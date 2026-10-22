@@ -55,7 +55,7 @@ func (h *RecordsHandler) enqueueImportJob(w http.ResponseWriter, r *http.Request
 	if replayed {
 		w.Header().Set("Idempotency-Replayed", "true")
 	}
-	w.Header().Set("Location", "/data-exchange/jobs/"+job.ID+"?provider=records&operation=import")
+	w.Header().Set("Location", "/data-exchange/jobs/"+job.JobID+"?provider=records&operation=import")
 	h.writeJSON(w, http.StatusAccepted, job)
 }
 
@@ -87,7 +87,7 @@ func (h *RecordsHandler) dispatchExport(w http.ResponseWriter, r *http.Request) 
 	if dispatch.Replayed {
 		w.Header().Set("Idempotency-Replayed", "true")
 	}
-	w.Header().Set("Location", "/data-exchange/jobs/"+dispatch.Job.ID+"?provider=records&operation=export")
+	w.Header().Set("Location", "/data-exchange/jobs/"+dispatch.Job.JobID+"?provider=records&operation=export")
 	h.writeJSON(w, http.StatusAccepted, dispatch.Job)
 }
 

@@ -106,11 +106,11 @@ func (s *OperationsApplicationService) DryRunBulkDeadLetters(ctx context.Context
 		return plan, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "prepare bounded bulk operation")
-	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsBulkPlan{}, err
 	}
-	plan := OperationsBulkPlan{DryRunOperationID: receipt.Command.ID, Owner: request.Owner, Action: request.Action, Filter: request.Filter, Limit: request.Limit, ExpiresAt: s.now().UTC().Add(15 * time.Minute)}
+	plan := OperationsBulkPlan{DryRunOperationID: receipt.Command.OperationID, Owner: request.Owner, Action: request.Action, Filter: request.Filter, Limit: request.Limit, ExpiresAt: s.now().UTC().Add(15 * time.Minute)}
 	for _, id := range request.Filter.IDs {
 		item, inspectErr := adapter.Inspect(ctx, id, principal)
 		candidate := OperationsBulkCandidate{ID: id, Item: item}
@@ -125,7 +125,7 @@ func (s *OperationsApplicationService) DryRunBulkDeadLetters(ctx context.Context
 		}
 		plan.Candidates = append(plan.Candidates, candidate)
 	}
-	plan.ConfirmationToken, _ = idempotency.Fingerprint(idempotency.FingerprintInput{UseCase: "bulk_operation.confirm", ResourceType: "bulk_operation", TargetID: receipt.Command.ID, Payload: map[string]any{"owner": plan.Owner, "action": plan.Action, "filter": plan.Filter, "candidates": eligibleBulkIDs(plan.Candidates), "expires_at": plan.ExpiresAt.Format(time.RFC3339Nano)}})
+	plan.ConfirmationToken, _ = idempotency.Fingerprint(idempotency.FingerprintInput{UseCase: "bulk_operation.confirm", ResourceType: "bulk_operation", TargetID: receipt.Command.OperationID, Payload: map[string]any{"owner": plan.Owner, "action": plan.Action, "filter": plan.Filter, "candidates": eligibleBulkIDs(plan.Candidates), "expires_at": plan.ExpiresAt.Format(time.RFC3339Nano)}})
 	result, _ := json.Marshal(plan)
 	receipt.Command.Status, receipt.Result, receipt.RelatedIDs = operationsmodel.OperationsStatusSucceeded, result, append([]string(nil), request.Filter.IDs...)
 	receipt.NextAction = "review per-item eligibility and apply before expiry with the exact confirmation token"
@@ -184,17 +184,17 @@ func (s *OperationsApplicationService) ApplyBulkDeadLetters(ctx context.Context,
 		return result, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "apply bounded bulk operation")
-	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsBulkApplyResult{}, err
 	}
 	result := OperationsBulkApplyResult{DryRunOperationID: plan.DryRunOperationID}
-	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
+	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.OperationID)
 	for _, candidate := range plan.Candidates {
 		if !candidate.Eligible {
 			continue
 		}
-		item, actionErr := adapter.Act(ownerContext, candidate.ID, plan.Action, strings.TrimSpace(request.Reason), receipt.Command.ID+":"+candidate.ID, principal)
+		item, actionErr := adapter.Act(ownerContext, candidate.ID, plan.Action, strings.TrimSpace(request.Reason), receipt.Command.OperationID+":"+candidate.ID, principal)
 		itemResult := OperationsBulkItemResult{ID: candidate.ID, Item: item, Status: "succeeded"}
 		if actionErr != nil {
 			itemResult.Status, itemResult.ErrorCode = "failed", "backend.operations.dead_letter_owner_rejected"

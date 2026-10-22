@@ -80,7 +80,7 @@ func (identityProjectionNoop) ListUserRoleAssignments(context.Context, identitys
 func TestReadServiceDoesNotLeakFilteredRecordCount(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "sales_order"}
 	repository := &readRepositoryProbe{page: recordmodel.RecordPageResult{
-		Items:   []recordmodel.Record{{ID: "order-1"}},
+		Items:   []recordmodel.Record{{RecordID: "order-1"}},
 		Total:   1,
 		HasNext: true,
 	}}
@@ -130,7 +130,7 @@ func TestReadServiceActionReadsPreserveSensitiveBusinessFieldsAfterScopeAuthoriz
 			{Key: "amount", Type: "number", Required: true, Config: map[string]any{"sensitive": true}},
 		},
 	}
-	record := recordmodel.Record{ID: "refund-1", Data: map[string]any{"amount": "128.50"}}
+	record := recordmodel.Record{RecordID: "refund-1", Data: map[string]any{"amount": "128.50"}}
 	repository := &readRepositoryProbe{
 		found:  true,
 		record: record,
@@ -144,14 +144,14 @@ func TestReadServiceActionReadsPreserveSensitiveBusinessFieldsAfterScopeAuthoriz
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: object.Key, Read: true, Scope: "all"}},
 	})
 
-	external, err := service.GetRecord(t.Context(), object.Key, record.ID, principal)
+	external, err := service.GetRecord(t.Context(), object.Key, record.RecordID, principal)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if external.Data["amount"] == "128.50" {
 		t.Fatalf("external read exposed sensitive amount: %#v", external.Data)
 	}
-	internal, err := service.GetRecordForAction(t.Context(), object.Key, record.ID, principal)
+	internal, err := service.GetRecordForAction(t.Context(), object.Key, record.RecordID, principal)
 	if err != nil {
 		t.Fatal(err)
 	}

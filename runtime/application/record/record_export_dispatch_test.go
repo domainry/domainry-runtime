@@ -19,7 +19,7 @@ func recordExportDispatchService(total int) (*RecordDataExchangeApplicationServi
 		if query.PageSize == 1 && !query.SkipTotal {
 			return recordmodel.RecordPageResult{Total: total}, nil
 		}
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
 	}}
 	exporter := recordExportEdgeService(object, repository)
 	binding := &recordDataExchangeBindingProbe{}
@@ -36,7 +36,7 @@ func TestRecordExportDispatchSelectsDeliveryWithoutCallerThresholdLogic(t *testi
 
 	background, binding := recordExportDispatchService(recordExportDirectMaxRows + 1)
 	result, err = background.DispatchExportIdempotent(t.Context(), "customer", "background-key", RecordExportOptions{}, principal)
-	if err != nil || result.Delivery != RecordExportDeliveryBackground || result.Job.ID == "" || binding.lastExport.Provider != "records" {
+	if err != nil || result.Delivery != RecordExportDeliveryBackground || result.Job.JobID == "" || binding.lastExport.Provider != "records" {
 		t.Fatalf("background=%+v submitted=%+v err=%v", result, binding.lastExport, err)
 	}
 	var payload recordDataExchangeExportPayload
@@ -54,9 +54,9 @@ func TestRecordExportDownloadIsOwnerScopedAndRequiresCompletedArtifact(t *testin
 	principal := recordExportPrincipal("customer")
 	principal.UserID = "actor"
 	binding.jobs = map[string]dataexchange.Job{
-		"job": {ID: "job", Provider: "records", Operation: "export", Status: "completed", WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, ObjectKey: "customer", ArtifactID: "artifact"},
+		"job": {JobID: "job", Provider: "records", Operation: "export", Status: "completed", WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, ObjectKey: "customer", ArtifactID: "artifact"},
 	}
-	binding.artifact = dataexchange.Artifact{ID: "artifact", Filename: "customer.csv", ContentType: "text/csv", Size: 4}
+	binding.artifact = dataexchange.Artifact{ArtifactID: "artifact", Filename: "customer.csv", ContentType: "text/csv", Size: 4}
 	binding.artifactContent = "data"
 	artifact, err := service.DownloadExport(t.Context(), "job", principal)
 	if err != nil {
@@ -73,7 +73,7 @@ func TestRecordExportDownloadIsOwnerScopedAndRequiresCompletedArtifact(t *testin
 	if _, err = service.DownloadExport(t.Context(), "job", other); apperror.CodeOf(err) != "backend.export.job_not_found" {
 		t.Fatalf("cross-owner download error=%v", err)
 	}
-	binding.jobs["job"] = dataexchange.Job{ID: "job", Provider: "records", Operation: "export", Status: "running", WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}
+	binding.jobs["job"] = dataexchange.Job{JobID: "job", Provider: "records", Operation: "export", Status: "running", WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}
 	if _, err = service.DownloadExport(t.Context(), "job", principal); apperror.CodeOf(err) != "backend.export.download_not_ready" {
 		t.Fatalf("running download error=%v", err)
 	}

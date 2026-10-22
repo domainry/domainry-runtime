@@ -120,7 +120,7 @@ func (s *reportExportStoreStub) TransitionReportExportAuditStatus(_ context.Cont
 	if s.transitionErr != nil {
 		return s.transitionErr
 	}
-	if s.audit.ID == recordID && strings.TrimSpace(fmt.Sprint(s.audit.Data[statusField])) == fromStatus {
+	if s.audit.RecordID == recordID && strings.TrimSpace(fmt.Sprint(s.audit.Data[statusField])) == fromStatus {
 		s.audit.Data[statusField] = toStatus
 	}
 	return nil
@@ -130,7 +130,7 @@ func (s *reportExportStoreStub) TransitionReportExportAudit(_ context.Context, _
 	if s.transitionErr != nil {
 		return false, s.transitionErr
 	}
-	if s.audit.ID != recordID || strings.TrimSpace(fmt.Sprint(s.audit.Data[statusField])) != fromStatus {
+	if s.audit.RecordID != recordID || strings.TrimSpace(fmt.Sprint(s.audit.Data[statusField])) != fromStatus {
 		return false, nil
 	}
 	for key, value := range patch {
@@ -161,10 +161,10 @@ func (s *reportExportStoreStub) GetReportRecord(_ context.Context, objectKey, re
 	if s.getErr != nil {
 		return recordmodel.Record{}, s.getErr
 	}
-	if objectKey == "report_export_audit" && recordID == s.audit.ID {
+	if objectKey == "report_export_audit" && recordID == s.audit.RecordID {
 		return s.audit, nil
 	}
-	if objectKey == "report_export_download" && recordID == s.download.ID {
+	if objectKey == "report_export_download" && recordID == s.download.RecordID {
 		return s.download, nil
 	}
 	return recordmodel.Record{}, &apperror.AppError{Kind: apperror.KindNotFound, Code: "backend.record.not_found"}
@@ -175,7 +175,7 @@ func (s *reportExportStoreStub) CreateReportRecord(_ context.Context, _ string, 
 	if s.createErr != nil {
 		return recordmodel.Record{}, s.createErr
 	}
-	s.download = recordmodel.Record{ID: "download-1", Data: data}
+	s.download = recordmodel.Record{RecordID: "download-1", Data: data}
 	return s.download, nil
 }
 

@@ -53,7 +53,7 @@ func (p *createExecutionProbe) TryBeginRecordMutation(_ context.Context, request
 	if p.beginErr != nil {
 		return recordmodel.RecordMutationClaimResult{}, p.beginErr
 	}
-	if p.execution.ID != "" {
+	if p.execution.OperationID != "" {
 		decision := idempotency.DecisionReplay
 		if p.execution.RequestFingerprint != request.RequestFingerprint {
 			decision = idempotency.DecisionFingerprintConflict
@@ -66,13 +66,13 @@ func (p *createExecutionProbe) TryBeginRecordMutation(_ context.Context, request
 		return recordmodel.RecordMutationClaimResult{Decision: decision, Execution: p.execution}, nil
 	}
 	p.execution = request.Execution
-	p.execution.ID, p.execution.RequestFingerprint = "execution-1", request.RequestFingerprint
+	p.execution.OperationID, p.execution.RequestFingerprint = "execution-1", request.RequestFingerprint
 	p.execution.Status, p.execution.LeaseOwner, p.execution.FencingToken = string(idempotency.StatusProcessing), request.LeaseOwner, 1
 	return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: p.execution}, nil
 }
 
 func TestCreateReplayRechecksPermissionBeforeReadingReceipt(t *testing.T) {
-	executions := &createExecutionProbe{execution: recordmodel.RecordMutationExecution{ID: "existing-receipt", Status: string(idempotency.StatusSucceeded)}}
+	executions := &createExecutionProbe{execution: recordmodel.RecordMutationExecution{OperationID: "existing-receipt", Status: string(idempotency.StatusSucceeded)}}
 	service := NewRecordCreateApplicationService(RecordCreateDependencies{
 		Repository: &createRepositoryProbe{},
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -133,7 +133,7 @@ func TestCreateValidatesStructuredFileReferencesBeforeCommit(t *testing.T) {
 		"file_id": "file-1", "filename": "stored.pdf", "content_type": "application/pdf", "size": float64(7),
 		"content_sha256": strings.Repeat("a", 64),
 	}}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader"}}))
-	if !errors.Is(err, validationFailure) || !validated || repository.commit.Record.ID != "" {
+	if !errors.Is(err, validationFailure) || !validated || repository.commit.Record.RecordID != "" {
 		t.Fatalf("create err=%v validated=%v commit=%#v", err, validated, repository.commit)
 	}
 }
@@ -150,14 +150,14 @@ func TestCreateLocalizedRecordCarriesTranslationsInCanonicalCommit(t *testing.T)
 		BuildAudit: func(_ context.Context, event, objectKey, recordID string, _ principalmodel.Principal, summary string, before, after, metadata map[string]any) auditmodel.AuditEvent {
 			return auditmodel.AuditEvent{Event: event, ObjectKey: objectKey, RecordID: recordID, Summary: summary, Before: before, After: after, Metadata: metadata}
 		},
-		NewRecordID: func(string) string { return "product-1" },
+		NewRecordID: func(string) (string, error) { return "product-1", nil },
 		Now:         func() time.Time { return time.Date(2026, time.August, 11, 10, 0, 0, 0, time.UTC) },
 	})
 	created, err := service.CreateClaimedLocalized(t.Context(), "product", map[string]any{"sku": "P-1", "name": "默认商品"}, recordmodel.RecordTranslations{"en-US": {"name": "Product"}, "zh-CN": {"name": "商品"}}, recordmodel.RecordMutationClaimResult{}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ID != "product-1" || len(repository.commit.LocalizedValues) != 2 {
+	if created.RecordID != "product-1" || len(repository.commit.LocalizedValues) != 2 {
 		t.Fatalf("created=%+v localized=%+v", created, repository.commit.LocalizedValues)
 	}
 	if repository.commit.LocalizedValues[0].Locale != "en-US" || repository.commit.LocalizedValues[0].TextValue != "Product" || repository.commit.LocalizedValues[1].Locale != "zh-CN" {
@@ -193,7 +193,7 @@ func TestCreateUserFieldOmissionAndDefaults(t *testing.T) {
 					return object, nil
 				},
 				CanWrite:    func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
-				NewRecordID: func(string) string { return "document-1" },
+				NewRecordID: func(string) (string, error) { return "document-1", nil },
 			})
 			created, err := service.Create(t.Context(), object.Key, test.input, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader", OrgID: "store-a"}}))
 			if err != nil {
@@ -235,7 +235,7 @@ func TestCreateUsesObjectAndRowAuthorizationWhilePreservingDataValidation(t *tes
 				}
 				return nil
 			},
-			NewRecordID: func(string) string { return "ticket-1" },
+			NewRecordID: func(string) (string, error) { return "ticket-1", nil },
 		}
 		if configure != nil {
 			configure(&dependencies)
@@ -379,11 +379,11 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 		},
 		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
 			calls = append(calls, "outbox")
-			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
+			return []publicationmodel.Message{{MessageID: "outbox-1"}}, nil
 		},
 		PrepareWorkflow: func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
 			calls = append(calls, "workflow_prepare")
-			return []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, nil
 		},
 		ExecuteWorkflow: func(_ context.Context, intents []workflowmodel.WorkflowExecution, _ principalmodel.Principal) {
 			calls = append(calls, "workflow_execute")
@@ -392,7 +392,7 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 		BuildAudit: func(_ context.Context, event, objectKey, recordID string, _ principalmodel.Principal, summary string, before, after, metadata map[string]any) auditmodel.AuditEvent {
 			return auditmodel.AuditEvent{Event: event, ObjectKey: objectKey, RecordID: recordID, Summary: summary, Before: before, After: after, Metadata: metadata}
 		},
-		NewRecordID: func(string) string { return "customer-1" },
+		NewRecordID: func(string) (string, error) { return "customer-1", nil },
 		Now:         func() time.Time { return time.Date(2026, time.July, 17, 12, 0, 0, 0, time.UTC) },
 	})
 
@@ -400,7 +400,7 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ID != "customer-1" || created.Data["name"] != "Automated" || created.CreatedAt != "2026-07-17T12:00:00Z" || created.UpdatedAt != created.CreatedAt {
+	if created.RecordID != "customer-1" || created.Data["name"] != "Automated" || created.CreatedAt != "2026-07-17T12:00:00Z" || created.UpdatedAt != created.CreatedAt {
 		t.Fatalf("created = %#v", created)
 	}
 	if repository.commit.Operation != "create" || repository.commit.Audit == nil || repository.commit.Audit.Event != "record_created" || len(repository.commit.Outbox) != 1 || len(repository.commit.WorkflowIntents) != 1 {
@@ -414,7 +414,7 @@ func TestCreateServiceOwnsCompleteCreateTransaction(t *testing.T) {
 
 func TestCreateServiceReturnsIdempotentReplayWithoutCommit(t *testing.T) {
 	repository := &createRepositoryProbe{}
-	replay := recordmodel.Record{ID: "customer-existing", Data: map[string]any{"name": "Existing"}}
+	replay := recordmodel.Record{RecordID: "customer-existing", Data: map[string]any{"name": "Existing"}}
 	audited := false
 	service := NewRecordCreateApplicationService(RecordCreateDependencies{
 		Repository: repository,
@@ -426,16 +426,16 @@ func TestCreateServiceReturnsIdempotentReplayWithoutCommit(t *testing.T) {
 			return replay, true, nil
 		},
 		Audit: func(_ context.Context, event, _, recordID string, _ principalmodel.Principal, _ string, _, _ map[string]any, metadata map[string]any) {
-			audited = event == "automation_create_idempotent_replay" && recordID == replay.ID && metadata["operation"] == "create"
+			audited = event == "automation_create_idempotent_replay" && recordID == replay.RecordID && metadata["operation"] == "create"
 		},
-		NewRecordID: func(string) string { return "unused" },
+		NewRecordID: func(string) (string, error) { return "unused", nil },
 	})
 
 	created, err := service.Create(t.Context(), "customer", map[string]any{"name": "Existing"}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ID != replay.ID || !audited || repository.commit.Operation != "" {
+	if created.RecordID != replay.RecordID || !audited || repository.commit.Operation != "" {
 		t.Fatalf("replay=%#v audited=%v commit=%#v", created, audited, repository.commit)
 	}
 }
@@ -443,7 +443,7 @@ func TestCreateServiceReturnsIdempotentReplayWithoutCommit(t *testing.T) {
 func TestCreateCallerKeyCompletesSemanticReplayReceipt(t *testing.T) {
 	repository := &createRepositoryProbe{}
 	executions := &createExecutionProbe{}
-	replay := recordmodel.Record{ID: "customer-existing", Data: map[string]any{"name": "Existing"}}
+	replay := recordmodel.Record{RecordID: "customer-existing", Data: map[string]any{"name": "Existing"}}
 	service := NewRecordCreateApplicationService(RecordCreateDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -458,7 +458,7 @@ func TestCreateCallerKeyCompletesSemanticReplayReceipt(t *testing.T) {
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})
 	for attempt := 0; attempt < 2; attempt++ {
 		created, err := service.CreateIdempotent(t.Context(), "customer", map[string]any{"name": "Existing"}, "semantic-replay", principal)
-		if err != nil || created.ID != replay.ID {
+		if err != nil || created.RecordID != replay.RecordID {
 			t.Fatalf("attempt=%d created=%+v err=%v", attempt, created, err)
 		}
 	}
@@ -482,7 +482,7 @@ func TestCreateServiceCallerKeyCommitsOnceAndReplaysDurableResult(t *testing.T) 
 			automationCalls++
 			return nil
 		},
-		NewRecordID:      func(string) string { return "customer-1" },
+		NewRecordID:      func(string) (string, error) { return "customer-1", nil },
 		ExecutionRuntime: recordruntime.NewRecordMutationExecutionRuntime(executions),
 		BuildAudit: func(_ context.Context, event, objectKey, recordID string, _ principalmodel.Principal, summary string, before, after, metadata map[string]any) auditmodel.AuditEvent {
 			return auditmodel.AuditEvent{Event: event, ObjectKey: objectKey, RecordID: recordID, Summary: summary, Before: before, After: after, Metadata: metadata}
@@ -500,7 +500,7 @@ func TestCreateServiceCallerKeyCommitsOnceAndReplaysDurableResult(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.ID != "customer-1" || second.ID != first.ID || executions.commitCalls != 1 || automationCalls != 1 || repository.commit.Operation != "" {
+	if first.RecordID != "customer-1" || second.RecordID != first.RecordID || executions.commitCalls != 1 || automationCalls != 1 || repository.commit.Operation != "" {
 		t.Fatalf("first=%#v second=%#v receipt commits=%d automation=%d repository=%#v", first, second, executions.commitCalls, automationCalls, repository.commit)
 	}
 	if _, err := service.CreateIdempotent(t.Context(), "customer", map[string]any{"name": "Different"}, "create-key", principal); apperror.CodeOf(err) != idempotency.ErrorCodeKeyReused {
@@ -528,7 +528,7 @@ func TestCreateServiceWrapsCommitFailure(t *testing.T) {
 			return definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
 		},
 		CanWrite:    func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
-		NewRecordID: func(string) string { return "customer-1" },
+		NewRecordID: func(string) (string, error) { return "customer-1", nil },
 	})
 
 	_, err := service.Create(t.Context(), "customer", map[string]any{"name": "Acme"}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
@@ -543,7 +543,7 @@ func TestCreateServiceMapsUniqueCommitFailureToStableConflict(t *testing.T) {
 			return definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}, nil
 		},
 		CanWrite:    func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
-		NewRecordID: func(string) string { return "customer-1" },
+		NewRecordID: func(string) (string, error) { return "customer-1", nil },
 	})
 
 	_, err := service.Create(t.Context(), "customer", map[string]any{"name": "Acme"}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))

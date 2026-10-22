@@ -45,7 +45,7 @@ func assertWorkflowExecutionDialectLease(t *testing.T, store *database.RuntimeSt
 	t.Helper()
 	workspace := id
 	repository := NewWorkflowWorkerStore(store)
-	execution := workflowmodel.WorkflowExecution{ID: id, WorkflowKey: "scheduled", Name: "Scheduled", Trigger: "scheduled", Status: "failed", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "system", Attempt: 1, MaxAttempts: 3, NextRunAt: "2026-07-19T00:00:00Z", Message: "retry", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: id, WorkflowKey: "scheduled", Name: "Scheduled", Trigger: "scheduled", Status: "failed", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "system", Attempt: 1, MaxAttempts: 3, NextRunAt: "2026-07-19T00:00:00Z", Message: "retry", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
 	if err := repository.InsertExecution(t.Context(), workspace, execution); err != nil {
 		t.Fatal(err)
 	}

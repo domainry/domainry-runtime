@@ -95,7 +95,7 @@ func (p *FileScanProcessor) scan(ctx context.Context, candidate lifecyclecontrac
 	counter := &byteCounter{}
 	content := io.TeeReader(reader, io.MultiWriter(hash, counter))
 	result, err := p.scanner.Scan(ctx, runtimefile.FileScanRequest{
-		WorkspaceID: candidate.WorkspaceID, FileID: candidate.FileID, BlobKey: candidate.Filename, Filename: candidate.Filename,
+		WorkspaceID: candidate.WorkspaceID, FileID: candidate.ArtifactID, BlobKey: candidate.Filename, Filename: candidate.Filename,
 		ContentType: candidate.ContentType, ContentSHA256: candidate.SHA256, Size: candidate.Size,
 	}, content)
 	if err != nil {
@@ -157,7 +157,7 @@ func (*BuiltinFileScanner) Scan(_ context.Context, request runtimefile.FileScanR
 		status, reason = lifecyclecontract.FileScanQuarantined, "content_type_mismatch"
 	}
 	candidate := lifecyclecontract.FileScanEvidence{
-		WorkspaceID: request.WorkspaceID, FileID: request.FileID, Filename: request.Filename, ContentType: request.ContentType,
+		WorkspaceID: request.WorkspaceID, ArtifactID: request.FileID, Filename: request.Filename, ContentType: request.ContentType,
 		SHA256: request.ContentSHA256, Size: request.Size, Status: status,
 	}
 	return runtimefile.FileScanResult{Status: status, Provider: builtinFileScannerProvider, EvidenceRef: fileScanEvidenceReference(candidate, reason, builtinFileScannerProvider)}, nil
@@ -200,7 +200,7 @@ func uploadContentTypeMatches(contentType string, content []byte) bool {
 func fileScanEvidenceReference(candidate lifecyclecontract.FileScanEvidence, reason, provider string) string {
 	hash := sha256.New()
 	_, _ = io.WriteString(hash, strings.Join([]string{
-		strings.TrimSpace(provider), candidate.WorkspaceID, candidate.FileID, strings.ToLower(candidate.SHA256),
+		strings.TrimSpace(provider), candidate.WorkspaceID, candidate.ArtifactID, strings.ToLower(candidate.SHA256),
 		fmt.Sprint(candidate.Size), strings.ToLower(candidate.ContentType), candidate.Status, strings.TrimSpace(reason),
 	}, "\x00"))
 	return strings.TrimSpace(reason) + ":sha256:" + hex.EncodeToString(hash.Sum(nil))

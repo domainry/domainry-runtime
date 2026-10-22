@@ -87,15 +87,15 @@ func TestRelatedPolicyTimeAndBlockingCandidateShortCircuits(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "booking", Validations: []definitionmodel.ValidationSchema{policy}}
 	data := map[string]any{"owner": "room-1", "starts_at": "2026-07-19T10:00:00Z", "ends_at": "2026-07-19T11:00:00Z"}
 	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{
-		{ID: "scope", Data: map[string]any{"owner": "room-2", "starts_at": "2026-07-19T10:00:00Z", "ends_at": "2026-07-19T11:00:00Z"}},
-		{ID: "missing", Data: map[string]any{"owner": "room-1"}},
-		{ID: "before", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-19T08:00:00Z", "ends_at": "2026-07-19T09:00:00Z"}},
+		{RecordID: "scope", Data: map[string]any{"owner": "room-2", "starts_at": "2026-07-19T10:00:00Z", "ends_at": "2026-07-19T11:00:00Z"}},
+		{RecordID: "missing", Data: map[string]any{"owner": "room-1"}},
+		{RecordID: "before", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-19T08:00:00Z", "ends_at": "2026-07-19T09:00:00Z"}},
 	}}}}
 	validator := newRelatedPolicyValidatorForTest(repository, nil, nil)
 	if err := validator.ValidateTimeOverlapPolicies(t.Context(), object, data, "current", "create", principal); err != nil {
 		t.Fatal(err)
 	}
-	blockingRepository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "nonmatch", Data: map[string]any{"status": "closed"}}}}}}
+	blockingRepository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "nonmatch", Data: map[string]any{"status": "closed"}}}}}}
 	blocking := newRelatedPolicyValidatorForTest(blockingRepository, map[string]definitionmodel.ObjectSchema{"task": relatedPolicyObject("task")}, nil)
 	validation := definitionmodel.ValidationSchema{Config: map[string]any{"filters": []any{map[string]any{"field": "status", "value": "active"}}}}
 	if found, err := blocking.blockingRecordExists(t.Context(), relatedPolicyObject("task"), validation, nil, principal); err != nil || found {

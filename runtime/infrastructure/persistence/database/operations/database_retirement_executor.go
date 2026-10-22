@@ -8,6 +8,7 @@ import (
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -52,9 +53,6 @@ func NewDatabaseRetirementSQLExecutor(store *database.RuntimeStore, now func() t
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	if newID == nil {
-		newID = requestcontext.NewRequestID
-	}
 	return DatabaseRetirementSQLExecutor{store: store, now: now, newID: newID}
 }
 
@@ -75,10 +73,10 @@ func (e DatabaseRetirementSQLExecutor) ApplyDatabaseRetirementTransition(ctx con
 	var statements []string
 	switch next.State {
 	case operationsmodel.DatabaseRetirementWritesDisabled:
-		statements, err = databaseWriteProtectionStatements(engine, current.Object, current.ID)
+		statements, err = databaseWriteProtectionStatements(engine, current.Object, current.OperationID)
 	case operationsmodel.DatabaseRetirementQuarantined:
 		if strings.TrimSpace(next.Evidence.QuarantineObjectName) == "" {
-			next.Evidence.QuarantineObjectName = databaseQuarantineObjectName(current.Object.Name, current.ID)
+			next.Evidence.QuarantineObjectName = databaseQuarantineObjectName(current.Object.Name, current.OperationID)
 		}
 		statements, err = databaseQuarantineStatements(engine, current.Object, next.Evidence.QuarantineObjectName)
 	case operationsmodel.DatabaseRetirementObservationComplete:
@@ -144,7 +142,7 @@ func (e DatabaseRetirementSQLExecutor) PreviewDatabaseRetirement(ctx context.Con
 	}
 	lockTimeout := 5 * time.Second
 	return operationsmodel.DatabaseDropPlan{
-		RetirementID: retirement.ID, Object: retirement.Object, Dependencies: dependencies, Statements: []string{statement},
+		OperationID: retirement.OperationID, Object: retirement.Object, Dependencies: dependencies, Statements: []string{statement},
 		EstimatedLock: time.Second, EstimatedReclaimBytes: estimatedBytes, LockTimeout: lockTimeout,
 		Rollback: retirement.Evidence.Rollback, ApprovalID: retirement.Evidence.ApprovalID,
 	}, nil
@@ -243,11 +241,10 @@ func qualifyRetirementIdentifier(engine datamigration.Engine, schema, name strin
 }
 
 func (e DatabaseRetirementSQLExecutor) ExecuteDatabaseRetirement(ctx context.Context, retirement operationsmodel.DatabaseRetirement, plan operationsmodel.DatabaseDropPlan) (result operationscontract.DatabaseRetirementExecutionResult, err error) {
-	newID := e.newID
-	if newID == nil {
-		newID = requestcontext.NewRequestID
+	result.AuditEventID, err = e.nextAuditEventID()
+	if err != nil {
+		return result, err
 	}
-	result.AuditEventID = "database-retirement:" + retirement.ID + ":" + strings.TrimSpace(newID())
 	if e.database() == nil {
 		return result, fmt.Errorf("database retirement executor unavailable")
 	}
@@ -262,7 +259,7 @@ func (e DatabaseRetirementSQLExecutor) ExecuteDatabaseRetirement(ctx context.Con
 	if err := operationspolicy.OperationsValidateDatabaseDropEvidence(retirement.Evidence, completedAt); err != nil {
 		return result, err
 	}
-	if plan.RetirementID != retirement.ID || plan.Object != retirement.Object {
+	if plan.OperationID != retirement.OperationID || plan.Object != retirement.Object {
 		return result, fmt.Errorf("database retirement plan identity mismatch")
 	}
 	engine, err := datamigration.ParseEngine(retirement.Object.Engine)
@@ -307,6 +304,17 @@ func (e DatabaseRetirementSQLExecutor) ExecuteDatabaseRetirement(ctx context.Con
 	return result, nil
 }
 
+func (e DatabaseRetirementSQLExecutor) nextAuditEventID() (string, error) {
+	if e.newID == nil {
+		return entityid.New("audevt")
+	}
+	candidate := strings.TrimSpace(e.newID())
+	if err := entityid.Validate("audevt", candidate); err == nil {
+		return candidate, nil
+	}
+	return entityid.Derive("audevt", "runtime.database-retirement-audit.injected-id", candidate)
+}
+
 func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *database.RuntimeStore, tx *sql.Tx, retirement operationsmodel.DatabaseRetirement, plan operationsmodel.DatabaseDropPlan, result operationscontract.DatabaseRetirementExecutionResult, completedAt time.Time) error {
 	if store == nil || tx == nil {
 		return fmt.Errorf("database retirement audit transaction unavailable")
@@ -316,10 +324,10 @@ func appendDatabaseRetirementCompletionAudit(ctx context.Context, store *databas
 		return err
 	}
 	event := auditmodel.AuditEvent{
-		ID: result.AuditEventID, WorkspaceID: workspaceID,
-		OperationID: requestcontext.OwnerExecutionID(ctx), OwnerRunID: retirement.ID,
+		AuditEventID: result.AuditEventID, WorkspaceID: workspaceID,
+		OperationID: requestcontext.OwnerExecutionID(ctx), OwnerRunID: retirement.OperationID,
 		Family: auditmodel.EventFamilyRuntimeOperations,
-		Event:  databaseRetirementCompletedAuditEvent, ObjectKey: "database_object", RecordID: retirement.ID,
+		Event:  databaseRetirementCompletedAuditEvent, ObjectKey: "database_object", RecordID: retirement.OperationID,
 		ActorID: strings.TrimSpace(retirement.Evidence.Owner), RoleKey: "operations",
 		Summary: "Database object retirement completed",
 		Before:  map[string]any{"state": retirement.State, "object": retirement.Object},
@@ -356,18 +364,18 @@ func (e DatabaseRetirementSQLExecutor) VerifyDatabaseRetirementCompletionAudit(c
 	events, err := binding.Reader().List(ctx, workspaceID, auditmodel.Query{
 		Event:      databaseRetirementCompletedAuditEvent,
 		ObjectKey:  "database_object",
-		RecordID:   retirement.ID,
-		OwnerRunID: retirement.ID,
+		RecordID:   retirement.OperationID,
+		OwnerRunID: retirement.OperationID,
 		Limit:      100,
 	})
 	if err != nil {
 		return fmt.Errorf("read database retirement completion Audit evidence: %w", err)
 	}
 	for _, event := range events {
-		if strings.TrimSpace(event.ID) != auditEventID {
+		if strings.TrimSpace(event.AuditEventID) != auditEventID {
 			continue
 		}
-		if event.WorkspaceID != workspaceID || event.Family != auditmodel.EventFamilyRuntimeOperations || event.Event != databaseRetirementCompletedAuditEvent || event.ObjectKey != "database_object" || event.RecordID != retirement.ID || event.OwnerRunID != retirement.ID || event.ActorID != strings.TrimSpace(retirement.Evidence.Owner) {
+		if event.WorkspaceID != workspaceID || event.Family != auditmodel.EventFamilyRuntimeOperations || event.Event != databaseRetirementCompletedAuditEvent || event.ObjectKey != "database_object" || event.RecordID != retirement.OperationID || event.OwnerRunID != retirement.OperationID || event.ActorID != strings.TrimSpace(retirement.Evidence.Owner) {
 			return fmt.Errorf("database retirement completion Audit evidence identity mismatch")
 		}
 		if databaseRetirementAuditValue(event.Before, "state") != string(operationsmodel.DatabaseRetirementQuarantined) || databaseRetirementAuditValue(event.After, "state") != string(operationsmodel.DatabaseRetirementDropped) {

@@ -22,23 +22,17 @@ func TestRecordContainsFiltersBeforeLimitAndPagesTiedTimesWithinStore(t *testing
 	object := definitionmodel.ObjectSchema{Key: "voucher", Fields: []definitionmodel.FieldSchema{
 		{Key: "customer", Type: "text"}, {Key: "cast_name", Type: "long_text"}, {Key: "occurred_at", Type: "datetime"},
 	}}
-	columns := []ormschema.ColumnDefinition{}
-	for _, field := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_org_id", "customer", "cast_name", "occurred_at"} {
-		columns = append(columns, ormschema.Column(field, ormschema.Text()))
-	}
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), object.Key).Columns(columns...).PrimaryKey("workspace_id", "id").Build()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, args...); err != nil {
-		t.Fatal(err)
-	}
+	createGeneratedRecordTable(t, store, object.Key,
+		ormschema.Column("customer", ormschema.Text()),
+		ormschema.Column("cast_name", ormschema.LongText()),
+		ormschema.Column("occurred_at", ormschema.BigInt()),
+	)
 	repository := recordStore(store)
 	base := time.Date(2026, 9, 8, 0, 0, 0, 0, time.UTC)
 	expected := []recordmodel.Record{}
 	insert := func(workspace, owner, id string, customer any, cast string, occurred time.Time) {
 		t.Helper()
-		record := recordmodel.Record{ID: id, OwnerOrgID: owner, CreatedAt: base.Format(time.RFC3339Nano), UpdatedAt: base.Format(time.RFC3339Nano),
+		record := recordmodel.Record{RecordID: id, OwnerOrgID: owner, CreatedAt: base.Format(time.RFC3339Nano), UpdatedAt: base.Format(time.RFC3339Nano),
 			Data: map[string]any{"customer": customer, "cast_name": cast, "occurred_at": occurred.Format(time.RFC3339Nano)}}
 		if err := repository.InsertRecord(t.Context(), workspace, object, record); err != nil {
 			t.Fatal(err)
@@ -62,19 +56,19 @@ func TestRecordContainsFiltersBeforeLimitAndPagesTiedTimesWithinStore(t *testing
 	insert("workspace-a", "store-a", "bracket-literal", "[a-z]", "東京 花子", base)
 	sort.Slice(expected, func(i, j int) bool {
 		if expected[i].Data["occurred_at"] == expected[j].Data["occurred_at"] {
-			return expected[i].ID < expected[j].ID
+			return expected[i].RecordID < expected[j].RecordID
 		}
 		return expected[i].Data["occurred_at"].(string) > expected[j].Data["occurred_at"].(string)
 	})
 	baseFilters := []recordmodel.RecordFilterExpression{
-		{Operator: "or", Children: []recordmodel.RecordFilterExpression{{Field: "customer", Operator: "contains", Value: " 50%_off~猫 "}, {Field: "id", Operator: "contains", Value: "never-match"}}},
+		{Operator: "or", Children: []recordmodel.RecordFilterExpression{{Field: "customer", Operator: "contains", Value: " 50%_off~猫 "}, {Field: "record_id", Operator: "contains", Value: "never-match"}}},
 		{Field: "cast_name", Operator: "contains", Value: "花子"},
 	}
 	query := recordmodel.RecordListQuery{Page: 1, PageSize: 40, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, OwnerOrganizationScopeID: "store-a",
 		Sort: []recordmodel.RecordSortRule{{Field: "occurred_at", Direction: "desc"}, {Field: "id", Direction: "asc"}}}
 	gotIDs, wantIDs := []string{}, []string{}
 	for _, record := range expected {
-		wantIDs = append(wantIDs, record.ID)
+		wantIDs = append(wantIDs, record.RecordID)
 	}
 	var cursor *recordmodel.Record
 	for pageNumber := range 3 {
@@ -91,7 +85,7 @@ func TestRecordContainsFiltersBeforeLimitAndPagesTiedTimesWithinStore(t *testing
 			t.Fatalf("page=%+v error=%v", page, err)
 		}
 		for _, record := range page.Items {
-			gotIDs = append(gotIDs, record.ID)
+			gotIDs = append(gotIDs, record.RecordID)
 		}
 		last := page.Items[len(page.Items)-1]
 		cursor = &last
@@ -102,7 +96,7 @@ func TestRecordContainsFiltersBeforeLimitAndPagesTiedTimesWithinStore(t *testing
 	for _, sample := range []struct{ literal, id string }{{"' OR 1=1 --", "injection-literal"}, {"[a-z]", "bracket-literal"}} {
 		query.FilterExpression = &recordmodel.RecordFilterExpression{Field: "customer", Operator: "contains", Value: sample.literal}
 		page, err := repository.ListRecords(t.Context(), "workspace-a", object, query)
-		if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != sample.id {
+		if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != sample.id {
 			t.Fatalf("literal=%q page=%+v error=%v", sample.literal, page, err)
 		}
 	}

@@ -152,10 +152,10 @@ func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.
 	if _, found, err := service.FindBeforeCreateReplay(t.Context(), definitionmodel.ObjectSchema{Key: "other"}, nil, principal); err != nil || found {
 		t.Fatalf("authorized replay found=%v err=%v", found, err)
 	}
-	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{ID: "record-1"}, principalmodel.Principal{}); messages != nil || err != nil {
+	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{RecordID: "record-1"}, principalmodel.Principal{}); messages != nil || err != nil {
 		t.Fatalf("unauthorized outbox=%#v", messages)
 	}
-	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, principal); err != nil || len(messages) != 1 || messages[0].DedupKey == "" {
+	if messages, err := service.AfterOutbox(t.Context(), "order", "update", nil, recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "ready"}}, principal); err != nil || len(messages) != 1 || messages[0].DedupKey == "" {
 		t.Fatalf("outbox=%#v", messages)
 	}
 
@@ -171,7 +171,7 @@ func TestAutomationFacadeBeforeOutboxSimulationAndWorkflowProjection(t *testing.
 		t.Fatalf("missing simulation err=%v", err)
 	}
 
-	run := workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ID: "execution-1", Status: "completed"}}
+	run := workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ExecutionID: "execution-1", Status: "completed"}}
 	projected, err := AutomationWorkflowInstructionResult("workflow-a", run, nil)
 	if err != nil || projected["execution_id"] != "execution-1" || projected["status"] != "completed" {
 		t.Fatalf("projection=%#v err=%v", projected, err)
@@ -197,8 +197,8 @@ func TestAutomationFacadeRunsOnlyMatchingEnabledWebhookRule(t *testing.T) {
 		t.Fatalf("trace=%#v err=%v", trace, err)
 	}
 	replay, err := service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal())
-	if err != nil || replay.ExecutionID != trace.ExecutionID {
-		t.Fatalf("webhook execution identity changed: first=%#v replay=%#v err=%v", trace, replay, err)
+	if err != nil || replay.ExecutionID == "" || replay.ExecutionID == trace.ExecutionID {
+		t.Fatalf("webhook executions did not receive independent entity identities: first=%#v replay=%#v err=%v", trace, replay, err)
 	}
 	request.Provider = "other"
 	if _, err = service.RunWebhookAutomation(t.Context(), request, automationFacadePrincipal()); apperror.CodeOf(err) != "backend.automation.webhook_rule_not_found" {
@@ -261,7 +261,7 @@ func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T
 		return notificationmodel.NotificationEvent{EventType: intent.EventType}, nil
 	}
 	service.commitNotification = automationNotificationCommitterStub{}
-	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", Rule: afterRule, RecordVersion: "v2", Record: recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", Rule: afterRule, RecordVersion: "v2", Record: recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 		Rules: registry,
 		WorkerStore: instructionRepositoryStub{
 			claim: func(_ context.Context, execution automationmodel.AutomationInstructionExecution, _, _ string) (automationmodel.AutomationInstructionExecution, bool, error) {
-				execution.ID, execution.LeaseOwner, execution.FencingToken = "instruction", "worker", 1
+				execution.RunID, execution.LeaseOwner, execution.FencingToken = "instruction", "worker", 1
 				return execution, true, nil
 			},
 			complete: func(context.Context, string, string, string, int64, string, map[string]any, string) (automationmodel.AutomationInstructionExecution, error) {
@@ -318,7 +318,7 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 	eventID := "automation:after:order:order-1:update:v1"
 	revision := "2026-09-29T08:00:00Z"
 	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
-		ID: eventID, RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: revision},
+		ID: eventID, RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: revision},
 		ActorUserID: "user", ActorRoleKey: "role", RequestID: "request", IdentityPolicy: "revalidate_initiator",
 	})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
@@ -342,7 +342,7 @@ func TestAutomationAfterOutboxRevalidatesIdentityAndRejectsLoopsAndDepth(t *test
 	message := func(event automationmodel.AutomationLifecycleEvent) publicationmodel.Message {
 		event.RuleKey, event.RecordVersion = "after", "v1"
 		event.Rule = rule
-		event.Record = recordmodel.Record{ID: "record", Data: map[string]any{}}
+		event.Record = recordmodel.Record{RecordID: "record", Data: map[string]any{}}
 		event.ActorUserID, event.ActorRoleKey = "user", "operator"
 		if event.IdentityPolicy == "" {
 			event.IdentityPolicy = "revalidate_initiator"
@@ -377,7 +377,7 @@ func TestAutomationAfterOutboxScopesIdentityResolutionToMessageWorkspace(t *test
 		},
 	})
 	event := automationmodel.AutomationLifecycleEvent{
-		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{}},
+		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{}},
 		ActorUserID: "operator-a", ActorRoleKey: "operator", IdentityPolicy: "revalidate_initiator",
 	}
 	if err := service.ExecuteOutboxMessage(t.Context(), publicationmodel.Message{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}); err != nil {
@@ -401,7 +401,7 @@ func TestQueuedAutomationRevalidatesCurrentActionPermissionInsteadOfFreezingRole
 		Rules: registry,
 		WorkerStore: instructionRepositoryStub{
 			claim: func(_ context.Context, execution automationmodel.AutomationInstructionExecution, _, _ string) (automationmodel.AutomationInstructionExecution, bool, error) {
-				execution.ID, execution.LeaseOwner, execution.FencingToken = "queued-instruction", "worker", 1
+				execution.RunID, execution.LeaseOwner, execution.FencingToken = "queued-instruction", "worker", 1
 				return execution, true, nil
 			},
 			complete: func(context.Context, string, string, string, int64, string, map[string]any, string) (automationmodel.AutomationInstructionExecution, error) {
@@ -423,7 +423,7 @@ func TestQueuedAutomationRevalidatesCurrentActionPermissionInsteadOfFreezingRole
 		},
 	})
 	event := automationmodel.AutomationLifecycleEvent{
-		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "ready"}},
+		RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "ready"}},
 		ActorUserID: "operator-a", ActorRoleKey: "operator", IdentityPolicy: "revalidate_initiator",
 	}
 	message := publicationmodel.Message{WorkspaceID: "workspace-a", Payload: automationbusiness.LifecycleEventPayload(event)}
@@ -472,7 +472,7 @@ func TestAutomationFacadeExecutesPureBeforeConditionAndDerivationWithoutIO(t *te
 	if _, err := service.RunBefore(t.Context(), "order", "create", "record-1", nil, nil, map[string]any{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}
-	service.workflows = automationFacadeWorkflowProbe{run: workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ID: "workflow-execution", Status: "waiting"}, Status: "waiting"}}
+	service.workflows = automationFacadeWorkflowProbe{run: workflowmodel.WorkflowRunResult{Execution: workflowmodel.WorkflowExecution{ExecutionID: "workflow-execution", Status: "waiting"}, Status: "waiting"}}
 	service.invokeAction = func(context.Context, actionmodel.ActionInvocation) (actionmodel.ActionInvocationResult, error) {
 		return actionmodel.ActionInvocationResult{InvocationID: "action-invocation", Output: map[string]any{"ok": true}}, nil
 	}

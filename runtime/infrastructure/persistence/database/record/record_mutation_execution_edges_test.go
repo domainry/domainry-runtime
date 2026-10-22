@@ -15,7 +15,7 @@ import (
 )
 
 func recordMutationExecutionFixture(now time.Time) recordmodel.RecordMutationExecution {
-	return recordmodel.RecordMutationExecution{ID: "execution", WorkspaceID: "workspace", Operation: "create", ObjectKey: "customer", TargetID: "record", IdempotencyKey: "key", RequestFingerprint: "fingerprint", Status: "processing", LeaseOwner: "worker", LeaseExpiresAt: now.Add(-time.Minute).Format(time.RFC3339Nano), FencingToken: 1, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}
+	return recordmodel.RecordMutationExecution{OperationID: "execution", WorkspaceID: "workspace", Operation: "create", ObjectKey: "customer", TargetID: "record", IdempotencyKey: "key", RequestFingerprint: "fingerprint", Status: "processing", LeaseOwner: "worker", LeaseExpiresAt: now.Add(-time.Minute).Format(time.RFC3339Nano), FencingToken: 1, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}
 }
 
 func recordMutationExecutionQueryStep(value recordmodel.RecordMutationExecution, resultJSON string) recordSQLQueryStep {
@@ -28,13 +28,13 @@ func recordMutationExecutionQueryStep(value recordmodel.RecordMutationExecution,
 }
 
 func recordMutationExecutionColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func recordMutationExecutionValues(value recordmodel.RecordMutationExecution, resultJSON string) []any {
 	record := recordMutationRecord(value, json.RawMessage(resultJSON))
 	return []any{
-		record.ID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentID,
+		record.ID, record.OperationID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentOperationID,
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
 		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
@@ -46,7 +46,7 @@ func recordMutationExecutionValues(value recordmodel.RecordMutationExecution, re
 func TestRecordMutationClaimSQLFailureAndRetryEdges(t *testing.T) {
 	now := time.Now().UTC()
 	request := recordmodel.RecordMutationClaimRequest{Execution: recordMutationExecutionFixture(now), RequestFingerprint: "fingerprint", LeaseOwner: "worker", Now: now}
-	request.Execution.ID = ""
+	request.Execution.OperationID = ""
 	request.Execution.Status = ""
 	request.Execution.LeaseExpiresAt = ""
 	if _, err := scriptedRecordStore(t, &recordSQLState{}).TryBeginRecordMutation(t.Context(), recordmodel.RecordMutationClaimRequest{}); err == nil {
@@ -100,7 +100,7 @@ func TestRecordMutationClaimSQLFailureAndRetryEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{err: errors.New("database is locked")}}})
-	if claim, err := store.TryBeginRecordMutation(t.Context(), request); err != nil || claim.Execution.ID == "" {
+	if claim, err := store.TryBeginRecordMutation(t.Context(), request); err != nil || claim.Execution.OperationID == "" {
 		t.Fatalf("busy retry claim=%+v err=%v", claim, err)
 	}
 	busySteps := make([]recordSQLExecStep, 50)
@@ -120,8 +120,8 @@ func TestRecordMutationClaimSQLFailureAndRetryEdges(t *testing.T) {
 
 func TestRecordMutationCompletionSQLFailureEdges(t *testing.T) {
 	now := time.Now().UTC()
-	completion := recordmodel.RecordMutationCompletion{WorkspaceID: "workspace", ExecutionID: "execution", LeaseOwner: "worker", FencingToken: 1, Result: map[string]any{"ok": true}, ExpiresAt: now.Add(time.Hour), Now: now}
-	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "customer"}, Record: recordmodel.Record{ID: "record"}}
+	completion := recordmodel.RecordMutationCompletion{WorkspaceID: "workspace", OperationID: "execution", LeaseOwner: "worker", FencingToken: 1, Result: map[string]any{"ok": true}, ExpiresAt: now.Add(time.Hour), Now: now}
+	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "customer"}, Record: recordmodel.Record{RecordID: "record"}}
 	if _, err := scriptedRecordStore(t, &recordSQLState{}).CommitRecordMutationExecution(t.Context(), commit, recordmodel.RecordMutationCompletion{}); err == nil {
 		t.Fatal("empty atomic completion accepted")
 	}

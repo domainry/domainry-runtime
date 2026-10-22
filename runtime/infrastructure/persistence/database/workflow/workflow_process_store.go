@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
@@ -29,16 +30,24 @@ func (r WorkflowProcessStore) database() workflowDatabase {
 	return r.store.DB()
 }
 
-var workflowProcessColumns = []string{"workspace_id", "id", "operation_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
-var workflowNodeColumns = []string{"workspace_id", "id", "process_id", "node_id", "node_type", "iteration", "status", "input_json", "output_json", "error_code", "started_at", "completed_at"}
-var workflowEventColumns = []string{"workspace_id", "id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at"}
+var workflowProcessColumns = []string{"id", "workspace_id", "process_id", "operation_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
+var workflowNodeColumns = []string{"workspace_id", "node_instance_id", "process_id", "node_id", "node_type", "iteration", "status", "input_json", "output_json", "error_code", "started_at", "completed_at"}
+var workflowEventColumns = []string{"workspace_id", "event_id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at"}
+
+func workflowNodeSelectColumns() []string {
+	return append([]string{"id"}, workflowNodeColumns...)
+}
+
+func workflowEventSelectColumns() []string {
+	return append([]string{"id"}, workflowEventColumns...)
+}
 
 func workflowProcessValues(process workflowmodel.WorkflowProcessInstance) []any {
 	definition, _ := database.MarshalTimeJSON(process.DefinitionSnapshot)
 	currentNodes, _ := database.MarshalTimeJSON(process.CurrentNodeIDs)
 	variables, _ := database.MarshalTimeJSON(database.NonNilMap(process.Variables))
 	result, _ := database.MarshalTimeJSON(database.NonNilMap(process.Result))
-	return []any{process.WorkspaceID, process.ID, process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
+	return []any{process.ID, process.WorkspaceID, process.ProcessID, process.OperationID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
 }
 
 func (r WorkflowProcessStore) InsertProcess(ctx context.Context, workspaceID string, process workflowmodel.WorkflowProcessInstance) error {
@@ -48,10 +57,10 @@ func (r WorkflowProcessStore) InsertProcess(ctx context.Context, workspaceID str
 	}
 	process.WorkspaceID = workspaceID
 	values := workflowProcessValues(process)
-	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_instances", workflowProcessColumns, values); err != nil {
+	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_instances", workflowProcessColumns[1:], values[1:]); err != nil {
 		return err
 	}
-	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns[1:]...).Values(values[1:]...).Build()
+	queryValue, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns[2:]...).Values(values[2:]...).Build()
 	if err != nil {
 		return fmt.Errorf("build workflow process insert: %w", err)
 	}
@@ -65,14 +74,14 @@ func (r WorkflowProcessStore) UpdateProcess(ctx context.Context, workspaceID str
 	}
 	process.WorkspaceID = workspaceID
 	values := workflowProcessValues(process)
-	return r.updateScopedRow(ctx, "_workflow_process_instances", workspaceID, process.ID, workflowProcessColumns[2:], values[2:])
+	return r.updateScopedRow(ctx, "_workflow_process_instances", workspaceID, process.ProcessID, workflowProcessColumns[3:], values[3:])
 }
 func (r WorkflowProcessStore) GetProcess(ctx context.Context, workspaceID, id string) (workflowmodel.WorkflowProcessInstance, bool, error) {
 	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns...).Where(query.Equal("id", id)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns...).Where(query.Equal("process_id", id)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, false, err
 	}
@@ -99,7 +108,7 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 		limit = 100
 	}
 	predicates := []query.Predicate{}
-	for _, item := range []struct{ column, value string }{{"id", filter.ProcessID}, {"status", filter.Status}, {"workflow_key", filter.WorkflowKey}, {"object_key", filter.ObjectKey}, {"record_id", filter.RecordID}, {"initiator_id", filter.InitiatorID}} {
+	for _, item := range []struct{ column, value string }{{"process_id", filter.ProcessID}, {"status", filter.Status}, {"workflow_key", filter.WorkflowKey}, {"object_key", filter.ObjectKey}, {"record_id", filter.RecordID}, {"initiator_id", filter.InitiatorID}} {
 		if value := strings.TrimSpace(item.value); value != "" {
 			predicates = append(predicates, query.Equal(item.column, value))
 		}
@@ -120,14 +129,14 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 	}
 	if approverID := strings.TrimSpace(filter.ApproverID); approverID != "" {
 		approver := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Alias("approver_task").Columns("id").Where(query.And(
-			query.EqualExpressions(query.QualifiedColumn("approver_task", "process_id"), query.QualifiedColumn("_workflow_process_instances", "id")),
+			query.EqualExpressions(query.QualifiedColumn("approver_task", "process_id"), query.QualifiedColumn("_workflow_process_instances", "process_id")),
 			query.EqualValue(query.QualifiedColumn("approver_task", "assignee_user_id"), approverID),
 		))
 		predicates = append(predicates, query.ExistsSubquery(approver))
 	}
 	if visibleToUserID := strings.TrimSpace(filter.VisibleToUserID); visibleToUserID != "" {
 		visible := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Alias("visible_task").Columns("id").Where(query.And(
-			query.EqualExpressions(query.QualifiedColumn("visible_task", "process_id"), query.QualifiedColumn("_workflow_process_instances", "id")),
+			query.EqualExpressions(query.QualifiedColumn("visible_task", "process_id"), query.QualifiedColumn("_workflow_process_instances", "process_id")),
 			query.EqualValue(query.QualifiedColumn("visible_task", "assignee_user_id"), visibleToUserID),
 		))
 		predicates = append(predicates, query.Or(query.Equal("initiator_id", visibleToUserID), query.ExistsSubquery(visible)))
@@ -140,7 +149,11 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 	}
 	if filter.AfterCreatedAt != "" && filter.AfterID != "" {
 		createdAt := timevalue.Millis(filter.AfterCreatedAt)
-		predicates = append(predicates, query.Or(query.LessThan("created_at", createdAt), query.And(query.Equal("created_at", createdAt), query.LessThan("id", filter.AfterID))))
+		seqID, parseErr := strconv.ParseInt(strings.TrimSpace(filter.AfterID), 10, 64)
+		if parseErr != nil || seqID < 1 {
+			return nil, fmt.Errorf("workflow process cursor sequence is invalid")
+		}
+		predicates = append(predicates, query.Or(query.LessThan("created_at", createdAt), query.And(query.Equal("created_at", createdAt), query.LessThan("id", seqID))))
 	}
 	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(workflowProcessColumns...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
@@ -169,7 +182,7 @@ func (r WorkflowProcessStore) ListProcesses(ctx context.Context, workspaceID str
 func workflowNodeValues(node workflowmodel.WorkflowNodeInstance) []any {
 	input, _ := database.MarshalTimeJSON(database.NonNilMap(node.Input))
 	output, _ := database.MarshalTimeJSON(database.NonNilMap(node.Output))
-	return []any{node.WorkspaceID, node.ID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, timevalue.Millis(node.StartedAt), timevalue.Millis(node.CompletedAt)}
+	return []any{node.WorkspaceID, node.NodeInstanceID, node.ProcessID, node.NodeID, node.NodeType, node.Iteration, node.Status, string(input), string(output), node.ErrorCode, timevalue.Millis(node.StartedAt), timevalue.Millis(node.CompletedAt)}
 }
 func (r WorkflowProcessStore) InsertNode(ctx context.Context, workspaceID string, node workflowmodel.WorkflowNodeInstance) error {
 	var err error
@@ -194,14 +207,14 @@ func (r WorkflowProcessStore) UpdateNode(ctx context.Context, workspaceID string
 		return err
 	}
 	values := workflowNodeValues(node)
-	return r.updateScopedRow(ctx, "_workflow_node_instances", workspaceID, node.ID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{values[6], values[7], values[8], values[9], values[11]})
+	return r.updateScopedRow(ctx, "_workflow_node_instances", workspaceID, node.NodeInstanceID, []string{"status", "input_json", "output_json", "error_code", "completed_at"}, []any{values[6], values[7], values[8], values[9], values[11]})
 }
 func (r WorkflowProcessStore) ListNodes(ctx context.Context, workspaceID, processID string) ([]workflowmodel.WorkflowNodeInstance, error) {
 	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
 	if err != nil {
 		return nil, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_node_instances", workspaceID).Columns(workflowNodeColumns...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("started_at"), query.Ascending("node_id"), query.Ascending("id")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_node_instances", workspaceID).Columns(workflowNodeSelectColumns()...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("started_at"), query.Ascending("node_id"), query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +229,7 @@ func (r WorkflowProcessStore) ListNodes(ctx context.Context, workspaceID, proces
 		var input, output string
 		var errorCode sql.NullString
 		var startedAt, completedAt int64
-		if err := rows.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt); err != nil {
+		if err := rows.Scan(&node.ID, &node.WorkspaceID, &node.NodeInstanceID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt); err != nil {
 			return nil, err
 		}
 		node.ErrorCode, node.StartedAt, node.CompletedAt = errorCode.String, timevalue.String(startedAt), timevalue.String(completedAt)
@@ -243,7 +256,7 @@ func (r WorkflowProcessStore) ListNodesForProcesses(ctx context.Context, workspa
 	if len(values) == 0 {
 		return nil, nil
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_node_instances", workspaceID).Columns(workflowNodeColumns...).Where(query.In("process_id", values...)).OrderBy(query.Ascending("process_id"), query.Ascending("started_at"), query.Ascending("node_id"), query.Ascending("id")).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_node_instances", workspaceID).Columns(workflowNodeSelectColumns()...).Where(query.In("process_id", values...)).OrderBy(query.Ascending("process_id"), query.Ascending("started_at"), query.Ascending("node_id"), query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +281,7 @@ func scanWorkflowNode(scanner interface{ Scan(...any) error }) (workflowmodel.Wo
 	var input, output string
 	var errorCode sql.NullString
 	var startedAt, completedAt int64
-	err := scanner.Scan(&node.WorkspaceID, &node.ID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt)
+	err := scanner.Scan(&node.ID, &node.WorkspaceID, &node.NodeInstanceID, &node.ProcessID, &node.NodeID, &node.NodeType, &node.Iteration, &node.Status, &input, &output, &errorCode, &startedAt, &completedAt)
 	node.ErrorCode, node.StartedAt, node.CompletedAt = errorCode.String, timevalue.String(startedAt), timevalue.String(completedAt)
 	_ = database.UnmarshalTimeJSON([]byte(input), &node.Input)
 	_ = database.UnmarshalTimeJSON([]byte(output), &node.Output)
@@ -278,7 +291,7 @@ func scanWorkflowNode(scanner interface{ Scan(...any) error }) (workflowmodel.Wo
 func workflowTaskValues(task workflowmodel.WorkflowTask) []any {
 	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
 	resolver, _ := database.MarshalTimeJSON(task.ResolverSnapshot)
-	return []any{task.WorkspaceID, task.ID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.CreatedAt), timevalue.Millis(task.UpdatedAt)}
+	return []any{task.WorkspaceID, task.TaskID, task.ProcessID, task.NodeInstanceID, task.NodeID, task.Title, task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), string(resolver), task.CandidateSource, task.NodeDefinitionVersion, task.Sequence, task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.CreatedAt), timevalue.Millis(task.UpdatedAt)}
 }
 func (r WorkflowProcessStore) InsertTask(ctx context.Context, workspaceID string, task workflowmodel.WorkflowTask) error {
 	var err error
@@ -303,7 +316,7 @@ func (r WorkflowProcessStore) UpdateTask(ctx context.Context, workspaceID string
 		return err
 	}
 	values := workflowTaskValues(task)
-	return r.updateScopedRow(ctx, "_workflow_tasks", workspaceID, task.ID, []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}, []any{values[6], values[7], values[8], values[9], values[10], values[15], values[16], values[17], values[18], values[19], values[20], values[22]})
+	return r.updateScopedRow(ctx, "_workflow_tasks", workspaceID, task.TaskID, []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}, []any{values[6], values[7], values[8], values[9], values[10], values[15], values[16], values[17], values[18], values[19], values[20], values[22]})
 }
 
 func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID string, tasks []workflowmodel.WorkflowTask) error {
@@ -314,7 +327,7 @@ func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID strin
 	byID := make(map[string]workflowmodel.WorkflowTask, len(tasks))
 	order := make([]string, 0, len(tasks))
 	for _, task := range tasks {
-		id := strings.TrimSpace(task.ID)
+		id := strings.TrimSpace(task.TaskID)
 		if id == "" {
 			continue
 		}
@@ -343,7 +356,7 @@ func (r WorkflowProcessStore) UpdateTasks(ctx context.Context, workspaceID strin
 		for _, id := range order[start:end] {
 			insert.Values(slices.Clone(workflowTaskValues(byID[id])[1:])...)
 		}
-		insert, buildErr := r.store.Engine.ApplyUpsert(insert, []string{"workspace_id", "id"}, assignments...)
+		insert, buildErr := r.store.Engine.ApplyUpsert(insert, []string{"task_id"}, assignments...)
 		if buildErr != nil {
 			return buildErr
 		}
@@ -362,7 +375,7 @@ func (r WorkflowProcessStore) GetTask(ctx context.Context, workspaceID, id strin
 	if err != nil {
 		return workflowmodel.WorkflowTask{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskColumns()...).Where(query.Equal("id", id)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskSelectColumns()...).Where(query.Equal("task_id", id)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowTask{}, false, err
 	}
@@ -387,7 +400,7 @@ func (r WorkflowProcessStore) ListTasks(ctx context.Context, workspaceID, proces
 			predicates = append(predicates, query.Equal(item.column, value))
 		}
 	}
-	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskColumns()...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskSelectColumns()...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
 		builder.Where(query.And(predicates...))
 	}
@@ -417,7 +430,7 @@ func (r WorkflowProcessStore) DecideTask(ctx context.Context, workspaceID, taskI
 		return workflowmodel.WorkflowTask{}, false, err
 	}
 	completedAtMillis := timevalue.Millis(completedAt)
-	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Set("status", decision).Set("decision", decision).Set("comment", comment).Set("completed_by", assigneeUserID).Set("completed_at", completedAtMillis).Set("updated_at", completedAtMillis).Where(query.And(query.Equal("id", taskID), query.Equal("assignee_user_id", assigneeUserID), query.Equal("status", "open"))).Build()
+	queryValue, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Set("status", decision).Set("decision", decision).Set("comment", comment).Set("completed_by", assigneeUserID).Set("completed_at", completedAtMillis).Set("updated_at", completedAtMillis).Where(query.And(query.Equal("task_id", taskID), query.Equal("assignee_user_id", assigneeUserID), query.Equal("status", "open"))).Build()
 	if err != nil {
 		return workflowmodel.WorkflowTask{}, false, err
 	}
@@ -442,7 +455,7 @@ func (r WorkflowProcessStore) InsertEvent(ctx context.Context, workspaceID strin
 	}
 	event.WorkspaceID = workspaceID
 	metadata, _ := database.MarshalTimeJSON(database.NonNilMap(event.Metadata))
-	values := []any{event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
+	values := []any{event.EventID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
 	if err := r.store.GuardSubjectEvidenceWrite(ctx, r.database(), workspaceID, "_workflow_process_events", workflowEventColumns[1:], values); err != nil {
 		return err
 	}
@@ -461,7 +474,7 @@ func (r WorkflowProcessStore) ListEvents(ctx context.Context, workspaceID, proce
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(workflowEventColumns...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(workflowEventSelectColumns()...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +489,7 @@ func (r WorkflowProcessStore) ListEvents(ctx context.Context, workspaceID, proce
 		var metadata string
 		var nodeID, taskID sql.NullString
 		var createdAt int64
-		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
+		if err := rows.Scan(&event.ID, &event.WorkspaceID, &event.EventID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
 			return nil, err
 		}
 		event.NodeID, event.TaskID = nodeID.String, taskID.String
@@ -495,7 +508,7 @@ func (r WorkflowProcessStore) updateScopedRow(ctx context.Context, table, worksp
 	for index, column := range columns {
 		builder.Set(column, values[index])
 	}
-	predicates := []query.Predicate{query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
+	predicates := []query.Predicate{query.Equal(workflowEntityIDColumn(table), id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
 	for i, column := range columns {
 		if column == "status" && values[i] != "cancelled" {
 			predicates = append(predicates, query.NotEqual("status", "cancelled"))
@@ -514,4 +527,23 @@ func (r WorkflowProcessStore) updateScopedRow(ctx context.Context, table, worksp
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func workflowEntityIDColumn(table string) string {
+	switch table {
+	case "_workflow_executions":
+		return "execution_id"
+	case "_workflow_process_instances":
+		return "process_id"
+	case "_workflow_node_instances":
+		return "node_instance_id"
+	case "_workflow_tasks":
+		return "task_id"
+	case "_workflow_process_events":
+		return "event_id"
+	case workflowRouteStepsTable:
+		return "route_step_id"
+	default:
+		panic("workflow entity table is not registered: " + table)
+	}
 }

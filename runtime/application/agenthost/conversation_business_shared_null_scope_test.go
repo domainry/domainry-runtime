@@ -21,7 +21,7 @@ func TestSharedBusinessSQLNullNegationMustNotCoverOriginalORMPage(t *testing.T) 
 			h, resolver, reads, producer := newConversationBusinessFixture(t)
 			enableBusinessEvidence(t, h)
 			principals, reader := bindSharedBusinessReader(h, resolver, producer)
-			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{ID: "zz-null-name", OwnerUserID: producer.UserID, Data: map[string]any{"name": nil, "amount": int64(1)}}); err != nil {
+			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{RecordID: "zz-null-name", OwnerUserID: producer.UserID, Data: map[string]any{"name": nil, "amount": int64(1)}}); err != nil {
 				t.Fatal(err)
 			}
 			present := identity.Predicate{Fact: "name", Operator: identity.OperatorExists, Value: true}

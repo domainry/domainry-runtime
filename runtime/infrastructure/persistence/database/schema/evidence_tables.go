@@ -6,9 +6,8 @@ import (
 )
 
 func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]string) error {
-	prepareWorkspaceScopedIdentities(tables)
 	for _, table := range sortedRuntimeSchemaTables(tables) {
-		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+quotedColumnDefinitions(s, tables[table])+")"); err != nil {
+		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+quotedColumnDefinitions(s, tables[table], runtimeEntityColumns(table)...)+")"); err != nil {
 			return fmt.Errorf("create %s: %w", table, err)
 		}
 	}
@@ -18,6 +17,12 @@ func ensureEvidenceTables(ctx context.Context, s Store, tables map[string][]stri
 		columns []string
 		unique  bool
 	}{
+		{name: "uniq_action_assurance_grant_id", table: "_action_assurance_grants", columns: []string{"grant_id"}, unique: true},
+		{name: "uniq_automation_run_id", table: "_automation_runs", columns: []string{"run_id"}, unique: true},
+		{name: "uniq_runtime_publication_message_id", table: "_publication_outbox", columns: []string{"message_id"}, unique: true},
+		{name: "uniq_workflow_execution_id", table: WorkflowExecutionsTable, columns: []string{"execution_id"}, unique: true},
+		{name: "uniq_runtime_release_cohort_key", table: "_release_cohorts", columns: []string{"cohort_key"}, unique: true},
+		{name: "uniq_runtime_release_instance_id", table: "_release_instances", columns: []string{"instance_id"}, unique: true},
 		{name: "idx_runtime_publication_destination", table: "_publication_outbox", columns: []string{"publication_type", "workspace_id", "connector_key", "status"}},
 		{name: "idx_runtime_publication_due", table: "_publication_outbox", columns: []string{"publication_type", "status", "next_attempt_at", "lease_expires_at", "created_at"}},
 		{name: "idx_runtime_publication_operation", table: "_publication_outbox", columns: []string{"workspace_id", "operation_id"}},

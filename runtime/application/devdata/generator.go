@@ -102,7 +102,7 @@ func GenerateIfEmpty(ctx context.Context, store Store, workspaceID string, model
 					return fmt.Errorf("generate development data for %s: %w", object.Key, generateErr)
 				}
 				now := time.Date(2026, time.January, 1, 0, 0, index, 0, time.UTC).Format(time.RFC3339Nano)
-				record := recordmodel.Record{WorkspaceID: workspaceID, ID: id, Data: data, CreatedAt: now, UpdatedAt: now}
+				record := recordmodel.Record{WorkspaceID: workspaceID, RecordID: id, Data: data, CreatedAt: now, UpdatedAt: now}
 				if insertErr := store.InsertRecord(txCtx, workspaceID, object, record); insertErr != nil {
 					return fmt.Errorf("insert development data for %s: %w", object.Key, insertErr)
 				}

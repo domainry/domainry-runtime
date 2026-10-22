@@ -29,7 +29,7 @@ type bulkExecutionProbe struct {
 
 func (p *bulkExecutionProbe) TryBeginExecution(_ context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
 	p.beginCalls++
-	if p.execution.ID != "" {
+	if p.execution.OperationID != "" {
 		if p.execution.RequestFingerprint != request.RequestFingerprint {
 			return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionFingerprintConflict, Execution: p.execution}, nil
 		}
@@ -46,13 +46,13 @@ func (p *bulkExecutionProbe) TryBeginExecution(_ context.Context, request action
 		return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionInProgress, Execution: p.execution}, nil
 	}
 	p.execution = request.Execution
-	p.execution.ID, p.execution.RequestFingerprint = "bulk-execution", request.RequestFingerprint
+	p.execution.OperationID, p.execution.RequestFingerprint = "bulk-execution", request.RequestFingerprint
 	p.execution.Status, p.execution.LeaseOwner, p.execution.FencingToken = string(idempotency.StatusProcessing), request.LeaseOwner, 1
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: p.execution}, nil
 }
 
 func TestActionBulkReplayRechecksPermissionBeforeReadingReceipt(t *testing.T) {
-	executions := &bulkExecutionProbe{execution: actionmodel.ActionBusinessExecution{ID: "existing-receipt", Status: string(idempotency.StatusSucceeded)}}
+	executions := &bulkExecutionProbe{execution: actionmodel.ActionBusinessExecution{OperationID: "existing-receipt", Status: string(idempotency.StatusSucceeded)}}
 	service := NewActionBulkApplicationService(ActionBulkDependencies{
 		Actions: func(context.Context) []definitionmodel.ActionSchema {
 			return []definitionmodel.ActionSchema{{Key: "order.approve", ObjectKey: "order"}}

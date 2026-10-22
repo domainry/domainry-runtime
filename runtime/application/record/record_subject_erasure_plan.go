@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +64,7 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 			}
 		}
 		for _, record := range matches[object.Key] {
-			mutation := recordmodel.SubjectErasureMutation{ObjectKey: object.Key, RecordID: record.ID, BeforeUpdatedAt: record.UpdatedAt, AfterUpdatedAt: after, Values: map[string]any{}}
+			mutation := recordmodel.SubjectErasureMutation{ObjectKey: object.Key, RecordID: record.RecordID, BeforeUpdatedAt: record.UpdatedAt, AfterUpdatedAt: after, Values: map[string]any{}}
 			for _, field := range object.Fields {
 				mode := recordpolicy.RecordSubjectEraseMode(field)
 				value := record.Data[field.Key]
@@ -71,7 +72,7 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 					continue
 				}
 				if mode == recordpolicy.RecordLifecycleEraseAnonymize {
-					mutation.Values[field.Key] = recordSubjectAnonymousValue(workspaceID, subjectID, object.Key, record.ID, field)
+					mutation.Values[field.Key] = recordSubjectAnonymousValue(workspaceID, subjectID, object.Key, record.RecordID, field)
 				} else {
 					mutation.Values[field.Key] = nil
 				}
@@ -89,7 +90,7 @@ func (s *RecordSubjectLifecycleApplicationService) PrepareSubjectErasure(ctx con
 						continue
 					}
 					seenFiles[value] = true
-					reference := lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.ID, FieldKey: field.Key, Reference: value}
+					reference := lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.RecordID, FieldKey: field.Key, Reference: value}
 					evidence, err := s.files.ExportSubjectFile(ctx, reference)
 					if err != nil {
 						return nil, err
@@ -262,7 +263,7 @@ func (s *RecordSubjectLifecycleApplicationService) SubjectRecordReferences(ctx c
 	result := []recordmodel.SubjectRecordReference{}
 	for _, object := range s.objects {
 		for _, record := range matches[object.Key] {
-			result = append(result, recordmodel.SubjectRecordReference{ObjectKey: object.Key, RecordID: record.ID})
+			result = append(result, recordmodel.SubjectRecordReference{ObjectKey: object.Key, RecordID: record.RecordID})
 		}
 	}
 	return result, nil
@@ -276,13 +277,13 @@ func (s *RecordSubjectLifecycleApplicationService) subjectFileReferencedOutsideP
 	for _, object := range s.objects {
 		after := ""
 		for {
-			page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: after, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+			page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: after, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}})
 			if err != nil {
 				return false, err
 			}
 			for _, record := range page.Items {
 				for key, value := range record.Data {
-					if _, removed := ignored[object.Key+"\x00"+record.ID][key]; removed {
+					if _, removed := ignored[object.Key+"\x00"+record.RecordID][key]; removed {
 						continue
 					}
 					if recordSubjectValueContainsReference(value, reference) {
@@ -293,10 +294,14 @@ func (s *RecordSubjectLifecycleApplicationService) subjectFileReferencedOutsideP
 			if !page.HasNext {
 				break
 			}
-			if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID == after {
+			if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID < 1 {
 				return false, fmt.Errorf("subject reference scan did not advance")
 			}
-			after = page.Items[len(page.Items)-1].ID
+			nextAfterID := strconv.FormatInt(page.Items[len(page.Items)-1].ID, 10)
+			if nextAfterID == after {
+				return false, fmt.Errorf("subject reference scan did not advance")
+			}
+			after = nextAfterID
 		}
 	}
 	return false, nil

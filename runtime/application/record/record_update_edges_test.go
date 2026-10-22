@@ -66,7 +66,7 @@ func TestUpdateDependencyFailuresAndCandidateGuards(t *testing.T) {
 	for _, stage := range stages {
 		t.Run(stage, func(t *testing.T) {
 			failure := errors.New(stage + " failed")
-			repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", UpdatedAt: "revision-2", Data: map[string]any{
+			repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", UpdatedAt: "revision-2", Data: map[string]any{
 				"name": "Before", "status": "open", "age": float64(20), "version": float64(2),
 			}}}
 			dependencies := recordUpdateEdgeDependencies(repository)
@@ -187,7 +187,7 @@ func TestUpdateDependencyFailuresAndCandidateGuards(t *testing.T) {
 }
 
 func TestUpdateSelfEffectRevalidatesChangedCandidate(t *testing.T) {
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(2)}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(2)}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	validationCalls := 0
 	dependencies.ApplySelfEffects = func(_ context.Context, _ definitionmodel.ObjectSchema, _ map[string]any, next map[string]any, _ string, _ principalmodel.Principal) (bool, error) {

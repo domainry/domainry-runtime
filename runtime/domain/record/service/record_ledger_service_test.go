@@ -20,7 +20,7 @@ func TestRecordLedgerEvidenceReplayAndTamperDetection(t *testing.T) {
 	records := make([]recordmodel.Record, 0, len(inputs))
 	previous := ""
 	for index, data := range inputs {
-		record, err := RecordLedgerBuildEvidence(object, recordmodel.Record{ID: "entry-" + string(rune('1'+index)), Data: data}, previous, secret)
+		record, err := RecordLedgerBuildEvidence(object, recordmodel.Record{RecordID: "entry-" + string(rune('1'+index)), Data: data}, previous, secret)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestRecordLedgerEvidenceReplayAndTamperDetection(t *testing.T) {
 
 func TestRecordLedgerRequiresAdjustmentKindForReversalReference(t *testing.T) {
 	object := recordLedgerTestObject()
-	record := recordmodel.Record{ID: "entry-1", Data: map[string]any{"account_id": "a", "business_key": "b", "entry_kind": "payment", "direction": "decrease", "balance_bucket": "cash", "amount": "1.00", "currency": "CNY", "source_reference": "s", "actor_id": "u", "rule_version": "1", "occurred_at": "2026-07-21T00:00:00Z", "sequence": 1, "reversal_of": "original"}}
+	record := recordmodel.Record{RecordID: "entry-1", Data: map[string]any{"account_id": "a", "business_key": "b", "entry_kind": "payment", "direction": "decrease", "balance_bucket": "cash", "amount": "1.00", "currency": "CNY", "source_reference": "s", "actor_id": "u", "rule_version": "1", "occurred_at": "2026-07-21T00:00:00Z", "sequence": 1, "reversal_of": "original"}}
 	_, err := RecordLedgerBuildEvidence(object, record, "", []byte("secret"))
 	assertRecordLedgerError(t, err, "backend.ledger.reversal_kind_invalid", "entry-1", 1)
 }
@@ -78,7 +78,7 @@ func cloneLedgerRecords(records []recordmodel.Record) []recordmodel.Record {
 		for key, value := range record.Data {
 			data[key] = value
 		}
-		cloned[index] = recordmodel.Record{ID: record.ID, Data: data}
+		cloned[index] = recordmodel.Record{RecordID: record.RecordID, Data: data}
 	}
 	return cloned
 }

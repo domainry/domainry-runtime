@@ -54,7 +54,7 @@ func (e *WorkflowProcessEngine) Start(ctx context.Context, workflow definitionmo
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	process := workflowmodel.WorkflowProcessInstance{
 		WorkspaceID:         principal.WorkspaceID,
-		ID:                  workflowProcessID(ctx, "process"),
+		ProcessID:           workflowProcessID(ctx, "process"),
 		OperationID:         requestcontext.OwnerExecutionID(ctx),
 		WorkflowKey:         workflow.Key,
 		WorkflowName:        workflow.Name,
@@ -75,13 +75,13 @@ func (e *WorkflowProcessEngine) Start(ctx context.Context, workflow definitionmo
 	if err := e.runtime.dependencies.Processes.InsertProcess(ctx, principal.WorkspaceID, process); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("insert workflow process", err)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, "", "", "process_started", principal.UserID, "workflow.event.process.started", map[string]any{"workflow_key": workflow.Key})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, "", "", "process_started", principal.UserID, "workflow.event.process.started", map[string]any{"workflow_key": workflow.Key})
 	trigger := workflowpolicy.WorkflowGraphTrigger(workflow.Graph)
-	triggerInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, trigger, "success", process.Variables, map[string]any{"triggered": true})
+	triggerInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, trigger, "success", process.Variables, map[string]any{"triggered": true})
 	if err := e.runtime.dependencies.Processes.InsertNode(ctx, principal.WorkspaceID, triggerInstance); err != nil {
 		return e.failProcess(ctx, process, "backend.workflow.node_insert_failed", principal.UserID)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, trigger.ID, "", "node_completed", principal.UserID, trigger.Name, map[string]any{"node_type": trigger.Type})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, trigger.ID, "", "node_completed", principal.UserID, trigger.Name, map[string]any{"node_type": trigger.Type})
 	return e.runWithContext(ctx, process, e.nextNodeIDs(workflow.Graph, trigger.ID, "success"), nil, principal)
 }
 
@@ -114,27 +114,27 @@ func (e *WorkflowProcessEngine) DecideTask(ctx context.Context, taskID string, r
 		return workflowmodel.WorkflowProcessInstance{}, internalError("get workflow process", err)
 	}
 	if strings.TrimSpace(req.IdempotencyKey) != "" {
-		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
-		workflowRecordCommand(&process, "task.decision:"+task.ID, key)
+		key := workflowCommandKey("task.decision", task.TaskID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
+		workflowRecordCommand(&process, "task.decision:"+task.TaskID, key)
 	}
-	taskSnapshots, err := e.runtime.dependencies.Processes.ListTasks(ctx, principal.WorkspaceID, process.ID, "", "", 500)
+	taskSnapshots, err := e.runtime.dependencies.Processes.ListTasks(ctx, principal.WorkspaceID, process.ProcessID, "", "", 500)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("snapshot workflow tasks", err)
 	}
-	nodeSnapshots, err := e.runtime.dependencies.Processes.ListNodes(ctx, principal.WorkspaceID, process.ID)
+	nodeSnapshots, err := e.runtime.dependencies.Processes.ListNodes(ctx, principal.WorkspaceID, process.ProcessID)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("snapshot workflow nodes", err)
 	}
 	processSnapshot := process
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	task, decided, err := e.runtime.dependencies.Processes.DecideTask(ctx, principal.WorkspaceID, task.ID, principal.UserID, decision, strings.TrimSpace(req.Comment), now)
+	task, decided, err := e.runtime.dependencies.Processes.DecideTask(ctx, principal.WorkspaceID, task.TaskID, principal.UserID, decision, strings.TrimSpace(req.Comment), now)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("decide workflow task", err)
 	}
 	if !decided {
 		return workflowmodel.WorkflowProcessInstance{}, conflict("backend.workflow.task_already_decided")
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, task.NodeID, task.ID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, task.NodeID, task.TaskID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment})
 	outcome, complete, err := e.aggregateApproval(ctx, process, task.NodeID, principal)
 	if err != nil {
 		return e.recoverWorkflowDecision(ctx, processSnapshot, nodeSnapshots, taskSnapshots, task, err, principal.UserID, nil)
@@ -148,7 +148,7 @@ func (e *WorkflowProcessEngine) DecideTask(ctx context.Context, taskID string, r
 		}
 		return process, nil
 	}
-	if err := e.completeApprovalNode(ctx, principal.WorkspaceID, process.ID, task.NodeID, outcome, principal.UserID); err != nil {
+	if err := e.completeApprovalNode(ctx, principal.WorkspaceID, process.ProcessID, task.NodeID, outcome, principal.UserID); err != nil {
 		return e.recoverWorkflowDecision(ctx, processSnapshot, nodeSnapshots, taskSnapshots, task, err, principal.UserID, nil)
 	}
 	process.Variables["approval_decision"] = outcome
@@ -162,7 +162,7 @@ func (e *WorkflowProcessEngine) DecideTask(ctx context.Context, taskID string, r
 		if err := e.runtime.dependencies.Processes.UpdateProcess(ctx, process.WorkspaceID, process); err != nil {
 			return process, internalError("reject workflow process", err)
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, task.NodeID, task.ID, "process_rejected", principal.UserID, "workflow.event.process.rejected", nil)
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, task.NodeID, task.TaskID, "process_rejected", principal.UserID, "workflow.event.process.rejected", nil)
 		return process, nil
 	}
 	next := e.nextNodeIDs(process.DefinitionSnapshot.Graph, task.NodeID, outcome)
@@ -215,7 +215,7 @@ func (e *WorkflowProcessEngine) runWithContext(ctx context.Context, process work
 		return process, internalError("update workflow process", err)
 	}
 	if process.Status == "completed" {
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, "", "", "process_completed", principal.UserID, "workflow.event.process.completed", nil)
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, "", "", "process_completed", principal.UserID, "workflow.event.process.completed", nil)
 	}
 	return process, nil
 }
@@ -239,11 +239,11 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 				return "", false, err
 			}
 			if outcome == "skipped" {
-				e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "approval_skipped", principal.UserID, node.Name, map[string]any{"reason": "assignee_not_found", "policy": "skip"})
+				e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "approval_skipped", principal.UserID, node.Name, map[string]any{"reason": "assignee_not_found", "policy": "skip"})
 			}
 			return outcome, waiting, nil
 		}
-		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", input, nil)
+		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", input, nil)
 		if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 			return "", false, internalError("insert approval node", err)
 		}
@@ -262,10 +262,10 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 			if err := e.runtime.dependencies.Processes.UpdateNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 				return "", false, internalError("skip approval node", err)
 			}
-			e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "approval_skipped", principal.UserID, node.Name, nodeInstance.Output)
+			e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "approval_skipped", principal.UserID, node.Name, nodeInstance.Output)
 			return "skipped", false, nil
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil)
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil)
 		return "waiting", true, nil
 	case "agent_task":
 		return e.executeAgentTaskNode(ctx, process, node, principal)
@@ -294,12 +294,12 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 		if e.runtime.dependencies.WaitTimers == nil {
 			return "", false, internalError("schedule workflow timer", fmt.Errorf("workflow wait timer service is required"))
 		}
-		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", input, nil)
+		nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", input, nil)
 		if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 			return "", false, internalError("insert timer node", err)
 		}
 		timerID, err := e.runtime.dependencies.WaitTimers.ScheduleWorkflowWaitTimer(ctx, WorkflowWaitTimerRequest{
-			WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeID: node.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
+			WorkspaceID: process.WorkspaceID, ProcessID: process.ProcessID, NodeID: node.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
 			Contract: workflowpolicy.WorkflowTimerNodeContract(node), Variables: workflowpolicy.WorkflowCloneMap(process.Variables), CreatedAt: time.Now().UTC(),
 		})
 		if err != nil {
@@ -311,7 +311,7 @@ func (e *WorkflowProcessEngine) executeNode(ctx context.Context, process *workfl
 		if err := e.runtime.dependencies.Processes.UpdateNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 			return "", false, internalError("update timer node", err)
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "timer_waiting", principal.UserID, node.Name, nodeInstance.Output)
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "timer_waiting", principal.UserID, node.Name, nodeInstance.Output)
 		return "waiting", true, nil
 	default:
 		return "", false, badRequest("backend.workflow.graph_node_type_invalid", "node", node.ID)
@@ -330,11 +330,11 @@ func workflowProcessConditionMatches(ctx context.Context, node definitionmodel.W
 }
 
 func (e *WorkflowProcessEngine) recordCompletedNode(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, input, output map[string]any, actorID string) error {
-	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "success", input, output)
+	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "success", input, output)
 	if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, instance); err != nil {
 		return internalError("insert workflow node", err)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "node_completed", actorID, node.Name, map[string]any{"node_type": node.Type})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "node_completed", actorID, node.Name, map[string]any{"node_type": node.Type})
 	return nil
 }
 
@@ -345,7 +345,7 @@ func (e *WorkflowProcessEngine) newNodeInstance(ctx context.Context, workspaceID
 	if status != "waiting" && status != "running" {
 		completedAt = now
 	}
-	return workflowmodel.WorkflowNodeInstance{WorkspaceID: workspaceID, ID: workflowProcessID(ctx, "node"), ProcessID: processID, NodeID: node.ID, NodeType: node.Type, Iteration: iteration, Status: status, Input: workflowpolicy.WorkflowCloneMap(input), Output: workflowpolicy.WorkflowCloneMap(output), StartedAt: now, CompletedAt: completedAt}
+	return workflowmodel.WorkflowNodeInstance{WorkspaceID: workspaceID, NodeInstanceID: workflowProcessID(ctx, "node"), ProcessID: processID, NodeID: node.ID, NodeType: node.Type, Iteration: iteration, Status: status, Input: workflowpolicy.WorkflowCloneMap(input), Output: workflowpolicy.WorkflowCloneMap(output), StartedAt: now, CompletedAt: completedAt}
 }
 
 func (e *WorkflowProcessEngine) nextNodeIteration(ctx context.Context, workspaceID, processID, nodeID string) int {

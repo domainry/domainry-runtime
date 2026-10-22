@@ -8,6 +8,7 @@ import (
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	"github.com/domainry/domainry-orm/recordschema"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	model "github.com/domainry/domainry-report-sdk/model"
@@ -45,14 +46,14 @@ func TestReportAnalysisRealOwnerFullSQLiteAggregationAndCurrentPermissions(t *te
 	}
 	bindReportTestMetadata(t, store)
 	columns := []ormschema.ColumnDefinition{}
-	for _, key := range []string{"workspace_id", "id", "owner_user_id", "department", "amount"} {
+	for _, key := range []string{"department", "amount"} {
 		columns = append(columns, ormschema.Column(key, ormschema.Text()))
 	}
-	for _, key := range []string{"created_at", "updated_at", "occurred_at"} {
+	for _, key := range []string{"occurred_at"} {
 		columns = append(columns, ormschema.Column(key, ormschema.Integer()))
 	}
 	columns = append(columns, ormschema.Column("quantity", ormschema.Integer()))
-	ddl, args, err := ormschema.NewTable(store.RuntimeRenderer(), "analysis_sale").Columns(columns...).PrimaryKey("workspace_id", "id").Build()
+	ddl, args, err := recordschema.NewTable(store.RuntimeRenderer(), "analysis_sale").Columns(columns...).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func TestReportAnalysisRealOwnerFullSQLiteAggregationAndCurrentPermissions(t *te
 	authority := model.ReportAuthority{AccessToken: "in-process-fixture"}
 	insert := func(workspace, id, user string, data map[string]any) recordmodel.Record {
 		t.Helper()
-		record := recordmodel.Record{ID: id, OwnerUserID: user, CreatedAt: "2026-08-01T00:00:00Z", UpdatedAt: "2026-08-01T00:00:00Z", Data: data}
+		record := recordmodel.Record{RecordID: id, OwnerUserID: user, CreatedAt: "2026-08-01T00:00:00Z", UpdatedAt: "2026-08-01T00:00:00Z", Data: data}
 		if err := repository.InsertRecord(t.Context(), workspace, object, record); err != nil {
 			t.Fatal(err)
 		}

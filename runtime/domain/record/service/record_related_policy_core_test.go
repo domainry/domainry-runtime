@@ -38,7 +38,7 @@ func recordPolicyRelationObject(validations ...definitionmodel.ValidationSchema)
 }
 
 func TestValidateRecordPoliciesRelatedStatusAndFieldResolution(t *testing.T) {
-	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{ID: "account-1", Data: map[string]any{"status": "active"}}, found: true}
+	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{RecordID: "account-1", Data: map[string]any{"status": "active"}}, found: true}
 	validator := newRelatedPolicyValidatorForTest(repository, map[string]definitionmodel.ObjectSchema{"account": relatedPolicyObject("account")}, nil)
 	object := recordPolicyRelationObject(
 		definitionmodel.ValidationSchema{Key: "ignored", Type: "unrelated"},
@@ -66,7 +66,7 @@ func TestValidateRecordPoliciesRelatedStatusAndFieldResolution(t *testing.T) {
 }
 
 func TestValidateRecordPoliciesRelatedBoolean(t *testing.T) {
-	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{ID: "account-1", Data: map[string]any{"locked": true}}, found: true}
+	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{RecordID: "account-1", Data: map[string]any{"locked": true}}, found: true}
 	validator := newRelatedPolicyValidatorForTest(repository, map[string]definitionmodel.ObjectSchema{"account": relatedPolicyObject("account")}, nil)
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
 
@@ -118,21 +118,21 @@ func TestRelatedRecordForValidationFailuresAndSuccess(t *testing.T) {
 	_, _, _, _, err = validator.relatedRecordForValidation(t.Context(), object, map[string]any{"account_id": "account-1"}, validation, "account_id", principal)
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.policy.related_record_missing", nil)
 
-	repository.found, repository.record = true, recordmodel.Record{ID: "account-1"}
+	repository.found, repository.record = true, recordmodel.Record{RecordID: "account-1"}
 	allow = false
 	_, _, _, _, err = validator.relatedRecordForValidation(t.Context(), object, map[string]any{"account_id": "account-1"}, validation, "account_id", principal)
 	assertRecordAppError(t, err, apperror.KindForbidden, "backend.record.outside_scope", nil)
 
 	allow = true
 	targetKey, targetObject, related, found, err := validator.relatedRecordForValidation(t.Context(), object, map[string]any{"account_id": "account-1"}, validation, "account_id", principal)
-	if err != nil || !found || targetKey != "account" || targetObject.Key != "account" || related.ID != "account-1" {
+	if err != nil || !found || targetKey != "account" || targetObject.Key != "account" || related.RecordID != "account-1" {
 		t.Fatalf("related record = %q %#v %#v found=%v err=%v", targetKey, targetObject, related, found, err)
 	}
 }
 
 func TestLookupRelatedRecordBranches(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
-	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "account-1"}}}}}
+	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "account-1"}}}}}
 	allow := false
 	objects := map[string]definitionmodel.ObjectSchema{"account": relatedPolicyObject("account")}
 	validator := newRelatedPolicyValidatorForTest(repository, objects, &allow)
@@ -165,7 +165,7 @@ func TestLookupRelatedRecordBranches(t *testing.T) {
 
 	validation.Config["system_lookup"] = true
 	key, object, record, found, err := validator.lookupRelatedRecord(t.Context(), validation, map[string]any{"code": "A"}, principal, "account", "code", "external_code")
-	if err != nil || !found || key != "account" || object.Key != "account" || record.ID != "account-1" {
+	if err != nil || !found || key != "account" || object.Key != "account" || record.RecordID != "account-1" {
 		t.Fatalf("system lookup result: %q %#v %#v found=%v err=%v", key, object, record, found, err)
 	}
 
@@ -178,11 +178,11 @@ func TestLookupRelatedRecordBranches(t *testing.T) {
 }
 
 func TestRelatedRecordForValidationUsesMatchLookup(t *testing.T) {
-	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "account-1"}}}}}
+	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "account-1"}}}}}
 	validator := newRelatedPolicyValidatorForTest(repository, map[string]definitionmodel.ObjectSchema{"account": relatedPolicyObject("account")}, nil)
 	validation := definitionmodel.ValidationSchema{Key: "by_code", Config: map[string]any{"target_object": "account", "source_field": "account_code", "target_match_field": "external_code"}}
 	key, _, record, found, err := validator.relatedRecordForValidation(t.Context(), definitionmodel.ObjectSchema{}, map[string]any{"account_code": "A"}, validation, "", principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}})
-	if err != nil || !found || key != "account" || record.ID != "account-1" || repository.queries[0].Filters["external_code"] != "A" {
+	if err != nil || !found || key != "account" || record.RecordID != "account-1" || repository.queries[0].Filters["external_code"] != "A" {
 		t.Fatalf("match lookup = %q %#v found=%v queries=%#v err=%v", key, record, found, repository.queries, err)
 	}
 }

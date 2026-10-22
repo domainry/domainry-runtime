@@ -82,7 +82,7 @@ func TestRecordFileFieldsOnlySupportNullFiltersAndAreNotSearchableOrSortable(t *
 		SearchFields: []string{"attachment", "title"},
 		Sort:         []recordmodel.RecordSortRule{{Field: "attachments", Direction: "asc"}, {Field: "title", Direction: "desc"}},
 	})
-	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "desc"}, {Field: "id", Direction: "asc"}}) {
+	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "desc"}, {Field: recordmodel.IDField, Direction: "asc"}}) {
 		t.Fatalf("normalized file query=%#v", query)
 	}
 	err := RecordValidateListFilters(object, map[string]any{"attachment": "file-1"})
@@ -127,7 +127,7 @@ func TestStructuredFieldsPublishPortableQuerySemantics(t *testing.T) {
 		SearchFields: []string{"tags", "payload", "title"},
 		Sort:         []recordmodel.RecordSortRule{{Field: "tags"}, {Field: "payload"}, {Field: "title"}},
 	})
-	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "asc"}, {Field: "id", Direction: "asc"}}) {
+	if !reflect.DeepEqual(query.SearchFields, []string{"title"}) || !reflect.DeepEqual(query.Sort, []recordmodel.RecordSortRule{{Field: "title", Direction: "asc"}, {Field: recordmodel.IDField, Direction: "asc"}}) {
 		t.Fatalf("structured query=%#v", query)
 	}
 	if err := RecordValidateListFilters(object, map[string]any{"tags": []any{"a"}, "tags__in": []any{[]any{"b"}}}); err != nil {

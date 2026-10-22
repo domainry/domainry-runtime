@@ -126,7 +126,7 @@ func (s *PipelineDomainService) ApplyItemDefaults(ctx context.Context, object de
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(stage.ID) == "" {
+	if strings.TrimSpace(stage.RecordID) == "" {
 		return pipelineError(apperror.KindBadRequest, "backend.pipeline.default_stage_required", nil)
 	}
 	stageObject, _ := s.object(ctx, "pipeline_stage")
@@ -136,7 +136,7 @@ func (s *PipelineDomainService) ApplyItemDefaults(ctx context.Context, object de
 	if err := ValidateStageBelongsToPipeline(stage, pipelineID); err != nil {
 		return err
 	}
-	data["current_stage"] = stage.ID
+	data["current_stage"] = stage.RecordID
 	return s.ApplyStageSLA(data, stage, strings.TrimSpace(fmt.Sprint(data["last_transition_at"])), overwriteSLA)
 }
 
@@ -168,14 +168,14 @@ func (s *PipelineDomainService) NextStage(ctx context.Context, workspaceID, pipe
 	var next recordmodel.Record
 	nextOrder := 0.0
 	for _, stage := range stages {
-		if strings.TrimSpace(stage.ID) == strings.TrimSpace(current.ID) {
+		if strings.TrimSpace(stage.RecordID) == strings.TrimSpace(current.RecordID) {
 			continue
 		}
 		order, ok := floatValue(stage.Data["sort_order"])
 		if !ok || order <= currentOrder {
 			continue
 		}
-		if next.ID == "" || order < nextOrder {
+		if next.RecordID == "" || order < nextOrder {
 			next, nextOrder = stage, order
 		}
 	}
@@ -191,7 +191,7 @@ func (s *PipelineDomainService) FirstStage(ctx context.Context, workspaceID, pip
 	firstOrder := 0.0
 	for _, stage := range stages {
 		order, ok := floatValue(stage.Data["sort_order"])
-		if ok && (first.ID == "" || order < firstOrder) {
+		if ok && (first.RecordID == "" || order < firstOrder) {
 			first, firstOrder = stage, order
 		}
 	}

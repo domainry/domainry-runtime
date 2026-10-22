@@ -70,11 +70,11 @@ func TestBusinessHandlerIdentityRemainingConditions(t *testing.T) {
 }
 
 func TestActionRecordAndHandlerInputRemainingConditions(t *testing.T) {
-	records := map[string]recordmodel.Record{"other\x00one": {ID: "other"}, "booking\x00one": {ID: "one"}}
-	if record, found := singleActionObjectRecord(records, "booking"); !found || record.ID != "one" {
+	records := map[string]recordmodel.Record{"other\x00one": {RecordID: "other"}, "booking\x00one": {RecordID: "one"}}
+	if record, found := singleActionObjectRecord(records, "booking"); !found || record.RecordID != "one" {
 		t.Fatalf("record=%+v found=%v", record, found)
 	}
-	records["booking\x00two"] = recordmodel.Record{ID: "two"}
+	records["booking\x00two"] = recordmodel.Record{RecordID: "two"}
 	if _, found := singleActionObjectRecord(records, "booking"); found {
 		t.Fatal("ambiguous record resolved")
 	}

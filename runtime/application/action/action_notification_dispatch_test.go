@@ -32,12 +32,12 @@ func TestBusinessActionStagesGrantedNotificationAtomicallyWithAudit(t *testing.T
 	execution := &businessActionExecution{
 		unitOfWork: newActionTestUnitOfWork(), identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-1", ReceiptID: "operation-1"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 		principal: runtimeext.Principal{UserID: "user-1", RoleKey: "operator", CausationID: "cause-1"}, invocation: actionTestInvocation(), notificationGrants: []string{"business_task.assigned"},
-		dependencies: BusinessHandlerExecutionDependencies{CompileNotification: func(_ context.Context, eventID string, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+		dependencies: BusinessHandlerExecutionDependencies{CompileNotification: func(_ context.Context, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 			compiled++
-			if eventID == "" || principal.WorkspaceID != "workspace-a" || intent.Variables[0].Value() != "PT COMEX order" {
+			if intent.SourceEventID == "" || principal.WorkspaceID != "workspace-a" || intent.Variables[0].Value() != "PT COMEX order" {
 				t.Fatalf("intent=%+v principal=%+v", intent, principal)
 			}
-			return notificationmodel.NotificationEvent{Source: "project", Category: "task", Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Assigned", Actions: []notificationmodel.NotificationInboxActionRef{{ResourceType: "project_record", ResourceID: "task-42"}}}}, nil
+			return notificationmodel.NotificationEvent{EventID: "notevt_11111111111111111111111111111111", Source: "project", Category: "task", Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Assigned", Actions: []notificationmodel.NotificationInboxActionRef{{ResourceType: "project_record", ResourceID: "task-42"}}}}, nil
 		}},
 		plans: []transactionmodel.MutationPlan{actionMutationEdgePlan(t, "create", "business_task", "task-42")},
 	}
@@ -71,8 +71,8 @@ func TestBusinessActionNotificationFailsClosedBeforeCommit(t *testing.T) {
 	if _, err := execution.StageNotification(t.Context(), valid); apperror.CodeOf(err) != "backend.notification.action_compiler_required" {
 		t.Fatalf("compiler err=%v", err)
 	}
-	execution.dependencies.CompileNotification = func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
-		return notificationmodel.NotificationEvent{}, nil
+	execution.dependencies.CompileNotification = func(context.Context, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+		return notificationmodel.NotificationEvent{EventID: "notevt_11111111111111111111111111111111"}, nil
 	}
 	if _, err := execution.StageNotification(t.Context(), valid); err != nil {
 		t.Fatal(err)
@@ -87,12 +87,16 @@ func TestBusinessActionStagesBoundedNotificationBatchInOrderWithoutPartialFailur
 	execution := &businessActionExecution{
 		unitOfWork: newActionTestUnitOfWork(), identity: runtimeext.ExecutionIdentity{ExecutionID: "execution-batch"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 		principal: runtimeext.Principal{UserID: "user-1", RoleKey: "operator"}, invocation: actionTestInvocation(), notificationGrants: []string{"business_task.assigned"},
-		dependencies: BusinessHandlerExecutionDependencies{CompileNotification: func(_ context.Context, eventID string, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+		dependencies: BusinessHandlerExecutionDependencies{CompileNotification: func(_ context.Context, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 			compiled++
-			if principal.WorkspaceID != "workspace-a" || eventID == "" {
-				t.Fatalf("principal=%+v event=%q", principal, eventID)
+			if principal.WorkspaceID != "workspace-a" || intent.SourceEventID == "" {
+				t.Fatalf("principal=%+v intent=%+v", principal, intent)
 			}
-			return notificationmodel.NotificationEvent{Snapshot: notificationmodel.NotificationInboxSnapshot{Title: intent.SubjectRecordID}}, nil
+			eventID := "notevt_11111111111111111111111111111111"
+			if intent.SubjectRecordID == "task-2" {
+				eventID = "notevt_22222222222222222222222222222222"
+			}
+			return notificationmodel.NotificationEvent{EventID: eventID, Snapshot: notificationmodel.NotificationInboxSnapshot{Title: intent.SubjectRecordID}}, nil
 		}},
 	}
 	first, second := testNotificationIntent(), testNotificationIntent()
@@ -114,7 +118,7 @@ func TestBusinessActionStagesBoundedNotificationBatchInOrderWithoutPartialFailur
 
 	failing := *execution
 	failing.notifications = nil
-	failing.dependencies.CompileNotification = func(_ context.Context, _ string, intent runtimeext.NotificationIntent, _ principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+	failing.dependencies.CompileNotification = func(_ context.Context, intent runtimeext.NotificationIntent, _ principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 		if intent.SubjectRecordID == "task-2" {
 			return notificationmodel.NotificationEvent{}, apperror.New(apperror.KindBadRequest, "test.compile_failed", nil, nil)
 		}
@@ -146,7 +150,7 @@ func TestConditionalMutationResultUsesCanonicalCommitVersionForNotification(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	canonical := recordmodel.Record{ID: "task-42", UpdatedAt: revision, Data: map[string]any{"status": "assigned"}}
+	canonical := recordmodel.Record{RecordID: "task-42", UpdatedAt: revision, Data: map[string]any{"status": "assigned"}}
 	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{
 		Operation: "update", Object: definitionmodel.ObjectSchema{Key: "business_task"}, Record: canonical,
 	}, map[string]any{"status": "open"})
@@ -165,9 +169,9 @@ func TestConditionalMutationResultUsesCanonicalCommitVersionForNotification(t *t
 			PlanConditionalUpdate: func(context.Context, string, string, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				// Reproduce the live boundary defect: the convenience result omits
 				// UpdatedAt even though the canonical commit owns the final revision.
-				return plan, recordmodel.Record{ID: canonical.ID, Data: canonical.Data}, nil
+				return plan, recordmodel.Record{RecordID: canonical.RecordID, Data: canonical.Data}, nil
 			},
-			CompileNotification: func(_ context.Context, _ string, intent runtimeext.NotificationIntent, _ principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+			CompileNotification: func(_ context.Context, intent runtimeext.NotificationIntent, _ principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 				if intent.SubjectVersion != revision {
 					t.Fatalf("notification subject version=%q", intent.SubjectVersion)
 				}
@@ -176,7 +180,7 @@ func TestConditionalMutationResultUsesCanonicalCommitVersionForNotification(t *t
 		},
 	}
 	result, err := execution.ApplyRecordMutation(t.Context(), runtimeext.RecordMutation{
-		Operation: runtimeext.MutationConditionalUpdate, ObjectKey: "business_task", RecordID: canonical.ID,
+		Operation: runtimeext.MutationConditionalUpdate, ObjectKey: "business_task", RecordID: canonical.RecordID,
 		Fields: map[string]any{"status": "assigned"}, Predicates: []runtimeext.Predicate{{Field: "status", Operator: "eq", Value: "open"}},
 	})
 	if err != nil || result.Record.UpdatedAt != revision {

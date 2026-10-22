@@ -61,12 +61,12 @@ func TestTenantWhereScopeAndFilterContract(t *testing.T) {
 func TestTenantWhereAllKeepsTenantAndBusinessFiltersWithoutScopePredicate(t *testing.T) {
 	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{
 		AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
-		Filters:           map[string]any{"id__in": []any{"candidate"}, "status": "open"},
+		Filters:           map[string]any{"record_id__in": []any{"candidate"}, "status": "open"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(where, `"workspace_id" = $1`) || !strings.Contains(where, `"id" IN ($2)`) || !strings.Contains(where, `"status" = $3`) {
+	if !strings.Contains(where, `"workspace_id" = $1`) || !strings.Contains(where, `"record_id" IN ($2)`) || !strings.Contains(where, `"status" = $3`) {
 		t.Fatalf("all lost tenant or business filters: where=%s args=%#v", where, args)
 	}
 	if strings.Contains(where, "owner_user_id") || strings.Contains(where, "owner_org_id") || strings.Contains(where, "EXISTS (") {
@@ -151,7 +151,7 @@ func TestQueryBuilderHelperContracts(t *testing.T) {
 	if order != ` ORDER BY "created_at" DESC, "name" ASC, "id" ASC` {
 		t.Fatalf("explicit order=%s", order)
 	}
-	if order := BuildOrder(store, recordmodel.RecordListQuery{Sort: []recordmodel.RecordSortRule{{Field: "created_at", Direction: "desc"}, {Field: "id", Direction: "desc"}}}); order != ` ORDER BY "created_at" DESC, "id" DESC` {
+	if order := BuildOrder(store, recordmodel.RecordListQuery{Sort: []recordmodel.RecordSortRule{{Field: "created_at", Direction: "desc"}, {Field: recordmodel.IDField, Direction: "desc"}}}); order != ` ORDER BY "created_at" DESC, "id" DESC` {
 		t.Fatalf("explicit stable order=%s", order)
 	}
 	for _, test := range []struct {
@@ -160,7 +160,7 @@ func TestQueryBuilderHelperContracts(t *testing.T) {
 	}{
 		{key: "age__gte", base: "age", operator: "gte", ok: true},
 		{key: "age__lte", base: "age", operator: "lte", ok: true},
-		{key: "id__in", base: "id", operator: "in", ok: true},
+		{key: "record_id__in", base: "record_id", operator: "in", ok: true},
 		{key: "plain", base: "plain"},
 	} {
 		base, operator, ok := splitFilterKey(test.key)

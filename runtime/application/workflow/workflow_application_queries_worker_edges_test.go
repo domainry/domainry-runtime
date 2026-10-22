@@ -41,11 +41,11 @@ func TestWorkflowProjectionActionsUsesCurrentSchemaSnapshot(t *testing.T) {
 func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 	worker := &workflowListWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, list: []workflowmodel.WorkflowExecution{
-		{ID: "denied", ObjectKey: "order", RecordID: "denied"},
-		{ID: "allowed", ObjectKey: "order", RecordID: "allowed"},
-		{ID: "other", ObjectKey: "other", RecordID: "other"},
+		{ExecutionID: "denied", ObjectKey: "order", RecordID: "denied"},
+		{ExecutionID: "allowed", ObjectKey: "order", RecordID: "allowed"},
+		{ExecutionID: "other", ObjectKey: "other", RecordID: "other"},
 	}}
-	reader := workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{"denied": {ID: "denied"}, "allowed": {ID: "allowed"}}}
+	reader := workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{"denied": {RecordID: "denied"}, "allowed": {RecordID: "allowed"}}}
 	service := &WorkflowApplicationService{
 		workerRepo: worker,
 		objectForAction: func(_ context.Context, _ principalmodel.Principal, key, operation string) (definitionmodel.ObjectSchema, error) {
@@ -55,7 +55,7 @@ func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.
 			return definitionmodel.ObjectSchema{Key: key}, nil
 		},
 		executionVisibility: NewWorkflowExecutionVisibilityApplicationService(reader, func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record) bool {
-			return record.ID == "allowed"
+			return record.RecordID == "allowed"
 		}),
 	}
 	if _, err := service.WorkflowExecutions(t.Context(), principalmodel.Principal{}, "", "", 1); apperror.CodeOf(err) != "backend.workspace_scope_required" {
@@ -77,14 +77,14 @@ func TestWorkflowExecutionQueryFilterVisibilityLimitAndFailureMatrix(t *testing.
 		t.Fatalf("limits=%v err=%v", worker.listLimits, err)
 	}
 	items, err = service.WorkflowExecutions(t.Context(), principal, " order ", "", 1)
-	if err != nil || len(items) != 1 || items[0].ID != "allowed" || worker.listLimits[len(worker.listLimits)-1] != 500 {
+	if err != nil || len(items) != 1 || items[0].ExecutionID != "allowed" || worker.listLimits[len(worker.listLimits)-1] != 500 {
 		t.Fatalf("items=%v limits=%v err=%v", items, worker.listLimits, err)
 	}
 	if _, err := service.WorkflowExecutions(t.Context(), principal, "order", "", 500); err != nil || worker.listLimits[len(worker.listLimits)-1] != 500 {
 		t.Fatalf("large filtered limits=%v err=%v", worker.listLimits, err)
 	}
 	items, err = service.WorkflowExecutions(t.Context(), principal, "", "allowed", 10)
-	if err != nil || len(items) != 1 || items[0].ID != "allowed" {
+	if err != nil || len(items) != 1 || items[0].ExecutionID != "allowed" {
 		t.Fatalf("record items=%v err=%v", items, err)
 	}
 	worker.listErr = errors.New("list")

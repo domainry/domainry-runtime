@@ -39,19 +39,19 @@ func projectRecordCursorSorts(values []runtimeengine.Sort) []recordmodel.RecordS
 			direction = "asc"
 		}
 		sorts = append(sorts, recordmodel.RecordSortRule{Field: field, Direction: direction})
-		hasID = hasID || field == "id"
+		hasID = hasID || field == recordmodel.IDField
 	}
 	if len(sorts) == 0 {
-		return []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
+		return []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}
 	}
 	if !hasID {
-		sorts = append(sorts, recordmodel.RecordSortRule{Field: "id", Direction: "asc"})
+		sorts = append(sorts, recordmodel.RecordSortRule{Field: recordmodel.IDField, Direction: "asc"})
 	}
 	return sorts
 }
 
 func projectRecordCursorRequired(sorts []recordmodel.RecordSortRule) bool {
-	return len(sorts) != 1 || sorts[0].Field != "id" || sorts[0].Direction != "asc"
+	return len(sorts) != 1 || sorts[0].Field != recordmodel.IDField || sorts[0].Direction != "asc"
 }
 
 func projectRecordCursorScope(runtimeID string, principal principalmodel.Principal) string {
@@ -111,8 +111,8 @@ func encodeProjectRecordCursor(runtimeID, objectKey string, query runtimeengine.
 	}
 	for _, rule := range sorts {
 		value, present := last.QuerySortValues[rule.Field]
-		if rule.Field == "id" {
-			value, present = last.ID, strings.TrimSpace(last.ID) != ""
+		if rule.Field == recordmodel.IDField {
+			value, present = last.ID, last.ID > 0
 		}
 		if !present {
 			return "", runtimeengine.NewError(runtimeengine.ErrorUnavailable, "backend.project_engine.pagination_cursor_unavailable", nil, nil)
@@ -144,8 +144,8 @@ func projectRecordCursorFilter(cursor projectRecordCursor, sorts []recordmodel.R
 		if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
 			return nil, projectRecordCursorInvalid(nil)
 		}
-		if rule.Field == "id" {
-			if id, ok := value.(string); !ok || strings.TrimSpace(id) == "" {
+		if rule.Field == recordmodel.IDField {
+			if id, ok := value.(json.Number); !ok || func() bool { parsed, err := id.Int64(); return err != nil || parsed < 1 }() {
 				return nil, projectRecordCursorInvalid(nil)
 			}
 		}
@@ -155,7 +155,7 @@ func projectRecordCursorFilter(cursor projectRecordCursor, sorts []recordmodel.R
 				operator = "lt"
 			}
 			comparison := recordmodel.RecordFilterExpression{Operator: operator, Field: rule.Field, Value: value}
-			if rule.Field != "id" {
+			if rule.Field != recordmodel.IDField {
 				comparison = recordmodel.RecordFilterExpression{Operator: "or", Children: []recordmodel.RecordFilterExpression{
 					comparison,
 					{Operator: "is_null", Field: rule.Field},

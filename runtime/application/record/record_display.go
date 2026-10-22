@@ -74,7 +74,7 @@ func (s *RecordApplicationService) GetRecordLocalized(ctx context.Context, objec
 		ctx,
 		principal.WorkspaceID,
 		object,
-		[]string{record.ID},
+		[]string{record.RecordID},
 		fields,
 		recordmodel.RecordLocalizationLocales(locale, fallbackLocale),
 	)
@@ -229,7 +229,7 @@ func (s *RecordApplicationService) RecordScopeAllowsAction(ctx context.Context, 
 	}
 	query := s.queryPolicy.NormalizeListQueryForAction(object, recordmodel.RecordListQuery{
 		Page: 1, PageSize: 1, SkipTotal: true,
-		Filters: map[string]any{"id__in": []any{recordID}},
+		Filters: map[string]any{"record_id__in": []any{recordID}},
 	}, principal, action)
 	page, err := s.RecordDomainService.Repository().ListRecords(ctx, principal.WorkspaceID, object, query)
 	if err != nil {
@@ -304,7 +304,7 @@ func (s *RecordApplicationService) ProjectRecordFields(ctx context.Context, prin
 	}
 	if s.audit != nil {
 		for _, record := range records {
-			recordDenials := denials[record.ID]
+			recordDenials := denials[record.RecordID]
 			if len(recordDenials) == 0 {
 				continue
 			}
@@ -314,7 +314,7 @@ func (s *RecordApplicationService) ProjectRecordFields(ctx context.Context, prin
 				fields = append(fields, denial.FieldKey)
 				rules = append(rules, denial.RuleKey)
 			}
-			s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
+			s.audit(ctx, "field_access_denied", object.Key, record.RecordID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
 		}
 	}
 	return projected, nil
@@ -352,5 +352,5 @@ func recordApplicationDisplay(object definitionmodel.ObjectSchema, record record
 			return key, value
 		}
 	}
-	return "id", record.ID
+	return "id", record.RecordID
 }

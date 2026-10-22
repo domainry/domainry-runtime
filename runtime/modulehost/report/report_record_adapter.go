@@ -105,7 +105,7 @@ func (a *ReportRecordAdapter) AuthorizeReportObjectSQLField(_ context.Context, p
 	// cannot project role field permissions for them. ObjectForAction above
 	// still enforces object read, and the execution query applies RLS; only
 	// project-model business fields enter the field-level authorization path below.
-	if fieldKey != "id" && fieldKey != "created_at" && fieldKey != "updated_at" && fieldKey != "workspace_id" {
+	if fieldKey != "id" && fieldKey != "record_id" && fieldKey != "created_at" && fieldKey != "updated_at" && fieldKey != "workspace_id" {
 		found := false
 		for _, field := range object.Fields {
 			if field.Key == fieldKey && strings.TrimSpace(field.DisabledAt) == "" {
@@ -190,7 +190,7 @@ func (a *ReportRecordAdapter) TransitionReportExportAudit(ctx context.Context, w
 		return false, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.report.export_control_invalid"}
 	}
 	return a.repository.UpdateRecordWhere(ctx, strings.TrimSpace(workspaceID), object, recordmodel.Record{
-		ID:        strings.TrimSpace(recordID),
+		RecordID:  strings.TrimSpace(recordID),
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		Data:      normalizedPatch,
 	}, map[string]any{statusField: strings.TrimSpace(fromStatus)})

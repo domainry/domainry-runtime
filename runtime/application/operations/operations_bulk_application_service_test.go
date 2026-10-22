@@ -75,14 +75,14 @@ func TestOperationsBulkRequiresMatchingDryRunAndReplaysPerItemResults(t *testing
 	if err != nil || result.Succeeded != 1 || result.Failed != 0 || len(result.Items) != 1 || owner.acts != 1 {
 		t.Fatalf("result=%#v acts=%d err=%v", result, owner.acts, err)
 	}
-	if len(owner.operationIDs) != 1 || owner.operationIDs[0] != result.Receipt.Command.ID {
-		t.Fatalf("owner operation ids=%v receipt=%q", owner.operationIDs, result.Receipt.Command.ID)
+	if len(owner.operationIDs) != 1 || owner.operationIDs[0] != result.Receipt.Command.OperationID {
+		t.Fatalf("owner operation ids=%v receipt=%q", owner.operationIDs, result.Receipt.Command.OperationID)
 	}
 	current := owner.items["a"]
 	current.Status = "archived"
 	owner.items["a"] = current
 	replayed, err := service.ApplyBulkDeadLetters(t.Context(), request, "apply-key", principal)
-	if err != nil || replayed.Succeeded != 1 || replayed.Items[0].Item.Status != "archived" || owner.acts != 1 || owner.inspects != 3 || replayed.Receipt.Command.ID != result.Receipt.Command.ID {
+	if err != nil || replayed.Succeeded != 1 || replayed.Items[0].Item.Status != "archived" || owner.acts != 1 || owner.inspects != 3 || replayed.Receipt.Command.OperationID != result.Receipt.Command.OperationID {
 		t.Fatalf("replay=%#v inspects=%d acts=%d err=%v", replayed, owner.inspects, owner.acts, err)
 	}
 }
@@ -115,14 +115,14 @@ func TestOperationsDeadLetterActionReplaysReceiptWithoutDuplicateOwnerMutation(t
 	if err != nil || owner.acts != 1 || first.Item.CorrelationID != "correlation-1" || first.Item.BusinessKey != "order-42" || first.Item.EvidenceRef != "evidence-7" {
 		t.Fatalf("first=%#v acts=%d err=%v", first, owner.acts, err)
 	}
-	if len(owner.operationIDs) != 1 || owner.operationIDs[0] != first.Receipt.Command.ID {
-		t.Fatalf("owner operation ids=%v receipt=%q", owner.operationIDs, first.Receipt.Command.ID)
+	if len(owner.operationIDs) != 1 || owner.operationIDs[0] != first.Receipt.Command.OperationID {
+		t.Fatalf("owner operation ids=%v receipt=%q", owner.operationIDs, first.Receipt.Command.OperationID)
 	}
 	current := owner.items["item-1"]
 	current.Status = "archived"
 	owner.items["item-1"] = current
 	replayed, err := service.ActOnDeadLetter(t.Context(), "probe", "item-1", "resolve", request, "resolve-key", principal)
-	if err != nil || owner.acts != 1 || owner.inspects != 1 || replayed.Item.Status != "archived" || replayed.Receipt.Command.ID != first.Receipt.Command.ID {
+	if err != nil || owner.acts != 1 || owner.inspects != 1 || replayed.Item.Status != "archived" || replayed.Receipt.Command.OperationID != first.Receipt.Command.OperationID {
 		t.Fatalf("replay=%#v inspects=%d acts=%d err=%v", replayed, owner.inspects, owner.acts, err)
 	}
 }

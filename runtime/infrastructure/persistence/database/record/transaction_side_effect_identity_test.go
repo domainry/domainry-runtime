@@ -10,7 +10,6 @@ import (
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
-	publicationhandoff "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -75,11 +74,11 @@ func TestTransactionalSideEffectsRequireStableIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	wantID := publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
-	var stored int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _publication_outbox WHERE id = ?`, wantID).Scan(&stored); err != nil || stored != 1 {
-		t.Fatalf("deterministic outbox id=%q stored=%d err=%v", wantID, stored, err)
+	var wantID string
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT message_id FROM _publication_outbox WHERE workspace_id = ? AND dedup_key = ?`, message.WorkspaceID, message.DedupKey).Scan(&wantID); err != nil || !strings.HasPrefix(wantID, "pubmsg_") {
+		t.Fatalf("generated outbox message_id=%q err=%v", wantID, err)
 	}
+	var stored int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _worker_scopes WHERE owner = ? AND scope_key = ?`, "runtime_publication_outbox", message.WorkspaceID).Scan(&stored); err != nil || stored != 1 {
 		t.Fatalf("transactional outbox workspace recovery scope stored=%d err=%v", stored, err)
 	}

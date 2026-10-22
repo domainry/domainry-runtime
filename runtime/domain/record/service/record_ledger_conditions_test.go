@@ -19,7 +19,7 @@ func TestRecordLedgerEntryValidationEdges(t *testing.T) {
 		{LedgerPolicy: &definitionmodel.ObjectLedgerPolicy{}, LifecyclePolicy: &definitionmodel.ObjectLifecyclePolicy{Mode: "mutable"}},
 	}
 	for _, object := range objects {
-		if _, err := RecordLedgerEntryFromRecord(object, recordmodel.Record{ID: "entry", Data: validData}); err == nil {
+		if _, err := RecordLedgerEntryFromRecord(object, recordmodel.Record{RecordID: "entry", Data: validData}); err == nil {
 			t.Fatal("invalid ledger policy accepted")
 		}
 	}
@@ -32,13 +32,13 @@ func TestRecordLedgerEntryValidationEdges(t *testing.T) {
 			badConfig.Fields[index] = amount
 		}
 	}
-	if _, err := RecordLedgerEntryFromRecord(badConfig, recordmodel.Record{ID: "entry", Data: validData}); err == nil {
+	if _, err := RecordLedgerEntryFromRecord(badConfig, recordmodel.Record{RecordID: "entry", Data: validData}); err == nil {
 		t.Fatal("invalid amount config accepted")
 	}
 	validObject = recordLedgerTestObject()
 	badAmount := cloneLedgerData(validData)
 	badAmount["amount"] = struct{}{}
-	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{ID: "entry", Data: badAmount}); err == nil {
+	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{RecordID: "entry", Data: badAmount}); err == nil {
 		t.Fatal("invalid amount accepted")
 	}
 
@@ -50,31 +50,31 @@ func TestRecordLedgerEntryValidationEdges(t *testing.T) {
 	} {
 		data := cloneLedgerData(validData)
 		mutation(data)
-		if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{ID: "entry", Data: data}); err == nil {
+		if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{RecordID: "entry", Data: data}); err == nil {
 			t.Fatal("invalid ledger entry accepted")
 		}
 	}
 	decrease := cloneLedgerData(validData)
 	decrease["direction"] = recordmodel.RecordLedgerDirectionDecrease
-	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{ID: "entry", Data: decrease}); err != nil {
+	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{RecordID: "entry", Data: decrease}); err != nil {
 		t.Fatalf("decrease rejected: %v", err)
 	}
 	adjustment := cloneLedgerData(validData)
 	adjustment["entry_kind"] = recordmodel.RecordLedgerKindAdjustment
 	adjustment["reversal_of"] = "original"
-	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{ID: "entry", Data: adjustment}); err != nil {
+	if _, err := RecordLedgerEntryFromRecord(validObject, recordmodel.Record{RecordID: "entry", Data: adjustment}); err != nil {
 		t.Fatalf("adjustment rejected: %v", err)
 	}
 }
 
 func TestRecordLedgerEvidenceAndReplayDependencyEdges(t *testing.T) {
 	object := recordLedgerTestObject()
-	if _, err := RecordLedgerBuildEvidence(object, recordmodel.Record{ID: "entry", Data: recordLedgerConditionData()}, " ", nil); err == nil {
+	if _, err := RecordLedgerBuildEvidence(object, recordmodel.Record{RecordID: "entry", Data: recordLedgerConditionData()}, " ", nil); err == nil {
 		t.Fatal("missing signature key accepted")
 	}
 	unsigned := object
 	unsigned.LedgerPolicy = &definitionmodel.ObjectLedgerPolicy{Integrity: definitionmodel.ObjectLedgerIntegritySHA256Chain}
-	record, err := RecordLedgerBuildEvidence(unsigned, recordmodel.Record{ID: "entry", Data: recordLedgerConditionData()}, " ", nil)
+	record, err := RecordLedgerBuildEvidence(unsigned, recordmodel.Record{RecordID: "entry", Data: recordLedgerConditionData()}, " ", nil)
 	if err != nil || record.Data["signature"] != nil {
 		t.Fatalf("unsigned record=%#v err=%v", record, err)
 	}
@@ -97,7 +97,7 @@ func TestRecordLedgerEvidenceAndReplayDependencyEdges(t *testing.T) {
 	}
 	unsigned = recordLedgerTestObject()
 	unsigned.LedgerPolicy.Signature = ""
-	if _, err := RecordLedgerReplay(unsigned, []recordmodel.Record{{ID: "bad", Data: map[string]any{}}}, nil, nil); err == nil {
+	if _, err := RecordLedgerReplay(unsigned, []recordmodel.Record{{RecordID: "bad", Data: map[string]any{}}}, nil, nil); err == nil {
 		t.Fatal("invalid replay record accepted")
 	}
 	broken := record
@@ -184,7 +184,7 @@ func recordLedgerBuildConditionRecords(t *testing.T, object definitionmodel.Obje
 	records := make([]recordmodel.Record, 0, len(inputs))
 	previous := ""
 	for index, input := range inputs {
-		record, err := RecordLedgerBuildEvidence(object, recordmodel.Record{ID: "entry-" + string(rune('1'+index)), Data: input}, previous, nil)
+		record, err := RecordLedgerBuildEvidence(object, recordmodel.Record{RecordID: "entry-" + string(rune('1'+index)), Data: input}, previous, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -21,7 +21,7 @@ import (
 
 func TestBusinessRecordStreamPublishesContentFreeCursor(t *testing.T) {
 	repository := &recordsAuditRepository{events: []auditmodel.AuditEvent{{
-		ID: "audit-1", WorkspaceID: "workspace", ObjectKey: "candidate_process",
+		AuditEventID: "audit-1", WorkspaceID: "workspace", ObjectKey: "candidate_process",
 		RecordID: "candidate-secret", CreatedAt: "2026-08-08T00:00:00Z",
 	}}}
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
@@ -44,7 +44,7 @@ func TestBusinessRecordStreamPublishesContentFreeCursor(t *testing.T) {
 
 func TestBusinessRecordStreamDoesNotRequireAuditPermission(t *testing.T) {
 	repository := &recordsAuditRepository{events: []auditmodel.AuditEvent{{
-		ID: "audit-1", WorkspaceID: "workspace", ObjectKey: "candidate_process",
+		AuditEventID: "audit-1", WorkspaceID: "workspace", ObjectKey: "candidate_process",
 		RecordID: "candidate-secret", CreatedAt: "2026-08-08T00:00:00Z",
 	}}}
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
@@ -87,7 +87,7 @@ func TestWriteBusinessRecordSSEStopsOnWriteFailure(t *testing.T) {
 }
 
 func TestBusinessRecordStreamPollsChangesAndHeartbeats(t *testing.T) {
-	repository := &recordsAuditRepository{events: []auditmodel.AuditEvent{{ID: "first", CreatedAt: "2026-08-08T00:00:00Z"}}}
+	repository := &recordsAuditRepository{events: []auditmodel.AuditEvent{{AuditEventID: "first", CreatedAt: "2026-08-08T00:00:00Z"}}}
 	handler, _ := recordsHandlerForTest(recordsHTTPPrincipal())
 	handler.audit = auditapplication.NewAuditApplicationService(repository)
 	handler.streamPollInterval = time.Millisecond
@@ -95,7 +95,7 @@ func TestBusinessRecordStreamPollsChangesAndHeartbeats(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	response := &cancelAfterNWriteRecorder{ResponseRecorder: httptest.NewRecorder(), cancel: cancel, remaining: 2, beforeWrite: func(write int) {
 		if write == 2 {
-			repository.events = []auditmodel.AuditEvent{{ID: "second", CreatedAt: "2026-08-08T00:01:00Z"}}
+			repository.events = []auditmodel.AuditEvent{{AuditEventID: "second", CreatedAt: "2026-08-08T00:01:00Z"}}
 		}
 	}}
 	handler.streamBusinessRecords(response, httptest.NewRequest(http.MethodGet, "/records/stream", nil).WithContext(ctx))
@@ -153,7 +153,7 @@ func TestBusinessRecordStreamWriteAndPollFailureBranches(t *testing.T) {
 	handler.streamPollInterval, handler.streamHeartbeat = time.Millisecond, time.Hour
 	handler.streamBusinessRecords(&streamSequenceWriter{ResponseRecorder: httptest.NewRecorder()}, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 
-	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{eventBatches: [][]auditmodel.AuditEvent{{{ID: "one"}}, {{ID: "two"}}}})
+	handler.audit = auditapplication.NewAuditApplicationService(&recordsAuditRepository{eventBatches: [][]auditmodel.AuditEvent{{{AuditEventID: "one"}}, {{AuditEventID: "two"}}}})
 	pollWriteFailure := &streamSequenceWriter{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 2}
 	handler.streamBusinessRecords(pollWriteFailure, httptest.NewRequest(http.MethodGet, "/records/stream", nil))
 

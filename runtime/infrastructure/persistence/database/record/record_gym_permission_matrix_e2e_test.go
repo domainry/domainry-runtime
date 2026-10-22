@@ -149,7 +149,7 @@ func TestGymPRDSection2FiveRoleCLSMatrixUsesGenericContextualFieldPolicies(t *te
 	for _, role := range roles {
 		principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}, roleSchemas[role])
 		for objectKey, data := range valuesByObject {
-			projected, _, err := fieldPolicy.ApplyRead(context.Background(), principal, objectsByKey[objectKey], recordmodel.Record{ID: "authorized-row", Data: data}, "read")
+			projected, _, err := fieldPolicy.ApplyRead(context.Background(), principal, objectsByKey[objectKey], recordmodel.Record{RecordID: "authorized-row", Data: data}, "read")
 			if err != nil {
 				t.Fatalf("CLS role=%s object=%s: %v", role, objectKey, err)
 			}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/recordschema"
 	"github.com/shopspring/decimal"
 
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -213,8 +214,8 @@ func (s *ReportSQLStore) reportObjectSQLSourceSelect(ctx context.Context, tx *sq
 		queryValue.ScopeExpression = &resolved
 	}
 	queryValue = recordpersistence.RecordQueryDatabaseValues(s.store.RuntimeEngine, object, queryValue)
-	columns := reportStoreSourceColumns(queryValue.SelectFields)
-	builder := query.NewSelectBuilder(s.store.SQLRenderer, object.Key).Columns(columns...)
+	projections := reportStoreSourceProjections(object.Key, queryValue.SelectFields)
+	builder := query.NewSelectBuilder(s.store.SQLRenderer, object.Key).Projections(projections...)
 	if !request.CrossWorkspaceAggregate {
 		predicate, err := querypersistence.BuildTenantPredicate(s.store, request.WorkspaceID, queryValue)
 		if err != nil {
@@ -238,6 +239,19 @@ func reportStoreSourceColumns(selected []string) []string {
 		}
 	}
 	return columns
+}
+
+func reportStoreSourceProjections(objectKey string, selected []string) []query.Projection {
+	columns := reportStoreSourceColumns(selected)
+	projections := make([]query.Projection, 0, len(columns))
+	for _, column := range columns {
+		if column == "record_id" {
+			projections = append(projections, query.ProjectAs(query.Column(recordschema.EntityIDColumn(objectKey)), "record_id"))
+			continue
+		}
+		projections = append(projections, query.Project(query.Column(column)))
+	}
+	return projections
 }
 
 func reportObjectSQLResultValue(profile persistencedriver.EngineProfile, column reportmodel.ReportResultColumnSchema, raw any) (string, error) {

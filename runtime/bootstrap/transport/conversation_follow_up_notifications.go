@@ -61,7 +61,7 @@ func (p agentFollowUpNotificationPublisher) PublishConversationFollowUp(ctx cont
 		return fmt.Errorf("Agent follow-up principal is no longer available")
 	}
 	_, _, err = p.publish(ctx, notificationmodel.NotificationIntent{
-		ID: event.ID, WorkspaceID: principal.WorkspaceID, SourceEventID: event.ID, EventType: eventType, Severity: severity,
+		WorkspaceID: principal.WorkspaceID, SourceEventID: event.ID, EventType: eventType, Severity: severity,
 		RecipientUserIDs: []string{principal.UserID}, SubjectType: "agent_follow_up", SubjectID: event.TaskID,
 		SubjectVersion: strconv.Itoa(event.Occurrence), GroupKey: event.PlanID, DedupeKey: event.ID,
 		OccurredAt: event.OccurredAt.UTC().Format(time.RFC3339Nano), Locale: strings.TrimSpace(principal.User.Locale),

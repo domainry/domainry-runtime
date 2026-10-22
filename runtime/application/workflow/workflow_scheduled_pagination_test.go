@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,16 +28,21 @@ func (r *scheduledKeysetReader) ListWorkflowRecords(_ context.Context, _ string,
 	r.queries = append(r.queries, query)
 	start := 0
 	if query.AfterID != "" {
-		start, _ = slices.BinarySearchFunc(r.records, query.AfterID, func(record recordmodel.Record, id string) int {
-			if record.ID < id {
+		physicalID, err := strconv.ParseInt(query.AfterID, 10, 64)
+		if err != nil {
+			return recordmodel.RecordPageResult{}, fmt.Errorf("invalid physical cursor %q: %w", query.AfterID, err)
+		}
+		start, _ = slices.BinarySearchFunc(r.records, physicalID, func(record recordmodel.Record, id int64) int {
+			switch {
+			case record.ID < id:
 				return -1
-			}
-			if record.ID > id {
+			case record.ID > id:
 				return 1
+			default:
+				return 0
 			}
-			return 0
 		})
-		for start < len(r.records) && r.records[start].ID <= query.AfterID {
+		for start < len(r.records) && r.records[start].ID <= physicalID {
 			start++
 		}
 	}
@@ -55,7 +61,7 @@ func TestScheduledWorkflowWindowPageTraversesThousandsWithBoundedCheckpoint(t *t
 	service := workflowRecordExecutionService(worker, workflow)
 	reader := &scheduledKeysetReader{}
 	for index := 0; index < 1001; index++ {
-		reader.records = append(reader.records, recordmodel.Record{ID: fmt.Sprintf("candidate-%04d", index), Data: map[string]any{"eligible": true}})
+		reader.records = append(reader.records, recordmodel.Record{ID: int64(index + 1), RecordID: fmt.Sprintf("candidate-%04d", index), Data: map[string]any{"eligible": true}})
 	}
 	service.recordReader = reader
 	service.schemaMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
@@ -66,7 +72,7 @@ func TestScheduledWorkflowWindowPageTraversesThousandsWithBoundedCheckpoint(t *t
 		worker.claims = append(worker.claims, workflowmodel.WorkflowExecutionClaimResult{
 			Decision: idempotency.DecisionAcquired,
 			Receipt: workflowmodel.WorkflowExecutionReceipt{
-				ID: fmt.Sprintf("receipt-%04d", index), WorkspaceID: principal.WorkspaceID,
+				OperationID: fmt.Sprintf("receipt-%04d", index), WorkspaceID: principal.WorkspaceID,
 				WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 			},
 		})
@@ -99,6 +105,9 @@ func TestScheduledWorkflowWindowPageTraversesThousandsWithBoundedCheckpoint(t *t
 			t.Fatalf("unbounded or unstable query: %+v", query)
 		}
 	}
+	if len(reader.queries) < 2 || reader.queries[1].AfterID != "200" {
+		t.Fatalf("second page must use physical id cursor, queries=%+v", reader.queries)
+	}
 }
 
 func TestScheduledWorkflowWindowPageRejectsInvalidCheckpoint(t *testing.T) {
@@ -119,11 +128,11 @@ func TestScheduledWorkflowWindowPageCrashReplayIsDeduplicatedBeforeCheckpointRes
 	worker := &workflowCommittedIntentWorkerEdgeStub{
 		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, updateWhereResult: true,
 		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
-			ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+			OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 		}},
 	}
 	service := workflowRecordExecutionService(worker, workflow)
-	service.recordReader = &scheduledKeysetReader{records: []recordmodel.Record{{ID: "candidate-1", Data: map[string]any{"eligible": true}}}}
+	service.recordReader = &scheduledKeysetReader{records: []recordmodel.Record{{ID: 1, RecordID: "candidate-1", Data: map[string]any{"eligible": true}}}}
 	service.schemaMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"candidate": {Key: "candidate"}}
 	}
@@ -131,9 +140,9 @@ func TestScheduledWorkflowWindowPageCrashReplayIsDeduplicatedBeforeCheckpointRes
 	if err != nil || first.Processed != 1 || first.Checkpoint == "" || len(worker.inserted) != 1 {
 		t.Fatalf("first=%+v inserted=%d err=%v", first, len(worker.inserted), err)
 	}
-	executionID := worker.inserted[0].ID
+	executionID := worker.inserted[0].ExecutionID
 	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{
-		ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: executionID,
+		OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: executionID,
 	}}
 	replayed, err := service.ProcessScheduledWorkflowWindowPage(t.Context(), "scheduled:activate", now, 1, "", principal)
 	if err != nil || replayed.Processed != 0 || replayed.Checkpoint != first.Checkpoint || len(worker.inserted) != 1 {

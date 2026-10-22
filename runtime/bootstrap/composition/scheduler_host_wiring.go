@@ -155,7 +155,7 @@ func schedulerMetadataRecord(key string, payload []byte, createdAt, updatedAt st
 func schedulerPublishedDefinitionRecords(definitions []SchedulerPublishedDefinition) []recordmodel.Record {
 	records := make([]recordmodel.Record, 0, len(definitions))
 	for _, definition := range definitions {
-		records = append(records, recordmodel.Record{ID: definition.Key, Data: cloneSchedulerDefinitionMap(definition.Data), CreatedAt: definition.CreatedAt, UpdatedAt: definition.UpdatedAt})
+		records = append(records, recordmodel.Record{RecordID: definition.Key, Data: cloneSchedulerDefinitionMap(definition.Data), CreatedAt: definition.CreatedAt, UpdatedAt: definition.UpdatedAt})
 	}
 	return records
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/datamigration"
 )
@@ -207,11 +208,11 @@ func TestRetirementNamingAndEffectiveObjectEdges(t *testing.T) {
 
 func TestDatabaseRetirementExecutorRejectsUnavailableAndInvalidTransitions(t *testing.T) {
 	executor := NewDatabaseRetirementSQLExecutor(nil, nil, nil)
-	if executor.now == nil || executor.newID == nil {
-		t.Fatal("constructor did not install default dependencies")
+	if executor.now == nil {
+		t.Fatal("constructor did not install default clock")
 	}
 	object := operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Kind: "table", Name: "legacy"}
-	current := operationsmodel.DatabaseRetirement{ID: "retire-legacy", Object: object}
+	current := operationsmodel.DatabaseRetirement{OperationID: persistenceOperationsTestID("op", "retire-legacy"), Object: object}
 	next := current
 	if _, err := executor.ApplyDatabaseRetirementTransition(t.Context(), current, next); err == nil || !strings.Contains(err.Error(), "unavailable") {
 		t.Fatalf("apply unavailable error=%v", err)
@@ -221,7 +222,7 @@ func TestDatabaseRetirementExecutorRejectsUnavailableAndInvalidTransitions(t *te
 	}
 	zero := DatabaseRetirementSQLExecutor{}
 	result, err := zero.ExecuteDatabaseRetirement(t.Context(), current, operationsmodel.DatabaseDropPlan{})
-	if err == nil || !strings.Contains(err.Error(), "unavailable") || !strings.HasPrefix(result.AuditEventID, "database-retirement:retire-legacy:") {
+	if err == nil || !strings.Contains(err.Error(), "unavailable") || entityid.Validate("audevt", result.AuditEventID) != nil {
 		t.Fatalf("execute result=%+v error=%v", result, err)
 	}
 
@@ -260,7 +261,7 @@ func TestDatabaseRetirementPreviewRejectsUnsupportedScopesAndMissingObjects(t *t
 		{Engine: "sqlite", Kind: "schema", Name: "main"},
 		{Engine: "sqlite", Kind: "table", Name: "missing"},
 	} {
-		if _, err := executor.PreviewDatabaseRetirement(t.Context(), operationsmodel.DatabaseRetirement{ID: "retire", Object: object}); err == nil {
+		if _, err := executor.PreviewDatabaseRetirement(t.Context(), operationsmodel.DatabaseRetirement{OperationID: persistenceOperationsTestID("op", "retire"), Object: object}); err == nil {
 			t.Fatalf("unsupported/missing preview was accepted: %+v", object)
 		}
 	}

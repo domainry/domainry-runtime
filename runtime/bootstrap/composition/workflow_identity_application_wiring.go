@@ -102,11 +102,11 @@ func (s runtimeWorkflowRecordTimers) ScheduleWorkflowWaitTimer(ctx context.Conte
 		}
 		calendar = catalog
 	}
-	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, schedule, recordmodel.Record{ID: request.RecordID, Data: sourceData}, calendar, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
+	timer, err := s.recordTimers.Schedule(ctx, request.WorkspaceID, schedule, recordmodel.Record{RecordID: request.RecordID, Data: sourceData}, calendar, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow timer %s", request.NodeID)))
 	if err != nil {
 		return "", err
 	}
-	return timer.ID, nil
+	return timer.RecordID, nil
 }
 
 func (s runtimeWorkflowRecordTimers) ScheduleWorkflowApprovalDeadlineTimer(ctx context.Context, request workflowapplication.WorkflowApprovalDeadlineTimerRequest) (string, error) {
@@ -119,9 +119,9 @@ func (s runtimeWorkflowRecordTimers) ScheduleWorkflowApprovalDeadlineTimer(ctx c
 		TimerKey: request.TaskID + ":" + phase, ObjectKey: "workflow_task", RecordID: request.TaskID,
 		Purpose: "approval_" + phase, ScheduleMode: "absolute", DueAt: request.DueAt, Timezone: "UTC",
 		TargetType: "workflow", TargetKey: "approval_deadline", PayloadJSON: string(payload), Sequence: request.CreatedAt.UnixNano(),
-	}, recordmodel.Record{ID: request.TaskID}, nil, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow approval %s timer", phase)))
+	}, recordmodel.Record{RecordID: request.TaskID}, nil, request.CreatedAt, principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, fmt.Sprintf("schedule workflow approval %s timer", phase)))
 	if err != nil {
 		return "", err
 	}
-	return timer.ID, nil
+	return timer.RecordID, nil
 }

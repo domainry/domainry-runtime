@@ -590,7 +590,7 @@ func TestBusinessHandlerExecutorReturnsOneAtomicMutationBatchAndDurableIntent(t 
 		if recordID == "" {
 			recordID = objectKey + "-1"
 		}
-		record := recordmodel.Record{ID: recordID, Data: fields}
+		record := recordmodel.Record{RecordID: recordID, Data: fields}
 		plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{Operation: operation, Object: definitionmodel.ObjectSchema{Key: objectKey}, Record: record}, nil)
 		return plan, record, err
 	}
@@ -618,7 +618,7 @@ func TestBusinessHandlerExecutorReturnsOneAtomicMutationBatchAndDurableIntent(t 
 		t.Fatalf("result=%+v error=%v", result, err)
 	}
 	intent := result.Commits[1].Outbox[0]
-	if receipt.ID != "durable_intent:execution-1:0" || intent.ID != receipt.ID || intent.ConnectorKey != "email" || intent.ConnectionKey != "primary" || intent.Operation != "booking.confirmed" || intent.DedupKey != "execution-1:intent:0" || intent.RequestFingerprint != strings.Repeat("c", 64) {
+	if receipt.ID != "durable_intent:execution-1:0" || intent.MessageID != receipt.ID || intent.ConnectorKey != "email" || intent.ConnectionKey != "primary" || intent.Operation != "booking.confirmed" || intent.DedupKey != "execution-1:intent:0" || intent.RequestFingerprint != strings.Repeat("c", 64) {
 		t.Fatalf("durable intent=%+v", intent)
 	}
 }
@@ -633,7 +633,7 @@ func TestBusinessActionPlansConditionalDeleteAndRestoreInOneCommitBoundary(t *te
 			t.Fatal(err)
 		}
 		plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{
-			Operation: operation, Object: definitionmodel.ObjectSchema{Key: objectKey}, Record: recordmodel.Record{ID: recordID}, RecordID: recordID,
+			Operation: operation, Object: definitionmodel.ObjectSchema{Key: objectKey}, Record: recordmodel.Record{RecordID: recordID}, RecordID: recordID,
 		}, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -646,7 +646,7 @@ func TestBusinessActionPlansConditionalDeleteAndRestoreInOneCommitBoundary(t *te
 		dependencies: BusinessHandlerExecutionDependencies{
 			PlanConditionalUpdate: func(_ context.Context, objectKey, recordID string, input transactionmodel.ConditionalUpdateInput, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				conditional = input
-				return newPlan("update", objectKey, recordID), recordmodel.Record{ID: recordID}, nil
+				return newPlan("update", objectKey, recordID), recordmodel.Record{RecordID: recordID}, nil
 			},
 			PlanDeleteMutation: func(_ context.Context, objectKey, recordID, expectedUpdatedAt string, _ principalmodel.Principal) ([]transactionmodel.MutationPlan, error) {
 				if expectedUpdatedAt != "delete-revision" {
@@ -658,7 +658,7 @@ func TestBusinessActionPlansConditionalDeleteAndRestoreInOneCommitBoundary(t *te
 				if expectedUpdatedAt != "restore-revision" {
 					t.Fatalf("restore expected revision = %q", expectedUpdatedAt)
 				}
-				return newPlan("restore", objectKey, recordID), recordmodel.Record{ID: recordID}, nil
+				return newPlan("restore", objectKey, recordID), recordmodel.Record{RecordID: recordID}, nil
 			},
 		},
 		invocation: actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}},

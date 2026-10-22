@@ -28,13 +28,13 @@ type cleanupGovernanceStub struct {
 
 func (s *cleanupGovernanceStub) ProcessCleanupJob(_ context.Context, workspaceID, jobID, _ string, _ time.Duration, batchSize int, _ time.Time, principal lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error) {
 	s.workspaceID, s.jobID, s.batchSize, s.principal = workspaceID, jobID, batchSize, principal
-	return lifecyclemodel.CleanupJob{ID: jobID, WorkspaceID: workspaceID, RequestedBy: principal.UserID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
+	return lifecyclemodel.CleanupJob{JobID: jobID, WorkspaceID: workspaceID, RequestedBy: principal.UserID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
 }
 
 func (s *cleanupGovernanceStub) InspectCleanupJob(_ context.Context, workspaceID, jobID string, principal lifecycleaccess.Principal) (lifecyclemodel.CleanupJob, error) {
 	s.inspections++
 	s.workspaceID, s.jobID, s.principal = workspaceID, jobID, principal
-	return lifecyclemodel.CleanupJob{ID: jobID, WorkspaceID: workspaceID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
+	return lifecyclemodel.CleanupJob{JobID: jobID, WorkspaceID: workspaceID, Status: lifecyclemodel.CleanupStatusSucceeded}, nil
 }
 
 type cleanupOperationRunnerStub struct {
@@ -46,7 +46,7 @@ func (s *cleanupOperationRunnerStub) ExecuteOwnerOperation(ctx context.Context, 
 	value, err := run(ctx)
 	return operationsapplication.OperationsOwnerExecutionResult{
 		Value:   value,
-		Receipt: operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-1"}, StatusURL: "/operations/operation-1"},
+		Receipt: operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{OperationID: "operation-1"}, StatusURL: "/operations/operation-1"},
 	}, err
 }
 

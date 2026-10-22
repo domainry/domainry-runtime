@@ -9,18 +9,18 @@ import (
 
 func TestCandidateScopeMatchesRelationToRecordPlannedInSameAction(t *testing.T) {
 	order := recordmodel.Record{
-		ID: "repair-1",
+		RecordID: "repair-1",
 		Data: map[string]any{
 			"reporter_identity_user_id": "reporter-1",
 		},
 	}
 	ctx := recordservice.RecordWithPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{
-		"repair_order": {order.ID: order},
+		"repair_order": {order.RecordID: order},
 	})
 	history := recordmodel.Record{
-		ID: "history-1",
+		RecordID: "history-1",
 		Data: map[string]any{
-			"repair_order_id": order.ID,
+			"repair_order_id": order.RecordID,
 		},
 	}
 	expression := recordmodel.RecordScopeExpression{

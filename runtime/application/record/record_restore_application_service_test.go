@@ -45,7 +45,7 @@ func (r *restoreRepositoryProbe) CommitRecordMutation(_ context.Context, _ strin
 func TestRestoreServiceOwnsCompleteRestoreTransaction(t *testing.T) {
 	object := restoreTestObject()
 	repository := &restoreRepositoryProbe{found: true, record: recordmodel.Record{
-		ID: "customer-1", UpdatedAt: "before", Data: map[string]any{
+		RecordID: "customer-1", UpdatedAt: "before", Data: map[string]any{
 			"status": "deleted", "deleted_at": "2026-07-01", "deleted_by": "u0", "version": "2", "name": "Acme",
 		},
 	}}
@@ -73,7 +73,7 @@ func TestRestoreServiceOwnsCompleteRestoreTransaction(t *testing.T) {
 		},
 		PrepareWorkflow: func(_ context.Context, _ string, _ recordmodel.Record, _ map[string]any, _ principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, error) {
 			preparedTriggers = append(preparedTriggers, trigger)
-			return []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, nil
 		},
 		ExecuteWorkflow: func(_ context.Context, intents []workflowmodel.WorkflowExecution, _ principalmodel.Principal) {
 			executed = append(executed, intents...)
@@ -101,7 +101,7 @@ func TestRestoreServiceOwnsCompleteRestoreTransaction(t *testing.T) {
 func TestPlanRestoreMutationUsesObservedRevisionWithoutCommit(t *testing.T) {
 	object := restoreTestObject()
 	repository := &restoreRepositoryProbe{found: true, record: recordmodel.Record{
-		ID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{
+		RecordID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{
 			"status": "deleted", "deleted_at": "2026-07-01", "deleted_by": "u0", "version": "2", "name": "Acme",
 		},
 	}}
@@ -139,7 +139,7 @@ func TestRestoreServicePreservesStructuredFailures(t *testing.T) {
 	})
 
 	t.Run("outside scope", func(t *testing.T) {
-		repository := &restoreRepositoryProbe{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "deleted"}}}
+		repository := &restoreRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "deleted"}}}
 		service := NewRecordRestoreApplicationService(RecordRestoreDependencies{
 			Repository: repository,
 			ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {

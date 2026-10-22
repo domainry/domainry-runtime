@@ -59,7 +59,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "suspended", 2, "session-a", true)
 	assertWorkspaceAdministrationEvidence(t, runtimeStore.DB(), 1, 1)
 	var operationID, causationID string
-	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT operation_id,causation_id FROM _audit_events WHERE event=?`, workspaceprovisionapplication.SuspendWorkspaceActionKey).Scan(&operationID, &causationID); err != nil || operationID != workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, "suspend-1") || causationID != "cause-a" {
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT operation_id,causation_id FROM _audit_events WHERE event=?`, workspaceprovisionapplication.SuspendWorkspaceActionKey).Scan(&operationID, &causationID); err != nil || operationID != mustWorkspaceAdministrationOperationID(t, actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, "suspend-1") || causationID != "cause-a" {
 		t.Fatalf("workspace administration audit operation=%q causation=%q err=%v", operationID, causationID, err)
 	}
 	replay, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 1, workspaceprovisionmodel.WorkspaceStatusSuspended, "suspend-1")
@@ -89,7 +89,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 		t.Fatalf("stale commercial CAS=%v", err)
 	}
 	commercialFailureKey := "commercial-audit-failure"
-	commercialAuditID := workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey, commercialFailureKey)
+	commercialAuditID := mustWorkspaceAdministrationOperationID(t, actor, workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey, commercialFailureKey)
 	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, commercialAuditID, nowText)
 	failingCommercialRequest := workspaceprovisionmodel.CommercialConfigurationUpdateRequest{
 		ExpectedRevision: 4,
@@ -102,7 +102,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	var plan string
 	var commercialRevision int
-	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT plan,commercial_revision FROM _workspaces WHERE id=?`, "workspace-target").Scan(&plan, &commercialRevision); err != nil || plan != "premium" || commercialRevision != 2 {
+	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT plan,commercial_revision FROM _workspaces WHERE workspace_id=?`, "workspace-target").Scan(&plan, &commercialRevision); err != nil || plan != "premium" || commercialRevision != 2 {
 		t.Fatalf("commercial rollback plan=%q revision=%d err=%v", plan, commercialRevision, err)
 	}
 	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 4, "session-a", true)
@@ -111,7 +111,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 		t.Fatal(err)
 	}
 	failingKey := "suspend-audit-failure"
-	auditID := workspaceAdministrationReceiptID(actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, failingKey)
+	auditID := mustWorkspaceAdministrationOperationID(t, actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, failingKey)
 	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, auditID, nowText)
 	if _, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 4, workspaceprovisionmodel.WorkspaceStatusSuspended, failingKey); err == nil {
 		t.Fatal("audit failure committed Workspace lifecycle mutation")
@@ -122,13 +122,26 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 }
 
-func insertWorkspaceAdministrationAuditCollision(t *testing.T, store *database.RuntimeStore, auditID, now string) {
+func insertWorkspaceAdministrationAuditCollision(t *testing.T, store *database.RuntimeStore, operationID, now string) {
 	t.Helper()
+	auditID, err := workspaceAdministrationAuditEventID(operationID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.AppendPreparedAuditWithin(t.Context(), runtimeauditmodule.NewTransaction(store.DB()), auditmodel.AuditEvent{
-		ID: auditID, WorkspaceID: "workspace-target", Family: auditmodel.EventFamilyRuntimeWorkspace, Event: "existing", ActorID: "test", RoleKey: "test", Summary: "collision", Metadata: map[string]any{"action_key": "collision"}, CreatedAt: now,
+		AuditEventID: auditID, WorkspaceID: "workspace-target", Family: auditmodel.EventFamilyRuntimeWorkspace, Event: "existing", ActorID: "test", RoleKey: "test", Summary: "collision", Metadata: map[string]any{"action_key": "collision"}, CreatedAt: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func mustWorkspaceAdministrationOperationID(t *testing.T, actor workspaceprovisionmodel.AdministrationActor, actionKey, idempotencyKey string) string {
+	t.Helper()
+	operationID, err := workspaceAdministrationOperationID(actor, actionKey, idempotencyKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return operationID
 }
 
 func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, name, installationIdentity string, now int64) {
@@ -138,7 +151,7 @@ func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, na
 		installation = installationIdentity
 	}
 	if _, err := db.ExecContext(t.Context(), `INSERT INTO _workspaces(
-		id,canonical_code,name,status,initial_installation_identity,
+		workspace_id,canonical_code,name,status,initial_installation_identity,
 		plan,included_user_limit,max_user_limit,included_customer_limit,max_customer_limit,included_store_limit,max_stores,
 		contract_date,billing_day,billing_contact_name,billing_contact_phone,billing_contact_email,billing_contact_address,billing_contact_notes,
 		commercial_revision,revision,created_at,updated_at
@@ -151,7 +164,7 @@ func assertWorkspaceAdministrationState(t *testing.T, db *sql.DB, workspaceID, s
 	t.Helper()
 	var gotStatus string
 	var gotRevision int
-	if err := db.QueryRowContext(t.Context(), `SELECT status,revision FROM _workspaces WHERE id=?`, workspaceID).Scan(&gotStatus, &gotRevision); err != nil || gotStatus != status || gotRevision != revision {
+	if err := db.QueryRowContext(t.Context(), `SELECT status,revision FROM _workspaces WHERE workspace_id=?`, workspaceID).Scan(&gotStatus, &gotRevision); err != nil || gotStatus != status || gotRevision != revision {
 		t.Fatalf("workspace status=%q revision=%d err=%v", gotStatus, gotRevision, err)
 	}
 	var revokedAt sql.NullInt64

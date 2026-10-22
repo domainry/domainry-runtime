@@ -16,15 +16,15 @@ func TestAutomationRunsKeepRuleHistoryAndInstructionLeaseStateSeparatedByKind(t 
 	workspaceID := "workspace-primary"
 	ruleID := "shared-business-key"
 	rule, err := NewAutomationExecutionStore(store).InsertExecution(t.Context(), workspaceID, automationmodel.AutomationRuleExecution{
-		ID: ruleID, RuleKey: "sync-customer", ObjectKey: "customer", RecordID: "customer-1",
+		RunID: ruleID, RuleKey: "sync-customer", ObjectKey: "customer", RecordID: "customer-1",
 		Phase: "after", Operation: "update", Status: "succeeded",
 		Candidate: map[string]any{"name": "updated"}, Trace: map[string]any{"connector_key": "crm"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rule.ID != ruleID {
-		t.Fatalf("rule id=%q want=%q", rule.ID, ruleID)
+	if rule.RunID != ruleID {
+		t.Fatalf("rule id=%q want=%q", rule.RunID, ruleID)
 	}
 
 	instruction, claimed, err := NewAutomationWorkerStore(store).ClaimInstruction(t.Context(), workspaceID, automationmodel.AutomationInstructionExecution{
@@ -42,7 +42,7 @@ func TestAutomationRunsKeepRuleHistoryAndInstructionLeaseStateSeparatedByKind(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rules) != 1 || rules[0].ID != ruleID {
+	if len(rules) != 1 || rules[0].RunID != ruleID {
 		t.Fatalf("rule history leaked instruction rows: %#v", rules)
 	}
 

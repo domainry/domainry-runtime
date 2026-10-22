@@ -105,7 +105,9 @@ func TestValidateAndConsumeCoversAllTokenEvidenceAndStoreBoundaries(t *testing.T
 		t.Fatal(err)
 	}
 	secret := "secret"
-	base := actionmodel.ActionAssuranceGrant{ID: "assurance_id", TokenHash: actionAssuranceTokenHash(secret), WorkspaceID: "workspace", UserID: "user", ActionKey: "action.run", ObjectKey: "order", RecordID: "order-1", PayloadDigest: digest, Methods: []string{"otp"}, IssuedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano)}
+	grantID := "assure_00000000000000000000000000000001"
+	validToken := grantID + "." + secret
+	base := actionmodel.ActionAssuranceGrant{ID: grantID, TokenHash: actionAssuranceTokenHash(secret), WorkspaceID: "workspace", UserID: "user", ActionKey: "action.run", ObjectKey: "order", RecordID: "order-1", PayloadDigest: digest, Methods: []string{"otp"}, IssuedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), ExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano)}
 	action := definitionmodel.ActionSchema{Key: "action.run", AssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{"otp"}}}
 	call := func(service *ActionAssuranceDomainService, action definitionmodel.ActionSchema, payload map[string]any, token string) error {
 		_, err := service.ValidateAndConsume(t.Context(), action, "workspace", "user", "order", "order-1", payload, token)
@@ -133,32 +135,32 @@ func TestValidateAndConsumeCoversAllTokenEvidenceAndStoreBoundaries(t *testing.T
 		}
 	}
 	store.getErr = errors.New("read failed")
-	if err := call(service, action, payload, "assurance_id."+secret); !errors.Is(err, store.getErr) {
+	if err := call(service, action, payload, validToken); !errors.Is(err, store.getErr) {
 		t.Fatalf("get err=%v", err)
 	}
 	store.getErr = nil
 	store.found = false
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_invalid" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_invalid" {
 		t.Fatalf("not found err=%v", err)
 	}
 	store.found = true
 	store.grant.TokenHash = "wrong"
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_invalid" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_invalid" {
 		t.Fatalf("hash err=%v", err)
 	}
 	store.grant = base
 	store.grant.ConsumedAt = now.Format(time.RFC3339Nano)
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_replayed" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_replayed" {
 		t.Fatalf("consumed err=%v", err)
 	}
 	store.grant = base
 	store.grant.ExpiresAt = "bad"
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_expired" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_expired" {
 		t.Fatalf("parse expiry err=%v", err)
 	}
 	store.grant = base
 	store.grant.ExpiresAt = now.Format(time.RFC3339Nano)
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_expired" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_expired" {
 		t.Fatalf("expired err=%v", err)
 	}
 
@@ -176,17 +178,17 @@ func TestValidateAndConsumeCoversAllTokenEvidenceAndStoreBoundaries(t *testing.T
 		t.Run(tc.name, func(t *testing.T) {
 			store.grant = base
 			tc.edit(&store.grant)
-			if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_binding_mismatch" {
+			if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_binding_mismatch" {
 				t.Fatalf("err=%v", err)
 			}
 		})
 	}
 	store.grant = base
-	if err := call(service, action, map[string]any{"invalid": make(chan int)}, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_payload_changed" {
+	if err := call(service, action, map[string]any{"invalid": make(chan int)}, validToken); actionAssuranceCode(err) != "backend.action.assurance_payload_changed" {
 		t.Fatalf("invalid payload err=%v", err)
 	}
 	store.grant.PayloadDigest = "other"
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_payload_changed" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_payload_changed" {
 		t.Fatalf("changed payload err=%v", err)
 	}
 
@@ -195,12 +197,12 @@ func TestValidateAndConsumeCoversAllTokenEvidenceAndStoreBoundaries(t *testing.T
 	store.grant = base
 	store.grant.Methods = []string{"workflow_approval"}
 	store.grant.ApprovalVersion = "v1"
-	if err := call(service, approval, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_approval_evidence_missing" {
+	if err := call(service, approval, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_approval_evidence_missing" {
 		t.Fatalf("approval hash err=%v", err)
 	}
 	store.grant.ApprovalHash = "approval-hash"
 	store.consumed = true
-	if err := call(service, approval, payload, "assurance_id."+secret); err != nil {
+	if err := call(service, approval, payload, validToken); err != nil {
 		t.Fatalf("approval evidence err=%v", err)
 	}
 
@@ -209,26 +211,26 @@ func TestValidateAndConsumeCoversAllTokenEvidenceAndStoreBoundaries(t *testing.T
 	store.grant = base
 	store.grant.Methods = []string{"recent_reauth"}
 	store.grant.IssuedAt = "bad"
-	if err := call(service, reauth, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_reauth_expired" {
+	if err := call(service, reauth, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_reauth_expired" {
 		t.Fatalf("reauth parse err=%v", err)
 	}
 	store.grant.IssuedAt = now.Add(-2 * time.Minute).Format(time.RFC3339Nano)
-	if err := call(service, reauth, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_reauth_expired" {
+	if err := call(service, reauth, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_reauth_expired" {
 		t.Fatalf("reauth age err=%v", err)
 	}
 
 	store.grant = base
 	store.consumeErr = errors.New("consume failed")
-	if err := call(service, action, payload, "assurance_id."+secret); !errors.Is(err, store.consumeErr) {
+	if err := call(service, action, payload, validToken); !errors.Is(err, store.consumeErr) {
 		t.Fatalf("consume err=%v", err)
 	}
 	store.consumeErr = nil
 	store.consumed = false
-	if err := call(service, action, payload, "assurance_id."+secret); actionAssuranceCode(err) != "backend.action.assurance_token_replayed" {
+	if err := call(service, action, payload, validToken); actionAssuranceCode(err) != "backend.action.assurance_token_replayed" {
 		t.Fatalf("consume race err=%v", err)
 	}
 	store.consumed = true
-	if evidence, err := service.ValidateAndConsume(t.Context(), action, " workspace ", " user ", " order ", " order-1 ", payload, " assurance_id."+secret+" "); err != nil || evidence.GrantID != base.ID || evidence.Facts["payload_digest"] != digest {
+	if evidence, err := service.ValidateAndConsume(t.Context(), action, " workspace ", " user ", " order ", " order-1 ", payload, " "+validToken+" "); err != nil || evidence.GrantID != base.ID || evidence.Facts["payload_digest"] != digest {
 		t.Fatalf("evidence=%#v err=%v", evidence, err)
 	}
 }

@@ -61,7 +61,7 @@ func TestDecodeAgentRecordQueryBoundsSortAndRelations(t *testing.T) {
 }
 
 func TestProjectAgentRecordRemovesEveryNonVisibleField(t *testing.T) {
-	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Ada", "email": "visible only to another role", "secret": "never expose"}}
+	record := recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Ada", "email": "visible only to another role", "secret": "never expose"}}
 	projectAgentRecord(&record, []string{"name"})
 	if len(record.Data) != 1 || record.Data["name"] != "Ada" {
 		t.Fatalf("projected record=%#v", record)

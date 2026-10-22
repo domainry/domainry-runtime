@@ -3,6 +3,7 @@ package record
 import (
 	"testing"
 
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
@@ -12,16 +13,15 @@ func TestSubjectRecordErasureClearsTranslationsAtomicallyAndRetainsDeclaredEvide
 	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE member_profile(workspace_id TEXT NOT NULL,id TEXT NOT NULL,updated_at BIGINT NOT NULL,name TEXT,sku TEXT,PRIMARY KEY(workspace_id,id))`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "member_profile", ormschema.Column("name", ormschema.Text()), ormschema.Column("sku", ormschema.Text()))
 	for _, workspace := range []string{"workspace-a", "workspace-b"} {
-		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO member_profile VALUES(?,?,?,?,?)`, workspace, "alice", int64(1790121600000), "private name", "retained sku"); err != nil {
+		recordID := "alice-" + workspace
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO member_profile(workspace_id,member_profile_id,updated_at,name,sku) VALUES(?,?,?,?,?)`, workspace, recordID, int64(1790121600000), "private name", "retained sku"); err != nil {
 			t.Fatal(err)
 		}
 		for _, field := range []string{"name", "sku"} {
 			for _, locale := range []string{"zh-CN", "en-US"} {
-				if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _record_localized_values(workspace_id,object_key,record_id,field_key,locale,text_value,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, workspace, "member_profile", "alice", field, locale, "private translated "+field, int64(1790121600000), int64(1790121600000)); err != nil {
+				if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _record_localized_values(workspace_id,object_key,record_id,field_key,locale,text_value,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, workspace, "member_profile", recordID, field, locale, "private translated "+field, int64(1790121600000), int64(1790121600000)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -31,7 +31,7 @@ func TestSubjectRecordErasureClearsTranslationsAtomicallyAndRetainsDeclaredEvide
 		{Key: "name", Type: "text", Config: map[string]any{"localized": true, "lifecycle_erase": "delete"}},
 		{Key: "sku", Type: "text", Config: map[string]any{"localized": true, "lifecycle_erase": "retain"}},
 	}}
-	mutation := recordmodel.SubjectErasureMutation{ObjectKey: "member_profile", RecordID: "alice", BeforeUpdatedAt: "2026-09-23T00:00:00Z", AfterUpdatedAt: "2026-09-24T00:00:00Z", Values: map[string]any{"name": nil}}
+	mutation := recordmodel.SubjectErasureMutation{ObjectKey: "member_profile", RecordID: "alice-workspace-a", BeforeUpdatedAt: "2026-09-23T00:00:00Z", AfterUpdatedAt: "2026-09-24T00:00:00Z", Values: map[string]any{"name": nil}}
 	records := NewRecordStore(store)
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_erasure_base BEFORE UPDATE ON member_profile WHEN OLD.workspace_id='workspace-a' BEGIN SELECT RAISE(ABORT,'injected base update failure'); END`); err != nil {
 		t.Fatal(err)

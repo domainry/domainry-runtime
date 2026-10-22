@@ -104,9 +104,9 @@ func (h *ConversationBusinessHost) QueryRelatedBusinessRecords(ctx context.Conte
 		}
 		// NULL/unset references deliberately match no real record. Still run the
 		// target query to enforce fields/filters and target access consistently.
-		required = recordmodel.RecordFilterExpression{Field: "id", Operator: "eq", Value: id}
+		required = recordmodel.RecordFilterExpression{Field: "record_id", Operator: "eq", Value: id}
 		if id == "" {
-			required = recordmodel.RecordFilterExpression{Field: "id", Operator: "is_null"}
+			required = recordmodel.RecordFilterExpression{Field: "record_id", Operator: "is_null"}
 		}
 	}
 	query := agentsdk.ConversationBusinessQuery{ObjectKey: selected.ObjectKey, Fields: q.Fields, OptionalFields: q.OptionalFields, Filters: q.Filters, Sort: q.Sort, PageSize: q.PageSize, Cursor: q.Cursor}

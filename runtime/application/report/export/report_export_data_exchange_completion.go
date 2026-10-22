@@ -49,9 +49,9 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 	}
 	now := p.dependencies.Clock().UTC()
 	binding, err := p.dependencies.Receipts.BindReportExportCompletion(ctx, runtimereportmodel.ReportExportCompletionBinding{
-		ReceiptID: payload.PrepareReceiptID, WorkspaceID: payload.WorkspaceID, RequesterUserID: payload.RequesterUserID,
+		OperationID: payload.PrepareOperationID, WorkspaceID: payload.WorkspaceID, RequesterUserID: payload.RequesterUserID,
 		ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey, AuditID: payload.AuditID,
-		JobID: completion.JobID, ArtifactID: completion.Artifact.ID, PayloadJSON: string(payloadJSON), CompletionFingerprint: completionFingerprint,
+		JobID: completion.JobID, ArtifactID: completion.Artifact.ArtifactID, PayloadJSON: string(payloadJSON), CompletionFingerprint: completionFingerprint,
 		Now: now, ExpiresAt: now.Add(90 * 24 * time.Hour),
 	})
 	if err != nil {
@@ -95,7 +95,7 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 		}
 	}
 	if transitionAudit {
-		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.ID,
+		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.RecordID,
 			mapping.AuditStatusField, status, map[string]any{
 				mapping.AuditStatusField: mapping.AuditPreparedStatus, mapping.AuditRowCountField: completion.Rows, mapping.AuditScopeHashField: expectedScopeHash,
 			})
@@ -138,8 +138,8 @@ func (p *DataExchangeProvider) CompleteExport(ctx context.Context, completion da
 		return err
 	}
 	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
-	return p.audit(ctx, "report-export-download-prepared:"+completion.Artifact.ID, "report_export_download_prepared", payload.ObjectKey, principal, payload.AuditID, map[string]any{
-		"report_key": payload.ReportKey, "download_id": downloadRecord.ID, "artifact_id": completion.Artifact.ID,
+	return p.audit(ctx, "report-export-download-prepared:"+completion.Artifact.ArtifactID, "report_export_download_prepared", payload.ObjectKey, principal, payload.AuditID, map[string]any{
+		"report_key": payload.ReportKey, "download_id": downloadRecord.RecordID, "artifact_id": completion.Artifact.ArtifactID,
 		"expires_at": completion.Artifact.ExpiresAt.UTC().UnixMilli(), "watermarked": prepared.control.Watermark,
 		"content_sha256": completion.Artifact.SHA256, "row_count": completion.Rows, "scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true)
@@ -172,7 +172,7 @@ func reportExportCompletionFingerprint(completion dataexchange.ExportCompletion)
 		Rows         int    `json:"rows"`
 		ResultChunks int    `json:"result_chunks"`
 	}{
-		JobID: strings.TrimSpace(completion.JobID), ArtifactID: strings.TrimSpace(completion.Artifact.ID),
+		JobID: strings.TrimSpace(completion.JobID), ArtifactID: strings.TrimSpace(completion.Artifact.ArtifactID),
 		Filename: strings.TrimSpace(completion.Artifact.Filename), ContentType: strings.TrimSpace(completion.Artifact.ContentType),
 		SHA256: strings.TrimSpace(completion.Artifact.SHA256), Size: completion.Artifact.Size,
 		ExpiresAt: completion.Artifact.ExpiresAt.UTC().Format(time.RFC3339Nano), Rows: completion.Rows, ResultChunks: completion.ResultChunks,

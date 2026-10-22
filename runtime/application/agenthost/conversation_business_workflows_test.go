@@ -38,7 +38,7 @@ func (f *businessWorkflowPortProbe) AgentWorkflowDefinition(_ context.Context, k
 func (f *businessWorkflowPortProbe) RunAgentWorkflowWithKey(_ context.Context, key string, data map[string]any, call string, p principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
 	f.starts++
 	f.lastPrincipal = p
-	f.execution = workflowmodel.WorkflowExecution{ID: "execution-1", ProcessID: f.process.ID, WorkflowKey: key, ActorID: p.UserID, WorkspaceID: p.WorkspaceID, IdempotencyKey: call, Payload: data}
+	f.execution = workflowmodel.WorkflowExecution{ExecutionID: "execution-1", ProcessID: f.process.ProcessID, WorkflowKey: key, ActorID: p.UserID, WorkspaceID: p.WorkspaceID, IdempotencyKey: call, Payload: data}
 	if f.unknown {
 		return workflowmodel.WorkflowRunResult{}, fmt.Errorf("transport unavailable")
 	}
@@ -51,7 +51,7 @@ func (f *businessWorkflowPortProbe) InspectAgentWorkflowInvocation(_ context.Con
 	return f.execution, true, nil
 }
 func (f *businessWorkflowPortProbe) WorkflowProcess(_ context.Context, id string, p principalmodel.Principal) (workflowapplication.WorkflowProcessDetail, error) {
-	if f.denied || id != f.process.ID || p.UserID != f.process.InitiatorID {
+	if f.denied || id != f.process.ProcessID || p.UserID != f.process.InitiatorID {
 		return workflowapplication.WorkflowProcessDetail{}, fmt.Errorf("denied")
 	}
 	return workflowapplication.WorkflowProcessDetail{Process: f.process}, nil
@@ -62,7 +62,7 @@ func TestConversationWorkflowHostConfirmsReconcilesAndRevalidatesChangingState(t
 	permissions := []string{"customer.read", "workflow.review.run"}
 	resolver.principal = accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: a.UserID, WorkspaceID: a.WorkspaceID}}, accessfixture.Bundle{Permissions: permissions, DataPolicies: accessfixture.DataPoliciesForPermissions(permissions, identitysdk.DataScopeOwner)})
 	definition := definitionmodel.WorkflowSchema{Key: "review", Name: "业务审核", Enabled: true, TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "manual"}, InputFields: []definitionmodel.WorkflowInputField{{Key: "reason", Type: "text", Required: true}}, Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "approval", Type: "approval", Name: "经理审批"}}}}
-	port := &businessWorkflowPortProbe{definition: definition, unknown: true, process: workflowmodel.WorkflowProcessInstance{ID: "process-1", WorkspaceID: a.WorkspaceID, WorkflowKey: "review", WorkflowName: "业务审核", InitiatorID: a.UserID, Status: "waiting", CurrentNodeIDs: []string{"approval"}, DefinitionSnapshot: definition, Variables: map[string]any{"private": "DO-NOT-EXPOSE"}, Result: map[string]any{"private": "DO-NOT-EXPOSE"}, UpdatedAt: "2026-09-10T08:00:00Z"}}
+	port := &businessWorkflowPortProbe{definition: definition, unknown: true, process: workflowmodel.WorkflowProcessInstance{ProcessID: "process-1", WorkspaceID: a.WorkspaceID, WorkflowKey: "review", WorkflowName: "业务审核", InitiatorID: a.UserID, Status: "waiting", CurrentNodeIDs: []string{"approval"}, DefinitionSnapshot: definition, Variables: map[string]any{"private": "DO-NOT-EXPOSE"}, Result: map[string]any{"private": "DO-NOT-EXPOSE"}, UpdatedAt: "2026-09-10T08:00:00Z"}}
 	if err := WithConversationBusinessWorkflows(port)(host); err != nil {
 		t.Fatal(err)
 	}

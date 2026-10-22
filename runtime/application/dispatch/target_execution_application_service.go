@@ -199,8 +199,8 @@ func (s *TargetExecutionApplicationService) Execute(ctx context.Context, request
 			return ExecutionReceipt{}, err
 		}
 		receiptID := executionID
-		if len(result.Executions) > 0 && strings.TrimSpace(result.Executions[0].ID) != "" {
-			receiptID = strings.TrimSpace(result.Executions[0].ID)
+		if len(result.Executions) > 0 && strings.TrimSpace(result.Executions[0].ExecutionID) != "" {
+			receiptID = strings.TrimSpace(result.Executions[0].ExecutionID)
 		}
 		return ExecutionReceipt{ID: receiptID, Owner: "workflow", Status: "accepted"}, nil
 	case "report_snapshot_refresh":
@@ -211,7 +211,7 @@ func (s *TargetExecutionApplicationService) Execute(ctx context.Context, request
 		if err != nil {
 			return ExecutionReceipt{}, err
 		}
-		receiptID := strings.TrimSpace(snapshot.ID)
+		receiptID := strings.TrimSpace(snapshot.SnapshotID)
 		if receiptID == "" {
 			receiptID = executionID
 		}

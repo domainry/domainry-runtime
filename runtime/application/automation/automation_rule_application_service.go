@@ -9,7 +9,6 @@ import (
 
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	automationdomain "github.com/domainry/domainry-runtime/runtime/domain/automation/service"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
@@ -84,16 +84,20 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 		return automationprojection.AutomationRuleTrace{}, automationError(apperror.KindInternal, "backend.internal", nil, "operation", "automation execution context is required")
 	}
 	started := time.Now()
-	executionID := fmt.Sprintf("automation_execution_%d", time.Now().UnixNano())
+	executionID, err := entityid.New("autorun")
+	if err != nil {
+		return automationprojection.AutomationRuleTrace{}, automationError(apperror.KindInternal, "backend.internal", err, "operation", "generate automation run identity")
+	}
+	idempotencyKey := ""
 	if automationDurableEffectPhase(request.Phase) && request.Record != nil {
-		executionID = "automation_rule:" + automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
+		idempotencyKey = automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
 	}
 	trace = automationprojection.AutomationRuleTrace{ExecutionID: executionID, RuleKey: request.Rule.Key, Status: "succeeded", Matched: true, InstructionTraces: []automationprojection.AutomationInstructionTrace{}, NodeTraces: []automationprojection.AutomationNodeTrace{}}
 	targetNodeID, _ := ctx.Value(simulationTargetKey).(string)
 	simulation, _ := ctx.Value(simulationEnabledKey).(bool)
 	recordID := ""
 	if request.Record != nil {
-		recordID = request.Record.ID
+		recordID = request.Record.RecordID
 	}
 	defer func() {
 		if simulation {
@@ -107,7 +111,7 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 			eventID = automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
 		}
 		execution := automationmodel.AutomationRuleExecution{
-			ID: executionID, WorkspaceID: request.WorkspaceID, RuleKey: request.Rule.Key, ObjectKey: request.Rule.ObjectKey, RecordID: recordID,
+			RunID: executionID, IdempotencyKey: idempotencyKey, WorkspaceID: request.WorkspaceID, RuleKey: request.Rule.Key, ObjectKey: request.Rule.ObjectKey, RecordID: recordID,
 			Phase: request.Phase, Operation: request.Rule.Trigger.Operation, Status: trace.Status, ActorID: request.Principal.UserID, RoleKey: request.Principal.RoleKey,
 			RequestID: request.Principal.RequestID, CorrelationID: valueOrDefault(request.Principal.RequestID, executionID), EventID: eventID,
 			DurationMS: trace.DurationMS, ErrorCode: trace.ErrorCode, Candidate: recordcontract.RecordCloneData(request.Candidate), Trace: automationdomain.TraceMap(trace),

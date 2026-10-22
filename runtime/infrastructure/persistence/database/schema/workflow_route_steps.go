@@ -16,8 +16,9 @@ const WorkflowRouteStepsTable = "_workflow_route_steps"
 // EnsureWorkflowRouteStepsSchema is Runtime schema 026.
 func EnsureWorkflowRouteStepsSchema(ctx context.Context, store Store) error {
 	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), WorkflowRouteStepsTable).IfNotExists().Columns(
+		ormschema.Column("id", ormschema.BigInt()).NotNull().AutoIncrement(),
 		ormschema.Column("workspace_id", ormschema.TextKey(128)).NotNull(),
-		ormschema.Column("id", ormschema.TextKey(128)).NotNull(),
+		ormschema.Column("route_step_id", ormschema.TextKey(128)).NotNull(),
 		ormschema.Column("process_id", ormschema.TextKey(128)).NotNull(),
 		ormschema.Column("node_id", ormschema.TextKey(128)).NotNull(),
 		ormschema.Column("step_no", ormschema.Integer()).NotNull(),
@@ -33,7 +34,7 @@ func EnsureWorkflowRouteStepsSchema(ctx context.Context, store Store) error {
 		ormschema.Column("node_instance_id", ormschema.TextKey(128)).NotNull().DefaultValue(""),
 		ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
 		ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
-	).PrimaryKey("workspace_id", "id").Build()
+	).PrimaryKey("id").Unique("route_step_id").Build()
 	if err != nil {
 		return fmt.Errorf("build %s: %w", WorkflowRouteStepsTable, err)
 	}

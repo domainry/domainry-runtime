@@ -45,7 +45,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("start: %v", err)
 			}
-			tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
+			tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ProcessID, "", "", 10)
 			if err != nil || len(tasks) != 2 {
 				t.Fatalf("tasks=%#v err=%v", tasks, err)
 			}
@@ -55,14 +55,14 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 			}
 			first := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: tasks[0].AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: integrationWorkflowTaskDecisionPermissions()})
 			application := records.Applications().Workflows
-			afterFirst, err := application.DecideTask(t.Context(), tasks[0].ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: test.firstDecision}, first)
+			afterFirst, err := application.DecideTask(t.Context(), tasks[0].TaskID, workflowmodel.WorkflowTaskDecisionRequest{Decision: test.firstDecision}, first)
 			if err != nil {
 				t.Fatalf("first decision: %v (cause: %v)", err, errors.Unwrap(err))
 			}
 			if afterFirst.Status != test.wantAfterFirst {
 				t.Fatalf("expected %s after first decision, got %#v", test.wantAfterFirst, afterFirst)
 			}
-			second, _, err := workflowProcessStore(store).GetTask(t.Context(), "workspace-primary", tasks[1].ID)
+			second, _, err := workflowProcessStore(store).GetTask(t.Context(), "workspace-primary", tasks[1].TaskID)
 			if err != nil || second.Status != test.wantSecondStatus {
 				t.Fatalf("expected second task %s, got %#v err=%v", test.wantSecondStatus, second, err)
 			}
@@ -70,7 +70,7 @@ func TestWorkflowApprovalModesAggregateTasks(t *testing.T) {
 				return
 			}
 			secondPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: second.AssigneeUserID, WorkspaceID: "workspace-primary"}}, accessfixture.Bundle{Key: "approver", Permissions: integrationWorkflowTaskDecisionPermissions()})
-			final, err := application.DecideTask(t.Context(), second.ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, secondPrincipal)
+			final, err := application.DecideTask(t.Context(), second.TaskID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved"}, secondPrincipal)
 			if err != nil || final.Status != test.wantFinal {
 				t.Fatalf("expected final %s, got %#v err=%v cause=%v", test.wantFinal, final, err, errors.Unwrap(err))
 			}
@@ -101,7 +101,7 @@ func approvalModeTestRuntime(t *testing.T, mode string, configure ...func(*defin
 		}
 		for _, resolver := range node.Contract.Approval.Resolvers {
 			for _, userID := range resolver.UserIDs {
-				identity.upsertUser(identitysdk.User{ID: userID, Status: identitysdk.UserStatusActive})
+				identity.upsertUser(identitysdk.User{UserID: userID, Status: identitysdk.UserStatusActive})
 			}
 		}
 	}

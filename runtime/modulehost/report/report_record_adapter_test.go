@@ -40,7 +40,7 @@ func (r *reportRecordAdapterRepository) ListRecords(context.Context, string, def
 func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}, {Key: "status", Type: "text"}, {Key: "retired", Type: "text", DisabledAt: "2026-08-10T00:00:00Z"}}}
 	objects := map[string]definitionmodel.ObjectSchema{"customer": object}
-	repository := &reportRecordAdapterRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}}}
+	repository := &reportRecordAdapterRepository{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}}}
 	objectForKey := func(_ context.Context, key string) (definitionmodel.ObjectSchema, bool) {
 		value, ok := objects[key]
 		return value, ok
@@ -77,7 +77,7 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 		t.Fatal("admin record access denied")
 	}
 	projected, err := adapter.ProjectReportRecordFields(t.Context(), principal, object, repository.page.Items)
-	if err != nil || len(projected) != 1 || projected[0].ID != "customer-1" {
+	if err != nil || len(projected) != 1 || projected[0].RecordID != "customer-1" {
 		t.Fatalf("projected=%#v err=%v", projected, err)
 	}
 	if masked, err := adapter.AuthorizeReportExportField(t.Context(), principal, "customer", "name"); err != nil || masked {
@@ -192,7 +192,7 @@ func TestReportRecordAdapterDelegatesRecordBoundaries(t *testing.T) {
 	if err := adapter.TransitionReportExportAuditStatus(t.Context(), "workspace-a", "customer", "audit-1", "status", "prepared", "denied"); err != nil {
 		t.Fatalf("transition status: %v", err)
 	}
-	if repository.updated.ID != "audit-1" || repository.updated.Data["status"] != "denied" || repository.updateConditions["status"] != "prepared" {
+	if repository.updated.RecordID != "audit-1" || repository.updated.Data["status"] != "denied" || repository.updateConditions["status"] != "prepared" {
 		t.Fatalf("updated=%#v conditions=%#v", repository.updated, repository.updateConditions)
 	}
 	won, err := adapter.TransitionReportExportAudit(t.Context(), "workspace-a", "customer", "audit-1", "status", "approved", map[string]any{"status": "prepared", "name": "scope-hash"})

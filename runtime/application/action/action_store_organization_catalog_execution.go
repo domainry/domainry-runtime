@@ -48,7 +48,7 @@ func (e *businessActionExecution) ListStoreOrganizations(ctx context.Context, re
 	}
 	result := runtimeext.StoreOrganizationCatalogPage{Items: make([]runtimeext.StoreOrganizationCatalogItem, len(page.Items)), NextCursor: strings.TrimSpace(page.NextCursor)}
 	for index, item := range page.Items {
-		if strings.TrimSpace(item.ID) == "" {
+		if strings.TrimSpace(item.OrganizationUnitID) == "" {
 			return runtimeext.StoreOrganizationCatalogPage{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_catalog_result_invalid", nil, nil)
 		}
 		issued, issueErr := e.issueStoreOrganizationCatalogItem(item)
@@ -84,7 +84,7 @@ func (e *businessActionExecution) ResolveStoreOrganization(ctx context.Context, 
 	if err != nil {
 		return runtimeext.StoreOrganizationCatalogItem{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.resolve_failed")
 	}
-	if strings.TrimSpace(resolved.ID) != organizationID {
+	if strings.TrimSpace(resolved.OrganizationUnitID) != organizationID {
 		return runtimeext.StoreOrganizationCatalogItem{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_catalog_result_invalid", nil, nil)
 	}
 	return e.issueStoreOrganizationCatalogItem(resolved)
@@ -103,7 +103,7 @@ func (e *businessActionExecution) validateStoreOrganizationCatalogAccess() error
 
 func (e *businessActionExecution) issueStoreOrganizationCatalogItem(item identitysdk.StoreOrganization) (runtimeext.StoreOrganizationCatalogItem, error) {
 	projected := runtimeext.StoreOrganizationCatalogItem{
-		ID: strings.TrimSpace(item.ID), Code: strings.TrimSpace(item.Code), Name: strings.TrimSpace(item.Name), Status: strings.TrimSpace(item.Status),
+		ID: strings.TrimSpace(item.OrganizationUnitID), Code: strings.TrimSpace(item.Code), Name: strings.TrimSpace(item.Name), Status: strings.TrimSpace(item.Status),
 		ParentOrganizationID: strings.TrimSpace(item.ParentOrganizationID), SortOrder: item.SortOrder, Version: item.Version,
 	}
 	issued, claim, err := runtimeext.IssueStoreOrganizationCatalogItem(projected)

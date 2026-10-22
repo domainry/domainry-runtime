@@ -12,7 +12,7 @@ const ReportExportPrepareUseCase = "report.export.prepare"
 // authenticated caller operation to one Data Exchange job without moving
 // Report definitions, audit records, or download records into Runtime.
 type ReportExportPrepareReceipt struct {
-	ID                    string
+	ID                    int64
 	OperationID           string
 	WorkspaceID           string
 	RequesterUserID       string
@@ -56,7 +56,7 @@ type ReportExportPrepareClaimResult struct {
 
 type ReportExportPreparePayload struct {
 	WorkspaceID    string
-	ReceiptID      string
+	OperationID    string
 	PayloadJSON    string
 	BusinessJobKey string
 	LeaseOwner     string
@@ -66,7 +66,7 @@ type ReportExportPreparePayload struct {
 
 type ReportExportPrepareCompletion struct {
 	WorkspaceID  string
-	ReceiptID    string
+	OperationID  string
 	JobID        string
 	LeaseOwner   string
 	FencingToken int64
@@ -76,7 +76,7 @@ type ReportExportPrepareCompletion struct {
 
 type ReportExportPrepareFailure struct {
 	WorkspaceID  string
-	ReceiptID    string
+	OperationID  string
 	LeaseOwner   string
 	FencingToken int64
 	ErrorCode    string
@@ -85,7 +85,7 @@ type ReportExportPrepareFailure struct {
 }
 
 type ReportExportCompletionBinding struct {
-	ReceiptID             string
+	OperationID           string
 	WorkspaceID           string
 	RequesterUserID       string
 	ReportKey             string

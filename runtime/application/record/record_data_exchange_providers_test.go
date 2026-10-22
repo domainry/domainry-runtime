@@ -29,10 +29,10 @@ func TestRecordProviderProjectsLegacyJobShapeForSharedHTTPRoute(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	value, err := projector.ProjectDataExchangeJob(t.Context(), dataexchange.Job{
-		ID: "job-1", Provider: "records", Operation: "import", WorkspaceID: "workspace", ActorID: "actor", Status: "running", CreatedAt: now, UpdatedAt: now,
+		JobID: "job-1", Provider: "records", Operation: "import", WorkspaceID: "workspace", ActorID: "actor", Status: "running", CreatedAt: now, UpdatedAt: now,
 	}, dataexchange.Scope{WorkspaceID: "workspace", ActorID: "actor"})
 	job, typed := value.(recordmodel.RecordBatchJob)
-	if err != nil || !typed || job.ID != "job-1" || job.Kind != "import" || job.Status != "running" {
+	if err != nil || !typed || job.JobID != "job-1" || job.Kind != "import" || job.Status != "running" {
 		t.Fatalf("projection=%#v err=%v", value, err)
 	}
 	if _, err = projector.ProjectDataExchangeJob(t.Context(), dataexchange.Job{Provider: "reports"}, dataexchange.Scope{}); !errors.Is(err, dataexchange.ErrJobNotFound) {

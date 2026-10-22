@@ -9,7 +9,7 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 	text := s.ApplicationSchemaIDColumnType()
 	tables := map[string][]string{
 		WorkflowProcessInstancesTable: {
-			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "workflow_key " + text + " NOT NULL", "workflow_name TEXT NOT NULL",
+			physicalAutoIncrementID(s.Driver()), "workspace_id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "workflow_key " + text + " NOT NULL", "workflow_name TEXT NOT NULL",
 			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"workflow_definition_version_id " + text + " NOT NULL DEFAULT ''",
 			"definition_version INTEGER NOT NULL", "definition_hash " + text + " NOT NULL", "definition_json TEXT NOT NULL",
@@ -18,13 +18,13 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 			"result_json TEXT NOT NULL", "error_code " + text, "created_at BIGINT NOT NULL", "updated_at BIGINT NOT NULL", "completed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		WorkflowNodeInstancesTable: {
-			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
+			physicalAutoIncrementID(s.Driver()), "workspace_id " + text + " NOT NULL", "node_instance_id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
 			"node_type " + text + " NOT NULL", "iteration INTEGER NOT NULL", "status " + text + " NOT NULL",
 			"input_json TEXT NOT NULL", "output_json TEXT NOT NULL", "error_code " + text,
 			"started_at BIGINT NOT NULL", "completed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		WorkflowTasksTable: {
-			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_instance_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
+			physicalAutoIncrementID(s.Driver()), "workspace_id " + text + " NOT NULL", "task_id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "node_instance_id " + text + " NOT NULL", "node_id " + text + " NOT NULL",
 			"title TEXT NOT NULL", "assignee_user_id " + text, "assignee_name TEXT", "assignee_role_key " + text,
 			"assignee_resolver_key " + text, "assignee_evidence_json TEXT NOT NULL DEFAULT '{\"matches\":[]}'",
 			"resolver_snapshot_json TEXT NOT NULL DEFAULT '[]'", "candidate_source " + text, "node_definition_version INTEGER NOT NULL DEFAULT 0", "sequence_no INTEGER NOT NULL",
@@ -32,13 +32,12 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 			"completed_by " + text, "completed_at BIGINT NOT NULL DEFAULT 0", "created_at BIGINT NOT NULL", "updated_at BIGINT NOT NULL",
 		},
 		WorkflowProcessEventsTable: {
-			"workspace_id " + text + " NOT NULL", "id " + text + " PRIMARY KEY", "process_id " + text + " NOT NULL", "node_id " + text, "task_id " + text,
+			physicalAutoIncrementID(s.Driver()), "workspace_id " + text + " NOT NULL", "event_id " + text + " NOT NULL", "process_id " + text + " NOT NULL", "node_id " + text, "task_id " + text,
 			"event " + text + " NOT NULL", "actor_id " + text + " NOT NULL", "summary TEXT NOT NULL", "metadata_json TEXT NOT NULL", "created_at BIGINT NOT NULL",
 		},
 	}
-	prepareWorkspaceScopedIdentities(tables)
 	for _, table := range sortedRuntimeSchemaTables(tables) {
-		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+quotedColumnDefinitions(s, tables[table])+")"); err != nil {
+		if _, err := s.SchemaDB().ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+s.TableIdentifier(table)+" ("+quotedColumnDefinitions(s, tables[table], runtimeEntityColumns(table)...)+")"); err != nil {
 			return fmt.Errorf("create %s: %w", table, err)
 		}
 	}
@@ -47,6 +46,10 @@ func EnsureWorkflowProcessSchema(ctx context.Context, s Store) error {
 		columns     []string
 		unique      bool
 	}{
+		{name: "uniq_workflow_process_id", table: WorkflowProcessInstancesTable, columns: []string{"process_id"}, unique: true},
+		{name: "uniq_workflow_node_instance_id", table: WorkflowNodeInstancesTable, columns: []string{"node_instance_id"}, unique: true},
+		{name: "uniq_workflow_task_id", table: WorkflowTasksTable, columns: []string{"task_id"}, unique: true},
+		{name: "uniq_workflow_event_id", table: WorkflowProcessEventsTable, columns: []string{"event_id"}, unique: true},
 		{name: "idx_workflow_process_business_record", table: WorkflowProcessInstancesTable, columns: []string{"workspace_id", "object_key", "record_id", "created_at"}},
 		{name: "idx_workflow_process_status", table: WorkflowProcessInstancesTable, columns: []string{"workspace_id", "status", "updated_at"}},
 		{name: "idx_workflow_process_operation", table: WorkflowProcessInstancesTable, columns: []string{"workspace_id", "operation_id"}},

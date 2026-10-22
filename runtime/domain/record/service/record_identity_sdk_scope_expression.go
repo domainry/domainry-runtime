@@ -162,7 +162,7 @@ func compileSDKPredicate(object definitionmodel.ObjectSchema, objects map[string
 		return recordmodel.RecordScopeExpression{}, err
 	}
 	if identityevaluator.IsMissingValue(value) {
-		return recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "id"}, nil
+		return recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "record_id"}, nil
 	}
 	switch predicate.Operator {
 	case identitysdk.OperatorEqual:
@@ -226,7 +226,7 @@ func compileSDKPredicateChildren(object definitionmodel.ObjectSchema, objects ma
 func sdkPolicyFactField(object definitionmodel.ObjectSchema, fact string) (string, bool) {
 	fact = strings.TrimSpace(fact)
 	aliases := map[string]string{
-		"id":            "id",
+		"id":            "record_id",
 		"owner_user_id": recordpolicy.RecordOwnerFieldKey(object),
 		"owner_org_id":  recordpolicy.RecordOwnerOrgIDFieldKey(object),
 	}
@@ -281,7 +281,7 @@ func sdkScopeRelationTarget(field definitionmodel.FieldSchema) string {
 }
 
 func denyAllRecordScopeExpression() *recordmodel.RecordScopeExpression {
-	return &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "id"}
+	return &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "record_id"}
 }
 
 func normalizeSDKScopeAction(action string) string {
@@ -352,8 +352,8 @@ func directSDKScopeExpressionMatches(expression recordmodel.RecordScopeExpressio
 
 func directRecordScopeValue(record recordmodel.Record, fieldKey string) (string, bool) {
 	switch strings.TrimSpace(fieldKey) {
-	case "id":
-		return record.ID, true
+	case "record_id":
+		return record.RecordID, true
 	case recordpolicy.RecordOwnerUserIDSystemField:
 		return strings.TrimSpace(record.OwnerUserID), true
 	case recordpolicy.RecordOwnerOrgIDSystemField:

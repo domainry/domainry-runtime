@@ -16,7 +16,7 @@ type securityChallengeOperationsProbe struct {
 
 func (probe *securityChallengeOperationsProbe) Call(_ context.Context, request integrationsdk.ProviderCallRequest) (integrationsdk.ProviderCallResult, error) {
 	probe.request = request
-	return integrationsdk.ProviderCallResult{Invocation: integrationsdk.Invocation{ID: "invocation-1", Status: "succeeded"}}, nil
+	return integrationsdk.ProviderCallResult{Invocation: integrationsdk.Invocation{InvocationID: "invocation-1", Status: "succeeded"}}, nil
 }
 
 func TestIdentitySecurityChallengeDeliveryUsesSensitiveIntegrationOperation(t *testing.T) {

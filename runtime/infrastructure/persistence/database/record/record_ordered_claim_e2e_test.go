@@ -18,9 +18,9 @@ func TestGenericOrderedClaimUsesPrioritySequenceCreatedAtAndAtomicCAS(t *testing
 	repository := recordStore(store)
 	now := time.Date(2026, 7, 21, 9, 0, 0, 0, time.UTC)
 	for _, item := range []recordmodel.Record{
-		{ID: "low", CreatedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 1, "sequence": 1}},
-		{ID: "high-second", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 2}},
-		{ID: "high-first", CreatedAt: now.Add(time.Minute).Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 1}},
+		{RecordID: "low", CreatedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 1, "sequence": 1}},
+		{RecordID: "high-second", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 2}},
+		{RecordID: "high-first", CreatedAt: now.Add(time.Minute).Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "ready", "priority": 10, "sequence": 1}},
 	} {
 		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, item); err != nil {
 			t.Fatal(err)
@@ -29,7 +29,7 @@ func TestGenericOrderedClaimUsesPrioritySequenceCreatedAtAndAtomicCAS(t *testing
 	request := recordservice.RecordOrderedClaimRequest{WorkspaceID: "workspace-primary", Object: object, StatusField: "status", EligibleStatuses: []string{"ready"}, ClaimedStatus: "claimed", Now: now}
 	for _, expected := range []string{"high-first", "high-second", "low"} {
 		claimed, ok, err := recordservice.RecordClaimFirstEligible(t.Context(), repository, request)
-		if err != nil || !ok || claimed.ID != expected {
+		if err != nil || !ok || claimed.RecordID != expected {
 			t.Fatalf("ordered claim got=%#v ok=%v err=%v want=%s", claimed, ok, err, expected)
 		}
 	}
@@ -49,7 +49,7 @@ func TestGenericOrderedClaimUsesPrioritySequenceCreatedAtAndAtomicCAS(t *testing
 				return
 			}
 			if ok {
-				claimedIDs <- candidate.ID
+				claimedIDs <- candidate.RecordID
 			}
 		}(index)
 	}

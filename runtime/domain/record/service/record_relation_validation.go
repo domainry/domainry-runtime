@@ -110,7 +110,7 @@ func RecordPlannedRelations(ctx context.Context) map[string]map[string]recordmod
 			result[objectKey][recordID] = recordmodel.Record{
 				WorkspaceID: record.WorkspaceID,
 				Deleted:     record.Deleted,
-				ID:          record.ID,
+				RecordID:    record.RecordID,
 				Data:        recordvalidation.RecordCloneData(record.Data),
 				CreatedAt:   record.CreatedAt,
 				UpdatedAt:   record.UpdatedAt,

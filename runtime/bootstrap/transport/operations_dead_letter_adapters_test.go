@@ -57,7 +57,7 @@ func deadLetterPrincipal() principalmodel.Principal {
 
 func TestPublicationHandoffDeadLetterOwnerInspectRetryResolveAndProjectionFallbacks(t *testing.T) {
 	repository := &deadLetterDeliveryRepository{found: true, message: publicationmodel.Message{
-		ID: "message", WorkspaceID: "workspace", ConnectorKey: "__automation__", Operation: "run", Status: "dead_letter", Error: "failed", EventID: "event", DedupKey: "dedup", AttemptCount: 2, UpdatedAt: "now",
+		MessageID: "message", WorkspaceID: "workspace", ConnectorKey: "__automation__", Operation: "run", Status: "dead_letter", Error: "failed", EventID: "event", DedupKey: "dedup", AttemptCount: 2, UpdatedAt: "now",
 	}}
 	service := publicationhandoff.NewPublicationHandoffApplicationService(publicationhandoff.Dependencies{Repository: repository})
 	owner := publicationHandoffDeadLetterOwner{service: service}
@@ -121,7 +121,7 @@ func (s *workflowDeadLetterServiceStub) ResolveWorkflowExecution(context.Context
 }
 
 func TestWorkflowDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
-	service := &workflowDeadLetterServiceStub{execution: workflowmodel.WorkflowExecution{ID: "execution", WorkflowKey: "approval", Status: "dead_letter", LastError: "failed", ProcessID: "process", ObjectKey: "order", RecordID: "record", Attempt: 2, MaxAttempts: 3, UpdatedAt: "now"}}
+	service := &workflowDeadLetterServiceStub{execution: workflowmodel.WorkflowExecution{ExecutionID: "execution", WorkflowKey: "approval", Status: "dead_letter", LastError: "failed", ProcessID: "process", ObjectKey: "order", RecordID: "record", Attempt: 2, MaxAttempts: 3, UpdatedAt: "now"}}
 	owner := workflowDeadLetterOwner{service: service}
 	principal := deadLetterPrincipal()
 	item, err := owner.Inspect(t.Context(), "execution", principal)

@@ -20,7 +20,7 @@ import (
 func (r RecordStore) insertWorkflowStartTx(ctx context.Context, tx TransactionExecutor, workspaceID string, start transactionmodel.WorkflowStartCommit) error {
 	process := start.Process
 	process.WorkspaceID = workspaceID
-	if strings.TrimSpace(process.ID) == "" || strings.TrimSpace(process.WorkflowKey) == "" {
+	if strings.TrimSpace(process.ProcessID) == "" || strings.TrimSpace(process.WorkflowKey) == "" {
 		return fmt.Errorf("staged workflow start requires a process identity")
 	}
 	definition, err := database.MarshalTimeJSON(process.DefinitionSnapshot)
@@ -30,30 +30,30 @@ func (r RecordStore) insertWorkflowStartTx(ctx context.Context, tx TransactionEx
 	currentNodes, _ := database.MarshalTimeJSON(process.CurrentNodeIDs)
 	variables, _ := database.MarshalTimeJSON(database.NonNilMap(process.Variables))
 	result, _ := database.MarshalTimeJSON(database.NonNilMap(process.Result))
-	columns := []string{"id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
-	values := []any{process.ID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
+	columns := []string{"process_id", "workflow_key", "workflow_name", "workflow_definition_version_id", "definition_version", "definition_hash", "definition_json", "object_key", "record_id", "initiator_id", "initiator_role_key", "status", "current_node_ids_json", "variables_json", "result_json", "error_code", "created_at", "updated_at", "completed_at"}
+	values := []any{process.ProcessID, process.WorkflowKey, process.WorkflowName, process.DefinitionVersionID, process.DefinitionVersion, process.DefinitionHash, string(definition), process.ObjectKey, process.RecordID, process.InitiatorID, process.InitiatorRoleKey, process.Status, string(currentNodes), string(variables), string(result), process.ErrorCode, timevalue.Millis(process.CreatedAt), timevalue.Millis(process.UpdatedAt), timevalue.Millis(process.CompletedAt)}
 	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return fmt.Errorf("build staged workflow process insert: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
-		return fmt.Errorf("insert staged workflow process: %w", database.MutationConstraintError(err, "workflow_process", process.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert staged workflow process: %w", database.MutationConstraintError(err, "workflow_process", process.ProcessID, mutation.MutationConflictIdempotency))
 	}
 	for _, step := range start.RouteSteps {
 		step.WorkspaceID = workspaceID
-		step.ProcessID = process.ID
+		step.ProcessID = process.ProcessID
 		if err := r.insertWorkflowRouteStepTx(ctx, tx, step); err != nil {
 			return err
 		}
 	}
 	intent := start.Intent
 	intent.WorkspaceID = workspaceID
-	intent.ProcessID = process.ID
+	intent.ProcessID = process.ProcessID
 	return r.insertWorkflowIntentTx(ctx, tx, intent)
 }
 
 func (r RecordStore) insertWorkflowRouteStepTx(ctx context.Context, tx TransactionExecutor, step workflowmodel.WorkflowRouteStep) error {
-	if strings.TrimSpace(step.ID) == "" || step.StepNo < 1 {
+	if strings.TrimSpace(step.RouteStepID) == "" || step.StepNo < 1 {
 		return fmt.Errorf("staged workflow route step requires an identity and a positive step number")
 	}
 	assignees := step.AssigneeSnapshot
@@ -64,14 +64,14 @@ func (r RecordStore) insertWorkflowRouteStepTx(ctx context.Context, tx Transacti
 	if err != nil {
 		return fmt.Errorf("encode staged workflow route assignees: %w", err)
 	}
-	columns := []string{"id", "process_id", "node_id", "step_no", "step_key", "title", "mode", "required_approvals", "status", "assignee_snapshot_json", "configured_by", "configured_at", "configure_source", "node_instance_id", "created_at", "updated_at"}
-	values := []any{step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}
+	columns := []string{"route_step_id", "process_id", "node_id", "step_no", "step_key", "title", "mode", "required_approvals", "status", "assignee_snapshot_json", "configured_by", "configured_at", "configure_source", "node_instance_id", "created_at", "updated_at"}
+	values := []any{step.RouteStepID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}
 	statement, args, err := query.NewWorkspaceInsertBuilder(r.store.SQLRenderer, "_workflow_route_steps", step.WorkspaceID).Columns(columns...).Values(values...).Build()
 	if err != nil {
 		return fmt.Errorf("build staged workflow route step insert: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
-		return fmt.Errorf("insert staged workflow route step: %w", database.MutationConstraintError(err, "workflow_route_step", step.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert staged workflow route step: %w", database.MutationConstraintError(err, "workflow_route_step", step.RouteStepID, mutation.MutationConflictIdempotency))
 	}
 	return nil
 }

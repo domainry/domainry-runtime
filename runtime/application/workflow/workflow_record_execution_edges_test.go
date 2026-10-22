@@ -67,7 +67,7 @@ func TestTriggeredWorkflowsAuthorizationFilteringPrincipalProjectionSortingAndFa
 	unmatched := workflowRecordTriggerSchema("unmatched")
 	unmatched.TriggerContract.ObjectKey = "other"
 	service := workflowRecordExecutionService(worker, z, disabled, unmatched, a)
-	record := recordmodel.Record{ID: "record", Data: map[string]any{"value": true}}
+	record := recordmodel.Record{RecordID: "record", Data: map[string]any{"value": true}}
 	if _, err := service.TriggeredWorkflows(t.Context(), "order", record, principalmodel.Principal{}, "record_updated:order"); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization=%v", err)
 	}
@@ -93,14 +93,14 @@ func TestExecuteCommittedWorkflowIntentsLifecycleClaimFailureMissingDefinitionAn
 	valid := workflowRecordTriggerSchema("valid")
 	invalid := workflowRecordTriggerSchema("invalid")
 	invalid.Graph = nil
-	intent := workflowmodel.WorkflowExecution{ID: "intent", WorkflowKey: "valid", Status: "pending", Trigger: "record_updated:order", Payload: map[string]any{"object_key": "order", "record_id": "record"}, Result: map[string]any{}, UpdatedAt: "updated"}
+	intent := workflowmodel.WorkflowExecution{ExecutionID: "intent", WorkflowKey: "valid", Status: "pending", Trigger: "record_updated:order", Payload: map[string]any{"object_key": "order", "record_id": "record"}, Result: map[string]any{}, UpdatedAt: "updated"}
 	worker := &workflowCommittedIntentWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, updateWhereResult: true}
 	service := workflowRecordExecutionService(worker, valid, invalid)
 	service.executeCommittedWorkflowIntents(nil, []workflowmodel.WorkflowExecution{intent}, principal)
 	if len(worker.whereUpdates) != 0 {
 		t.Fatal("nil context claimed intent")
 	}
-	service.executeCommittedWorkflowIntents(t.Context(), []workflowmodel.WorkflowExecution{{ID: "missing", WorkflowKey: "missing"}}, principal)
+	service.executeCommittedWorkflowIntents(t.Context(), []workflowmodel.WorkflowExecution{{ExecutionID: "missing", WorkflowKey: "missing"}}, principal)
 	if len(worker.whereUpdates) != 0 {
 		t.Fatal("missing definition claimed")
 	}

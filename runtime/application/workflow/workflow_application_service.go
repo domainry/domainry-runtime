@@ -93,7 +93,7 @@ func (s *WorkflowApplicationService) wakeWorkflowExecution(execution workflowmod
 	if s == nil || !workflowpolicy.WorkflowExecutionDue(execution, s.worker.Clock.Now()) {
 		return
 	}
-	WakeWorkflowContinuation(s, WorkflowContinuationLocator{WorkspaceID: execution.WorkspaceID, ExecutionID: execution.ID})
+	WakeWorkflowContinuation(s, WorkflowContinuationLocator{WorkspaceID: execution.WorkspaceID, ExecutionID: execution.ExecutionID})
 }
 
 func (s *WorkflowApplicationService) ProcessWorkflowContinuation(ctx context.Context, locator WorkflowContinuationLocator, principal principalmodel.Principal) (workflowmodel.WorkflowProcessResult, error) {

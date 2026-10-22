@@ -14,8 +14,9 @@ package workflowmodel
 //	returned     an assignee returned on this step
 //	skipped      the step was never activated
 type WorkflowRouteStep struct {
+	ID                int64                   `json:"id"`
 	WorkspaceID       string                  `json:"workspace_id"`
-	ID                string                  `json:"id"`
+	RouteStepID       string                  `json:"route_step_id"`
 	ProcessID         string                  `json:"process_id"`
 	NodeID            string                  `json:"node_id"`
 	StepNo            int                     `json:"step_no"`

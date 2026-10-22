@@ -2,14 +2,13 @@ package action
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -99,7 +98,7 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if err != nil {
 			return normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.resolve_failed")
 		}
-		if strings.TrimSpace(organization.ID) != targetID {
+		if strings.TrimSpace(organization.OrganizationUnitID) != targetID {
 			return apperror.New(apperror.KindInternal, "backend.action.target_organization_identity_mismatch", nil, nil)
 		}
 		if err := e.authorizeTargetOrganization(targetID); err != nil {
@@ -130,7 +129,7 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 			if resolveErr != nil {
 				return normalizeIdentityCapabilityError(resolveErr, "identity.store_organization_delivery.resolve_failed")
 			}
-			if strings.TrimSpace(organization.ID) != targetID || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
+			if strings.TrimSpace(organization.OrganizationUnitID) != targetID || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
 				return apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
 			}
 		}
@@ -184,10 +183,10 @@ func (e *businessActionExecution) resolveSoleAuthorizedActiveStore(ctx context.C
 	// store. We deliberately do not skip disabled rows or select the first row:
 	// either would let a multi-store principal acquire an implicit target.
 	if len(page.Items) != 1 || strings.TrimSpace(page.NextCursor) != "" ||
-		!strings.EqualFold(strings.TrimSpace(page.Items[0].Status), "active") || strings.TrimSpace(page.Items[0].ID) == "" {
+		!strings.EqualFold(strings.TrimSpace(page.Items[0].Status), "active") || strings.TrimSpace(page.Items[0].OrganizationUnitID) == "" {
 		return "", apperror.New(apperror.KindBadRequest, "backend.action.target_organization_ambiguous", nil, nil)
 	}
-	return strings.TrimSpace(page.Items[0].ID), nil
+	return strings.TrimSpace(page.Items[0].OrganizationUnitID), nil
 }
 
 func (e *businessActionExecution) bindStoreOrganizationDelivery(ctx context.Context) (identitysdk.StoreOrganizationDelivery, error) {
@@ -255,7 +254,10 @@ func (e *businessActionExecution) ProvisionStoreOrganization(ctx context.Context
 	if activeStores >= commercial.MaxStores {
 		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.action.store_quota_exceeded", nil, map[string]string{"max_stores": fmt.Sprint(commercial.MaxStores)})
 	}
-	organizationID := stableStoreOrganizationID(e.workspace.ID, e.identity.ExecutionID)
+	organizationID, err := stableStoreOrganizationID(e.workspace.ID, e.identity.ExecutionID)
+	if err != nil {
+		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindInternal, "identity.store_organization_delivery.identity_invalid", err, nil)
+	}
 	result, err := delivery.DeliverStoreOrganization(txCtx, identitysdk.StoreOrganizationDeliveryRequest{
 		ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
 		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
@@ -273,7 +275,7 @@ func (e *businessActionExecution) ProvisionStoreOrganization(ctx context.Context
 	if err != nil {
 		return runtimeext.StoreOrganizationProvisionResult{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.create_failed")
 	}
-	if strings.TrimSpace(result.Organization.ID) != organizationID {
+	if strings.TrimSpace(result.Organization.OrganizationUnitID) != organizationID {
 		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindInternal, "backend.action.target_organization_identity_mismatch", nil, nil)
 	}
 	e.setTargetOrganization(organizationID, true)
@@ -359,7 +361,7 @@ func (e *businessActionExecution) mutateFixedStoreOrganization(ctx context.Conte
 		return runtimeext.StoreOrganizationMutationResult{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery."+idempotencySuffix+"_failed")
 	}
 	organization := delivered.Organization
-	if strings.TrimSpace(organization.ID) != targetID || organization.Version < 1 || operation == identitysdk.StoreOrganizationRename && strings.TrimSpace(organization.Name) != name || operation == identitysdk.StoreOrganizationDisable && !strings.EqualFold(strings.TrimSpace(organization.Status), "disabled") {
+	if strings.TrimSpace(organization.OrganizationUnitID) != targetID || organization.Version < 1 || operation == identitysdk.StoreOrganizationRename && strings.TrimSpace(organization.Name) != name || operation == identitysdk.StoreOrganizationDisable && !strings.EqualFold(strings.TrimSpace(organization.Status), "disabled") {
 		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_identity_mismatch", nil, nil)
 	}
 	return runtimeext.StoreOrganizationMutationResult{Target: e.targetOrganization, Name: strings.TrimSpace(organization.Name), Status: strings.TrimSpace(organization.Status), Version: organization.Version, Replayed: delivered.Replayed}, nil
@@ -398,9 +400,8 @@ func countActiveStoreOrganizations(ctx context.Context, delivery identitysdk.Sto
 	}
 }
 
-func stableStoreOrganizationID(workspaceID, executionID string) string {
-	digest := sha256.Sum256([]byte("runtime-action-store-organization-v1\x00" + strings.TrimSpace(workspaceID) + "\x00" + strings.TrimSpace(executionID)))
-	return "store_" + hex.EncodeToString(digest[:16])
+func stableStoreOrganizationID(workspaceID, executionID string) (string, error) {
+	return entityid.Derive("store", "runtime.action.store-organization", workspaceID, executionID)
 }
 
 func (e *businessActionExecution) setTargetOrganization(targetID string, provisioned bool) {
@@ -468,7 +469,7 @@ func (e *businessActionExecution) validateMutationTarget(plans []transactionmode
 		ownerID := strings.TrimSpace(commit.Record.OwnerOrgID)
 		if ownerID == "" || ownerID != e.targetOrganization.ID {
 			return apperror.New(apperror.KindForbidden, "backend.action.mixed_target_organization", nil, map[string]string{
-				"object": commit.Object.Key, "record_id": firstNonempty(commit.Record.ID, commit.RecordID),
+				"object": commit.Object.Key, "record_id": firstNonempty(commit.Record.RecordID, commit.RecordID),
 			})
 		}
 	}

@@ -32,7 +32,7 @@ func (s uploadSubjectMemory) FindUploadSubject(_ context.Context, workspace, id 
 func TestUploadSubjectBindingRejectsForeignClaimsAndForgedRecordReferences(t *testing.T) {
 	owner := uploadAccessPrincipal("asset.read", "asset.create")
 	registry := NewUploadSubjectRegistry(uploadSubjectMemory{})
-	artifact := lifecyclecontract.UploadArtifact{ID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "file_url", Filename: "avatar.png", SHA256: "hash"}
+	artifact := lifecyclecontract.UploadArtifact{ArtifactID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "file_url", Filename: "avatar.png", SHA256: "hash"}
 	if err := registry.Register(t.Context(), artifact, owner); err != nil {
 		t.Fatal(err)
 	}
@@ -78,16 +78,16 @@ func TestFileCleanClaimRequiresAuthenticatedUploaderDespiteValidScanReceipt(t *t
 	}
 	registry := NewUploadSubjectRegistry(uploadSubjectMemory{})
 	service.BindUploadSubjects(registry)
-	artifact := lifecyclecontract.UploadArtifact{ID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "file_url", Filename: "avatar.png", SHA256: "hash", Size: 1}
+	artifact := lifecyclecontract.UploadArtifact{ArtifactID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "file_url", Filename: "avatar.png", SHA256: "hash", Size: 1}
 	if err = registry.Register(t.Context(), artifact, owner); err != nil {
 		t.Fatal(err)
 	}
-	store.evidence[owner.WorkspaceID+"\x00file-1"] = lifecyclecontract.FileScanEvidence{FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, Filename: artifact.Filename, SHA256: artifact.SHA256, Size: 1, Status: lifecyclecontract.FileScanClean}
-	evidence, err := verifier.Status(t.Context(), owner.WorkspaceID, artifact.ID)
+	store.evidence[owner.WorkspaceID+"\x00file-1"] = lifecyclecontract.FileScanEvidence{ArtifactID: artifact.ArtifactID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, Filename: artifact.Filename, SHA256: artifact.SHA256, Size: 1, Status: lifecyclecontract.FileScanClean}
+	evidence, err := verifier.Status(t.Context(), owner.WorkspaceID, artifact.ArtifactID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := runtimeext.FileVerificationRequest{FileID: artifact.ID, ContentSHA256: artifact.SHA256, ScanReceipt: evidence.Receipt}
+	request := runtimeext.FileVerificationRequest{FileID: artifact.ArtifactID, ContentSHA256: artifact.SHA256, ScanReceipt: evidence.Receipt}
 	if _, err = service.VerifyClean(WithUploadClaimPrincipal(t.Context(), owner), owner.WorkspaceID, request); err != nil {
 		t.Fatal(err)
 	}

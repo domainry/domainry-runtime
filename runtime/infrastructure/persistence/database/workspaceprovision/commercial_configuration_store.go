@@ -28,7 +28,7 @@ func (store *CommercialConfigurationStore) LockWorkspaceCommercialConfiguration(
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("Action transaction is required to lock Workspace commercial configuration")
 	}
 	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
-		Columns("max_stores", "commercial_revision").Where(query.Equal("id", workspaceID))
+		Columns("max_stores", "commercial_revision").Where(query.Equal("workspace_id", workspaceID))
 	builder, err := store.runtime.RuntimeProfile().ApplyClaimLock(builder, false)
 	if err != nil {
 		return actionapplication.WorkspaceCommercialConfiguration{}, fmt.Errorf("apply Workspace commercial configuration lock: %w", err)

@@ -242,7 +242,7 @@ func TestAutomationRuleExecutionValidationConditionErrorTargetsAndAudit(t *testi
 	})
 	after := base
 	after.Phase = "after"
-	after.Record = &recordmodel.Record{ID: "record-1", UpdatedAt: "v1"}
+	after.Record = &recordmodel.Record{RecordID: "record-1", UpdatedAt: "v1"}
 	if trace, err := service.Execute(t.Context(), after); err != nil || trace.NodeTraces[len(trace.NodeTraces)-1].NodeID != "outbox" || audits < 2 {
 		t.Fatalf("after trace=%#v audits=%d err=%v", trace, audits, err)
 	}

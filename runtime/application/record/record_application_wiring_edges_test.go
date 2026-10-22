@@ -17,7 +17,7 @@ import (
 
 func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer"}
-	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme"}}
+	record := recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}
 	counts := map[string]int{}
 	service := NewRecordApplicationService(RecordApplicationDependencies{
@@ -28,7 +28,7 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		},
 		PrepareWorkflow: func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
 			counts["prepare"]++
-			return []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, nil
 		},
 		ExecuteWorkflow: func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal) {
 			counts["execute"]++
@@ -55,7 +55,7 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		},
 		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
 			counts["outbox"]++
-			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
+			return []publicationmodel.Message{{MessageID: "outbox-1"}}, nil
 		},
 		BuildAudit: func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent {
 			counts["build_audit"]++
@@ -63,19 +63,19 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		},
 	})
 
-	service.audit(t.Context(), "event", object.Key, record.ID, principal, "summary", nil, nil, nil)
+	service.audit(t.Context(), "event", object.Key, record.RecordID, principal, "summary", nil, nil, nil)
 	if intents, err := service.prepareWorkflow(t.Context(), object.Key, record, nil, principal, "trigger"); err != nil || len(intents) != 1 {
 		t.Fatalf("intents=%#v err=%v", intents, err)
 	}
-	service.executeWorkflow(t.Context(), []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, principal)
+	service.executeWorkflow(t.Context(), []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, principal)
 	if len(service.schemaMap()) != 1 || len(service.identityProfileExtensions()) != 1 {
 		t.Fatal("schema and extensions were not delegated")
 	}
 
-	if replay, found, err := service.create.dependencies.FindReplay(t.Context(), object, record.Data, principal); err != nil || !found || replay.ID != record.ID {
+	if replay, found, err := service.create.dependencies.FindReplay(t.Context(), object, record.Data, principal); err != nil || !found || replay.RecordID != record.RecordID {
 		t.Fatalf("replay=%#v found=%v err=%v", replay, found, err)
 	}
-	if err := service.create.dependencies.RunBefore(t.Context(), object.Key, "create", record.ID, nil, nil, record.Data, principal); err != nil {
+	if err := service.create.dependencies.RunBefore(t.Context(), object.Key, "create", record.RecordID, nil, nil, record.Data, principal); err != nil {
 		t.Fatal(err)
 	}
 	if outbox, err := service.create.dependencies.AfterOutbox(t.Context(), object.Key, "create", nil, record, principal); err != nil || len(outbox) != 1 {
@@ -85,18 +85,18 @@ func TestNewRecordApplicationServiceWiresOptionalCallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	service.create.dependencies.ExecuteWorkflow(t.Context(), nil, principal)
-	service.create.dependencies.Audit(t.Context(), "event", object.Key, record.ID, principal, "summary", nil, nil, nil)
-	if audit := service.create.dependencies.BuildAudit(t.Context(), "event", object.Key, record.ID, principal, "summary", nil, nil, nil); audit.Event != "record_event" {
+	service.create.dependencies.Audit(t.Context(), "event", object.Key, record.RecordID, principal, "summary", nil, nil, nil)
+	if audit := service.create.dependencies.BuildAudit(t.Context(), "event", object.Key, record.RecordID, principal, "summary", nil, nil, nil); audit.Event != "record_event" {
 		t.Fatalf("audit=%#v", audit)
 	}
 
-	if changed, err := service.update.dependencies.ApplySelfEffects(t.Context(), object, nil, record.Data, record.ID, principal); err != nil || !changed {
+	if changed, err := service.update.dependencies.ApplySelfEffects(t.Context(), object, nil, record.Data, record.RecordID, principal); err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
-	if err := service.update.dependencies.RunBefore(t.Context(), object.Key, "update", record.ID, nil, nil, record.Data, principal); err != nil {
+	if err := service.update.dependencies.RunBefore(t.Context(), object.Key, "update", record.RecordID, nil, nil, record.Data, principal); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.delete.dependencies.RunBefore(t.Context(), object.Key, "delete", record.ID, nil, nil, record.Data, principal); err != nil {
+	if err := service.delete.dependencies.RunBefore(t.Context(), object.Key, "delete", record.RecordID, nil, nil, record.Data, principal); err != nil {
 		t.Fatal(err)
 	}
 	if users, err := service.exporter.dependencies.ListIdentityUsers(t.Context()); err != nil || users != nil {

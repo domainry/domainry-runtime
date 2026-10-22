@@ -66,7 +66,7 @@ func (s *RecordUniquenessValidator) ValidateUnique(ctx context.Context, workspac
 			return recordInternalError("check unique combination", err)
 		}
 		for _, existing := range page.Items {
-			if existing.ID != currentID {
+			if existing.RecordID != currentID {
 				return recordServiceError(apperror.KindBadRequest, "backend.unique.combination", nil, "validation", validation.Key)
 			}
 		}
@@ -102,7 +102,7 @@ func (s *RecordUniquenessValidator) ValidateUnique(ctx context.Context, workspac
 				return recordInternalError("check conditional unique combination", listErr)
 			}
 			for _, existing := range page.Items {
-				if existing.ID != currentID {
+				if existing.RecordID != currentID {
 					code := policy.Message
 					if code == "" {
 						code = "backend.unique.conditional"

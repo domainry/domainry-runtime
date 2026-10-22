@@ -18,7 +18,7 @@ func TestRecordExportProjectionFailureIsReturned(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	failure := errors.New("projection failed")
 	service := recordExportEdgeService(object, &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
 	}})
 	service.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
 		return nil, failure
@@ -91,7 +91,7 @@ func TestRecordExportScopedProjectedMissingAndNilFields(t *testing.T) {
 		{Key: "account_id", Type: "relation", Config: map[string]any{"object_key": "account"}},
 	}}
 	repository := &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"nil_value": "original", "account_id": "account-1"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"nil_value": "original", "account_id": "account-1"}}}}, nil
 	}}
 	service := recordExportEdgeService(object, repository)
 	service.dependencies.NormalizeQuery = func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery {
@@ -99,7 +99,7 @@ func TestRecordExportScopedProjectedMissingAndNilFields(t *testing.T) {
 		return recordmodel.RecordListQuery{ScopeExpression: expression}
 	}
 	service.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
-		return []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"nil_value": nil}}}, nil
+		return []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"nil_value": nil}}}, nil
 	}
 	content, _, err := exportRecordDirectForTest(t.Context(), service, object.Key, recordExportPrincipal(object.Key), RecordExportOptions{})
 	if err != nil || !strings.Contains(string(content), "customer-1") {

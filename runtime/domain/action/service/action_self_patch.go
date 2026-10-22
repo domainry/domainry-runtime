@@ -40,7 +40,7 @@ func ActionApplyTransitionSelfPatch(transition map[string]any, data map[string]a
 
 func applySelfPatchMap(patch, data map[string]any, sourceRecordID string, principal principalmodel.Principal) bool {
 	changed := false
-	source := recordmodel.Record{ID: sourceRecordID, Data: data}
+	source := recordmodel.Record{RecordID: sourceRecordID, Data: data}
 	for key, value := range patch {
 		key = strings.TrimSpace(key)
 		if key == "" {

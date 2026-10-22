@@ -135,8 +135,8 @@ func TestRecordImportErrorAndBatchYieldEdges(t *testing.T) {
 
 func TestRecordCreateDefaultIDAndClock(t *testing.T) {
 	service := NewRecordCreateApplicationService(RecordCreateDependencies{})
-	if id := service.newRecordID("customer"); !strings.HasPrefix(id, "customer_") {
-		t.Fatalf("id=%q", id)
+	if id, err := service.newRecordID("customer"); err != nil || !strings.HasPrefix(id, "rec_") {
+		t.Fatalf("id=%q error=%v", id, err)
 	}
 	before := time.Now().Add(-time.Second)
 	got := service.now()

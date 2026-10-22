@@ -27,7 +27,7 @@ func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRunti
 			users = nil
 		}
 		for _, user := range users {
-			assigneeNames[user.ID] = user.Name
+			assigneeNames[user.UserID] = user.Name
 		}
 	}
 	nodes := make([]definitionmodel.WorkflowGraphNode, 0, len(nodeIDs))
@@ -50,9 +50,9 @@ func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRunti
 			}
 			return false, badRequest("backend.workflow.approval_assignee_not_found", "node", node.ID)
 		}
-		instance := records.processEngine.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", process.Variables, nil)
+		instance := records.processEngine.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", process.Variables, nil)
 		commit.InsertNodes = append(commit.InsertNodes, instance)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil, now))
 		mode := valueOrDefault(strings.TrimSpace(contract.Mode), "any")
 		for index, assignee := range assignees {
 			status := "open"
@@ -60,12 +60,12 @@ func prepareNextApprovalNodes(ctx context.Context, records *WorkflowProcessRunti
 				status = "pending"
 			}
 			title := valueOrDefault(strings.TrimSpace(contract.Title), node.Name)
-			task := workflowmodel.WorkflowTask{ID: workflowProcessID(ctx, "task"), ProcessID: process.ID, NodeInstanceID: instance.ID, NodeID: node.ID, Title: title, AssigneeUserID: assignee.UserID, AssigneeRoleKey: assignee.RoleKey, AssigneeResolverKey: assignee.ResolverKey, AssigneeEvidence: assignee.Evidence, ResolverSnapshot: workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers), CandidateSource: workflowpolicy.WorkflowCandidateSource(workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers)), NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot), Sequence: index + 1, Status: status, DueAt: workflowpolicy.WorkflowApprovalDueAt(contract, node, time.Now().UTC()), CreatedAt: now, UpdatedAt: now}
+			task := workflowmodel.WorkflowTask{TaskID: workflowProcessID(ctx, "task"), ProcessID: process.ProcessID, NodeInstanceID: instance.NodeInstanceID, NodeID: node.ID, Title: title, AssigneeUserID: assignee.UserID, AssigneeRoleKey: assignee.RoleKey, AssigneeResolverKey: assignee.ResolverKey, AssigneeEvidence: assignee.Evidence, ResolverSnapshot: workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers), CandidateSource: workflowpolicy.WorkflowCandidateSource(workflowpolicy.WorkflowOrderedApprovalResolvers(contract.Resolvers)), NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot), Sequence: index + 1, Status: status, DueAt: workflowpolicy.WorkflowApprovalDueAt(contract, node, time.Now().UTC()), CreatedAt: now, UpdatedAt: now}
 			if name, ok := assigneeNames[assignee.UserID]; ok {
 				task.AssigneeName = name
 			}
 			commit.InsertTasks = append(commit.InsertTasks, task)
-			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence}, now))
+			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, node.ID, task.TaskID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence}, now))
 		}
 	}
 	return true, nil
@@ -94,7 +94,7 @@ func (e *WorkflowProcessEngine) recoverWorkflowDecision(
 	if !ok {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("restore workflow decision state", errors.New("workflow state store unavailable"))
 	}
-	event := workflowDecisionEvent(ctx, process.ID, decidedTask.NodeID, decidedTask.ID, "task_decision_rolled_back", actorID, serviceErrorCode(decisionErr), nil, now)
+	event := workflowDecisionEvent(ctx, process.ProcessID, decidedTask.NodeID, decidedTask.TaskID, "task_decision_rolled_back", actorID, serviceErrorCode(decisionErr), nil, now)
 	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, Process: &process, UpdateNodes: nodes, UpdateTasks: tasks, Events: []workflowmodel.WorkflowProcessEvent{event}, WorkflowExecution: recoveryExecution}); err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("restore workflow decision state", err)
 	}
@@ -138,8 +138,8 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow process", err)
 	}
 	if strings.TrimSpace(req.IdempotencyKey) != "" {
-		key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
-		workflowRecordCommand(&process, "task.decision:"+task.ID, key)
+		key := workflowCommandKey("task.decision", task.TaskID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(decision, req))
+		workflowRecordCommand(&process, "task.decision:"+task.TaskID, key)
 	}
 	node, _ := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, task.NodeID)
 	route, routed := workflowpolicy.WorkflowApprovalRoute(node)
@@ -150,7 +150,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, true, internalError("list workflow tasks", err)
 	}
-	nodes, err := records.dependencies.Processes.ListNodes(ctx, principal.WorkspaceID, process.ID)
+	nodes, err := records.dependencies.Processes.ListNodes(ctx, principal.WorkspaceID, process.ProcessID)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, true, internalError("list workflow nodes", err)
 	}
@@ -192,7 +192,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		if strings.TrimSpace(req.IdempotencyKey) != "" {
 			commit.Process = &process
 		}
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, task.TaskID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
 		if routed {
 			if _, err := applyRouteDecision(ctx, records, &commit, &process, node, plan, outcome, false, principal, now); err != nil {
 				return workflowmodel.WorkflowProcessInstance{}, true, err
@@ -209,7 +209,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 			for _, nextTask := range pending {
 				nextTask.Status, nextTask.UpdatedAt = "open", now
 				commit.UpdateTasks = append(commit.UpdateTasks, nextTask)
-				commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, nextTask.ID, "task_opened", "system", nextTask.Title, nil, now))
+				commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, nextTask.TaskID, "task_opened", "system", nextTask.Title, nil, now))
 				break
 			}
 		}
@@ -229,24 +229,24 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		return process, true, nil
 	}
 	nextNodeIDs := records.processEngine.nextNodeIDs(process.DefinitionSnapshot.Graph, task.NodeID, outcome)
-	commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
+	commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, task.TaskID, "task_"+decision, principal.UserID, "workflow.event.task."+decision, map[string]any{"comment": task.Comment}, now))
 	for _, sibling := range tasks {
-		if sibling.ID == task.ID || sibling.NodeID != task.NodeID || sibling.NodeInstanceID != task.NodeInstanceID || (sibling.Status != "open" && sibling.Status != "pending") {
+		if sibling.TaskID == task.TaskID || sibling.NodeID != task.NodeID || sibling.NodeInstanceID != task.NodeInstanceID || (sibling.Status != "open" && sibling.Status != "pending") {
 			continue
 		}
 		sibling.Status, sibling.UpdatedAt = "cancelled", now
 		commit.UpdateTasks = append(commit.UpdateTasks, sibling)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, sibling.ID, "task_cancelled", principal.UserID, sibling.Title, nil, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, sibling.TaskID, "task_cancelled", principal.UserID, sibling.Title, nil, now))
 	}
 	nodeFound := false
 	for _, node := range nodes {
-		if node.NodeID != task.NodeID || node.Status != "waiting" || (task.NodeInstanceID != "" && node.ID != task.NodeInstanceID) {
+		if node.NodeID != task.NodeID || node.Status != "waiting" || (task.NodeInstanceID != "" && node.NodeInstanceID != task.NodeInstanceID) {
 			continue
 		}
 		nodeFound = true
 		node.Status, node.Output, node.CompletedAt = outcome, map[string]any{"decision": outcome}, now
 		commit.UpdateNodes = append(commit.UpdateNodes, node)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, "", "approval_"+outcome, principal.UserID, "workflow.event.approval."+outcome, nil, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, "", "approval_"+outcome, principal.UserID, "workflow.event.approval."+outcome, nil, now))
 		break
 	}
 	if !nodeFound {
@@ -266,7 +266,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		if outcome == "approved" && plan.hasNext && plan.next.Status == "configurable" && plan.configured == nil {
 			routeDecisionConfigurationError(&process, plan.next, now)
 			commit.Process = &process
-			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "process_failed", principal.UserID, process.ErrorCode, map[string]any{"step_key": plan.next.StepKey}, now))
+			commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, task.TaskID, "process_failed", principal.UserID, process.ErrorCode, map[string]any{"step_key": plan.next.StepKey}, now))
 			return commitRouteApprovalContinuation(ctx, records, commit, process, task, req, principal, now)
 		}
 	}
@@ -281,7 +281,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 			execution, found := workflowmodel.WorkflowExecution{}, false
 			if records.dependencies.Workers != nil {
 				var loadErr error
-				execution, found, loadErr = records.dependencies.Workers.GetExecution(ctx, principal.WorkspaceID, process.ID)
+				execution, found, loadErr = records.dependencies.Workers.GetExecutionByProcessID(ctx, principal.WorkspaceID, process.ProcessID)
 				if loadErr != nil {
 					return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow execution", loadErr)
 				}
@@ -291,7 +291,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 			}
 			execution.Status, execution.UpdatedAt, execution.Message = "waiting", now, "workflow.message.approvalWaiting"
 			execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)
-			execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ID, process.CurrentNodeIDs, process.Status
+			execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ProcessID, process.CurrentNodeIDs, process.Status
 			if found {
 				commit.WorkflowExecution = &execution
 			} else {
@@ -314,11 +314,11 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		}
 		process.Status, process.CurrentNodeIDs, process.CompletedAt, process.UpdatedAt = "running", uniqueSortedStrings(nextNodeIDs), "", now
 		commit.Process = &process
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, "workflow_continuation_queued", principal.UserID, "workflow.event.continuation.queued", map[string]any{"node_ids": nextNodeIDs}, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, task.TaskID, "workflow_continuation_queued", principal.UserID, "workflow.event.continuation.queued", map[string]any{"node_ids": nextNodeIDs}, now))
 		execution, found := workflowmodel.WorkflowExecution{}, false
 		if records.dependencies.Workers != nil {
 			var loadErr error
-			execution, found, loadErr = records.dependencies.Workers.GetExecution(ctx, principal.WorkspaceID, process.ID)
+			execution, found, loadErr = records.dependencies.Workers.GetExecutionByProcessID(ctx, principal.WorkspaceID, process.ProcessID)
 			if loadErr != nil {
 				return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow execution", loadErr)
 			}
@@ -329,7 +329,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 		execution.Status, execution.Attempt, execution.UpdatedAt = "pending", 0, now
 		execution.Message, execution.LastError, execution.NextRunAt = "workflow.message.continuationQueued", "", ""
 		execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)
-		execution.Result["transactional_continuation"], execution.Result["resume_process_id"], execution.Result["resume_node_ids"] = true, process.ID, nextNodeIDs
+		execution.Result["transactional_continuation"], execution.Result["resume_process_id"], execution.Result["resume_node_ids"] = true, process.ProcessID, nextNodeIDs
 		if found {
 			commit.WorkflowExecution = &execution
 		} else {
@@ -349,7 +349,7 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 			return workflowmodel.WorkflowProcessInstance{}, true, conflict("backend.workflow.task_already_decided")
 		}
 		if records.dependencies.WakeWorkflowContinuation != nil {
-			records.dependencies.WakeWorkflowContinuation(execution.WorkspaceID, execution.ID)
+			records.dependencies.WakeWorkflowContinuation(execution.WorkspaceID, execution.ExecutionID)
 		}
 		if records.dependencies.Workers == nil {
 			return process, true, nil
@@ -368,14 +368,14 @@ func decideTerminalWorkflowTaskWithContext(ctx context.Context, records *Workflo
 	}
 	process.CurrentNodeIDs, process.CompletedAt, process.UpdatedAt = workflowpolicy.WorkflowRemoveString(process.CurrentNodeIDs, task.NodeID), now, now
 	commit.Process = &process
-	commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, task.NodeID, task.ID, processEvent, principal.UserID, processSummary, nil, now))
+	commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, task.NodeID, task.TaskID, processEvent, principal.UserID, processSummary, nil, now))
 	if records.dependencies.Workers != nil {
-		if execution, found, loadErr := records.dependencies.Workers.GetExecution(ctx, principal.WorkspaceID, process.ID); loadErr != nil {
+		if execution, found, loadErr := records.dependencies.Workers.GetExecutionByProcessID(ctx, principal.WorkspaceID, process.ProcessID); loadErr != nil {
 			return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow execution", loadErr)
 		} else if found {
-			execution.ProcessID, execution.Status, execution.UpdatedAt = process.ID, process.Status, process.UpdatedAt
+			execution.ProcessID, execution.Status, execution.UpdatedAt = process.ProcessID, process.Status, process.UpdatedAt
 			execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)
-			execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ID, process.CurrentNodeIDs, process.Status
+			execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ProcessID, process.CurrentNodeIDs, process.Status
 			execution.NodeID, execution.LastError, execution.NextRunAt = "", "", ""
 			delete(execution.Result, "node_id")
 			commit.WorkflowExecution = &execution
@@ -443,7 +443,7 @@ func commitRouteApprovalContinuation(ctx context.Context, records *WorkflowProce
 	execution, found := workflowmodel.WorkflowExecution{}, false
 	if records.dependencies.Workers != nil {
 		var loadErr error
-		execution, found, loadErr = records.dependencies.Workers.GetExecution(ctx, principal.WorkspaceID, process.ID)
+		execution, found, loadErr = records.dependencies.Workers.GetExecutionByProcessID(ctx, principal.WorkspaceID, process.ProcessID)
 		if loadErr != nil {
 			return workflowmodel.WorkflowProcessInstance{}, true, internalError("get workflow execution", loadErr)
 		}
@@ -453,7 +453,7 @@ func commitRouteApprovalContinuation(ctx context.Context, records *WorkflowProce
 	}
 	execution.Status, execution.UpdatedAt, execution.Message = process.Status, now, "workflow.message.approvalWaiting"
 	execution.Result = workflowpolicy.WorkflowCloneMap(execution.Result)
-	execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ID, process.CurrentNodeIDs, process.Status
+	execution.Result["process_id"], execution.Result["current_node_ids"], execution.Result["process_status"] = process.ProcessID, process.CurrentNodeIDs, process.Status
 	if found {
 		commit.WorkflowExecution = &execution
 	} else {

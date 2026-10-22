@@ -30,8 +30,8 @@ func TestReportEngineObjectsPreservesJoinProofMetadata(t *testing.T) {
 }
 
 func TestRuntimeReportCompilerDiscoversAndCanonicalizesSQLSources(t *testing.T) {
-	schema := reportmodel.ReportObjectSQLSchema{SQL: `SELECT s.id AS sale_id, COUNT(DISTINCT p.id) AS payment_count
-FROM sale s LEFT JOIN payment p ON p.sale_id = s.id GROUP BY s.id`}
+	schema := reportmodel.ReportObjectSQLSchema{SQL: `SELECT s.record_id AS sale_id, COUNT(DISTINCT p.id) AS payment_count
+FROM sale s LEFT JOIN payment p ON p.sale_id = s.record_id GROUP BY s.record_id`}
 	sources, err := ReportObjectSQLSourceObjects(schema)
 	if err != nil || strings.Join(sources, ",") != "sale,payment" {
 		t.Fatalf("sources=%v err=%v", sources, err)

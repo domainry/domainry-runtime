@@ -84,7 +84,7 @@ func (s *RecordApplicationService) ReferenceOptions(ctx context.Context, sourceO
 	}
 	result := RecordReferenceOptionPage{Items: make([]RecordReferenceOption, 0, len(page.Items)), HasMore: page.HasNext}
 	for _, item := range page.Items {
-		result.Items = append(result.Items, RecordReferenceOption{ID: item.ID, Name: recordReferenceDisplayName(item, displayFields)})
+		result.Items = append(result.Items, RecordReferenceOption{ID: item.RecordID, Name: recordReferenceDisplayName(item, displayFields)})
 	}
 	return result, nil
 }
@@ -220,13 +220,13 @@ func recordReferenceProjectionFields(displayFields []string) []string {
 func recordReferenceDisplayName(record recordmodel.Record, displayFields []string) string {
 	for _, field := range displayFields {
 		if field == "id" {
-			return record.ID
+			return record.RecordID
 		}
 		if value := strings.TrimSpace(fmt.Sprint(record.Data[field])); value != "" && value != "<nil>" {
 			return value
 		}
 	}
-	return record.ID
+	return record.RecordID
 }
 
 func (s *RecordApplicationService) foundationReferenceOptions(ctx context.Context, targetObjectKey string, request RecordReferenceOptionRequest, displayFields []string) (RecordReferenceOptionPage, error) {
@@ -253,12 +253,12 @@ func (s *RecordApplicationService) foundationReferenceOptions(ctx context.Contex
 	for _, user := range users {
 		name := strings.TrimSpace(user.Name)
 		if name == "" {
-			name = user.ID
+			name = user.UserID
 		}
 		if needle != "" && !strings.Contains(strings.ToLower(name), needle) {
 			continue
 		}
-		matched = append(matched, RecordReferenceOption{ID: user.ID, Name: name})
+		matched = append(matched, RecordReferenceOption{ID: user.UserID, Name: name})
 	}
 	_ = displayFields
 	start := (page - 1) * limit

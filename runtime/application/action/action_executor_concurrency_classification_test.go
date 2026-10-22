@@ -25,7 +25,7 @@ func TestConditionalUpdateClassifiesOnlyDeclaredChangesAfterActionStartAsRecordC
 			Execution: actionmodel.ActionBusinessExecution{CreatedAt: "2026-07-26T12:00:00Z"},
 		}},
 		observedRecords: map[string]recordmodel.Record{
-			"inventory_balance\x00balance-1": {ID: "balance-1", UpdatedAt: "2026-07-26T12:00:01Z"},
+			"inventory_balance\x00balance-1": {RecordID: "balance-1", UpdatedAt: "2026-07-26T12:00:01Z"},
 		},
 	}
 	declared := runtimeext.RecordMutation{
@@ -46,7 +46,7 @@ func TestConditionalUpdateClassifiesOnlyDeclaredChangesAfterActionStartAsRecordC
 	}
 
 	execution.observedRecords["inventory_balance\x00balance-1"] = recordmodel.Record{
-		ID: "balance-1", UpdatedAt: "2026-07-26T11:59:59Z",
+		RecordID: "balance-1", UpdatedAt: "2026-07-26T11:59:59Z",
 	}
 	if _, _, err := execution.planConditionalUpdate(t.Context(), declared); !errors.Is(err, insufficient) || apperror.CodeOf(err) != "inventory.insufficient_available" {
 		t.Fatalf("preexisting predicate error=%v code=%s", err, apperror.CodeOf(err))

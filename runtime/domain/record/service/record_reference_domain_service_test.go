@@ -34,7 +34,7 @@ func (r *referenceRepositoryProbe) ListRecords(_ context.Context, _ string, obje
 func scopedReferenceList(repository recordrepository.RecordRepository, allow func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 	return func(ctx context.Context, objectKey string, query recordmodel.RecordListQuery, principal principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 		object := definitionmodel.ObjectSchema{Key: objectKey}
-		if raw, ok := query.Filters["id__in"].([]any); ok && len(raw) == 1 {
+		if raw, ok := query.Filters["record_id__in"].([]any); ok && len(raw) == 1 {
 			record, found, err := repository.GetRecord(ctx, principal.WorkspaceID, object, raw[0].(string))
 			if err != nil || !found || (allow != nil && !allow(principal, object, record)) {
 				return recordmodel.RecordPageResult{}, err
@@ -86,12 +86,12 @@ func TestReferenceServiceOwnsReverseRelationAggregation(t *testing.T) {
 	order := definitionmodel.ObjectSchema{Key: "order", Name: "Order", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Name: "Customer", Type: "relation", Config: map[string]any{"object_key": "customer"}}}}
 	objects := map[string]definitionmodel.ObjectSchema{"order": order, "customer": customer, "invoice": invoice}
 	repository := &referenceRepositoryProbe{
-		records: map[string]recordmodel.Record{"customer:c1": {ID: "c1"}},
+		records: map[string]recordmodel.Record{"customer:c1": {RecordID: "c1"}},
 		pages: map[string]map[int]recordmodel.RecordPageResult{
-			"invoice": {1: {Items: []recordmodel.Record{{ID: "i1", Data: map[string]any{"customer_id": "c1"}}}}},
+			"invoice": {1: {Items: []recordmodel.Record{{RecordID: "i1", Data: map[string]any{"customer_id": "c1"}}}}},
 			"order": {
-				1: {Items: []recordmodel.Record{{ID: "o1", Data: map[string]any{"customer_id": "c1"}}}, HasNext: true},
-				2: {Items: []recordmodel.Record{{ID: "o2", Data: map[string]any{"customer_id": "other"}}, {ID: "o3", Data: map[string]any{"customer_id": "c1"}}}},
+				1: {Items: []recordmodel.Record{{RecordID: "o1", Data: map[string]any{"customer_id": "c1"}}}, HasNext: true},
+				2: {Items: []recordmodel.Record{{RecordID: "o2", Data: map[string]any{"customer_id": "other"}}, {RecordID: "o3", Data: map[string]any{"customer_id": "c1"}}}},
 			},
 		},
 	}
@@ -124,7 +124,7 @@ func TestReferenceServiceOwnsRelatedRecordQuery(t *testing.T) {
 	parent := definitionmodel.ObjectSchema{Key: "order"}
 	related := definitionmodel.ObjectSchema{Key: "line_item", Fields: []definitionmodel.FieldSchema{{Key: "order_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "order"}}}}
 	objects := map[string]definitionmodel.ObjectSchema{"order": parent, "line_item": related}
-	repository := &referenceRepositoryProbe{records: map[string]recordmodel.Record{"order:o1": {ID: "o1"}}}
+	repository := &referenceRepositoryProbe{records: map[string]recordmodel.Record{"order:o1": {RecordID: "o1"}}}
 	var listedObject string
 	var listedQuery recordmodel.RecordListQuery
 	service := NewRecordReferenceDomainService(RecordReferenceDependencies{
@@ -135,10 +135,10 @@ func TestReferenceServiceOwnsRelatedRecordQuery(t *testing.T) {
 		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
 		ListRecords: func(_ context.Context, objectKey string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 			if objectKey == parent.Key {
-				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "o1"}}, Total: 1}, nil
+				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "o1"}}, Total: 1}, nil
 			}
 			listedObject, listedQuery = objectKey, query
-			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "line-1"}}}, nil
+			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "line-1"}}}, nil
 		},
 	})
 
@@ -154,12 +154,12 @@ func TestReferenceServiceOwnsRelatedRecordQuery(t *testing.T) {
 func TestReferenceServiceRejectsParentOutsideScope(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer"}
 	service := NewRecordReferenceDomainService(RecordReferenceDependencies{
-		Repository: &referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:c1": {ID: "c1"}}},
+		Repository: &referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:c1": {RecordID: "c1"}}},
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 			return object, nil
 		},
 		CanAccess:   func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false },
-		ListRecords: scopedReferenceList(&referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:c1": {ID: "c1"}}}, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }),
+		ListRecords: scopedReferenceList(&referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:c1": {RecordID: "c1"}}}, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }),
 	})
 
 	_, err := service.References(t.Context(), "customer", "c1", principalmodel.Principal{Principal: identitysdk.Principal{Known: true}})

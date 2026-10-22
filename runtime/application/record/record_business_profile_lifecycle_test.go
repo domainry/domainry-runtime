@@ -127,7 +127,7 @@ func TestBusinessProfileLifecycleDefinitionErrorsSkipsAndExpectedRevision(t *tes
 		t.Fatalf("definition err=%v", err)
 	}
 	binding := profilebindingmodel.BusinessIdentityBinding{Key: "member", StatusField: "status", ActiveStatusValues: []string{"active"}}
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "profile-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "active"}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "profile-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "active"}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{Key: "profile", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}, nil

@@ -28,7 +28,7 @@ func numericLimitValidation(config map[string]any) definitionmodel.ValidationSch
 
 func TestValidateNumericLimitPoliciesDirectRelation(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
-	repository := &relatedPolicyRepositoryProbe{found: true, record: recordmodel.Record{ID: "budget-1", Data: map[string]any{"remaining": 100.0}}}
+	repository := &relatedPolicyRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "budget-1", Data: map[string]any{"remaining": 100.0}}}
 	validator := newRelatedPolicyValidatorForTest(repository, map[string]definitionmodel.ObjectSchema{"budget": relatedPolicyObject("budget")}, nil)
 
 	object := numericRelationObject(numericLimitValidation(map[string]any{"relation_field": "budget_id", "target_field": "remaining"}))
@@ -56,8 +56,8 @@ func TestValidateNumericLimitPoliciesMatchLookupAndSourceRelation(t *testing.T) 
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
 	repository := &relatedPolicyRepositoryProbe{
 		found:  true,
-		record: recordmodel.Record{ID: "source-1", Data: map[string]any{"code": "A"}},
-		pages:  map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "budget-A", Data: map[string]any{"remaining": 100.0}}}}},
+		record: recordmodel.Record{RecordID: "source-1", Data: map[string]any{"code": "A"}},
+		pages:  map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "budget-A", Data: map[string]any{"remaining": 100.0}}}}},
 	}
 	validator := newRelatedPolicyValidatorForTest(repository, map[string]definitionmodel.ObjectSchema{
 		"budget": relatedPolicyObject("budget"), "source": relatedPolicyObject("source"),
@@ -140,21 +140,21 @@ func TestRelatedRecordBranches(t *testing.T) {
 	_, _, err = validator.relatedRecord(t.Context(), object, map[string]any{"budget_id": "budget-1"}, "budget_id", principal)
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.policy.related_record_missing", nil)
 
-	repository.found, repository.record = true, recordmodel.Record{ID: "budget-1"}
+	repository.found, repository.record = true, recordmodel.Record{RecordID: "budget-1"}
 	allow = false
 	_, _, err = validator.relatedRecord(t.Context(), object, map[string]any{"budget_id": "budget-1"}, "budget_id", principal)
 	assertRecordAppError(t, err, apperror.KindForbidden, "backend.record.outside_scope", nil)
 
 	allow = true
 	targetObject, record, err := validator.relatedRecord(t.Context(), object, map[string]any{"budget_id": "budget-1"}, "budget_id", principal)
-	if err != nil || targetObject.Key != "budget" || record.ID != "budget-1" {
+	if err != nil || targetObject.Key != "budget" || record.RecordID != "budget-1" {
 		t.Fatalf("related record = %#v %#v err=%v", targetObject, record, err)
 	}
 }
 
 func TestTargetRecordByMatchBranches(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace"}}
-	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "budget-A"}}}}}
+	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "budget-A"}}}}}
 	allow := true
 	objects := map[string]definitionmodel.ObjectSchema{"budget": relatedPolicyObject("budget")}
 	validator := newRelatedPolicyValidatorForTest(repository, objects, &allow)
@@ -184,7 +184,7 @@ func TestTargetRecordByMatchBranches(t *testing.T) {
 
 	allow = true
 	object, record, err := validator.targetRecordByMatch(t.Context(), validation, "A", principal)
-	if err != nil || object.Key != "budget" || record.ID != "budget-A" || repository.queries[len(repository.queries)-1].Filters["code"] != "A" {
+	if err != nil || object.Key != "budget" || record.RecordID != "budget-A" || repository.queries[len(repository.queries)-1].Filters["code"] != "A" {
 		t.Fatalf("match result = %#v %#v queries=%#v err=%v", object, record, repository.queries, err)
 	}
 }

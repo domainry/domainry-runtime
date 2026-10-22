@@ -189,18 +189,18 @@ func TestBusinessHandlerExecutorRecordAndCanonicalCommitEdges(t *testing.T) {
 
 	executor = newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{
 		GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-			return recordmodel.Record{ID: "booking-1"}, nil
+			return recordmodel.Record{RecordID: "booking-1"}, nil
 		},
 	})
 	result, err := executor.execute(t.Context(), governed)
-	if err != nil || result.Record == nil || result.Record.Record.ID != "booking-1" || result.Record.Output["booking_id"] != "booking-output-1" {
+	if err != nil || result.Record == nil || result.Record.Record.RecordID != "booking-1" || result.Record.Output["booking_id"] != "booking-output-1" {
 		t.Fatalf("result=%+v error=%v", result, err)
 	}
 	handler = actionExecutorEdgeHandler{
 		descriptor: actionTestHandlerDescriptor(action.Key, nil),
 		invoke: func(_ context.Context, execution runtimeext.ActionExecution) error {
 			session := execution.(*businessActionExecution)
-			session.mutatedRecords = map[string]recordmodel.Record{"booking\x00booking-1": {ID: "booking-1"}}
+			session.mutatedRecords = map[string]recordmodel.Record{"booking\x00booking-1": {RecordID: "booking-1"}}
 			_ = session.Workspace()
 			return nil
 		},
@@ -216,14 +216,14 @@ func TestBusinessHandlerExecutorRecordAndCanonicalCommitEdges(t *testing.T) {
 		descriptor: actionTestHandlerDescriptor(action.Key, nil),
 		invoke: func(_ context.Context, execution runtimeext.ActionExecution) error {
 			session := execution.(*businessActionExecution)
-			session.mutatedRecords = map[string]recordmodel.Record{"booking\x00booking-internal": {ID: "booking-internal"}}
+			session.mutatedRecords = map[string]recordmodel.Record{"booking\x00booking-internal": {RecordID: "booking-internal"}}
 			return nil
 		},
 	}
 	governed = actionExecutorEdgeGoverned(handler, action)
 	governed.invocation.RecordID = "merchant-booking-number"
 	result, err = newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}).execute(t.Context(), governed)
-	if err != nil || result.Record == nil || result.Record.RecordID != "booking-internal" || result.Record.Record.ID != "booking-internal" {
+	if err != nil || result.Record == nil || result.Record.RecordID != "booking-internal" || result.Record.Record.RecordID != "booking-internal" {
 		t.Fatalf("business-key target result=%+v error=%v", result, err)
 	}
 
@@ -231,14 +231,14 @@ func TestBusinessHandlerExecutorRecordAndCanonicalCommitEdges(t *testing.T) {
 		descriptor: actionTestHandlerDescriptor(action.Key, nil),
 		invoke: func(_ context.Context, execution runtimeext.ActionExecution) error {
 			session := execution.(*businessActionExecution)
-			session.observedRecords = map[string]recordmodel.Record{"booking\x00booking-internal": {ID: "booking-internal"}}
+			session.observedRecords = map[string]recordmodel.Record{"booking\x00booking-internal": {RecordID: "booking-internal"}}
 			return nil
 		},
 	}
 	governed = actionExecutorEdgeGoverned(handler, action)
 	governed.invocation.RecordID = "merchant-booking-number"
 	result, err = newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}).execute(t.Context(), governed)
-	if err != nil || result.Record == nil || result.Record.RecordID != "booking-internal" || result.Record.Record.ID != "booking-internal" {
+	if err != nil || result.Record == nil || result.Record.RecordID != "booking-internal" || result.Record.Record.RecordID != "booking-internal" {
 		t.Fatalf("observed business-key target result=%+v error=%v", result, err)
 	}
 

@@ -18,7 +18,7 @@ import (
 
 func TestActionApplicationDependencyAndNilReceiverBoundaries(t *testing.T) {
 	customFailureAudit := func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult, error) []auditmodel.AuditEvent {
-		return []auditmodel.AuditEvent{{ID: "custom-failure"}}
+		return []auditmodel.AuditEvent{{AuditEventID: "custom-failure"}}
 	}
 	service := NewActionApplication(ActionApplicationDependencies{
 		Audit: ActionAudit{BuildFailure: customFailureAudit},
@@ -204,7 +204,7 @@ func TestActionApplicationInvocationIdempotencyAndRecordVersion(t *testing.T) {
 				ActionKey: action.Key,
 				ObjectKey: action.ObjectKey,
 				RecordID:  invocation.RecordID,
-				Record:    recordmodel.Record{ID: invocation.RecordID, UpdatedAt: "version-2"},
+				Record:    recordmodel.Record{RecordID: invocation.RecordID, UpdatedAt: "version-2"},
 			}
 			return ActionExecutionResult{Record: &result}, nil
 		},

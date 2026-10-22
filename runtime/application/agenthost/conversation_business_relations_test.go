@@ -50,7 +50,7 @@ func newBusinessRelationFixture(t *testing.T) (*ConversationBusinessHost, *busin
 		{order, "hidden", "colleague", a.WorkspaceID, map[string]any{"name": "PRIVATE-OWNER", "customer": "own-1"}},
 		{order, "hidden-workspace", a.UserID, "other-workspace", map[string]any{"name": "PRIVATE-WORKSPACE", "customer": "own-1"}},
 	} {
-		if err := reads.repository.InsertRecord(t.Context(), row.workspace, row.object, recordmodel.Record{ID: row.id, OwnerUserID: row.owner, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: row.data}); err != nil {
+		if err := reads.repository.InsertRecord(t.Context(), row.workspace, row.object, recordmodel.Record{RecordID: row.id, OwnerUserID: row.owner, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: row.data}); err != nil {
 			t.Fatal(err)
 		}
 	}

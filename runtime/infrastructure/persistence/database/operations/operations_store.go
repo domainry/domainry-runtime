@@ -81,8 +81,8 @@ func (s OperationsStore) RegisterOperationsCommand(ctx context.Context, receipt 
 	}
 	if workspaceID, workspaceErr := principalmodel.NewWorkspaceID(receipt.Command.Scope.WorkspaceID); workspaceErr == nil {
 		if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID.String(), sharedoperation.TableName,
-			[]string{"id", "owner", "resource_type", "resource_id", "requested_by"},
-			[]any{receipt.Command.ID, receipt.Command.Owner, receipt.Command.Scope.ResourceType, receipt.Command.Scope.ResourceID, receipt.Command.RequestedBy}); err != nil {
+			[]string{"operation_id", "owner", "resource_type", "resource_id", "requested_by"},
+			[]any{receipt.Command.OperationID, receipt.Command.Owner, receipt.Command.Scope.ResourceType, receipt.Command.Scope.ResourceID, receipt.Command.RequestedBy}); err != nil {
 			return operationsmodel.OperationsReceipt{}, "", err
 		}
 	}
@@ -120,7 +120,7 @@ func (s OperationsStore) GetOperationsReceipt(ctx context.Context, scope operati
 	if err != nil {
 		return operationsmodel.OperationsReceipt{}, false, err
 	}
-	filter.ID = strings.TrimSpace(id)
+	filter.OperationID = strings.TrimSpace(id)
 	return s.getRecord(ctx, filter)
 }
 
@@ -169,7 +169,7 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 	}
 	recordFilter.Status = string(filter.Status)
 	recordFilter.FailureClass = string(filter.FailureClass)
-	recordFilter.Owner, recordFilter.Kind, recordFilter.ParentID = filter.Owner, filter.Kind, filter.ParentID
+	recordFilter.Owner, recordFilter.Kind, recordFilter.ParentOperationID = filter.Owner, filter.Kind, filter.ParentOperationID
 	recordFilter.ResourceType, recordFilter.ResourceID = filter.ResourceType, filter.ResourceID
 	recordFilter.RequestedBy, recordFilter.Correlation = filter.RequestedBy, filter.Correlation
 	recordFilter.CreatedFrom, recordFilter.CreatedTo, recordFilter.Search, recordFilter.Limit = filter.CreatedFrom, filter.CreatedTo, filter.Search, filter.Limit
@@ -268,8 +268,8 @@ func operationsRecord(receipt operationsmodel.OperationsReceipt) sharedoperation
 		finishedAt = receipt.Command.FinishedAt.UTC().Format(time.RFC3339Nano)
 	}
 	return sharedoperation.Record{
-		ID: receipt.Command.ID, WorkspaceID: receipt.Command.Scope.WorkspaceID, SystemPurpose: receipt.Command.Scope.SystemPurpose,
-		Owner: receipt.Command.Owner, Kind: receipt.Command.Kind, ActionKey: receipt.Command.ActionKey, ParentID: receipt.Command.ParentID,
+		ID: receipt.Command.ID, OperationID: receipt.Command.OperationID, WorkspaceID: receipt.Command.Scope.WorkspaceID, SystemPurpose: receipt.Command.Scope.SystemPurpose,
+		Owner: receipt.Command.Owner, Kind: receipt.Command.Kind, ActionKey: receipt.Command.ActionKey, ParentOperationID: receipt.Command.ParentOperationID,
 		ResourceType: receipt.Command.Scope.ResourceType, ResourceID: receipt.Command.Scope.ResourceID,
 		IdempotencyKey: receipt.Command.IdempotencyKey, RequestFingerprint: receipt.Command.RequestFingerprint,
 		RequestedBy: receipt.Command.RequestedBy, Reason: receipt.Command.Reason, Reference: receipt.Command.Reference,
@@ -285,7 +285,7 @@ func operationsRecord(receipt operationsmodel.OperationsReceipt) sharedoperation
 func operationsReceipt(record sharedoperation.Record) (operationsmodel.OperationsReceipt, error) {
 	receipt := operationsmodel.OperationsReceipt{
 		Command: operationsmodel.OperationsCommand{
-			ID: record.ID, Owner: record.Owner, Kind: record.Kind, ActionKey: record.ActionKey, ParentID: record.ParentID,
+			ID: record.ID, OperationID: record.OperationID, Owner: record.Owner, Kind: record.Kind, ActionKey: record.ActionKey, ParentOperationID: record.ParentOperationID,
 			Scope:          operationsmodel.OperationsScope{WorkspaceID: record.WorkspaceID, SystemPurpose: record.SystemPurpose, ResourceType: record.ResourceType, ResourceID: record.ResourceID},
 			IdempotencyKey: record.IdempotencyKey, RequestFingerprint: record.RequestFingerprint, RequestedBy: record.RequestedBy,
 			Reason: record.Reason, Reference: record.Reference, Status: operationsmodel.OperationsStatus(record.Status),

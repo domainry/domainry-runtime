@@ -125,7 +125,7 @@ func deploymentStatusService(fixture *deploymentStatusFixture) *DeploymentRuntim
 func TestDeploymentIdempotencyStatusAndMutationEdges(t *testing.T) {
 	t.Parallel()
 
-	fixture := &deploymentStatusFixture{operational: deploymentmodel.IdempotencyOperationalStatus{Backlog: map[string]int{"pending": 2}}, receipts: []idempotency.ReceiptSummary{{ID: "receipt-1"}}, recordTotals: map[string]int{}, recordErrors: map[string]error{}}
+	fixture := &deploymentStatusFixture{operational: deploymentmodel.IdempotencyOperationalStatus{Backlog: map[string]int{"pending": 2}}, receipts: []idempotency.ReceiptSummary{{OperationID: "receipt-1"}}, recordTotals: map[string]int{}, recordErrors: map[string]error{}}
 	service := deploymentStatusService(fixture)
 	status, err := service.IdempotencyOperationalStatus(t.Context(), "workspace-a")
 	if err != nil || status.Backlog["pending"] != 2 {

@@ -46,11 +46,7 @@ func TestWorkflowSchemaOwnershipMatchesEveryFreshTableAndPrimaryKey(t *testing.T
 		if !found {
 			t.Fatalf("Workflow table %s has ownership but no canonical DDL", table.Name)
 		}
-		quoted := make([]string, len(table.PrimaryKey))
-		for index, column := range table.PrimaryKey {
-			quoted[index] = `"` + column + `"`
-		}
-		if primaryKey := "PRIMARY KEY (" + strings.Join(quoted, ", ") + ")"; !strings.Contains(statement, primaryKey) {
+		if !ddlDeclaresPrimaryKey(statement, table.PrimaryKey) {
 			t.Fatalf("Workflow table %s ownership primary key %v does not match DDL: %s", table.Name, table.PrimaryKey, statement)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-orm/recordschema"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -30,11 +31,11 @@ func TestReportPeriodPercentUsesStoredScaleAndFloorsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	columns := []ormschema.ColumnDefinition{}
-	for _, field := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_org_id", "rate"} {
+	for _, field := range []string{"rate"} {
 		columns = append(columns, ormschema.Column(field, ormschema.Text()))
 	}
 	columns = append(columns, ormschema.Column("fees", ormschema.Integer()))
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), "nomination").Columns(columns...).PrimaryKey("workspace_id", "id").Build()
+	statement, args, err := recordschema.NewTable(store.RuntimeRenderer(), "nomination").Columns(columns...).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,12 +63,12 @@ func TestReportPeriodPercentUsesStoredScaleAndFloorsOnce(t *testing.T) {
 	}
 	for _, test := range cases {
 		for index, fees := range test.fees {
-			if err := records.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: fmt.Sprintf("%s-fee-%d", test.name, index), OwnerOrgID: test.name, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z", Data: map[string]any{"fees": fees, "rate": test.rate}}); err != nil {
+			if err := records.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{RecordID: fmt.Sprintf("%s-fee-%d", test.name, index), OwnerOrgID: test.name, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z", Data: map[string]any{"fees": fees, "rate": test.rate}}); err != nil {
 				t.Fatal(err)
 			}
 		}
 		// Same store reference in a different workspace must never enter totals.
-		if err := records.InsertRecord(t.Context(), "workspace-b", object, recordmodel.Record{ID: test.name + "-foreign", OwnerOrgID: test.name, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z", Data: map[string]any{"fees": int64(999999), "rate": "0.9999"}}); err != nil {
+		if err := records.InsertRecord(t.Context(), "workspace-b", object, recordmodel.Record{RecordID: test.name + "-foreign", OwnerOrgID: test.name, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z", Data: map[string]any{"fees": int64(999999), "rate": "0.9999"}}); err != nil {
 			t.Fatal(err)
 		}
 	}

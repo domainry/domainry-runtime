@@ -27,7 +27,7 @@ func (recordCompositionIdentityProjection) FindOrganizationUnit(context.Context,
 	return identitysdk.OrganizationUnit{}, false, nil
 }
 func (recordCompositionIdentityProjection) ListUsers(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.User, error) {
-	return []identitysdk.User{{ID: "user-1"}}, nil
+	return []identitysdk.User{{UserID: "user-1"}}, nil
 }
 func (recordCompositionIdentityProjection) ListRoles(context.Context, identitysdk.ProjectionQuery) ([]identitysdk.Role, error) {
 	return nil, nil
@@ -81,27 +81,27 @@ func TestRecordApplicationCompositionForwardsEveryOwnedClosure(t *testing.T) {
 		}},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, principalBundle)
-	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme", "owner_id": "admin"}}
+	record := recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Acme", "owner_id": "admin"}}
 
-	_ = service.create.dependencies.ValidatePipeline(ctx, object, record.ID, record.Data, principal)
+	_ = service.create.dependencies.ValidatePipeline(ctx, object, record.RecordID, record.Data, principal)
 	_ = service.create.dependencies.ApplyPipelineDefaults(ctx, object, record.Data, principal, false)
-	_ = service.create.dependencies.RunBefore(ctx, object.Key, "create", record.ID, nil, nil, record.Data, principal)
+	_ = service.create.dependencies.RunBefore(ctx, object.Key, "create", record.RecordID, nil, nil, record.Data, principal)
 	_ = service.create.dependencies.ValidateRelations(ctx, object, record.Data, principal)
-	_ = service.create.dependencies.ValidatePolicies(ctx, object, nil, record.Data, record.ID, "create", principal)
+	_ = service.create.dependencies.ValidatePolicies(ctx, object, nil, record.Data, record.RecordID, "create", principal)
 	_, _ = service.create.dependencies.PrepareWorkflow(ctx, object.Key, record, nil, principal, "record_created:customer")
 	_ = service.restore.dependencies.ValidateRelations(ctx, object, record.Data, principal)
-	_ = service.restore.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "restore", principal)
+	_ = service.restore.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.RecordID, "restore", principal)
 	_, _ = service.restore.dependencies.PrepareWorkflow(ctx, object.Key, record, record.Data, principal, "record_restored:customer")
 
-	_ = service.update.dependencies.ValidatePipeline(ctx, object, record.ID, record.Data, principal)
+	_ = service.update.dependencies.ValidatePipeline(ctx, object, record.RecordID, record.Data, principal)
 	_ = service.update.dependencies.ApplyPipelineDefaults(ctx, object, record.Data, principal, false)
-	_ = service.update.dependencies.RunBefore(ctx, object.Key, "update", record.ID, nil, record.Data, record.Data, principal)
+	_ = service.update.dependencies.RunBefore(ctx, object.Key, "update", record.RecordID, nil, record.Data, record.Data, principal)
 	_ = service.update.dependencies.ValidateRelations(ctx, object, record.Data, principal)
-	_ = service.update.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "update", principal)
+	_ = service.update.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.RecordID, "update", principal)
 	_, _ = service.update.dependencies.PrepareWorkflow(ctx, object.Key, record, record.Data, principal, "record_updated:customer")
 
-	_ = service.delete.dependencies.RunBefore(ctx, object.Key, "delete", record.ID, nil, record.Data, record.Data, principal)
-	_ = service.delete.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.ID, "delete", principal)
+	_ = service.delete.dependencies.RunBefore(ctx, object.Key, "delete", record.RecordID, nil, record.Data, record.Data, principal)
+	_ = service.delete.dependencies.ValidatePolicies(ctx, object, record.Data, record.Data, record.RecordID, "delete", principal)
 	_, _ = service.delete.dependencies.PrepareWorkflow(ctx, object.Key, record, record.Data, principal, "record_deleted:customer")
 	_, _, _ = service.delete.dependencies.PlanUpdateReference(ctx, recordservice.RecordDeleteReference{Object: definitionmodel.ObjectSchema{Key: "missing"}, Record: record, Field: definitionmodel.FieldSchema{Key: "customer"}}, principal)
 

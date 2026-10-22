@@ -47,7 +47,7 @@ func planRouteDecision(ctx context.Context, records *WorkflowProcessRuntime, pro
 	if records.dependencies.Routes == nil {
 		return plan, internalError("read workflow route", fmt.Errorf("workflow route store is required"))
 	}
-	steps, err := records.dependencies.Routes.ListRouteSteps(ctx, process.WorkspaceID, process.ID)
+	steps, err := records.dependencies.Routes.ListRouteSteps(ctx, process.WorkspaceID, process.ProcessID)
 	if err != nil {
 		return plan, internalError("list workflow route steps", err)
 	}
@@ -137,7 +137,7 @@ func workflowRouteBusinessError(err error) error {
 func applyRouteDecision(ctx context.Context, records *WorkflowProcessRuntime, commit *transactionmodel.WorkflowDecisionCommit, process *workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, plan workflowRouteDecisionPlan, outcome string, complete bool, principal principalmodel.Principal, now string) (bool, error) {
 	if plan.configured != nil {
 		commit.UpdateRouteSteps = append(commit.UpdateRouteSteps, *plan.configured)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, "", WorkflowRouteStepConfiguredEvent, principal.UserID, plan.configured.Title, map[string]any{
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, node.ID, "", WorkflowRouteStepConfiguredEvent, principal.UserID, plan.configured.Title, map[string]any{
 			"step_key": plan.configured.StepKey, "step_no": plan.configured.StepNo, "assignee_count": len(plan.configured.AssigneeSnapshot), "required_approvals": plan.configured.RequiredApprovals,
 		}, now))
 	}
@@ -173,19 +173,19 @@ func applyRouteDecision(ctx context.Context, records *WorkflowProcessRuntime, co
 		}
 	}
 	next.AssigneeSnapshot = assignees
-	instance := records.processEngine.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", process.Variables, nil)
+	instance := records.processEngine.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", process.Variables, nil)
 	instance.Iteration = next.StepNo
 	commit.InsertNodes = append(commit.InsertNodes, instance)
 	contract := workflowpolicy.WorkflowApprovalNodeContract(node)
-	for _, task := range WorkflowRouteStepTasks(ctx, *process, node, contract, next, instance.ID, now) {
+	for _, task := range WorkflowRouteStepTasks(ctx, *process, node, contract, next, instance.NodeInstanceID, now) {
 		commit.InsertTasks = append(commit.InsertTasks, task)
-		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": next.Mode, "sequence": task.Sequence, "step_key": next.StepKey}, now))
+		commit.Events = append(commit.Events, workflowDecisionEvent(ctx, process.ProcessID, node.ID, task.TaskID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": next.Mode, "sequence": task.Sequence, "step_key": next.StepKey}, now))
 	}
-	next.Status, next.NodeInstanceID, next.UpdatedAt = "active", instance.ID, now
+	next.Status, next.NodeInstanceID, next.UpdatedAt = "active", instance.NodeInstanceID, now
 	commit.UpdateRouteSteps = append(commit.UpdateRouteSteps, next)
 	commit.Events = append(commit.Events,
-		workflowDecisionEvent(ctx, process.ID, node.ID, "", WorkflowRouteStepActivatedEvent, principal.UserID, next.Title, map[string]any{"step_key": next.StepKey, "step_no": next.StepNo, "assignee_count": len(assignees)}, now),
-		workflowDecisionEvent(ctx, process.ID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil, now),
+		workflowDecisionEvent(ctx, process.ProcessID, node.ID, "", WorkflowRouteStepActivatedEvent, principal.UserID, next.Title, map[string]any{"step_key": next.StepKey, "step_no": next.StepNo, "assignee_count": len(assignees)}, now),
+		workflowDecisionEvent(ctx, process.ProcessID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil, now),
 	)
 	process.Status, process.CurrentNodeIDs, process.CompletedAt, process.UpdatedAt = "waiting", []string{node.ID}, "", now
 	return true, nil

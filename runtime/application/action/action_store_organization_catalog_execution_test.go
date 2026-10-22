@@ -32,7 +32,7 @@ func (stub *storeOrganizationCatalogDeliveryStub) ResolveStoreOrganization(_ con
 
 func TestStoreOrganizationCatalogResolvesExactAuthorizedOrganization(t *testing.T) {
 	delivery := &storeOrganizationCatalogDeliveryStub{resolveResult: identitysdk.StoreOrganization{
-		ID: "store-north", Code: "north", Name: "North", Status: "active", ParentOrganizationID: "company-hq", SortOrder: 1, Version: 4,
+		OrganizationUnitID: "store-north", Code: "north", Name: "North", Status: "active", ParentOrganizationID: "company-hq", SortOrder: 1, Version: 4,
 	}}
 	execution := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
 	execution.unitOfWork = newActionTestUnitOfWork()
@@ -52,7 +52,7 @@ func TestStoreOrganizationCatalogResolvesExactAuthorizedOrganization(t *testing.
 	}
 	execution.unitOfWork.rollBack(t.Context())
 
-	delivery.resolveResult.ID = "store-south"
+	delivery.resolveResult.OrganizationUnitID = "store-south"
 	mismatch := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
 	mismatch.unitOfWork = newActionTestUnitOfWork()
 	mismatch.storeCatalogGrant = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
@@ -78,8 +78,8 @@ func (stub *storeOrganizationCatalogDeliveryStub) ListStoreOrganizations(_ conte
 
 func TestStoreOrganizationCatalogUsesTrustedIdentityScopeAndSameActionSnapshot(t *testing.T) {
 	delivery := &storeOrganizationCatalogDeliveryStub{pages: []identitysdk.StoreOrganizationPage{
-		{Items: []identitysdk.StoreOrganization{{ID: "store-north", Code: "north", Name: "North", Status: "active", ParentOrganizationID: "company-hq", Path: "/company-hq/store-north", AncestorIDs: []string{"company-hq"}, Depth: 2, SortOrder: 1, Version: 3}}, NextCursor: "opaque-next"},
-		{Items: []identitysdk.StoreOrganization{{ID: "store-south", Code: "south", Name: "South", Status: "active", ParentOrganizationID: "company-hq", SortOrder: 2, Version: 1}}},
+		{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-north", Code: "north", Name: "North", Status: "active", ParentOrganizationID: "company-hq", Path: "/company-hq/store-north", AncestorIDs: []string{"company-hq"}, Depth: 2, SortOrder: 1, Version: 3}}, NextCursor: "opaque-next"},
+		{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-south", Code: "south", Name: "South", Status: "active", ParentOrganizationID: "company-hq", SortOrder: 2, Version: 1}}},
 	}}
 	execution := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
 	execution.unitOfWork = newActionTestUnitOfWork()
@@ -97,7 +97,7 @@ func TestStoreOrganizationCatalogUsesTrustedIdentityScopeAndSameActionSnapshot(t
 		if query.OwnerOrganizationScopeID != "store-north" {
 			t.Fatalf("owner Organization scope=%q", query.OwnerOrganizationScopeID)
 		}
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "back-north", OwnerOrgID: "store-north"}}, Total: 1}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "back-north", OwnerOrgID: "store-north"}}, Total: 1}, nil
 	}
 
 	first, err := execution.ListStoreOrganizations(t.Context(), runtimeext.StoreOrganizationCatalogRequest{})
@@ -124,8 +124,8 @@ func TestStoreOrganizationCatalogUsesTrustedIdentityScopeAndSameActionSnapshot(t
 
 func TestStoreOrganizationRecordLookupUsesIssuedIdentityNotStoreNameAndFailsClosed(t *testing.T) {
 	delivery := &storeOrganizationCatalogDeliveryStub{pages: []identitysdk.StoreOrganizationPage{{Items: []identitysdk.StoreOrganization{
-		{ID: "store-north", Code: "north", Name: "Same Name", Status: "active", ParentOrganizationID: "company-hq"},
-		{ID: "store-south", Code: "south", Name: "Same Name", Status: "active", ParentOrganizationID: "company-hq"},
+		{OrganizationUnitID: "store-north", Code: "north", Name: "Same Name", Status: "active", ParentOrganizationID: "company-hq"},
+		{OrganizationUnitID: "store-south", Code: "south", Name: "Same Name", Status: "active", ParentOrganizationID: "company-hq"},
 	}}}}
 	execution := workspaceAggregateTestExecution(workspaceAggregatePrincipal("sale.aggregate"), nil, nil, new([]WorkspaceAggregateAudit))
 	execution.unitOfWork = newActionTestUnitOfWork()
@@ -135,7 +135,7 @@ func TestStoreOrganizationRecordLookupUsesIssuedIdentityNotStoreNameAndFailsClos
 	seenScopes := []string{}
 	execution.dependencies.ListRecords = func(_ context.Context, _ string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 		seenScopes = append(seenScopes, query.OwnerOrganizationScopeID)
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "config-" + query.OwnerOrganizationScopeID, OwnerOrgID: query.OwnerOrganizationScopeID}}, Total: 1}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "config-" + query.OwnerOrganizationScopeID, OwnerOrgID: query.OwnerOrganizationScopeID}}, Total: 1}, nil
 	}
 	page, err := execution.ListStoreOrganizations(t.Context(), runtimeext.StoreOrganizationCatalogRequest{PageSize: 25})
 	if err != nil || len(page.Items) != 2 {
@@ -165,7 +165,7 @@ func TestStoreOrganizationRecordLookupUsesIssuedIdentityNotStoreNameAndFailsClos
 	}
 
 	execution.dependencies.ListRecords = func(_ context.Context, _ string, _ recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "foreign", OwnerOrgID: "store-foreign"}}, Total: 1}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "foreign", OwnerOrgID: "store-foreign"}}, Total: 1}, nil
 	}
 	if _, err := execution.QueryRecords(t.Context(), runtimeext.RecordQuery{Operation: runtimeext.QueryList, ObjectKey: "sale", StoreOrganization: &page.Items[0], Limit: 2}); apperror.CodeOf(err) != "backend.action.store_organization_record_scope_violation" {
 		t.Fatalf("foreign record error=%v", err)

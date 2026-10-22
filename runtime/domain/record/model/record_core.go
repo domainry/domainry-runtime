@@ -1,12 +1,15 @@
 package recordmodel
 
+const IDField = "id"
+
 type Record struct {
 	// QuerySortValues is an internal cursor projection populated only for
 	// explicitly requested sort fields. It preserves NULL versus empty text;
 	// display Data may omit empty values. It is never serialized to clients.
 	QuerySortValues map[string]any                `json:"-"`
+	ID              int64                         `json:"id"`
 	WorkspaceID     string                        `json:"workspace_id"`
-	ID              string                        `json:"id"`
+	RecordID        string                        `json:"record_id"`
 	Data            map[string]any                `json:"data"`
 	CreatedAt       string                        `json:"created_at"`
 	UpdatedAt       string                        `json:"updated_at"`

@@ -14,21 +14,21 @@ import (
 func TestRecordApplicationAuditCallbacksCoverDisabledAndEnabledPaths(t *testing.T) {
 	service := &RecordApplicationService{}
 	object := definitionmodel.ObjectSchema{Key: "customer"}
-	record := recordmodel.Record{ID: "customer-1"}
+	record := recordmodel.Record{RecordID: "customer-1"}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user"}}
 	service.auditFieldDenials(t.Context(), object, record, "read", nil, principal)
-	service.auditScopeDenial(t.Context(), object, record.ID, principal)
+	service.auditScopeDenial(t.Context(), object, record.RecordID, principal)
 	events := []string{}
 	metadataByEvent := map[string]map[string]any{}
 	service.audit = func(_ context.Context, event, objectKey, recordID string, _ principalmodel.Principal, _ string, _, _, metadata map[string]any) {
-		if objectKey != object.Key || recordID != record.ID || metadata == nil {
+		if objectKey != object.Key || recordID != record.RecordID || metadata == nil {
 			t.Fatalf("event=%s object=%s record=%s metadata=%v", event, objectKey, recordID, metadata)
 		}
 		events = append(events, event)
 		metadataByEvent[event] = metadata
 	}
 	service.auditFieldDenials(t.Context(), object, record, "read", []recordservice.RecordFieldPolicyDecision{{FieldKey: "secret", RuleKey: "mask-secret"}}, principal)
-	service.auditScopeDenial(t.Context(), object, record.ID, principal)
+	service.auditScopeDenial(t.Context(), object, record.RecordID, principal)
 	if len(events) != 2 || events[0] != "field_access_denied" || events[1] != "data_scope_access_denied" {
 		t.Fatalf("events=%v", events)
 	}

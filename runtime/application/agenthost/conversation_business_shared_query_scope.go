@@ -117,7 +117,7 @@ func (h *ConversationBusinessHost) businessReadRelatedQueryScopeCovers(ctx conte
 			if page.Total == nil || *page.Total != 1 || len(page.Items) != 1 || page.HasNext || page.NextCursor != "" || page.Items[0].ID == "" {
 				return false
 			}
-			required = recordmodel.RecordFilterExpression{Field: "id", Operator: "eq", Value: page.Items[0].ID}
+			required = recordmodel.RecordFilterExpression{Field: "record_id", Operator: "eq", Value: page.Items[0].ID}
 		default:
 			return false
 		}

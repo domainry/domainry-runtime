@@ -79,7 +79,7 @@ func TestCreatePlanningDoesNotSelfDeadlockSharedSingleConnectionSQLitePool(t *te
 	unitOfWork := &actionUnitOfWork{
 		manager: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		claim: actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{
-			ID: "execution-1", LeaseOwner: "test-owner", FencingToken: 1,
+			OperationID: "execution-1", LeaseOwner: "test-owner", FencingToken: 1,
 		}},
 		phases: newActionExecutionPhaseMachine(),
 	}
@@ -96,7 +96,7 @@ func TestCreatePlanningDoesNotSelfDeadlockSharedSingleConnectionSQLitePool(t *te
 				if err := db.QueryRowContext(ctx, "SELECT id FROM _identity_users WHERE id = ?", "identity-user-1").Scan(&id); err != nil {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 				}
-				return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "member-1", Data: map[string]any{"identity_user_id": id}}, nil
+				return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "member-1", Data: map[string]any{"identity_user_id": id}}, nil
 			},
 		},
 	}

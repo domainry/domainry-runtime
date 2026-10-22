@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	connector "github.com/domainry/domainry-connector-sdk"
@@ -58,7 +59,7 @@ type BusinessHandlerExecutionDependencies struct {
 	PlanDeleteMutation                func(context.Context, string, string, string, principalmodel.Principal) ([]transactionmodel.MutationPlan, error)
 	PlanRestoreMutation               func(context.Context, string, string, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error)
 	ValidateDurableIntent             func(context.Context, runtimeext.DurableIntent, principalmodel.Principal) error
-	CompileNotification               func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
+	CompileNotification               func(context.Context, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error)
 	FindIdentityUser                  func(context.Context, string) (identitysdk.User, bool, error)
 	VerifyFileClean                   func(context.Context, string, runtimeext.FileVerificationRequest) (runtimeext.FileVerificationEvidence, error)
 	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
@@ -190,7 +191,7 @@ func (e *BusinessHandlerExecutor) execute(ctx context.Context, governed governed
 			return ActionExecutionResult{}, resolveErr
 		}
 		result := actionmodel.ActionResult{
-			ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: record.ID,
+			ActionKey: action.Key, ObjectKey: action.ObjectKey, RecordID: record.RecordID,
 			Message: "backend.action.executed", Record: record, Output: output,
 			CreatedRecords: session.created, UpdatedRecords: session.updated, DeletedRecords: session.deleted, RestoredRecords: session.restored,
 		}
@@ -338,7 +339,7 @@ func (e *businessActionExecution) observeRecord(objectKey string, record recordm
 	if e.observedRecords == nil {
 		e.observedRecords = map[string]recordmodel.Record{}
 	}
-	e.observedRecords[strings.TrimSpace(objectKey)+"\x00"+strings.TrimSpace(record.ID)] = record
+	e.observedRecords[strings.TrimSpace(objectKey)+"\x00"+strings.TrimSpace(record.RecordID)] = record
 }
 
 func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtimeext.RecordQuery) (runtimeext.RecordQueryResult, error) {
@@ -611,7 +612,11 @@ func cloneRuntimeextPrincipal(principal runtimeext.Principal) runtimeext.Princip
 }
 
 func toRuntimeextRecord(objectKey string, record recordmodel.Record) runtimeext.Record {
-	return runtimeext.Record{ID: record.ID, ObjectKey: objectKey, Fields: actionCloneMap(record.Data), UpdatedAt: record.UpdatedAt}
+	result := runtimeext.Record{ID: record.RecordID, ObjectKey: objectKey, Fields: actionCloneMap(record.Data), UpdatedAt: record.UpdatedAt}
+	if record.ID > 0 {
+		result.Cursor = strconv.FormatInt(record.ID, 10)
+	}
+	return result
 }
 
 func cloneWorkflowGrants(grants []runtimeext.WorkflowGrant) []runtimeext.WorkflowGrant {

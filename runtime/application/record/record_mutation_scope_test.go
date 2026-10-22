@@ -16,7 +16,7 @@ type recordMutationTargetRepositoryProbe struct {
 
 func (r *recordMutationTargetRepositoryProbe) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 	r.listQuery = query
-	return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "candidate"}}}, nil
+	return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "candidate"}}}, nil
 }
 
 func (r *recordMutationTargetRepositoryProbe) GetRecord(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
@@ -56,10 +56,10 @@ func TestRecordMutationTargetLoaderTreatsClientIDAsScopedCandidate(t *testing.T)
 	repository := &recordMutationTargetRepositoryProbe{}
 	scope := &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_user_id", Values: []string{"server-user"}}
 	record, found, err := recordRepositoryMutationTargetLoader(repository)(t.Context(), "workspace", definitionmodel.ObjectSchema{Key: "order"}, "candidate", scope)
-	if err != nil || !found || record.ID != "candidate" {
+	if err != nil || !found || record.RecordID != "candidate" {
 		t.Fatalf("scoped candidate lookup record=%#v found=%v err=%v", record, found, err)
 	}
-	ids, ok := repository.listQuery.Filters["id__in"].([]any)
+	ids, ok := repository.listQuery.Filters["record_id__in"].([]any)
 	if repository.getCalls != 0 || !ok || len(ids) != 1 || ids[0] != "candidate" {
 		t.Fatalf("client ID bypassed scoped list query: query=%#v get_calls=%d", repository.listQuery, repository.getCalls)
 	}
@@ -71,10 +71,10 @@ func TestRecordMutationTargetLoaderTreatsClientIDAsScopedCandidate(t *testing.T)
 func TestRecordMutationTargetLoaderUsesOnlyWorkspaceAndCandidateIDForAll(t *testing.T) {
 	repository := &recordMutationTargetRepositoryProbe{}
 	record, found, err := recordRepositoryMutationTargetLoader(repository)(t.Context(), "workspace", definitionmodel.ObjectSchema{Key: "order"}, "candidate", nil)
-	if err != nil || !found || record.ID != "candidate" {
+	if err != nil || !found || record.RecordID != "candidate" {
 		t.Fatalf("all candidate lookup record=%#v found=%v err=%v", record, found, err)
 	}
-	ids, ok := repository.listQuery.Filters["id__in"].([]any)
+	ids, ok := repository.listQuery.Filters["record_id__in"].([]any)
 	if repository.getCalls != 0 || !ok || len(ids) != 1 || ids[0] != "candidate" {
 		t.Fatalf("client ID bypassed tenant list query: query=%#v get_calls=%d", repository.listQuery, repository.getCalls)
 	}

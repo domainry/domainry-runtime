@@ -31,14 +31,14 @@ func (s *ReportExportApplicationService) validateReportExportRetry(ctx context.C
 		return invalid()
 	}
 	payload.AuditID = job.ReferenceID
-	if payload.WorkspaceID != principal.WorkspaceID || payload.RequesterUserID != principal.UserID || payload.ReportKey != strings.TrimSpace(request.ReportKey) || payload.ObjectKey != strings.TrimSpace(request.ObjectKey) || payload.PrepareReceiptID == "" {
+	if payload.WorkspaceID != principal.WorkspaceID || payload.RequesterUserID != principal.UserID || payload.ReportKey != strings.TrimSpace(request.ReportKey) || payload.ObjectKey != strings.TrimSpace(request.ObjectKey) || payload.PrepareOperationID == "" {
 		return invalid()
 	}
-	receipt, found, err := s.prepareReceipts.GetReportExportPrepareReceipt(ctx, principal.WorkspaceID, payload.PrepareReceiptID)
+	receipt, found, err := s.prepareReceipts.GetReportExportPrepareReceipt(ctx, principal.WorkspaceID, payload.PrepareOperationID)
 	if err != nil {
 		return err
 	}
-	if !found || receipt.JobID != job.ID || receipt.CompletionArtifactID != "" || receipt.CompletionFingerprint != "" {
+	if !found || receipt.JobID != job.JobID || receipt.CompletionArtifactID != "" || receipt.CompletionFingerprint != "" {
 		return invalid()
 	}
 	frozen, err := reportExportPayloadFromReceipt(receipt)

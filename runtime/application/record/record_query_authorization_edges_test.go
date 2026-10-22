@@ -21,11 +21,11 @@ type recordQueryRepositoryProbe struct {
 }
 
 func (r *recordQueryRepositoryProbe) GetRecord(_ context.Context, _ string, object definitionmodel.ObjectSchema, recordID string) (recordmodel.Record, bool, error) {
-	return recordmodel.Record{ID: recordID, Data: map[string]any{"name": object.Key}}, true, nil
+	return recordmodel.Record{RecordID: recordID, Data: map[string]any{"name": object.Key}}, true, nil
 }
 
 func (r *recordQueryRepositoryProbe) ListRecords(_ context.Context, _ string, object definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
-	record := recordmodel.Record{ID: object.Key + "-1", Data: map[string]any{"name": object.Key}}
+	record := recordmodel.Record{RecordID: object.Key + "-1", Data: map[string]any{"name": object.Key}}
 	if object.Key == "line_item" {
 		record.Data["customer_id"] = "customer-1"
 	}
@@ -113,7 +113,7 @@ func TestRecordQueryEntrypointsDelegateForAuthorizedWorkspace(t *testing.T) {
 	if query := service.NormalizeListQuery(customer, recordmodel.RecordListQuery{Page: -1}, principal); query.Page != 1 {
 		t.Fatalf("normalized query=%#v", query)
 	}
-	if record, err := service.GetRecord(t.Context(), customer.Key, "customer-1", principal); err != nil || record.ID != "customer-1" {
+	if record, err := service.GetRecord(t.Context(), customer.Key, "customer-1", principal); err != nil || record.RecordID != "customer-1" {
 		t.Fatalf("record=%#v err=%v", record, err)
 	}
 	if summary, err := service.RecordReferences(t.Context(), customer.Key, "customer-1", principal); err != nil || summary.Total != 1 {
@@ -125,7 +125,7 @@ func TestRecordQueryEntrypointsDelegateForAuthorizedWorkspace(t *testing.T) {
 	if references, err := service.IdentityProfileReferences(t.Context(), "user-1", principal); err != nil || len(references) != 1 || references[0].RecordCount != 1 {
 		t.Fatalf("identity profile references=%#v err=%v", references, err)
 	}
-	if !service.CanAccessRecord(principal, customer, recordmodel.Record{ID: "customer-1"}) {
+	if !service.CanAccessRecord(principal, customer, recordmodel.Record{RecordID: "customer-1"}) {
 		t.Fatal("workspace administrator should access the record")
 	}
 }

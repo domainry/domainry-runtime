@@ -28,7 +28,7 @@ func (s *WorkflowApplicationService) loadWorkflowProcessSummaryNodes(ctx context
 	failedProcessIDs := make([]string, 0, len(processes))
 	for _, process := range processes {
 		if process.Status == "failed" || process.Status == "configuration_error" {
-			failedProcessIDs = append(failedProcessIDs, process.ID)
+			failedProcessIDs = append(failedProcessIDs, process.ProcessID)
 		}
 	}
 	if len(failedProcessIDs) == 0 {
@@ -62,13 +62,13 @@ func (e *WorkflowProcessEngine) cancelUnfinishedApprovalTasks(ctx context.Contex
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	updates := make([]workflowmodel.WorkflowTask, 0, len(tasks))
 	for _, task := range tasks {
-		if task.ID == exceptTaskID || (task.Status != "open" && task.Status != "pending") {
+		if task.TaskID == exceptTaskID || (task.Status != "open" && task.Status != "pending") {
 			continue
 		}
 		task.Status = "cancelled"
 		task.UpdatedAt = now
 		updates = append(updates, task)
-		e.appendEvent(ctx, task.WorkspaceID, task.ProcessID, task.NodeID, task.ID, "task_cancelled", actorID, task.Title, nil)
+		e.appendEvent(ctx, task.WorkspaceID, task.ProcessID, task.NodeID, task.TaskID, "task_cancelled", actorID, task.Title, nil)
 	}
 	if len(updates) > 0 {
 		_ = updateWorkflowTasks(ctx, e.runtime.dependencies.Processes, updates[0].WorkspaceID, updates)
@@ -94,7 +94,7 @@ func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyK
 	}
 	process, err := s.processEngine.Start(ctx, workflow, payload, principal)
 	if err != nil {
-		if process.ID == "" {
+		if process.ProcessID == "" {
 			return workflowmodel.WorkflowExecution{}, err
 		}
 		execution := s.failedWorkflowProcessExecution(ctx, workflow, process, payload, principal, trigger, attempt, idempotencyKey, err)
@@ -104,14 +104,14 @@ func (s *WorkflowApplicationService) executeWorkflowGraphProcessWithIdempotencyK
 		if completeErr := s.completeWorkflowExecutionReceipt(ctx, claim, execution, principal); completeErr != nil {
 			return workflowmodel.WorkflowExecution{}, internalError("complete failed workflow execution receipt", completeErr)
 		}
-		s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ID, execution.NodeID, "", "workflow_execution_"+execution.Status, principal.UserID, execution.LastError, map[string]any{"execution_id": execution.ID, "attempt": execution.Attempt})
+		s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ProcessID, execution.NodeID, "", "workflow_execution_"+execution.Status, principal.UserID, execution.LastError, map[string]any{"execution_id": execution.ExecutionID, "attempt": execution.Attempt})
 		return execution, nil
 	}
 	execution := workflowmodel.WorkflowExecution{
 		WorkspaceID: principal.WorkspaceID,
-		ID:          process.ID, OperationID: process.OperationID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
+		ExecutionID: workflowProcessID(ctx, "execution"), OperationID: process.OperationID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
 		Status: process.Status, ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: workflowpolicy.WorkflowCloneMap(payload),
-		Result: map[string]any{"process_id": process.ID, "current_node_ids": process.CurrentNodeIDs, "definition_hash": process.DefinitionHash}, ProcessID: process.ID,
+		Result: map[string]any{"process_id": process.ProcessID, "current_node_ids": process.CurrentNodeIDs, "definition_hash": process.DefinitionHash}, ProcessID: process.ProcessID,
 		ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(workflow),
 		IdempotencyKey: idempotencyKey, Attempt: attempt, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(workflow), Message: "workflow.message.processStarted",
 		CreatedAt: process.CreatedAt, UpdatedAt: process.UpdatedAt,

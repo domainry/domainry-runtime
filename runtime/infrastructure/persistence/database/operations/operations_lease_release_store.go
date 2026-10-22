@@ -26,13 +26,13 @@ type operationsLeaseReleaseSpec struct {
 var operationsLeaseReleaseSpecs = map[string]operationsLeaseReleaseSpec{
 	"dispatch_callback":          {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "dispatch"},
 	"workflow":                   {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "workflow"},
-	"workflow_execution":         {table: "_workflow_executions", idColumn: "id", workspaceColumn: "workspace_id"},
-	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "id", workspaceColumn: "workspace_id"},
+	"workflow_execution":         {table: "_workflow_executions", idColumn: "execution_id", workspaceColumn: "workspace_id"},
+	"workflow_deadline":          {table: "_workflow_tasks", idColumn: "task_id", workspaceColumn: "workspace_id"},
 	"business_action":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "action"},
 	"record_mutation":            {table: sharedoperation.TableName, idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "owner", scopeValue: "record"},
 	"idempotency_cleanup":        {table: sharedworkerscope.TableName, idColumn: "id", scopeColumn: "owner", scopeValue: sharedworkerscope.OwnerIdempotencyCleanup},
-	"automation":                 {table: "_automation_runs", idColumn: "id", workspaceColumn: "workspace_id", scopeColumn: "run_kind", scopeValue: "instruction"},
-	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
+	"automation":                 {table: "_automation_runs", idColumn: "run_id", workspaceColumn: "workspace_id", scopeColumn: "run_kind", scopeValue: "instruction"},
+	"runtime_publication_outbox": {table: "_publication_outbox", idColumn: "message_id", workspaceColumn: "workspace_id", publicationType: "integration.connector"},
 }
 
 func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
@@ -115,7 +115,7 @@ func (s OperationsStore) ForceReleaseOperationsLease(ctx context.Context, reques
 func (s OperationsStore) forceReleaseWorkerScopeLease(ctx context.Context, tx *sql.Tx, request operationsmodel.OperationsLeaseReleaseRequest) (operationsmodel.OperationsLeaseReleaseResult, bool, error) {
 	store := sharedworkerscope.NewStore(s.database(), s.store.SQLRenderer)
 	released, found, err := store.ForceReleaseLease(ctx, tx, sharedworkerscope.LeaseRelease{
-		Identity:           sharedworkerscope.Identity{ID: request.ResourceID, Owner: sharedworkerscope.OwnerIdempotencyCleanup},
+		Identity:           sharedworkerscope.Identity{Owner: sharedworkerscope.OwnerIdempotencyCleanup, ScopeKey: request.ResourceID},
 		ExpectedLeaseOwner: request.ExpectedLeaseOwner, ExpectedFencingToken: request.ExpectedFencingToken,
 		Now: request.Now, AllowUnexpired: request.VerifiedStuck,
 	})
@@ -141,7 +141,7 @@ func (s OperationsStore) forceReleaseSharedOperationLease(ctx context.Context, t
 	txContext := sharedoperation.WithExecutor(ctx, tx)
 	token := request.ExpectedFencingToken
 	filter := sharedoperation.RecordFilter{
-		WorkspaceID: request.WorkspaceID, ID: request.ResourceID, Owner: spec.scopeValue,
+		WorkspaceID: request.WorkspaceID, OperationID: request.ResourceID, Owner: spec.scopeValue,
 		LeaseOwner: request.ExpectedLeaseOwner, FencingToken: &token,
 	}
 	record, found, err := ledger.GetRecord(txContext, filter)

@@ -44,9 +44,9 @@ func TestWorkflowRecordReaderAdapterNilAndRepositoryDelegation(t *testing.T) {
 	if page, err := empty.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}, principal); err != nil || page.Total != 0 {
 		t.Fatalf("nil list page=%+v err=%v", page, err)
 	}
-	repository := workflowRecordRepositoryEdgeStub{record: recordmodel.Record{ID: "record"}, found: true, page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "record"}}, Total: 1}}
+	repository := workflowRecordRepositoryEdgeStub{record: recordmodel.Record{RecordID: "record"}, found: true, page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "record"}}, Total: 1}}
 	adapter := NewWorkflowRecordReaderAdapter(repository, normalize)
-	if record, found, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record", principal); err != nil || !found || record.ID != "record" {
+	if record, found, err := adapter.GetWorkflowRecord(t.Context(), "workspace", definitionmodel.ObjectSchema{}, "record", principal); err != nil || !found || record.RecordID != "record" {
 		t.Fatalf("record=%+v found=%v err=%v", record, found, err)
 	}
 	if page, err := adapter.ListWorkflowRecords(t.Context(), "workspace", definitionmodel.ObjectSchema{}, recordmodel.RecordListQuery{}, principal); err != nil || page.Total != 1 {
@@ -77,7 +77,7 @@ func TestWorkflowProcessRuntimeAuthorizationWrappersAndFailedNode(t *testing.T) 
 		t.Fatalf("recipient authorization=%v", err)
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{}}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{}}}
 	completed, err := engine.RunWithContext(t.Context(), process, nil, nil, principal)
 	if err != nil || completed.Status != "completed" {
 		t.Fatalf("completed=%+v err=%v", completed, err)
@@ -109,7 +109,7 @@ func TestWorkflowProcessRuntimeAuthorizationWrappersAndFailedNode(t *testing.T) 
 func TestWorkflowProcessRuntimeResumeTimerNodeEdges(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	process := workflowmodel.WorkflowProcessInstance{
-		ID:             "process",
+		ProcessID:      "process",
 		WorkspaceID:    principal.WorkspaceID,
 		Status:         "waiting",
 		CurrentNodeIDs: []string{"timer"},
@@ -152,7 +152,7 @@ func TestWorkflowProcessRuntimeResumeTimerNodeEdges(t *testing.T) {
 	}
 	store = newStore()
 	store.nodes["process"] = []workflowmodel.WorkflowNodeInstance{{NodeID: "timer", Status: "success"}}
-	if resumed, err := newEngine(store).ResumeTimerNode(t.Context(), principal.WorkspaceID, "process", "timer", principal); err != nil || resumed.ID != process.ID {
+	if resumed, err := newEngine(store).ResumeTimerNode(t.Context(), principal.WorkspaceID, "process", "timer", principal); err != nil || resumed.ProcessID != process.ProcessID {
 		t.Fatalf("completed timer process=%+v error=%v", resumed, err)
 	}
 	store = newStore()
@@ -199,7 +199,7 @@ func TestWorkflowTimerContinuationReauthorizesInheritedInitiator(t *testing.T) {
 	resolver := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(resolved)}
 	engine := NewWorkflowProcessRuntime(WorkflowDependencies{Principals: resolver}).ProcessEngine()
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process", WorkspaceID: worker.WorkspaceID, InitiatorID: "sales-1", InitiatorRoleKey: "sales_rep",
+		ProcessID: "process", WorkspaceID: worker.WorkspaceID, InitiatorID: "sales-1", InitiatorRoleKey: "sales_rep",
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "scheduled-send"},
 	}
 	actual, err := engine.timerContinuationPrincipal(t.Context(), process, worker)

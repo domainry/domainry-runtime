@@ -42,7 +42,7 @@ func TestConversationWorkflowReceiptNeverReclaimsExpiredStart(t *testing.T) {
 	if claim, err := repository.TryBeginExecution(t.Context(), request); err != nil || claim.Decision != idempotency.DecisionFingerprintConflict {
 		t.Fatal(claim, err)
 	}
-	completion := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: "workspace", ReceiptID: before.ID, ExecutionID: "process-1", LeaseOwner: before.LeaseOwner, FencingToken: before.FencingToken, Now: now, ExpiresAt: now.Add(time.Hour)}
+	completion := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: "workspace", OperationID: before.OperationID, ExecutionID: "process-1", LeaseOwner: before.LeaseOwner, FencingToken: before.FencingToken, Now: now, ExpiresAt: now.Add(time.Hour)}
 	if err := repository.CompleteExecutionReceipt(t.Context(), completion); err != nil {
 		t.Fatal(err)
 	}

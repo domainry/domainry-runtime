@@ -24,8 +24,8 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
-		`CREATE TABLE sale (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER, UNIQUE (workspace_id, id))`,
-		`CREATE TABLE payment (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT, UNIQUE (workspace_id, id))`,
+		`CREATE TABLE sale (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, sale_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, ext_info TEXT NOT NULL DEFAULT '{}', create_by TEXT, update_by TEXT, owner_user_id TEXT, owner_org_id TEXT, employee_id TEXT, team_id TEXT, organization_path TEXT, status TEXT, net_total TEXT, discount_total TEXT, refund_total TEXT, units INTEGER)`,
+		`CREATE TABLE payment (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, payment_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, ext_info TEXT NOT NULL DEFAULT '{}', create_by TEXT, update_by TEXT, owner_user_id TEXT, owner_org_id TEXT, sale_id TEXT, owner_id TEXT, kind TEXT, amount TEXT)`,
 	} {
 		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
 			t.Fatal(err)
@@ -42,7 +42,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	records := recordpersistence.NewRecordStore(store)
 	insert := func(workspace string, object definitionmodel.ObjectSchema, id string, data map[string]any) {
 		t.Helper()
-		if err := records.InsertRecord(t.Context(), workspace, object, recordmodel.Record{ID: id, CreatedAt: "2026-08-01T10:00:00Z", UpdatedAt: "2026-08-01T10:00:00Z", Data: data}); err != nil {
+		if err := records.InsertRecord(t.Context(), workspace, object, recordmodel.Record{RecordID: id, CreatedAt: "2026-08-01T10:00:00Z", UpdatedAt: "2026-08-01T10:00:00Z", Data: data}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -106,7 +106,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 	}
 
 	joined := execute(reportmodel.ReportObjectSQLSchema{
-		SQL: `SELECT s.id AS sale_id, COALESCE(SUM(p.amount), 0) AS visible_paid FROM sale s LEFT JOIN payment p ON p.sale_id = s.id GROUP BY s.id ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale", "payment"},
+		SQL: `SELECT s.record_id AS sale_id, COALESCE(SUM(p.amount), 0) AS visible_paid FROM sale s LEFT JOIN payment p ON p.sale_id = s.record_id GROUP BY s.record_id ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale", "payment"},
 		JoinCardinalities: []reportmodel.ReportObjectSQLCardinality{{Alias: "p", Cardinality: "one_to_many"}},
 		ResultSchema:      []reportmodel.ReportResultColumnSchema{{Key: "sale_id", Type: "text", Kind: "dimension"}, {Key: "visible_paid", Type: "currency", Kind: "measure", Precision: 19, Scale: 2}},
 	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}, "p": {AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "payment", ScopeExpression: &recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "owner_id", Values: []string{"user-1"}}}})
@@ -114,7 +114,7 @@ func TestReportObjectSQLExecutesPOSFixtureWithIsolationRLSAndExactMoney(t *testi
 		t.Fatalf("left joined=%#v", joined)
 	}
 	zeroDivision := execute(reportmodel.ReportObjectSQLSchema{
-		SQL: `SELECT s.id AS sale_id, s.units / NULLIF(s.units, 0) AS safe_ratio FROM sale s ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale"},
+		SQL: `SELECT s.record_id AS sale_id, s.units / NULLIF(s.units, 0) AS safe_ratio FROM sale s ORDER BY sale_id LIMIT 10`, SourceObjects: []string{"sale"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "sale_id", Type: "text", Kind: "dimension"}, {Key: "safe_ratio", Type: "decimal", Kind: "measure"}},
 	}, map[string]recordmodel.RecordListQuery{"s": {AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}})
 	if len(zeroDivision) != 3 || zeroDivision[0]["safe_ratio"] != "1" || zeroDivision[1]["safe_ratio"] != "" || zeroDivision[2]["safe_ratio"] != "1" {

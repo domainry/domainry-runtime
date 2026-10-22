@@ -38,7 +38,7 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 	}}
 	customer := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	objects := map[string]definitionmodel.ObjectSchema{"order": order, "customer": customer}
-	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "order-1", CreatedAt: "created", UpdatedAt: "updated", Data: map[string]any{"number": "SO-1", "customer_id": "customer-1"}}}}}
+	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "order-1", CreatedAt: "created", UpdatedAt: "updated", Data: map[string]any{"number": "SO-1", "customer_id": "customer-1"}}}}}
 	relationCalls := 0
 	var auditMetadata map[string]any
 	service := NewRecordExportApplicationService(RecordExportDependencies{
@@ -54,10 +54,10 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 			if objectKey != "customer" || query.PageSize != 1 {
 				t.Fatalf("relation query object=%q query=%#v", objectKey, query)
 			}
-			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
+			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}}, nil
 		},
 		RecordDisplay: func(_ definitionmodel.ObjectSchema, record recordmodel.Record) (string, string) {
-			return record.ID, record.Data["name"].(string)
+			return record.RecordID, record.Data["name"].(string)
 		},
 		Audit: func(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _ map[string]any, metadata map[string]any) {
 			if event == "record_exported" {
@@ -88,7 +88,7 @@ func TestExportServiceOwnsCSVRelationDisplayAndAudit(t *testing.T) {
 
 func TestExportServiceBindsAssuranceToCanonicalIntentAndAuditEvidence(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}, ExportAssurancePolicy: &definitionmodel.ActionAssurancePolicy{RequiredMethods: []string{definitionmodel.ActionAssuranceOTP}}}
-	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}}}
+	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}}}
 	events := map[string]map[string]any{}
 	service := NewRecordExportApplicationService(RecordExportDependencies{
 		Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema {
@@ -131,7 +131,7 @@ func TestExportServiceKeepsCurrencyCanonicalAndRejectsBinaryFloat(t *testing.T) 
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, accessfixture.Bundle{
 		Permissions: []string{"invoice.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "invoice", Scope: "all", Read: true}},
 	})
-	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "invoice-1", Data: map[string]any{"amount": "0.3"}}}}}
+	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "invoice-1", Data: map[string]any{"amount": "0.3"}}}}}
 	service := NewRecordExportApplicationService(RecordExportDependencies{Repository: repository, Objects: func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"invoice": object}
 	}})
@@ -151,14 +151,14 @@ func TestExportServiceKeepsCurrencyCanonicalAndRejectsBinaryFloat(t *testing.T) 
 
 func TestExportServiceResolvesIdentityLabelsWithinPrincipalScope(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "task", Fields: []definitionmodel.FieldSchema{{Key: "assignee", Type: "relation", Config: map[string]any{"object_key": "identity_user"}}}}
-	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "task-1", Data: map[string]any{"assignee": "u1"}}}}}
+	repository := &exportRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "task-1", Data: map[string]any{"assignee": "u1"}}}}}
 	service := NewRecordExportApplicationService(RecordExportDependencies{
 		Repository: repository,
 		Objects: func() map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{"task": object}
 		},
 		ListIdentityUsers: func(context.Context) ([]identitysdk.User, error) {
-			return []identitysdk.User{{ID: "u1", Name: "Alice"}, {ID: "u2", Name: "Bob"}}, nil
+			return []identitysdk.User{{UserID: "u1", Name: "Alice"}, {UserID: "u2", Name: "Bob"}}, nil
 		},
 	})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "u1"}}, accessfixture.Bundle{Permissions: []string{"task.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "task", Scope: "owner", Read: true}}})

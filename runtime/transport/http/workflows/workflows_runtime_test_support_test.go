@@ -26,13 +26,13 @@ type workflowHTTPProcessStore struct {
 
 func (s *workflowHTTPProcessStore) InsertProcess(_ context.Context, _ string, process workflowmodel.WorkflowProcessInstance) error {
 	if s.err == nil {
-		s.processes[process.ID] = process
+		s.processes[process.ProcessID] = process
 	}
 	return s.err
 }
 func (s *workflowHTTPProcessStore) UpdateProcess(_ context.Context, _ string, process workflowmodel.WorkflowProcessInstance) error {
 	if s.err == nil {
-		s.processes[process.ID] = process
+		s.processes[process.ProcessID] = process
 	}
 	return s.err
 }
@@ -67,7 +67,7 @@ func (s *workflowHTTPProcessStore) UpdateNode(_ context.Context, _ string, node 
 		return s.err
 	}
 	for index := range s.nodes[node.ProcessID] {
-		if s.nodes[node.ProcessID][index].ID == node.ID {
+		if s.nodes[node.ProcessID][index].NodeInstanceID == node.NodeInstanceID {
 			s.nodes[node.ProcessID][index] = node
 			return nil
 		}
@@ -79,13 +79,13 @@ func (s *workflowHTTPProcessStore) ListNodes(_ context.Context, _, processID str
 }
 func (s *workflowHTTPProcessStore) InsertTask(_ context.Context, _ string, task workflowmodel.WorkflowTask) error {
 	if s.err == nil {
-		s.tasks[task.ID] = task
+		s.tasks[task.TaskID] = task
 	}
 	return s.err
 }
 func (s *workflowHTTPProcessStore) UpdateTask(_ context.Context, _ string, task workflowmodel.WorkflowTask) error {
 	if s.err == nil {
-		s.tasks[task.ID] = task
+		s.tasks[task.TaskID] = task
 	}
 	return s.err
 }
@@ -126,16 +126,16 @@ func (s *workflowHTTPProcessStore) CommitWorkflowDecision(_ context.Context, com
 	if s.err != nil {
 		return false, s.err
 	}
-	current, found := s.tasks[commit.DecidedTask.ID]
+	current, found := s.tasks[commit.DecidedTask.TaskID]
 	if !found || current.Status != commit.ExpectedTaskStatus || current.AssigneeUserID != commit.ExpectedAssigneeID {
 		return false, nil
 	}
-	s.tasks[commit.DecidedTask.ID] = commit.DecidedTask
+	s.tasks[commit.DecidedTask.TaskID] = commit.DecidedTask
 	for _, task := range commit.UpdateTasks {
-		s.tasks[task.ID] = task
+		s.tasks[task.TaskID] = task
 	}
 	if commit.Process != nil {
-		s.processes[commit.Process.ID] = *commit.Process
+		s.processes[commit.Process.ProcessID] = *commit.Process
 	}
 	for _, event := range commit.Events {
 		s.events[event.ProcessID] = append(s.events[event.ProcessID], event)
@@ -148,13 +148,13 @@ func (s *workflowHTTPProcessStore) CommitWorkflowState(_ context.Context, commit
 		return s.err
 	}
 	if commit.Process != nil {
-		s.processes[commit.Process.ID] = *commit.Process
+		s.processes[commit.Process.ProcessID] = *commit.Process
 	}
 	for _, node := range commit.UpdateNodes {
 		_ = s.UpdateNode(context.Background(), commit.WorkspaceID, node)
 	}
 	for _, task := range commit.UpdateTasks {
-		s.tasks[task.ID] = task
+		s.tasks[task.TaskID] = task
 	}
 	for _, event := range commit.Events {
 		s.events[event.ProcessID] = append(s.events[event.ProcessID], event)
@@ -172,14 +172,14 @@ type workflowHTTPWorkerStore struct {
 
 func (s *workflowHTTPWorkerStore) InsertExecution(_ context.Context, _ string, execution workflowmodel.WorkflowExecution) error {
 	if s.err == nil {
-		s.executions[execution.ID] = execution
+		s.executions[execution.ExecutionID] = execution
 	}
 	return s.err
 }
 func (s *workflowHTTPWorkerStore) TryBeginExecution(_ context.Context, request workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error) {
 	s.claimRequests = append(s.claimRequests, request)
 	receipt := request.Receipt
-	receipt.ID = "workflow-http-receipt"
+	receipt.OperationID = "workflow-http-receipt"
 	receipt.RequestFingerprint = request.RequestFingerprint
 	receipt.LeaseOwner = request.LeaseOwner
 	receipt.FencingToken = 1
@@ -194,6 +194,17 @@ func (s *workflowHTTPWorkerStore) GetExecution(_ context.Context, _, id string) 
 	}
 	execution, found := s.executions[id]
 	return execution, found, nil
+}
+func (s *workflowHTTPWorkerStore) GetExecutionByProcessID(_ context.Context, _, processID string) (workflowmodel.WorkflowExecution, bool, error) {
+	if s.err != nil {
+		return workflowmodel.WorkflowExecution{}, false, s.err
+	}
+	for _, execution := range s.executions {
+		if execution.ProcessID == processID {
+			return execution, true, nil
+		}
+	}
+	return workflowmodel.WorkflowExecution{}, false, nil
 }
 func (s *workflowHTTPWorkerStore) ListExecutions(_ context.Context, _ string, limit int) ([]workflowmodel.WorkflowExecution, error) {
 	if s.err != nil {
@@ -210,13 +221,13 @@ func (s *workflowHTTPWorkerStore) ListExecutions(_ context.Context, _ string, li
 }
 func (s *workflowHTTPWorkerStore) UpdateExecution(_ context.Context, _ string, execution workflowmodel.WorkflowExecution) error {
 	if s.err == nil {
-		s.executions[execution.ID] = execution
+		s.executions[execution.ExecutionID] = execution
 	}
 	return s.err
 }
 func (s *workflowHTTPWorkerStore) UpdateExecutionWhere(_ context.Context, _ string, execution workflowmodel.WorkflowExecution, _ map[string]any) (bool, error) {
 	if s.err == nil {
-		s.executions[execution.ID] = execution
+		s.executions[execution.ExecutionID] = execution
 	}
 	return s.err == nil, s.err
 }
@@ -284,19 +295,19 @@ func seedWorkflowHTTPProcess(processes *workflowHTTPProcessStore, status string)
 		{ID: "start", Type: "trigger"},
 		{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "all"}}},
 	}, Edges: []definitionmodel.WorkflowGraphEdge{{ID: "start-approval", Source: "start", Target: "approval"}}}
-	processes.processes["process-1"] = workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1", ID: "process-1", WorkflowKey: "order.approve", WorkflowName: "Order approve", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "order.approve", Name: "Order approve", Graph: graph}, InitiatorID: "admin-1", Status: status, UpdatedAt: "2026-09-14T00:00:00Z", CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}}
-	processes.nodes["process-1"] = []workflowmodel.WorkflowNodeInstance{{WorkspaceID: "workspace-1", ID: "node-1", ProcessID: "process-1", NodeID: "approval", NodeType: "approval", Status: "waiting"}}
-	processes.tasks["task-1"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", ID: "task-1", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "admin-1", Status: "open"}
-	processes.tasks["task-2"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", ID: "task-2", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "reviewer-2", Status: "open"}
+	processes.processes["process-1"] = workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1", ProcessID: "process-1", WorkflowKey: "order.approve", WorkflowName: "Order approve", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "order.approve", Name: "Order approve", Graph: graph}, InitiatorID: "admin-1", Status: status, UpdatedAt: "2026-09-14T00:00:00Z", CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}}
+	processes.nodes["process-1"] = []workflowmodel.WorkflowNodeInstance{{WorkspaceID: "workspace-1", NodeInstanceID: "node-1", ProcessID: "process-1", NodeID: "approval", NodeType: "approval", Status: "waiting"}}
+	processes.tasks["task-1"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", TaskID: "task-1", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "admin-1", Status: "open"}
+	processes.tasks["task-2"] = workflowmodel.WorkflowTask{WorkspaceID: "workspace-1", TaskID: "task-2", ProcessID: "process-1", NodeID: "approval", AssigneeUserID: "reviewer-2", Status: "open"}
 }
 
 func (s *workflowHTTPProcessStore) CommitWorkflowWithdrawal(_ context.Context, commit transactionmodel.WorkflowWithdrawalCommit) error {
 	if s.err != nil {
 		return s.err
 	}
-	s.processes[commit.Process.ID] = commit.Process
+	s.processes[commit.Process.ProcessID] = commit.Process
 	for id, task := range s.tasks {
-		if task.ProcessID == commit.Process.ID && (task.Status == "open" || task.Status == "pending") {
+		if task.ProcessID == commit.Process.ProcessID && (task.Status == "open" || task.Status == "pending") {
 			task.Status = "cancelled"
 			s.tasks[id] = task
 		}

@@ -34,8 +34,8 @@ func TestRecordSystemDisplayNamesAreBatchResolvedWithoutReplacingIDs(t *testing.
 	}}
 	service := &RecordApplicationService{RecordDomainService: recordservice.NewRecordDomainService(recordservice.RecordDomainServiceDependencies{IdentityProjection: projection})}
 	records := []recordmodel.Record{
-		{ID: "one", CreateBy: "creator-1", UpdateBy: "updater-1", OwnerUserID: "owner-1", OwnerOrgID: "org-1"},
-		{ID: "two", CreateBy: "creator-1", OwnerUserID: "owner-1"},
+		{RecordID: "one", CreateBy: "creator-1", UpdateBy: "updater-1", OwnerUserID: "owner-1", OwnerOrgID: "org-1"},
+		{RecordID: "two", CreateBy: "creator-1", OwnerUserID: "owner-1"},
 	}
 
 	service.resolveRecordSystemDisplayNames(t.Context(), records)
@@ -54,7 +54,7 @@ func TestRecordSystemDisplayNamesAreBatchResolvedWithoutReplacingIDs(t *testing.
 func TestRecordSystemDisplayNameFailureLeavesReadableIDs(t *testing.T) {
 	projection := &recordSystemDisplayProjection{err: errors.New("identity unavailable")}
 	service := &RecordApplicationService{RecordDomainService: recordservice.NewRecordDomainService(recordservice.RecordDomainServiceDependencies{IdentityProjection: projection})}
-	records := []recordmodel.Record{{ID: "one", OwnerUserID: "owner-1"}}
+	records := []recordmodel.Record{{RecordID: "one", OwnerUserID: "owner-1"}}
 
 	service.resolveRecordSystemDisplayNames(t.Context(), records)
 

@@ -2,14 +2,13 @@ package recordtimer
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -42,7 +41,7 @@ func (s *RecordTimerApplicationService) Schedule(ctx context.Context, workspaceI
 		return recordmodel.Record{}, err
 	}
 	if err := s.repository.CommitRecordMutationBatch(ctx, workspaceID, []transactionmodel.RecordMutationCommit{commit}); err != nil {
-		if existing, found, getErr := s.repository.GetRecord(ctx, workspaceID, commit.Object, commit.Record.ID); getErr == nil && found {
+		if existing, found, getErr := s.repository.GetRecord(ctx, workspaceID, commit.Object, commit.Record.RecordID); getErr == nil && found {
 			return existing, nil
 		}
 		return recordmodel.Record{}, err
@@ -68,7 +67,11 @@ func (s *RecordTimerApplicationService) BuildRecordTimerMutation(ctx context.Con
 		now = s.worker.Clock.Now()
 	}
 	stamp := now.UTC().Format(time.RFC3339Nano)
-	record := recordmodel.Record{ID: recordTimerID(workspaceID, request), CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{
+	timerID, err := recordTimerID(workspaceID, request)
+	if err != nil {
+		return transactionmodel.RecordMutationCommit{}, recordTimerInternalError("derive record timer identity", err)
+	}
+	record := recordmodel.Record{RecordID: timerID, CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{
 		"timer_key": request.TimerKey, "object_key": request.ObjectKey, "record_id": request.RecordID, "purpose": request.Purpose,
 		"status": "scheduled", "schedule_mode": request.ScheduleMode, "due_at": request.DueAt.UTC().Format(time.RFC3339Nano),
 		"source_field": request.SourceField, "offset_seconds": request.OffsetSeconds, "timezone": request.Timezone,
@@ -114,7 +117,7 @@ func (s *RecordTimerApplicationService) BuildRecordTimerSupersedeMutations(ctx c
 	if err != nil {
 		return nil, err
 	}
-	replacement.SupersedesTimerID = current.ID
+	replacement.SupersedesTimerID = current.RecordID
 	created, err := s.BuildRecordTimerMutation(ctx, workspaceID, replacement, now)
 	if err != nil {
 		return nil, err
@@ -136,7 +139,7 @@ func (s *RecordTimerApplicationService) CancelRecordTimers(ctx context.Context, 
 	}
 	cancelled := 0
 	for {
-		page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 500, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters, Sort: []recordmodel.RecordSortRule{{Field: "due_at", Direction: "asc"}, {Field: "id", Direction: "asc"}}})
+		page, listErr := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 500, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: filters, Sort: []recordmodel.RecordSortRule{{Field: "due_at", Direction: "asc"}, {Field: recordmodel.IDField, Direction: "asc"}}})
 		if listErr != nil {
 			return cancelled, recordTimerInternalError("list record timers to cancel", listErr)
 		}
@@ -162,16 +165,19 @@ func (s *RecordTimerApplicationService) recordTimerEventObject(ctx context.Conte
 	return s.objectForPrincipal(ctx, recordTimerWorkerPrincipal(), "record_timer_event")
 }
 
-func buildRecordTimerEventCommit(object definitionmodel.ObjectSchema, timer recordmodel.Record, eventType, workerID, errorCode, message, nextDueAt string, now time.Time) transactionmodel.RecordMutationCommit {
+func buildRecordTimerEventCommit(object definitionmodel.ObjectSchema, timer recordmodel.Record, eventType, workerID, errorCode, message, nextDueAt string, now time.Time) (transactionmodel.RecordMutationCommit, error) {
 	attempt := recordTimerInt(timer.Data["attempt"], 0)
 	token := recordTimerInt(timer.Data["fencing_token"], 0)
 	stamp := now.UTC().Format(time.RFC3339Nano)
-	hash := sha256.Sum256([]byte(strings.Join([]string{timer.ID, eventType, stamp, workerID, strconv.Itoa(attempt), strconv.Itoa(token)}, "\x00")))
-	event := recordmodel.Record{ID: "record_timer_event_" + hex.EncodeToString(hash[:12]), CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{
-		"record_timer_id": timer.ID, "event_type": eventType, "attempt": attempt, "fencing_token": token,
+	eventID, err := entityid.Derive("tmrevent", "runtime.record-timer-event", timer.RecordID, eventType, stamp, workerID, strconv.Itoa(attempt), strconv.Itoa(token))
+	if err != nil {
+		return transactionmodel.RecordMutationCommit{}, recordTimerInternalError("derive record timer event identity", err)
+	}
+	event := recordmodel.Record{RecordID: eventID, CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{
+		"record_timer_id": timer.RecordID, "event_type": eventType, "attempt": attempt, "fencing_token": token,
 		"worker_id": strings.TrimSpace(workerID), "error_code": strings.TrimSpace(errorCode), "message": strings.TrimSpace(message), "next_due_at": strings.TrimSpace(nextDueAt),
 	}}
-	return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: event}
+	return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: event}, nil
 }
 
 func cloneRecordTimer(record recordmodel.Record) recordmodel.Record {
@@ -183,7 +189,6 @@ func cloneRecordTimer(record recordmodel.Record) recordmodel.Record {
 	return record
 }
 
-func recordTimerID(workspaceID string, request RecordTimerSchedule) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{strings.TrimSpace(workspaceID), request.TimerKey, request.ObjectKey, request.RecordID, request.Purpose}, ":")))
-	return "record_timer:" + hex.EncodeToString(sum[:])[:24]
+func recordTimerID(workspaceID string, request RecordTimerSchedule) (string, error) {
+	return entityid.Derive("timer", "runtime.record-timer", workspaceID, request.TimerKey, request.ObjectKey, request.RecordID, request.Purpose)
 }

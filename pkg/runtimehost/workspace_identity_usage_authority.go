@@ -121,10 +121,18 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ListAuthorizedWorkspace
 	after := strings.TrimSpace(request.AfterWorkspaceID)
 	predicate := query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))
 	if after != "" {
-		predicate = query.And(predicate, query.GreaterThanExpressions(query.QualifiedColumn("workspace", "id"), query.Value(after)))
+		anchorStatement, anchorArguments, anchorErr := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("workspace_id", after)).Limit(1).Build()
+		if anchorErr != nil {
+			return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", anchorErr)
+		}
+		var afterID int64
+		if anchorErr = executor.QueryRowContext(ctx, anchorStatement, anchorArguments...).Scan(&afterID); anchorErr != nil {
+			return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassBadRequest, "identity.workspace_usage_catalog_request_invalid", anchorErr)
+		}
+		predicate = query.And(predicate, query.GreaterThanExpressions(query.QualifiedColumn("workspace", "id"), query.Value(afterID)))
 	}
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
-		Columns("id", "status").Where(predicate).OrderBy(query.Ascending("id")).Limit(request.Limit).Build()
+		Columns("workspace_id", "status").Where(predicate).OrderBy(query.Ascending("id")).Limit(request.Limit).Build()
 	if err != nil {
 		return identitymodulehost.WorkspaceIdentityUsageCatalogPage{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
 	}
@@ -161,7 +169,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) ResolveAuthorizedWorksp
 	if executor == nil {
 		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_transaction_required", nil)
 	}
-	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "status").
+	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Columns("workspace_id", "status").
 		Where(query.And(query.Equal("canonical_code", workspaceCode), query.Equal("status", "active"))).Limit(1).Build()
 	if err != nil {
 		return identitymodulehost.WorkspaceIdentityUsageCatalogEntry{}, workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_catalog_unavailable", err)
@@ -195,7 +203,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) validateGrant(ctx conte
 		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassForbidden, "identity.workspace_usage_grant_invalid", nil)
 	}
 	statement, arguments, err := query.NewWorkspaceSelectBuilder(authority.runtime.RuntimeRenderer(), "_audit_events", installation.WorkspaceID).
-		Columns("event", "actor_id", "role_key", "metadata_json").Where(query.Equal("id", strings.TrimSpace(grant.AuthorizationAuditID))).Limit(1).Build()
+		Columns("event", "actor_id", "role_key", "metadata_json").Where(query.Equal("audit_event_id", strings.TrimSpace(grant.AuthorizationAuditID))).Limit(1).Build()
 	if err != nil {
 		return workspaceIdentityUsageAuthorityError(identitysdk.ErrorClassInternal, "identity.workspace_usage_authority_audit_unavailable", err)
 	}
@@ -215,7 +223,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) validateGrant(ctx conte
 func (authority *runtimeWorkspaceIdentityUsageAuthority) catalogRevision(ctx context.Context, executor database.ActionExecutionExecutor, installationID string) (string, error) {
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(
-			query.Project(query.QualifiedColumn("workspace", "id")), query.Project(query.QualifiedColumn("workspace", "revision")),
+			query.Project(query.QualifiedColumn("workspace", "workspace_id")), query.Project(query.QualifiedColumn("workspace", "revision")),
 			query.Project(query.QualifiedColumn("workspace", "commercial_revision")),
 		).
 		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))).OrderBy(query.AscendingExpression(query.QualifiedColumn("workspace", "id"))).Build()
@@ -264,7 +272,7 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) appendAuthorizationAudi
 	if err := runtimeauditmodule.NewAuditStoreFromRuntimeStore(authority.runtime).InsertAuditEvent(auditCtx, installation.WorkspaceID, event); err != nil {
 		return "", err
 	}
-	return event.ID, nil
+	return event.AuditEventID, nil
 }
 
 func workspaceIdentityUsageAuthorizationRevisionDigest(revision string) string {

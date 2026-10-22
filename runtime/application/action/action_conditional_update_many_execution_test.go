@@ -21,8 +21,8 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 	listCalls, planCalls := 0, 0
 	object := definitionmodel.ObjectSchema{Key: "shift", Fields: []definitionmodel.FieldSchema{{Key: "staff_id", Type: "text"}, {Key: "status", Type: "text"}, {Key: "clock_out", Type: "datetime"}}}
 	records := []recordmodel.Record{
-		{ID: "shift-1", OwnerOrgID: "store-a", UpdatedAt: "v1", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
-		{ID: "shift-2", OwnerOrgID: "store-a", UpdatedAt: "v1", Data: map[string]any{"staff_id": "staff-2", "status": "working"}},
+		{RecordID: "shift-1", OwnerOrgID: "store-a", UpdatedAt: "v1", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
+		{RecordID: "shift-2", OwnerOrgID: "store-a", UpdatedAt: "v1", Data: map[string]any{"staff_id": "staff-2", "status": "working"}},
 	}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
@@ -96,8 +96,8 @@ func TestConditionalUpdateManyRejectsMissingAndDuplicateExactCoverageBeforePlann
 			ListRecords: func(context.Context, string, recordmodel.RecordListQuery, principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 				listCalls++
 				return recordmodel.RecordPageResult{Items: []recordmodel.Record{
-					{ID: "shift-1", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
-					{ID: "shift-2", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
+					{RecordID: "shift-1", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
+					{RecordID: "shift-2", Data: map[string]any{"staff_id": "staff-1", "status": "working"}},
 				}}, nil
 			},
 			PlanConditionalUpdateLockedRecord: func(context.Context, string, recordmodel.Record, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {

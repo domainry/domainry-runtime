@@ -18,7 +18,7 @@ import (
 const recordMutationFailureCompletionTimeout = 5 * time.Second
 
 func finalizeRecordMutationFailure(ctx context.Context, execution *recordruntime.RecordMutationExecutionRuntime, claim recordmodel.RecordMutationClaimResult, failure error) error {
-	if failure == nil || execution == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+	if failure == nil || execution == nil || strings.TrimSpace(claim.Execution.OperationID) == "" {
 		return failure
 	}
 	completionContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordMutationFailureCompletionTimeout)

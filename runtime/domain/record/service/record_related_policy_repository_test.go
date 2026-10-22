@@ -38,7 +38,7 @@ func (r *relatedPolicyRepositoryProbe) GetRecord(context.Context, string, defini
 
 func TestRelatedPolicyValidatorBlocksMatchingRelatedRecords(t *testing.T) {
 	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {
-		Items: []recordmodel.Record{{ID: "task-1", Data: map[string]any{"order_id": "order-1", "status": "active"}}},
+		Items: []recordmodel.Record{{RecordID: "task-1", Data: map[string]any{"order_id": "order-1", "status": "active"}}},
 	}}}
 	validator := NewRecordRelatedPolicyValidator(RecordRelatedPolicyDependencies{
 		Repository: repository,
@@ -69,7 +69,7 @@ func TestRelatedPolicyValidatorValidatesDynamicReferences(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "activity", Validations: []definitionmodel.ValidationSchema{{
 		Key: "target_exists", Type: "dynamic_reference_exists",
 	}}}
-	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{ID: "customer-1"}, found: true}
+	repository := &relatedPolicyRepositoryProbe{record: recordmodel.Record{RecordID: "customer-1"}, found: true}
 	allow := true
 	validator := NewRecordRelatedPolicyValidator(RecordRelatedPolicyDependencies{
 		Repository: repository,
@@ -100,11 +100,11 @@ func TestRelatedPolicyValidatorValidatesDynamicReferences(t *testing.T) {
 func TestRelatedPolicyValidatorFindsTimeOverlapAcrossPages(t *testing.T) {
 	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{
 		1: {HasNext: true, Items: []recordmodel.Record{
-			{ID: "booking-1", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "visible": true}},
-			{ID: "hidden", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "visible": false}},
-			{ID: "cancelled", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "status": "cancelled", "visible": true}},
+			{RecordID: "booking-1", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "visible": true}},
+			{RecordID: "hidden", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "visible": false}},
+			{RecordID: "cancelled", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T10:30:00Z", "ends_at": "2026-07-17T11:30:00Z", "status": "cancelled", "visible": true}},
 		}},
-		2: {Items: []recordmodel.Record{{ID: "booking-2", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T11:00:00Z", "ends_at": "2026-07-17T13:00:00Z", "visible": true}}}},
+		2: {Items: []recordmodel.Record{{RecordID: "booking-2", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-17T11:00:00Z", "ends_at": "2026-07-17T13:00:00Z", "visible": true}}}},
 	}}
 	validator := NewRecordRelatedPolicyValidator(RecordRelatedPolicyDependencies{
 		Repository: repository,

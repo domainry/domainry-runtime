@@ -48,14 +48,14 @@ func workflowProjectResolverEngine(t *testing.T, resolver workflowProjectAssigne
 	}
 	registry.Freeze()
 	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{
-		"approver": {ID: "approver", Status: identitysdk.UserStatusActive},
-	}, roles: []identitysdk.Role{{ID: "finance-role", Key: "finance"}}, assignments: map[string][]identitysdk.UserRoleAssignment{
+		"approver": {UserID: "approver", Status: identitysdk.UserStatusActive},
+	}, roles: []identitysdk.Role{{RoleID: "finance-role", Key: "finance"}}, assignments: map[string][]identitysdk.UserRoleAssignment{
 		"approver": {{UserID: "approver", RoleID: "finance-role"}},
 	}}
 	return NewWorkflowProcessEngine(WorkflowDependencies{
 		Identity: identity, ProjectExtensions: registry,
 		RecordReader: workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{
-			"record": {ID: "record", Data: map[string]any{"amount": "1200", "secret": "must-not-project"}},
+			"record": {RecordID: "record", Data: map[string]any{"amount": "1200", "secret": "must-not-project"}},
 		}},
 		ObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{"order": {Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "amount", Type: "number"}, {Key: "region", Type: "text"}, {Key: "secret", Type: "text"}}}}
@@ -72,7 +72,7 @@ func TestProjectAssigneeResolverRejectsUnassignedCandidateRole(t *testing.T) {
 	identity := engine.runtime.dependencies.Identity.(workflowApprovalIdentityStub)
 	identity.assignments = nil
 	engine.runtime.dependencies.Identity = identity
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", ID: "process", WorkflowKey: "expense", DefinitionVersion: 3, ObjectKey: "order", RecordID: "record"}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", ProcessID: "process", WorkflowKey: "expense", DefinitionVersion: 3, ObjectKey: "order", RecordID: "record"}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "requester"}}
 	if _, err := engine.resolveProjectAssignees(t.Context(), process, "approval", definitionmodel.WorkflowAssigneeResolver{Type: "project", ResolverKey: descriptor.ResolverKey, Config: map[string]any{"threshold": float64(1000)}}, 0, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("unassigned role error=%v", err)
@@ -98,7 +98,7 @@ func TestProjectAssigneeResolverUsesOnlyDeclaredCapabilitiesAndPersistsEvidence(
 		return []runtimeext.AssigneeResolverCandidate{{UserID: "approver", RoleKey: "finance", Evidence: []runtimeext.AssigneeEvidenceFact{{Key: "amount_band", Value: "high"}}}}, nil
 	}}
 	engine := workflowProjectResolverEngine(t, resolver)
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", ID: "process", WorkflowKey: "expense", DefinitionVersion: 3, ObjectKey: "order", RecordID: "record"}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", ProcessID: "process", WorkflowKey: "expense", DefinitionVersion: 3, ObjectKey: "order", RecordID: "record"}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "requester"}}
 	resolved, err := engine.resolveProjectAssignees(t.Context(), process, "approval", definitionmodel.WorkflowAssigneeResolver{Type: "project", ResolverKey: "finance.approver", Config: map[string]any{"threshold": 1000}}, 0, principal)
 	if err != nil || len(resolved) != 1 || resolved[0].UserID != "approver" || resolved[0].RoleKey != "finance" || resolved[0].ResolverKey != "finance.approver" {
@@ -171,7 +171,7 @@ func TestProjectAssigneeResolverReferenceValidationRejectsMissingRegistrationAnd
 	objects := func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": {Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "amount"}, {Key: "region"}}}}
 	}
-	identity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "finance", Key: "finance"}}}
+	identity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{RoleID: "finance", Key: "finance"}}}
 	validator := NewWorkflowReferenceValidator(workflowSchemaProviderEdgeStub{}, objects, identity, registry)
 	workflow := definitionmodel.WorkflowSchema{TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "record_updated", ObjectKey: "order"}}
 	users, roles := validator.workflowIdentityReferenceCatalog(t.Context())

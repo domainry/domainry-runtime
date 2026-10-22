@@ -22,7 +22,7 @@ func TestRecordContainsBindsLiteralAndKeepsAuthorizationConjunctive(t *testing.T
 		strings.Contains(where, "50%") || !reflect.DeepEqual(args, []any{"workspace-a", "store-a", "% 50~%~_off~~猫 ' %", "%[abc]%"}) {
 		t.Fatalf("where=%s args=%#v error=%v", where, args, err)
 	}
-	if _, err := recordFilterPredicate(recordmodel.RecordFilterExpression{Field: "name", Operator: "contains", Value: 1}, 0); err == nil {
+	if _, err := recordFilterPredicate("", recordmodel.RecordFilterExpression{Field: "name", Operator: "contains", Value: 1}, 0); err == nil {
 		t.Fatal("unvalidated non-text literal reached SQL")
 	}
 }

@@ -50,19 +50,19 @@ func TestFileCapabilityValidatesRecordReferenceAgainstUploadSubjectAndCleanEvide
 	registry := NewUploadSubjectRegistry(uploadSubjectMemory{})
 	service.BindUploadSubjects(registry)
 	artifact := lifecyclecontract.UploadArtifact{
-		ID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "attachment", Filename: "stored.pdf",
+		ArtifactID: "file-1", WorkspaceID: owner.WorkspaceID, ObjectKey: "asset", FieldKey: "attachment", Filename: "stored.pdf",
 		ContentType: "application/pdf", SHA256: strings.Repeat("a", 64), Size: 7, CreatedAt: time.Now().UTC(),
 	}
 	if err := registry.Register(t.Context(), artifact, owner); err != nil {
 		t.Fatal(err)
 	}
 	evidence := lifecyclecontract.FileScanEvidence{
-		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
+		ArtifactID: artifact.ArtifactID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
 		Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256, Size: artifact.Size,
 		Status: lifecyclecontract.FileScanClean, Provider: "test", EvidenceRef: "scan-1", ScannedAt: time.Now().UTC(),
 	}
-	store.evidence[owner.WorkspaceID+"\x00"+artifact.ID] = evidence
-	clean, err := verifier.Status(t.Context(), owner.WorkspaceID, artifact.ID)
+	store.evidence[owner.WorkspaceID+"\x00"+artifact.ArtifactID] = evidence
+	clean, err := verifier.Status(t.Context(), owner.WorkspaceID, artifact.ArtifactID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestFileCapabilityValidatesRecordReferenceAgainstUploadSubjectAndCleanEvide
 		Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"allowed_mime_types": []any{"application/pdf"}},
 	}}}
 	values := map[string]any{"attachment": map[string]any{
-		"file_id": artifact.ID, "filename": artifact.Filename, "content_type": artifact.ContentType, "size": artifact.Size,
+		"file_id": artifact.ArtifactID, "filename": artifact.Filename, "content_type": artifact.ContentType, "size": artifact.Size,
 		"content_sha256": artifact.SHA256, "scan_receipt": clean.Receipt,
 	}}
 	if err := service.ValidateRecordReferences(t.Context(), object, values, owner); err != nil {
@@ -85,8 +85,8 @@ func TestFileCapabilityValidatesRecordReferenceAgainstUploadSubjectAndCleanEvide
 	if err := service.ValidateRecordReferences(t.Context(), forged, values, owner); apperror.CodeOf(err) != "backend.upload.file_identity_mismatch" {
 		t.Fatalf("forged object binding error=%v", err)
 	}
-	store.evidence[owner.WorkspaceID+"\x00"+artifact.ID] = lifecyclecontract.FileScanEvidence{
-		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
+	store.evidence[owner.WorkspaceID+"\x00"+artifact.ArtifactID] = lifecyclecontract.FileScanEvidence{
+		ArtifactID: artifact.ArtifactID, WorkspaceID: artifact.WorkspaceID, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey,
 		Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256, Size: artifact.Size, Status: lifecyclecontract.FileScanPending,
 	}
 	if err := service.ValidateRecordReferences(t.Context(), object, values, owner); apperror.CodeOf(err) != "backend.upload.scan_not_clean" {
@@ -115,8 +115,8 @@ func (s *fileCapabilityStoreStub) RegisterUpload(_ context.Context, artifact lif
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.registerCalls++
-	s.evidence[artifact.WorkspaceID+"\x00"+artifact.ID] = lifecyclecontract.FileScanEvidence{
-		FileID: artifact.ID, WorkspaceID: artifact.WorkspaceID, Filename: artifact.Filename, ContentType: artifact.ContentType,
+	s.evidence[artifact.WorkspaceID+"\x00"+artifact.ArtifactID] = lifecyclecontract.FileScanEvidence{
+		ArtifactID: artifact.ArtifactID, WorkspaceID: artifact.WorkspaceID, Filename: artifact.Filename, ContentType: artifact.ContentType,
 		ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: artifact.SHA256, Size: artifact.Size, Status: lifecyclecontract.FileScanPending,
 	}
 	return nil
@@ -139,7 +139,7 @@ func (s *fileCapabilityStoreStub) FindFileScan(_ context.Context, workspaceID, f
 func (s *fileCapabilityStoreStub) RecordFileScan(_ context.Context, evidence lifecyclecontract.FileScanEvidence) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.evidence[evidence.WorkspaceID+"\x00"+evidence.FileID] = evidence
+	s.evidence[evidence.WorkspaceID+"\x00"+evidence.ArtifactID] = evidence
 	return nil
 }
 

@@ -21,14 +21,14 @@ type windowedWorkflowRuntime struct {
 
 func (w *windowedWorkflowRuntime) ExecuteWorkflowTarget(_ context.Context, request WorkflowTargetRequest) (workflowmodel.WorkflowProcessResult, error) {
 	w.target, w.idempotencyKey, w.dueAt, w.limit = request.Operation, request.IdempotencyKey, request.EffectiveAt, request.Limit
-	return workflowmodel.WorkflowProcessResult{Executions: []workflowmodel.WorkflowExecution{{ID: "workflow-execution-1"}}}, nil
+	return workflowmodel.WorkflowProcessResult{Executions: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-execution-1"}}}, nil
 }
 
 type reportSnapshotRuntime struct{ calls int }
 
 func (r *reportSnapshotRuntime) RefreshSnapshot(context.Context, string, string, principalmodel.Principal) (reportmodel.ReportSnapshot, error) {
 	r.calls++
-	return reportmodel.ReportSnapshot{ID: "snapshot-1", Status: "succeeded"}, nil
+	return reportmodel.ReportSnapshot{SnapshotID: "snapshot-1", Status: "succeeded"}, nil
 }
 
 type agentTargetRuntime struct {

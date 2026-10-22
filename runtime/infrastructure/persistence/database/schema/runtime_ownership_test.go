@@ -47,6 +47,9 @@ func TestRuntimeSchemaOwnershipMatchesEveryFreshTableAndPrimaryKey(t *testing.T)
 		t.Fatalf("fresh SQLite Runtime tables=%v ownership=%+v", created, tables)
 	}
 	for _, table := range tables {
+		if !slices.Equal(table.PrimaryKey, []string{"id"}) {
+			t.Fatalf("Runtime table %s physical primary key=%v want [id]", table.Name, table.PrimaryKey)
+		}
 		if table.Name == ManagedDatabaseCohortTable {
 			continue // Managed server databases persist this installation identity; SQLite derives it from its canonical path.
 		}
@@ -56,6 +59,9 @@ func TestRuntimeSchemaOwnershipMatchesEveryFreshTableAndPrimaryKey(t *testing.T)
 		}
 		if !ddlDeclaresPrimaryKey(statement, table.PrimaryKey) {
 			t.Fatalf("Runtime table %s ownership primary key %v does not match DDL: %s", table.Name, table.PrimaryKey, statement)
+		}
+		if !strings.Contains(statement, `"id" INTEGER PRIMARY KEY AUTOINCREMENT`) {
+			t.Fatalf("Runtime table %s has no SQLite BIGINT physical auto-increment ID: %s", table.Name, statement)
 		}
 	}
 	if !slices.Equal(RuntimeOwnedTables(), schemaownership.Names(tables)) {

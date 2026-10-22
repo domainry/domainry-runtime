@@ -32,7 +32,7 @@ func (r *pipelineEdgeRepository) GetRecord(_ context.Context, _ string, object d
 		records = r.stages
 	}
 	for _, record := range records {
-		if record.ID == recordID {
+		if record.RecordID == recordID {
 			return record, true, nil
 		}
 	}
@@ -53,11 +53,11 @@ func (r *pipelineEdgeRepository) ListRecords(_ context.Context, _ string, object
 }
 
 func TestPipelineGetStageAndDefaultValidationEdges(t *testing.T) {
-	repository := &pipelineEdgeRepository{stages: []recordmodel.Record{{ID: "stage-1", Data: map[string]any{"pipeline": "pipeline-1"}}, {ID: "denied", Data: map[string]any{"pipeline": "pipeline-1"}}}}
+	repository := &pipelineEdgeRepository{stages: []recordmodel.Record{{RecordID: "stage-1", Data: map[string]any{"pipeline": "pipeline-1"}}, {RecordID: "denied", Data: map[string]any{"pipeline": "pipeline-1"}}}}
 	service := pipelineEdgeService(repository)
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}
 	stage, err := service.GetStage(t.Context(), principal.WorkspaceID, " stage-1 ")
-	if err != nil || stage.ID != "stage-1" {
+	if err != nil || stage.RecordID != "stage-1" {
 		t.Fatalf("stage=%+v err=%v", stage, err)
 	}
 	if err := service.ValidateDefaults(t.Context(), definitionmodel.ObjectSchema{Key: "other"}, "", nil, principal); err != nil {
@@ -102,22 +102,22 @@ func TestPipelineGetStageAndDefaultValidationEdges(t *testing.T) {
 func TestPipelineApplyItemDefaultsCoversStageAndPipelinePaths(t *testing.T) {
 	repository := &pipelineEdgeRepository{
 		pipelines: []recordmodel.Record{
-			{ID: "pipeline-default", Data: map[string]any{"default_stage": "stage-default"}},
-			{ID: "pipeline-first", Data: map[string]any{}},
-			{ID: "pipeline-blank-default", Data: map[string]any{"default_stage": ""}},
-			{ID: "pipeline-empty", Data: map[string]any{}},
-			{ID: "denied-pipeline", Data: map[string]any{"default_stage": "stage-default"}},
-			{ID: "pipeline-denied-stage", Data: map[string]any{"default_stage": "denied"}},
-			{ID: "pipeline-mismatch", Data: map[string]any{"default_stage": "stage-default"}},
+			{RecordID: "pipeline-default", Data: map[string]any{"default_stage": "stage-default"}},
+			{RecordID: "pipeline-first", Data: map[string]any{}},
+			{RecordID: "pipeline-blank-default", Data: map[string]any{"default_stage": ""}},
+			{RecordID: "pipeline-empty", Data: map[string]any{}},
+			{RecordID: "denied-pipeline", Data: map[string]any{"default_stage": "stage-default"}},
+			{RecordID: "pipeline-denied-stage", Data: map[string]any{"default_stage": "denied"}},
+			{RecordID: "pipeline-mismatch", Data: map[string]any{"default_stage": "stage-default"}},
 		},
 		stages: []recordmodel.Record{
-			{ID: "stage-default", Data: map[string]any{"pipeline": "pipeline-default", "sort_order": 10, "sla_hours": 2}},
-			{ID: "stage-first", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 1, "sla_hours": 1}},
-			{ID: "stage-blank-default", Data: map[string]any{"pipeline": "pipeline-blank-default", "sort_order": 1}},
-			{ID: "stage-later", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 2}},
-			{ID: "stage-last", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 3}},
-			{ID: "stage-invalid", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": "invalid"}},
-			{ID: "denied", Data: map[string]any{"pipeline": "pipeline-denied-stage"}},
+			{RecordID: "stage-default", Data: map[string]any{"pipeline": "pipeline-default", "sort_order": 10, "sla_hours": 2}},
+			{RecordID: "stage-first", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 1, "sla_hours": 1}},
+			{RecordID: "stage-blank-default", Data: map[string]any{"pipeline": "pipeline-blank-default", "sort_order": 1}},
+			{RecordID: "stage-later", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 2}},
+			{RecordID: "stage-last", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": 3}},
+			{RecordID: "stage-invalid", Data: map[string]any{"pipeline": "pipeline-first", "sort_order": "invalid"}},
+			{RecordID: "denied", Data: map[string]any{"pipeline": "pipeline-denied-stage"}},
 		},
 	}
 	service := pipelineEdgeService(repository)
@@ -182,8 +182,8 @@ func TestPipelineApplyItemDefaultsCoversStageAndPipelinePaths(t *testing.T) {
 	if err := service.ApplyItemDefaults(t.Context(), item, map[string]any{"pipeline": "pipeline-mismatch"}, principal, false); errorCode(err) != "backend.pipeline.stage_pipeline_mismatch" {
 		t.Fatalf("default stage mismatch err=%v", err)
 	}
-	next, err := service.NextStage(t.Context(), "workspace-a", "pipeline-first", recordmodel.Record{ID: "current", Data: map[string]any{"sort_order": 1.5}})
-	if err != nil || next.ID != "stage-later" {
+	next, err := service.NextStage(t.Context(), "workspace-a", "pipeline-first", recordmodel.Record{RecordID: "current", Data: map[string]any{"sort_order": 1.5}})
+	if err != nil || next.RecordID != "stage-later" {
 		t.Fatalf("next=%+v err=%v", next, err)
 	}
 
@@ -278,7 +278,7 @@ func pipelineEdgeService(repository *pipelineEdgeRepository) *PipelineDomainServ
 			return definitionmodel.ObjectSchema{Key: key}, key == "pipeline" || key == "pipeline_stage"
 		},
 		CanAccess: func(_ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record) bool {
-			return record.ID != "denied" && record.ID != "denied-pipeline"
+			return record.RecordID != "denied" && record.RecordID != "denied-pipeline"
 		},
 		Now: func() time.Time { return time.Date(2026, time.July, 19, 12, 0, 0, 0, time.UTC) },
 	})

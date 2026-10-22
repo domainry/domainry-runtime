@@ -16,12 +16,12 @@ func TestRunCommittedWorkflowContinuationClaimLoadRunAndCommitOutcomes(t *testin
 	condition := definitionmodel.WorkflowGraphNode{ID: "condition", Type: "condition", Contract: &definitionmodel.WorkflowNodeContract{Condition: &definitionmodel.WorkflowConditionContract{Type: "always"}}}
 	process := workflowEngineProcess([]definitionmodel.WorkflowGraphNode{condition}, nil)
 	process.WorkspaceID = principal.WorkspaceID
-	execution := workflowmodel.WorkflowExecution{ID: "execution", WorkspaceID: principal.WorkspaceID, ProcessID: process.ID, WorkflowKey: process.WorkflowKey, Status: "pending", UpdatedAt: "old", Result: map[string]any{"resume_node_ids": []string{"condition"}}}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", WorkspaceID: principal.WorkspaceID, ProcessID: process.ProcessID, WorkflowKey: process.WorkflowKey, Status: "pending", UpdatedAt: "old", Result: map[string]any{"resume_node_ids": []string{"condition"}}}
 	makeRuntime := func(worker *workflowRuntimeWorkerEdgeStub, store *workflowProcessStoreEdgeStub) *WorkflowProcessRuntime {
 		return NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store, Workers: worker, Schema: workflowSchemaProviderEdgeStub{}})
 	}
 	baseStore := func() *workflowProcessStoreEdgeStub {
-		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
+		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ProcessID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	}
 	worker := &workflowRuntimeWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"execution": execution}}, whereResults: []bool{true}, continuation: process, continuationFound: true}
 	continued, claimed, err := runCommittedWorkflowContinuation(t.Context(), makeRuntime(worker, baseStore()), execution, principal, process, nil, nil, workflowmodel.WorkflowTask{})
@@ -94,11 +94,11 @@ func TestExecuteWorkflowGraphProcessReplayStartAndPersistenceOutcomes(t *testing
 	if err != nil || execution.Status != "completed" || len(worker.inserted) != 1 {
 		t.Fatalf("execution=%+v inserts=%v err=%v", execution, worker.inserted, err)
 	}
-	replay := workflowmodel.WorkflowExecution{ID: "replay", Status: "completed"}
+	replay := workflowmodel.WorkflowExecution{ExecutionID: "replay", Status: "completed"}
 	workflow.IdempotencyKeys = []string{"idempotency_key"}
-	worker = &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"replay": replay}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "replay"}}}
+	worker = &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"replay": replay}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "replay"}}}
 	replayed, err := makeService(baseStore(), worker).executeWorkflowGraphProcess(t.Context(), workflow, map[string]any{"idempotency_key": "key"}, principal, "manual", 1, false)
-	if err != nil || replayed.ID != "replay" {
+	if err != nil || replayed.ExecutionID != "replay" {
 		t.Fatalf("replayed=%+v err=%v", replayed, err)
 	}
 	worker.claimErr = errors.New("claim")
@@ -128,7 +128,7 @@ func TestExecuteWorkflowGraphProcessReplayStartAndPersistenceOutcomes(t *testing
 	if _, err := makeService(baseStore(), worker).executeWorkflowGraphProcess(t.Context(), workflow, nil, principal, "manual", 1, true); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("success insert=%v", err)
 	}
-	claim := workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "owner", FencingToken: 1}}
+	claim := workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "owner", FencingToken: 1}}
 	worker = &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, claim: claim, completionErr: errors.New("receipt")}
 	if _, err := makeService(baseStore(), worker).executeWorkflowGraphProcess(t.Context(), workflow, map[string]any{"idempotency_key": "key"}, principal, "manual", 1, false); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("success receipt=%v", err)

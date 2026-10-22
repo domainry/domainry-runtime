@@ -28,7 +28,7 @@ func (p *retryExchange) SubmitExport(_ context.Context, request dataexchange.Exp
 		return p.jobs[id], true, nil
 	}
 	id := fmt.Sprintf("job-%d", len(p.jobs)+1)
-	job := dataexchange.Job{ID: id, Provider: request.Provider, Operation: "export", Status: "queued", WorkspaceID: request.Scope.WorkspaceID, ActorID: request.Scope.ActorID, RoleKey: request.Scope.RoleKey, ObjectKey: request.ObjectKey, ReferenceID: request.ReferenceID, Options: append([]byte(nil), request.Options...)}
+	job := dataexchange.Job{JobID: id, Provider: request.Provider, Operation: "export", Status: "queued", WorkspaceID: request.Scope.WorkspaceID, ActorID: request.Scope.ActorID, RoleKey: request.Scope.RoleKey, ObjectKey: request.ObjectKey, ReferenceID: request.ReferenceID, Options: append([]byte(nil), request.Options...)}
 	p.jobs[id], p.keys[request.IdempotencyKey] = job, id
 	return job, false, nil
 }
@@ -50,7 +50,7 @@ func TestReportExportRetryCreatesOneFreshAttemptAndPreservesFailedJob(t *testing
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	records := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved"}}}
+	records := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved"}}}
 	exchange := &retryExchange{jobs: map[string]dataexchange.Job{}, keys: map[string]string{}}
 	providers := recordapplication.NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal { return principal })
 	service := NewReportExportApplicationService(ReportExportApplicationDependencies{Records: records, Audit: &reportAuditAppenderStub{}, DataExchange: exchange, DataExchangeProviders: providers, PrepareReceipts: newReportPrepareReceiptStore(t)})
@@ -64,13 +64,13 @@ func TestReportExportRetryCreatesOneFreshAttemptAndPreservesFailedJob(t *testing
 		t.Fatal(err)
 	}
 	retry := request
-	retry.IdempotencyKey, retry.RetryOfJobID = "retry", first.ID
+	retry.IdempotencyKey, retry.RetryOfJobID = "retry", first.JobID
 	if _, err := service.PrepareResolvedExport(t.Context(), retry, definition, control, principal); err == nil {
 		t.Fatal("queued job accepted as a failed predecessor")
 	}
-	failed := exchange.jobs[first.ID]
+	failed := exchange.jobs[first.JobID]
 	failed.Status, failed.ErrorCode = "failed", "backend.report.export_scope_changed"
-	exchange.jobs[first.ID] = failed
+	exchange.jobs[first.JobID] = failed
 	for _, kind := range []string{"actor", "workspace", "audit", "report", "object"} {
 		t.Run(kind, func(t *testing.T) {
 			other, attempted := principal, retry
@@ -93,17 +93,17 @@ func TestReportExportRetryCreatesOneFreshAttemptAndPreservesFailedJob(t *testing
 	}
 	owner.sourceVersion = "after-original-failure"
 	second, err := service.PrepareResolvedExport(t.Context(), retry, definition, control, principal)
-	if err != nil || second.ID == first.ID || len(exchange.jobs) != 2 {
+	if err != nil || second.JobID == first.JobID || len(exchange.jobs) != 2 {
 		t.Fatalf("new attempt=%+v err=%v jobs=%d", second, err, len(exchange.jobs))
 	}
-	if !reflect.DeepEqual(exchange.jobs[first.ID], failed) {
+	if !reflect.DeepEqual(exchange.jobs[first.JobID], failed) {
 		t.Fatal("old failure evidence was rewritten")
 	}
-	if reflect.DeepEqual(exchange.jobs[second.ID].Options, failed.Options) {
+	if reflect.DeepEqual(exchange.jobs[second.JobID].Options, failed.Options) {
 		t.Fatal("new attempt reused the old frozen payload")
 	}
 	replayed, err := service.PrepareResolvedExport(t.Context(), retry, definition, control, principal)
-	if err != nil || replayed.ID != second.ID || len(exchange.jobs) != 2 {
+	if err != nil || replayed.JobID != second.JobID || len(exchange.jobs) != 2 {
 		t.Fatalf("retry replay=%+v err=%v", replayed, err)
 	}
 	retry.IdempotencyKey = "competing-caller"

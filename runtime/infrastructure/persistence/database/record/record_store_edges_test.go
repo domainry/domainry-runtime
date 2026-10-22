@@ -119,7 +119,7 @@ func TestStructuredFieldDatabaseCodecAndQueryValuesAreCanonical(t *testing.T) {
 }
 
 func recordFixture() recordmodel.Record {
-	return recordmodel.Record{ID: "record", CreatedAt: "created", UpdatedAt: "updated", Data: map[string]any{"name": "Acme", "amount": 2, "active": true}}
+	return recordmodel.Record{RecordID: "record", CreatedAt: "created", UpdatedAt: "updated", Data: map[string]any{"name": "Acme", "amount": 2, "active": true}}
 }
 
 func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
@@ -133,11 +133,11 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 			_, err := realStore.ListRecords(t.Context(), "", object, recordmodel.RecordListQuery{})
 			return err
 		},
-		"get":          func() error { _, _, err := realStore.GetRecord(t.Context(), "", object, value.ID); return err },
+		"get":          func() error { _, _, err := realStore.GetRecord(t.Context(), "", object, value.RecordID); return err },
 		"insert":       func() error { return realStore.InsertRecord(t.Context(), "", object, value) },
 		"update":       func() error { return realStore.UpdateRecord(t.Context(), "", object, value) },
 		"update-where": func() error { _, err := realStore.UpdateRecordWhere(t.Context(), "", object, value, nil); return err },
-		"delete":       func() error { return realStore.DeleteRecord(t.Context(), "", object, value.ID) },
+		"delete":       func() error { return realStore.DeleteRecord(t.Context(), "", object, value.RecordID) },
 		"unique": func() error {
 			_, err := realStore.UniqueExists(t.Context(), "", object.Key, "name", "", "Acme")
 			return err
@@ -164,18 +164,20 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 		t.Fatalf("list terminal error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{err: errRecordSQL}}})
-	if _, _, err := store.GetRecord(t.Context(), "workspace", object, value.ID); !errors.Is(err, errRecordSQL) {
+	if _, _, err := store.GetRecord(t.Context(), "workspace", object, value.RecordID); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("get error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{querySteps: []recordSQLQueryStep{{columns: []string{"id"}, nextErr: errRecordSQL}}})
-	if _, _, err := store.GetRecord(t.Context(), "workspace", object, value.ID); !errors.Is(err, errRecordSQL) {
+	if _, _, err := store.GetRecord(t.Context(), "workspace", object, value.RecordID); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("get terminal error=%v", err)
 	}
 
 	for name, call := range map[string]func(RecordStore) error{
 		"insert": func(store RecordStore) error { return store.InsertRecord(t.Context(), "workspace", object, value) },
 		"update": func(store RecordStore) error { return store.UpdateRecord(t.Context(), "workspace", object, value) },
-		"delete": func(store RecordStore) error { return store.DeleteRecord(t.Context(), "workspace", object, value.ID) },
+		"delete": func(store RecordStore) error {
+			return store.DeleteRecord(t.Context(), "workspace", object, value.RecordID)
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{err: errRecordSQL}}})
@@ -193,11 +195,11 @@ func TestRecordStoreSQLFailureAndProjectionEdges(t *testing.T) {
 		t.Fatalf("conditional exec error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{rowsErr: errRecordSQL}}})
-	if err := store.DeleteRecord(t.Context(), "workspace", object, value.ID); !errors.Is(err, errRecordSQL) {
+	if err := store.DeleteRecord(t.Context(), "workspace", object, value.RecordID); !errors.Is(err, errRecordSQL) {
 		t.Fatalf("delete rows error=%v", err)
 	}
 	store = scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{rows: 0}}})
-	if err := store.DeleteRecord(t.Context(), "workspace", object, value.ID); err == nil {
+	if err := store.DeleteRecord(t.Context(), "workspace", object, value.RecordID); err == nil {
 		t.Fatal("missing delete accepted")
 	}
 	emptyValue := value
@@ -276,7 +278,7 @@ func TestRecordStoreBindsMySQLSystemTimestampsAsUnixMillis(t *testing.T) {
 	store := scriptedRecordStore(t, state)
 	store.store.RuntimeEngine = testEngineProfile("mysql")
 	stamp := "2026-09-24T01:02:03.123456Z"
-	record := recordmodel.Record{ID: "record-1", CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{"name": "Acme"}}
+	record := recordmodel.Record{RecordID: "record-1", CreatedAt: stamp, UpdatedAt: stamp, Data: map[string]any{"name": "Acme"}}
 	if err := store.InsertRecord(t.Context(), "workspace", recordObjectFixture(), record); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +333,7 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	}
 
 	for _, operation := range []string{"update", "delete"} {
-		commit := transactionmodel.RecordMutationCommit{Operation: operation, Object: object, Record: value, RecordID: value.ID}
+		commit := transactionmodel.RecordMutationCommit{Operation: operation, Object: object, Record: value, RecordID: value.RecordID}
 		store = scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{rowsErr: errRecordSQL}}})
 		if err := store.CommitRecordMutation(t.Context(), "workspace", commit); !errors.Is(err, errRecordSQL) {
 			t.Fatalf("%s rows error=%v", operation, err)
@@ -375,10 +377,10 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	_ = tx.Rollback()
 
 	for name, commit := range map[string]transactionmodel.RecordMutationCommit{
-		"audit":    {Operation: "create", Object: object, Record: value, Audit: &auditmodel.AuditEvent{ID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}},
-		"audits":   {Operation: "create", Object: object, Record: value, Audits: []auditmodel.AuditEvent{{ID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}}},
-		"outbox":   {Operation: "create", Object: object, Record: value, Outbox: []publicationmodel.Message{{ID: "outbox", WorkspaceID: "workspace", DedupKey: "key"}}},
-		"workflow": {Operation: "create", Object: object, Record: value, WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow"}}},
+		"audit":    {Operation: "create", Object: object, Record: value, Audit: &auditmodel.AuditEvent{AuditEventID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}},
+		"audits":   {Operation: "create", Object: object, Record: value, Audits: []auditmodel.AuditEvent{{AuditEventID: "audit", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", CreatedAt: "2026-07-19T00:00:00Z"}}},
+		"outbox":   {Operation: "create", Object: object, Record: value, Outbox: []publicationmodel.Message{{MessageID: "outbox", WorkspaceID: "workspace", DedupKey: "key"}}},
+		"workflow": {Operation: "create", Object: object, Record: value, WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow"}}},
 	} {
 		t.Run(name+"-insert", func(t *testing.T) {
 			store := scriptedRecordStore(t, &recordSQLState{execSteps: []recordSQLExecStep{{rows: 1}, {err: errRecordSQL}}})
@@ -390,9 +392,9 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 
 	bad := func() {}
 	for name, workflow := range map[string]workflowmodel.WorkflowExecution{
-		"action":  {ID: "workflow", Action: map[string]any{"bad": bad}},
-		"payload": {ID: "workflow", Action: map[string]any{}, Payload: map[string]any{"bad": bad}},
-		"result":  {ID: "workflow", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{"bad": bad}},
+		"action":  {ExecutionID: "workflow", Action: map[string]any{"bad": bad}},
+		"payload": {ExecutionID: "workflow", Action: map[string]any{}, Payload: map[string]any{"bad": bad}},
+		"result":  {ExecutionID: "workflow", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{"bad": bad}},
 	} {
 		if _, _, err := workflowExecutionInsertValues(workflow); err == nil {
 			t.Fatalf("%s workflow encoding accepted", name)
@@ -400,14 +402,14 @@ func TestRecordMutationSQLFailureAndSideEffectEdges(t *testing.T) {
 	}
 	store = scriptedRecordStore(t, &recordSQLState{})
 	tx, _ = store.database().BeginTx(t.Context(), nil)
-	if err := store.insertWorkflowIntentTx(t.Context(), tx, workflowmodel.WorkflowExecution{ID: "workflow", Action: map[string]any{"bad": bad}}); err == nil {
+	if err := store.insertWorkflowIntentTx(t.Context(), tx, workflowmodel.WorkflowExecution{ExecutionID: "workflow", Action: map[string]any{"bad": bad}}); err == nil {
 		t.Fatal("invalid workflow encoding accepted")
 	}
 	_ = tx.Rollback()
 	for name, event := range map[string]auditmodel.AuditEvent{
-		"before":   {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Before: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
-		"after":    {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", After: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
-		"metadata": {ID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Metadata: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
+		"before":   {AuditEventID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Before: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
+		"after":    {AuditEventID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", After: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
+		"metadata": {AuditEventID: "audit", WorkspaceID: "workspace", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", Metadata: map[string]any{"bad": bad}, CreatedAt: "2026-07-19T00:00:00Z"},
 	} {
 		store = scriptedRecordStore(t, &recordSQLState{})
 		tx, _ := store.database().BeginTx(t.Context(), nil)

@@ -35,7 +35,7 @@ func fixture(t *testing.T) (*database.RuntimeStore, *Handler, context.Context) {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
-		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
+		`CREATE TABLE _subject_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL)`,
 		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at BIGINT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
 	} {
 		if _, err = store.DB().ExecContext(t.Context(), statement); err != nil {
@@ -51,7 +51,7 @@ func fixture(t *testing.T) (*database.RuntimeStore, *Handler, context.Context) {
 
 func beginSubjectErasure(t *testing.T, store *database.RuntimeStore, request, subject string) {
 	t.Helper()
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES(?,'workspace-a','subject_request','erase',?)`, request, subject); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(request_id,workspace_id,request_type,kind,resolved_identity) VALUES(?,'workspace-a','subject_request','erase',?)`, request, subject); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a',?,'lifecycle','erase_fence','{}',?)`, request, time.Now().UTC().UnixMilli()); err != nil {
@@ -139,13 +139,16 @@ func seed(t *testing.T, store *database.RuntimeStore, table, id, workspace strin
 		if v, ok := override[name]; ok {
 			value = v
 		}
-		if name == "id" {
+		if name == "id" && strings.Contains(strings.ToUpper(kind), "INT") {
+			continue
+		}
+		if name == subjectEvidenceIDColumn(table) {
 			value = id
 		}
 		if name == "workspace_id" {
 			value = workspace
 		}
-		if name == "idempotency_key" || name == "operation_id" || name == "dedup_key" || name == "token_hash" || name == "audit_event_id" {
+		if name != subjectEvidenceIDColumn(table) && (name == "idempotency_key" || name == "operation_id" || name == "dedup_key" || name == "token_hash" || name == "audit_event_id") {
 			value = id + ":" + name
 		}
 		columns = append(columns, store.Identifier(name))
@@ -165,7 +168,7 @@ func seed(t *testing.T, store *database.RuntimeStore, table, id, workspace strin
 }
 func rawRow(t *testing.T, store *database.RuntimeStore, table, id, workspace string) []byte {
 	t.Helper()
-	rows, err := store.DB().QueryContext(t.Context(), "SELECT * FROM "+store.TableIdentifier(table)+" WHERE workspace_id=? AND id=?", workspace, id)
+	rows, err := store.DB().QueryContext(t.Context(), "SELECT * FROM "+store.TableIdentifier(table)+" WHERE workspace_id=? AND "+store.Identifier(subjectEvidenceIDColumn(table))+"=?", workspace, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,10 +252,10 @@ func TestRuntimeEvidenceErasureUsesDurableScopeAndRollsBackBeforeRetry(t *testin
 	if _, err = h.ErasePreparedSubject(requestcontext.WithWorkspaceID(ctx, "workspace-b"), "erase-alice", "workspace-a", "alice", p, nil); err == nil {
 		t.Fatal("accepted wrong workspace context")
 	}
-	if _, err = h.ErasePreparedSubject(ctx, "erase-alice", "workspace-a", "alice", p, []lifecyclemodel.LegalHold{{ID: "hold"}}); err == nil {
+	if _, err = h.ErasePreparedSubject(ctx, "erase-alice", "workspace-a", "alice", p, []lifecyclemodel.LegalHold{{HoldID: "hold"}}); err == nil {
 		t.Fatal("ignored hold")
 	}
-	if _, err = store.DB().ExecContext(ctx, `CREATE TRIGGER fail_subject_cleanup BEFORE UPDATE ON _workflow_tasks WHEN OLD.id='a_workflow_tasks' BEGIN SELECT RAISE(ABORT,'injected cleanup failure'); END`); err != nil {
+	if _, err = store.DB().ExecContext(ctx, `CREATE TRIGGER fail_subject_cleanup BEFORE UPDATE ON _workflow_tasks WHEN OLD.task_id='a_workflow_tasks' BEGIN SELECT RAISE(ABORT,'injected cleanup failure'); END`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = h.ErasePreparedSubject(ctx, "erase-alice", "workspace-a", "alice", p, nil); err == nil {
@@ -291,13 +294,13 @@ func TestRuntimeEvidenceErasureUsesDurableScopeAndRollsBackBeforeRetry(t *testin
 		}
 	}
 	worker := workflowstore.NewWorkflowWorkerStore(store)
-	if err = worker.UpdateExecution(ctx, "workspace-a", workflowmodel.WorkflowExecution{ID: "a_workflow_executions", Status: "pending", Payload: map[string]any{"email": "a@private.example.test"}}); err == nil {
+	if err = worker.UpdateExecution(ctx, "workspace-a", workflowmodel.WorkflowExecution{ExecutionID: "a_workflow_executions", Status: "pending", Payload: map[string]any{"email": "a@private.example.test"}}); err == nil {
 		t.Fatal("cached workflow rewrote erased payload")
 	}
-	if err = worker.InsertProcessEvent(ctx, "workspace-a", workflowmodel.WorkflowProcessEvent{ID: "late-event", ProcessID: "a_workflow_process_instances", ActorID: "manager", Summary: "a@private.example.test"}); err == nil {
+	if err = worker.InsertProcessEvent(ctx, "workspace-a", workflowmodel.WorkflowProcessEvent{EventID: "late-event", ProcessID: "a_workflow_process_instances", ActorID: "manager", Summary: "a@private.example.test"}); err == nil {
 		t.Fatal("late event reintroduced process content")
 	}
-	if err = worker.InsertExecution(ctx, "workspace-a", workflowmodel.WorkflowExecution{ID: "new-workflow", ActorID: "alice", Status: "pending"}); err == nil {
+	if err = worker.InsertExecution(ctx, "workspace-a", workflowmodel.WorkflowExecution{ExecutionID: "new-workflow", ActorID: "alice", Status: "pending"}); err == nil {
 		t.Fatal("new workflow accepted erased actor")
 	}
 	_, claim, err := publicationstore.NewWorkerStore(store).ClaimOutbox(ctx, "workspace-a", "a_publication_outbox", "late-worker", time.Now().UTC().Format(time.RFC3339Nano))
@@ -322,7 +325,7 @@ func TestRuntimeEvidenceBusyAndEmptyParentsDoNotErasePeerWorkflows(t *testing.T)
 	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM _subject_steps WHERE request_id='busy-erase' AND owner='runtime_evidence'`).Scan(&steps); err != nil || steps != 0 {
 		t.Fatalf("busy preparation left owner steps: %d %v", steps, err)
 	}
-	if _, err := store.DB().ExecContext(ctx, `UPDATE _publication_outbox SET status='queued' WHERE id='busy'`); err != nil {
+	if _, err := store.DB().ExecContext(ctx, `UPDATE _publication_outbox SET status='queued' WHERE message_id='busy'`); err != nil {
 		t.Fatal(err)
 	}
 	p, err := h.PrepareSubjectErasure(ctx, "busy-erase", "workspace-a", "alice")
@@ -346,18 +349,22 @@ func TestRuntimeEvidenceIncludesTypedNotificationIntentAndRejectsNewPublication(
 		t.Fatal(err)
 	}
 	publication := notificationstore.NewPublicationOutboxStore(store)
+	messageIDs := map[string]string{}
 	for _, subject := range []string{"alice", "bob"} {
 		tx, err := store.DB().BeginTx(ctx, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		intent := notificationmodel.NotificationIntent{ID: subject + "-notification", WorkspaceID: "workspace-a", SourceEventID: subject + "-event", RecipientUserIDs: []string{subject}, Variables: map[string]any{"email": subject + "@private.test"}}
-		if err = publication.InsertIntentTx(ctx, tx, intent); err != nil {
+		intent := notificationmodel.NotificationIntent{WorkspaceID: "workspace-a", SourceEventID: subject + "-event", RecipientUserIDs: []string{subject}, Variables: map[string]any{"email": subject + "@private.test"}}
+		messageID, insertErr := publication.InsertIntentTx(ctx, tx, intent)
+		if insertErr != nil {
+			err = insertErr
 			t.Fatal(err)
 		}
 		if err = tx.Commit(); err != nil {
 			t.Fatal(err)
 		}
+		messageIDs[subject] = messageID
 	}
 	beginSubjectErasure(t, store, "notify-erase", "alice")
 	p, err := h.PrepareSubjectErasure(ctx, "notify-erase", "workspace-a", "alice")
@@ -367,10 +374,10 @@ func TestRuntimeEvidenceIncludesTypedNotificationIntentAndRejectsNewPublication(
 	if _, err = h.ErasePreparedSubject(ctx, "notify-erase", "workspace-a", "alice", p, nil); err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(rawRow(t, store, "_publication_outbox", "alice-notification", "workspace-a"), []byte("alice@private.test")) {
+	if bytes.Contains(rawRow(t, store, "_publication_outbox", messageIDs["alice"], "workspace-a"), []byte("alice@private.test")) {
 		t.Fatal("intent private variables survived")
 	}
-	if !bytes.Contains(rawRow(t, store, "_publication_outbox", "bob-notification", "workspace-a"), []byte("bob@private.test")) {
+	if !bytes.Contains(rawRow(t, store, "_publication_outbox", messageIDs["bob"], "workspace-a"), []byte("bob@private.test")) {
 		t.Fatal("peer intent changed")
 	}
 	tx, err := store.DB().BeginTx(ctx, nil)
@@ -378,7 +385,7 @@ func TestRuntimeEvidenceIncludesTypedNotificationIntentAndRejectsNewPublication(
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if err = publication.InsertIntentTx(ctx, tx, notificationmodel.NotificationIntent{ID: "late-notification", WorkspaceID: "workspace-a", SourceEventID: "late-event", RecipientUserIDs: []string{"alice"}}); err == nil {
+	if _, err = publication.InsertIntentTx(ctx, tx, notificationmodel.NotificationIntent{WorkspaceID: "workspace-a", SourceEventID: "late-event", RecipientUserIDs: []string{"alice"}}); err == nil {
 		t.Fatal("new subject intent bypassed fence")
 	}
 }

@@ -36,7 +36,7 @@ func TestRelationReadOnlyActionReferenceUsesCallerScope(t *testing.T) {
 	adapter := recordQueryPolicyAdapter{service: recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
 		Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} },
 	})}
-	stage := recordmodel.Record{ID: "shared-stage", OwnerUserID: "administrator"}
+	stage := recordmodel.Record{RecordID: "shared-stage", OwnerUserID: "administrator"}
 	if allowed, err := adapter.canAccessPersistedRecord(ctx, principal, object, stage); err != nil || !allowed {
 		t.Fatalf("caller-readable Action stage was rejected: allowed=%v err=%v", allowed, err)
 	}
@@ -95,7 +95,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 
 	t.Run("relation validator adapter uses the declared Action read scope", func(t *testing.T) {
 		principal := makePrincipal()
-		record := recordmodel.Record{ID: "workflow-booking"}
+		record := recordmodel.Record{RecordID: "workflow-booking"}
 		allowed, err := adapter.canAccessPersistedRecord(actionContext, principal, object, record)
 		if err != nil || !allowed {
 			t.Fatalf("declared Action relation read allowed=%v error=%v", allowed, err)
@@ -193,7 +193,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 		if authorized.HasExactPermission("member.read") || principal.HasExactPermission("booking.read") {
 			t.Fatal("record timer relation scope escaped the derived principal")
 		}
-		allowed, err := adapter.canAccessPersistedRecord(actionContext, principal, object, recordmodel.Record{ID: "workflow-booking"})
+		allowed, err := adapter.canAccessPersistedRecord(actionContext, principal, object, recordmodel.Record{RecordID: "workflow-booking"})
 		if err != nil || !allowed {
 			t.Fatalf("record timer relation read allowed=%v error=%v", allowed, err)
 		}

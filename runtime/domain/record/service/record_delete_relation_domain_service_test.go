@@ -39,8 +39,8 @@ func TestDeleteRelationServiceScansReferencesInStableObjectOrder(t *testing.T) {
 		"a_quote": {Key: "a_quote", Fields: []definitionmodel.FieldSchema{{Key: "customer", Type: "relation", Config: map[string]any{"target": "customer", "on_delete": "cascade"}}}},
 	}
 	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{
-		"a_quote": {{Items: []recordmodel.Record{{ID: "quote-1"}}, HasNext: true}, {Items: []recordmodel.Record{{ID: "quote-2"}}}},
-		"z_order": {{Items: []recordmodel.Record{{ID: "order-1"}}}},
+		"a_quote": {{Items: []recordmodel.Record{{RecordID: "quote-1"}}, HasNext: true}, {Items: []recordmodel.Record{{RecordID: "quote-2"}}}},
+		"z_order": {{Items: []recordmodel.Record{{RecordID: "order-1"}}}},
 	}}
 	service := NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return objects })
 
@@ -50,7 +50,7 @@ func TestDeleteRelationServiceScansReferencesInStableObjectOrder(t *testing.T) {
 	}
 	got := []string{}
 	for _, reference := range references {
-		got = append(got, reference.Object.Key+":"+reference.Record.ID)
+		got = append(got, reference.Object.Key+":"+reference.Record.RecordID)
 	}
 	if !reflect.DeepEqual(got, []string{"a_quote:quote-1", "a_quote:quote-2", "z_order:order-1"}) {
 		t.Fatalf("references = %#v", got)
@@ -71,7 +71,7 @@ func TestDeleteRelationServiceAppliesSetNullAndCascade(t *testing.T) {
 	}
 	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{
 		"order": {
-			{Items: []recordmodel.Record{{ID: "order-1"}}},
+			{Items: []recordmodel.Record{{RecordID: "order-1"}}},
 		},
 	}}
 	// Both fields query the same fixture page, so each callback receives one reference.
@@ -79,11 +79,11 @@ func TestDeleteRelationServiceAppliesSetNullAndCascade(t *testing.T) {
 	setNull, cascade := []string{}, []string{}
 	err := service.Apply(t.Context(), "workspace-primary", "customer", "customer-1", RecordDeleteRelationCallbacks{
 		SetNull: func(_ context.Context, reference RecordDeleteReference) error {
-			setNull = append(setNull, reference.Field.Key+":"+reference.Record.ID)
+			setNull = append(setNull, reference.Field.Key+":"+reference.Record.RecordID)
 			return nil
 		},
 		Cascade: func(_ context.Context, reference RecordDeleteReference) error {
-			cascade = append(cascade, reference.Field.Key+":"+reference.Record.ID)
+			cascade = append(cascade, reference.Field.Key+":"+reference.Record.RecordID)
 			return nil
 		},
 	})
@@ -100,7 +100,7 @@ func TestDeleteRelationServiceRejectsRestrictBeforeSideEffects(t *testing.T) {
 		{Key: "customer", Type: "relation", Config: map[string]any{"target": "customer"}},
 		{Key: "secondary_customer", Type: "relation", Config: map[string]any{"target": "customer", "on_delete": "set_null"}},
 	}}
-	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{"order": {{Items: []recordmodel.Record{{ID: "order-1"}}}}}}
+	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{"order": {{Items: []recordmodel.Record{{RecordID: "order-1"}}}}}}
 	service := NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
 	})

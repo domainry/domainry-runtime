@@ -58,7 +58,7 @@ func TestWorkflowApplicationAuthorizesWorkspaceBeforeRepositoryAccess(t *testing
 			t.Fatalf("check %d code=%q", index, code)
 		}
 	}
-	service.ExecuteCommittedWorkflowIntents(t.Context(), []workflowmodel.WorkflowExecution{{ID: "intent-1"}}, principal)
+	service.ExecuteCommittedWorkflowIntents(t.Context(), []workflowmodel.WorkflowExecution{{ExecutionID: "intent-1"}}, principal)
 	if calls != 0 {
 		t.Fatalf("repository called before workflow scope authorization: %d", calls)
 	}

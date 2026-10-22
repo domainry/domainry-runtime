@@ -23,7 +23,7 @@ func TestOpenVerifiedFileRequiresExactReadableRecordBinding(t *testing.T) {
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-other")}}, nil
+				return recordmodel.Record{RecordID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-other")}}, nil
 			},
 			OpenVerifiedFile: func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error) {
 				openCalls++
@@ -50,7 +50,7 @@ func TestIssueFileDownloadRequiresGrantAndExactReadableRecordBinding(t *testing.
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-1")}}, nil
+				return recordmodel.Record{RecordID: "source-1", Data: map[string]any{"file_id": verifiedFileReference("file-1")}}, nil
 			},
 			IssueFileDownload: func(_ context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error) {
 				issueCalls++
@@ -124,7 +124,7 @@ func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 		return &businessActionExecution{
 			dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				stageCalls++
-				commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "record_timer"}, Record: recordmodel.Record{ID: "job-1"}, RecordID: "job-1"}
+				commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "record_timer"}, Record: recordmodel.Record{RecordID: "job-1"}, RecordID: "job-1"}
 				return commit, runtimeext.BusinessJobReceipt{JobID: "job-1"}, nil
 			}},
 			workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(), fileGrants: grants,
@@ -143,9 +143,9 @@ func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 	if _, err := granted.canonicalCommits(); apperror.CodeOf(err) != "backend.business_job.requires_business_mutation" {
 		t.Fatalf("expected mutation requirement, code=%q err=%v", apperror.CodeOf(err), err)
 	}
-	granted.setCommits = []transactionmodel.RecordMutationCommit{{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "document_import"}, Record: recordmodel.Record{ID: "import-1"}, RecordID: "import-1"}}
+	granted.setCommits = []transactionmodel.RecordMutationCommit{{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "document_import"}, Record: recordmodel.Record{RecordID: "import-1"}, RecordID: "import-1"}}
 	commits, err := granted.canonicalCommits()
-	if err != nil || len(commits) != 2 || commits[1].Record.ID != "job-1" {
+	if err != nil || len(commits) != 2 || commits[1].Record.RecordID != "job-1" {
 		t.Fatalf("commits=%+v err=%v", commits, err)
 	}
 }

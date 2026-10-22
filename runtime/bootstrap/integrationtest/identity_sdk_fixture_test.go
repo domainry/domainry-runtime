@@ -18,17 +18,17 @@ import (
 func newIntegrationIdentityFactory() identitysdk.Factory {
 	roles := integrationIdentityFixtureRoles()
 	users := []identitysdk.User{
-		{ID: "admin", Name: "Administrator", Email: "admin@example.com", Status: "active"},
-		{ID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active"},
-		{ID: "restricted_user", Name: "Restricted user", Email: "restricted@example.com", Status: "active"},
-		{ID: "automation_business_tester_user", Name: "Automation business tester", Email: "automation-business-tester@example.com", Status: "active"},
-		{ID: "automation_history_reviewer_user", Name: "Automation history reviewer", Email: "automation-history-reviewer@example.com", Status: "active"},
-		{ID: "sales_rep_1", Name: "Sales representative", Email: "sales-rep@example.com", Status: "active"},
-		{ID: "sales_manager", Name: "Sales manager", Email: "sales-manager@example.com", Status: "active"},
-		{ID: "finance_reviewer", Name: "Finance reviewer", Email: "finance-reviewer@example.com", Status: "active"},
-		{ID: "sales_user", Name: "Sales user", Email: "sales@example.com", Status: "active"},
-		{ID: "credit_user", Name: "Credit manager", Email: "credit@example.com", Status: "active"},
-		{ID: "finance_user", Name: "Finance user", Email: "finance@example.com", Status: "active"},
+		{UserID: "admin", Name: "Administrator", Email: "admin@example.com", Status: "active"},
+		{UserID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active"},
+		{UserID: "restricted_user", Name: "Restricted user", Email: "restricted@example.com", Status: "active"},
+		{UserID: "automation_business_tester_user", Name: "Automation business tester", Email: "automation-business-tester@example.com", Status: "active"},
+		{UserID: "automation_history_reviewer_user", Name: "Automation history reviewer", Email: "automation-history-reviewer@example.com", Status: "active"},
+		{UserID: "sales_rep_1", Name: "Sales representative", Email: "sales-rep@example.com", Status: "active"},
+		{UserID: "sales_manager", Name: "Sales manager", Email: "sales-manager@example.com", Status: "active"},
+		{UserID: "finance_reviewer", Name: "Finance reviewer", Email: "finance-reviewer@example.com", Status: "active"},
+		{UserID: "sales_user", Name: "Sales user", Email: "sales@example.com", Status: "active"},
+		{UserID: "credit_user", Name: "Credit manager", Email: "credit@example.com", Status: "active"},
+		{UserID: "finance_user", Name: "Finance user", Email: "finance@example.com", Status: "active"},
 	}
 	return runtimetestkit.NewIdentityFactory(runtimetestkit.IdentityFixtureConfig{
 		Roles: roles,

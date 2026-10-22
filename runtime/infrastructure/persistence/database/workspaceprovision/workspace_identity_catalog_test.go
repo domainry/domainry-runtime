@@ -38,7 +38,7 @@ func TestIdentityCatalogResolvesOnlyActiveLocalWorkspaces(t *testing.T) {
 		}
 	}
 	for _, status := range []string{"suspended", "active"} {
-		statement, args, err := query.NewUpdateBuilder(store.RuntimeRenderer(), "_workspaces").Set("status", status).Where(query.Equal("id", "physical-b")).Build()
+		statement, args, err := query.NewUpdateBuilder(store.RuntimeRenderer(), "_workspaces").Set("status", status).Where(query.Equal("workspace_id", "physical-b")).Build()
 		if err != nil {
 			t.Fatal(err)
 		}

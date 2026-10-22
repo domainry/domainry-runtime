@@ -84,8 +84,8 @@ func (s *WorkflowApplicationService) StageWorkflowRouteStart(ctx context.Context
 			return transactionmodel.WorkflowStartCommit{}, workflowRouteStartError("backend.workflow.route_step_key_duplicate", fmt.Sprintf("route.steps[%d].step_key", index), map[string]string{"step_key": step.StepKey})
 		}
 		stepKeys[step.StepKey] = true
-		step.WorkspaceID, step.ProcessID = principal.WorkspaceID, process.ID
-		step.ID = fmt.Sprintf("%s_step_%d", process.ID, step.StepNo)
+		step.WorkspaceID, step.ProcessID = principal.WorkspaceID, process.ProcessID
+		step.RouteStepID = workflowProcessID(ctx, "step")
 		steps = append(steps, step)
 	}
 	intent := workflowRouteStartIntent(workflow, process, principal, now)
@@ -151,12 +151,12 @@ func workflowRouteEligibleAssignees(ctx context.Context, identity identitysdk.Pr
 	}
 	active := make(map[string]identitysdk.User, len(users))
 	for _, user := range users {
-		electorate.Known[user.ID] = true
+		electorate.Known[user.UserID] = true
 		if user.Status != identitysdk.UserStatusActive {
 			continue
 		}
-		electorate.Active[user.ID] = true
-		active[user.ID] = user
+		electorate.Active[user.UserID] = true
+		active[user.UserID] = user
 	}
 	roleKeys := route.EligibleRoles
 	if len(roleKeys) == 0 {
@@ -164,7 +164,7 @@ func workflowRouteEligibleAssignees(ctx context.Context, identity identitysdk.Pr
 	}
 	if len(roleKeys) == 0 {
 		for _, user := range active {
-			electorate.Eligible[user.ID] = workflowmodel.WorkflowRouteAssignee{UserID: user.ID, DisplayName: user.Name}
+			electorate.Eligible[user.UserID] = workflowmodel.WorkflowRouteAssignee{UserID: user.UserID, DisplayName: user.Name}
 		}
 		return electorate, nil
 	}
@@ -175,8 +175,8 @@ func workflowRouteEligibleAssignees(ctx context.Context, identity identitysdk.Pr
 	roleByID := map[string]string{}
 	for _, role := range roles {
 		for _, wanted := range roleKeys {
-			if role.ID == wanted || role.Key == wanted {
-				roleByID[role.ID] = valueOrDefault(strings.TrimSpace(role.Key), role.ID)
+			if role.RoleID == wanted || role.Key == wanted {
+				roleByID[role.RoleID] = valueOrDefault(strings.TrimSpace(role.Key), role.RoleID)
 			}
 		}
 	}
@@ -193,7 +193,7 @@ func workflowRouteEligibleAssignees(ctx context.Context, identity identitysdk.Pr
 		if !usable {
 			continue
 		}
-		electorate.Eligible[assignment.UserID] = workflowmodel.WorkflowRouteAssignee{UserID: user.ID, DisplayName: user.Name, RoleKey: roleKey}
+		electorate.Eligible[assignment.UserID] = workflowmodel.WorkflowRouteAssignee{UserID: user.UserID, DisplayName: user.Name, RoleKey: roleKey}
 	}
 	return electorate, nil
 }
@@ -325,7 +325,7 @@ func (s *WorkflowApplicationService) workflowRouteStartProcess(ctx context.Conte
 		variables["initiating_role_key"] = principal.RoleKey
 	}
 	return workflowmodel.WorkflowProcessInstance{
-		WorkspaceID: principal.WorkspaceID, ID: workflowRouteStartProcessID(ctx, request),
+		WorkspaceID: principal.WorkspaceID, ProcessID: workflowRouteStartProcessID(ctx, request),
 		OperationID: requestcontext.OwnerExecutionID(ctx),
 		WorkflowKey: workflow.Key, WorkflowName: workflow.Name,
 		DefinitionVersionID: workflow.DefinitionVersionID, DefinitionVersion: workflowpolicy.WorkflowPublishedVersion(workflow),
@@ -335,27 +335,21 @@ func (s *WorkflowApplicationService) workflowRouteStartProcess(ctx context.Conte
 	}
 }
 
-// workflowRouteStartProcessID is derived from the Action execution so a
-// retried Action invocation stages the identical process identity instead of
-// leaking a second starting process.
 func workflowRouteStartProcessID(ctx context.Context, request workflowmodel.WorkflowRouteStartRequest) string {
-	executionID := strings.TrimSpace(request.ExecutionID)
-	if executionID == "" {
-		return workflowProcessID(ctx, "process")
-	}
-	return fmt.Sprintf("process_%s_%d", executionID, request.StageIndex)
+	_ = request
+	return workflowProcessID(ctx, "process")
 }
 
 func workflowRouteStartIntent(workflow definitionmodel.WorkflowSchema, process workflowmodel.WorkflowProcessInstance, principal principalmodel.Principal, now string) workflowmodel.WorkflowExecution {
 	payload := workflowpolicy.WorkflowCloneMap(process.Variables)
-	payload["process_id"] = process.ID
+	payload["process_id"] = process.ProcessID
 	return workflowmodel.WorkflowExecution{
-		WorkspaceID: process.WorkspaceID, ID: "intent_" + process.ID, WorkflowKey: workflow.Key, Name: workflow.Name,
+		WorkspaceID: process.WorkspaceID, ExecutionID: workflowProcessID(context.Background(), "execution"), WorkflowKey: workflow.Key, Name: workflow.Name,
 		OperationID: process.OperationID,
 		Trigger:     WorkflowRouteStartTrigger, Status: "pending", ActionType: "workflow_graph",
 		Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: payload,
-		Result:    map[string]any{"transactional_intent": true, "route_start": true, "resume_process_id": process.ID},
-		ProcessID: process.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID,
+		Result:    map[string]any{"transactional_intent": true, "route_start": true, "resume_process_id": process.ProcessID},
+		ProcessID: process.ProcessID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID,
 		RunAs: workflowpolicy.WorkflowRunAs(workflow), Attempt: 0, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(workflow),
 		Message: "workflow.message.queued", CreatedAt: now, UpdatedAt: now,
 	}

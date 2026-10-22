@@ -163,7 +163,7 @@ func TestImportApplyObservesCancellationBetweenRows(t *testing.T) {
 	service.dependencies.CreateRecord = func(context.Context, string, map[string]any, principalmodel.Principal) (recordmodel.Record, error) {
 		createCalls++
 		cancel()
-		return recordmodel.Record{ID: "created"}, nil
+		return recordmodel.Record{RecordID: "created"}, nil
 	}
 	if _, err := service.Apply(ctx, "customer", []byte("name\nAcme\nBeta\n"), recordImportEdgePrincipal()); !errors.Is(err, context.Canceled) || createCalls != 1 {
 		t.Fatalf("err=%v createCalls=%d", err, createCalls)
@@ -190,7 +190,7 @@ func TestImportIdempotentDependencyAndCompletionFailures(t *testing.T) {
 	executions := &importCompletionErrorProbe{err: failure}
 	service.dependencies.Execution = recordruntime.NewRecordMutationExecutionRuntime(executions)
 	service.dependencies.CreateIdempotent = func(context.Context, string, map[string]any, string, principalmodel.Principal) (recordmodel.Record, bool, error) {
-		return recordmodel.Record{ID: "created"}, false, nil
+		return recordmodel.Record{RecordID: "created"}, false, nil
 	}
 	if _, replay, err := service.ApplyIdempotent(t.Context(), "customer", []byte("name\nAcme\n"), "operation-1", principal); replay || !errors.Is(err, failure) {
 		t.Fatalf("replay=%v err=%v", replay, err)
@@ -359,7 +359,7 @@ func TestImportApplyCancellationAtBatchYield(t *testing.T) {
 		if createCalls == recordImportBatchSize {
 			cancel()
 		}
-		return recordmodel.Record{ID: "created"}, nil
+		return recordmodel.Record{RecordID: "created"}, nil
 	}
 	if _, err := service.Apply(ctx, "customer", []byte(csv.String()), recordImportEdgePrincipal()); !errors.Is(err, context.Canceled) || createCalls != recordImportBatchSize {
 		t.Fatalf("err=%v createCalls=%d", err, createCalls)

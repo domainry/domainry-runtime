@@ -6,7 +6,10 @@ import "strings"
 // keys and values stop at generated code and are not exposed by generated
 // Action capabilities.
 type Record struct {
-	ID        string
+	ID string
+	// Cursor is this row's continuation for id-ascending scans. Echo it as
+	// RecordQuery.AfterID; ID remains the public business identity.
+	Cursor    string
 	ObjectKey string
 	Fields    map[string]any
 	Version   int64
@@ -48,7 +51,9 @@ type RecordQuery struct {
 	Sorts      []Sort
 	Projection []string
 	Limit      int
-	AfterID    string
+	// AfterID echoes a prior Record.Cursor for an id-ascending scan. It is not
+	// a business identity and cannot be constructed from Record.ID.
+	AfterID string
 	// StoreOrganization is an execution-scoped catalog reference used only by
 	// generated catalog-owned list methods. It is not a business-field filter.
 	StoreOrganization *StoreOrganizationCatalogItem

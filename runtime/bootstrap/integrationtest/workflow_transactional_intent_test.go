@@ -34,7 +34,7 @@ func TestWorkflowPollingClaimsCommittedIntentWithoutWakeup(t *testing.T) {
 	records := newWorkflowProcessTestService(t, store, workflow, nil)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	intent := workflowmodel.WorkflowExecution{
-		ID: "intent_1", WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: "action_executed:pipeline_item.advance",
+		ExecutionID: "intent_1", WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: "action_executed:pipeline_item.advance",
 		Status: "pending", ActionType: "workflow_graph", Action: workflow.Action,
 		Payload: map[string]any{"object_key": "pipeline_item", "record_id": "item_1"}, Result: map[string]any{"transactional_intent": true},
 		ObjectKey: "pipeline_item", RecordID: "item_1", ActorID: "admin", MaxAttempts: 3,
@@ -51,7 +51,7 @@ func TestWorkflowPollingClaimsCommittedIntentWithoutWakeup(t *testing.T) {
 	if result.Processed != 1 || len(result.Executions) != 1 {
 		t.Fatalf("expected one continued execution, got %#v", result)
 	}
-	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", intent.ID)
+	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", intent.ExecutionID)
 	if err != nil || !ok {
 		t.Fatalf("get claimed intent: ok=%v err=%v", ok, err)
 	}

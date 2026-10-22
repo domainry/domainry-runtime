@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-orm/recordschema"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	reportquery "github.com/domainry/domainry-report-sdk/query"
@@ -32,11 +33,11 @@ func TestReportContainsAggregatesCompleteMatchingScopeWithLiteralSearch(t *testi
 		t.Fatal(err)
 	}
 	columns := []ormschema.ColumnDefinition{}
-	for _, field := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_org_id", "customer", "cast_names"} {
+	for _, field := range []string{"customer", "cast_names"} {
 		columns = append(columns, ormschema.Column(field, ormschema.Text()))
 	}
 	columns = append(columns, ormschema.Column("amount", ormschema.Integer()))
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), "voucher").Columns(columns...).PrimaryKey("workspace_id", "id").Build()
+	statement, args, err := recordschema.NewTable(store.RuntimeRenderer(), "voucher").Columns(columns...).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestReportContainsAggregatesCompleteMatchingScopeWithLiteralSearch(t *testi
 	records := recordpersistence.NewRecordStore(store)
 	insert := func(workspace, owner, id string, customer any, cast string, amount int64) {
 		t.Helper()
-		if err := records.InsertRecord(t.Context(), workspace, object, recordmodel.Record{ID: id, OwnerOrgID: owner, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z",
+		if err := records.InsertRecord(t.Context(), workspace, object, recordmodel.Record{RecordID: id, OwnerOrgID: owner, CreatedAt: "2026-09-08T00:00:00Z", UpdatedAt: "2026-09-08T00:00:00Z",
 			Data: map[string]any{"customer": customer, "cast_names": cast, "amount": amount}}); err != nil {
 			t.Fatal(err)
 		}

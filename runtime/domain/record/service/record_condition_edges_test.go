@@ -28,7 +28,7 @@ func TestReadRemainingConditionOperands(t *testing.T) {
 	if refs, err := service.IdentityProfileReferences(t.Context(), "user", principal); err != nil || len(refs) != 0 {
 		t.Fatalf("zero refs=%#v err=%v", refs, err)
 	}
-	repository := &readRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "hidden"}}}}
+	repository := &readRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "hidden"}}}}
 	reader := NewRecordReadDomainService(RecordReadDependencies{Repository: repository, Policy: readPolicyProbe{object: definitionmodel.ObjectSchema{Key: "customer"}, allow: false}})
 	if page, err := reader.ListRecords(t.Context(), "customer", recordmodel.RecordListQuery{}, principalmodel.Principal{}); err != nil || len(page.Items) != 0 {
 		t.Fatalf("denied page=%#v err=%v", page, err)
@@ -48,8 +48,8 @@ func TestReferenceAndUniquenessRemainingConditionOperands(t *testing.T) {
 			return customer, nil
 		},
 		ListRecords: func(_ context.Context, key string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-			if key == "customer" && query.Filters["id__in"] != nil {
-				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}, Total: 1}, nil
+			if key == "customer" && query.Filters["record_id__in"] != nil {
+				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1"}}, Total: 1}, nil
 			}
 			return recordmodel.RecordPageResult{}, nil
 		},

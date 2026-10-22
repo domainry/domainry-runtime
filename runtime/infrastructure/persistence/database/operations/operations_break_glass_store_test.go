@@ -21,16 +21,16 @@ func TestOperationsBreakGlassStoreEnforcesSingleActiveAndRevisionCAS(t *testing.
 	}
 	store := NewOperationsStore(runtimeStore)
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
-	grant := operationsmodel.OperationsBreakGlassGrant{ID: "grant-1", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, ActorID: "actor", ApproverIDs: []string{"a", "b"}, Reason: "incident", IncidentRef: "INC-1", AlertTarget: "pager", AuditEventID: "audit-1", ExpiresAt: now.Add(time.Hour), Revision: 1, CreatedAt: now, UpdatedAt: now}
+	grant := operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant-1", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, ActorID: "actor", ApproverIDs: []string{"a", "b"}, Reason: "incident", IncidentRef: "INC-1", AlertTarget: "pager", AuditEventID: "audit-1", ExpiresAt: now.Add(time.Hour), Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if created, err := store.CreateOperationsBreakGlass(t.Context(), grant); err != nil || !created {
 		t.Fatalf("created=%v err=%v", created, err)
 	}
 	grant2 := grant
-	grant2.ID, grant2.AuditEventID = "grant-2", "audit-2"
+	grant2.BreakGlassGrantID, grant2.AuditEventID = "grant-2", "audit-2"
 	if created, err := store.CreateOperationsBreakGlass(t.Context(), grant2); err != nil || created {
 		t.Fatalf("second created=%v err=%v", created, err)
 	}
-	read, found, err := store.GetOperationsBreakGlass(t.Context(), grant.ID)
+	read, found, err := store.GetOperationsBreakGlass(t.Context(), grant.BreakGlassGrantID)
 	if err != nil || !found || len(read.ApproverIDs) != 2 || !read.Active(now) {
 		t.Fatalf("read=%#v found=%v err=%v", read, found, err)
 	}

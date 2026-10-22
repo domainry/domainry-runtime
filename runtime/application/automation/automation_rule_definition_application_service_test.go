@@ -141,7 +141,7 @@ func TestAutomationPauseStopsNewTriggersWithoutInvalidatingQueuedRuleSnapshot(t 
 	})
 	principal := automationDefinitionPrincipal("workspace-a")
 	principal.RoleKey = "automation-manager"
-	messages, err := service.AfterOutbox(t.Context(), "account", "update", map[string]any{"name": "Old"}, recordmodel.Record{ID: "account-1", Data: map[string]any{"name": "New"}, UpdatedAt: "v2"}, principal)
+	messages, err := service.AfterOutbox(t.Context(), "account", "update", map[string]any{"name": "Old"}, recordmodel.Record{RecordID: "account-1", Data: map[string]any{"name": "New"}, UpdatedAt: "v2"}, principal)
 	if err != nil || len(messages) != 1 {
 		t.Fatalf("queued messages=%#v err=%v", messages, err)
 	}
@@ -152,7 +152,7 @@ func TestAutomationPauseStopsNewTriggersWithoutInvalidatingQueuedRuleSnapshot(t 
 	if err := service.ExecuteOutboxMessage(t.Context(), messages[0]); err != nil {
 		t.Fatalf("queued snapshot was invalidated by pause: %v", err)
 	}
-	messages, err = service.AfterOutbox(t.Context(), "account", "update", map[string]any{"name": "New"}, recordmodel.Record{ID: "account-1", Data: map[string]any{"name": "Newest"}, UpdatedAt: "v3"}, principal)
+	messages, err = service.AfterOutbox(t.Context(), "account", "update", map[string]any{"name": "New"}, recordmodel.Record{RecordID: "account-1", Data: map[string]any{"name": "Newest"}, UpdatedAt: "v3"}, principal)
 	if err != nil || len(messages) != 0 {
 		t.Fatalf("pause did not stop new triggers: messages=%#v err=%v", messages, err)
 	}

@@ -62,7 +62,7 @@ func TestSQLiteInstallationRetainsWorkspaceAuthorityAfterDatabaseRelocation(t *t
 		t.Fatal(err)
 	}
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "created_at", "updated_at").
+		Columns("workspace_id", "canonical_code", "name", "status", "initial_installation_identity", "created_at", "updated_at").
 		Values("workspace-restored", "restored", "Restored workspace", "active", identity, 1, 1).Build()
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestSQLiteInstallationRetainsWorkspaceAuthorityAfterDatabaseRelocation(t *t
 		t.Fatalf("restored identity=%q expected=%q error=%v", observed, identity, err)
 	}
 	second, secondArgs, err := query.NewInsertBuilder(restored.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "created_at", "updated_at").
+		Columns("workspace_id", "canonical_code", "name", "status", "initial_installation_identity", "created_at", "updated_at").
 		Values("workspace-conflict", "conflict", "Conflicting authority", "active", strings.Repeat("a", 64), 1, 1).Build()
 	if err != nil {
 		t.Fatal(err)

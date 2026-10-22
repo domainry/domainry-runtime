@@ -89,7 +89,7 @@ func TestRecordMutationFacadeConditionalAuthorizationEdge(t *testing.T) {
 
 func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	record := recordmodel.Record{ID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{"name": "Before"}}
+	record := recordmodel.Record{RecordID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{"name": "Before"}}
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	newService := func(repository *updateRepositoryProbe, objectForAction func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error), canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool, canWrite bool) *RecordUpdateApplicationService {
 		return NewRecordUpdateApplicationService(RecordUpdateDependencies{
@@ -101,13 +101,13 @@ func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 		return object, nil
 	}
 
-	if _, _, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+	if _, _, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, nil, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}
 	failure := errors.New("dependency failure")
 	if _, _, err := newService(&updateRepositoryProbe{}, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{}, failure
-	}, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); !errors.Is(err, failure) {
+	}, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, nil, principal); !errors.Is(err, failure) {
 		t.Fatalf("object err=%v", err)
 	}
 	timerObject := object
@@ -115,41 +115,41 @@ func TestPlanUpdateMutationCoversDependencyAndScopeEdges(t *testing.T) {
 	timerObject.Config = map[string]any{"record_timer_runtime": true}
 	if _, _, err := newService(&updateRepositoryProbe{}, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return timerObject, nil
-	}, nil, true).PlanUpdateMutation(t.Context(), timerObject.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
+	}, nil, true).PlanUpdateMutation(t.Context(), timerObject.Key, record.RecordID, nil, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("record timer err=%v", err)
 	}
-	if _, _, err := newService(&updateRepositoryProbe{err: failure}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.internal" {
+	if _, _, err := newService(&updateRepositoryProbe{err: failure}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, nil, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("repository err=%v", err)
 	}
-	if _, _, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.record.not_found" {
+	if _, _, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, nil, principal); apperror.CodeOf(err) != "backend.record.not_found" {
 		t.Fatalf("not-found err=%v", err)
 	}
 	plannedContext := recordservice.RecordWithPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{
-		object.Key: {record.ID: record},
+		object.Key: {record.RecordID: record},
 	})
-	planned, staged, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(plannedContext, object.Key, record.ID, map[string]any{"name": "After staged create"}, principal)
+	planned, staged, err := newService(&updateRepositoryProbe{}, objectForAction, nil, true).PlanUpdateMutation(plannedContext, object.Key, record.RecordID, map[string]any{"name": "After staged create"}, principal)
 	if err != nil || staged.Data["name"] != "After staged create" || planned.CanonicalCommit().Operation != "update" {
 		t.Fatalf("staged plan=%#v updated=%#v err=%v", planned, staged, err)
 	}
 	repository := &updateRepositoryProbe{found: true, record: record}
-	if _, _, err := newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, nil, principal); apperror.CodeOf(err) != "backend.record.outside_scope" {
+	if _, _, err := newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false }, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, nil, principal); apperror.CodeOf(err) != "backend.record.outside_scope" {
 		t.Fatalf("scope err=%v", err)
 	}
-	if _, _, err := newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true }, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, map[string]any{"name": "After"}, principal); err != nil {
+	if _, _, err := newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true }, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, map[string]any{"name": "After"}, principal); err != nil {
 		t.Fatalf("allowed scope err=%v", err)
 	}
-	if _, _, err := newService(repository, objectForAction, nil, false).PlanUpdateMutation(t.Context(), object.Key, record.ID, map[string]any{"name": "After"}, principal); apperror.CodeOf(err) != "backend.record.owner_write_denied" {
+	if _, _, err := newService(repository, objectForAction, nil, false).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, map[string]any{"name": "After"}, principal); apperror.CodeOf(err) != "backend.record.owner_write_denied" {
 		t.Fatalf("planning err=%v", err)
 	}
-	plan, updated, err := newService(repository, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.ID, map[string]any{"name": "After"}, principal)
+	plan, updated, err := newService(repository, objectForAction, nil, true).PlanUpdateMutation(t.Context(), object.Key, record.RecordID, map[string]any{"name": "After"}, principal)
 	if err != nil || updated.Data["name"] != "After" || len(plan.WriteSet()) != 1 {
 		t.Fatalf("plan=%#v updated=%#v err=%v", plan, updated, err)
 	}
 	facade := &RecordApplicationService{update: newService(repository, objectForAction, nil, true)}
-	if _, err := facade.UpdateRecordIdempotent(t.Context(), object.Key, record.ID, map[string]any{"name": "After"}, "", principal); err != nil {
+	if _, err := facade.UpdateRecordIdempotent(t.Context(), object.Key, record.RecordID, map[string]any{"name": "After"}, "", principal); err != nil {
 		t.Fatalf("idempotent update err=%v", err)
 	}
-	if _, err := facade.ConditionalUpdateRecord(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"name": "After"}}, principal); err != nil {
+	if _, err := facade.ConditionalUpdateRecord(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"name": "After"}}, principal); err != nil {
 		t.Fatalf("conditional update err=%v", err)
 	}
 }

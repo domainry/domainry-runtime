@@ -52,7 +52,7 @@ func (s *ActionExecutionRuntime) BeginTransaction(ctx context.Context) (actionco
 }
 
 func (s *ActionExecutionRuntime) CommitTransaction(ctx context.Context, transaction actioncontract.ActionExecutionTransaction, claim actionmodel.ActionExecutionClaimResult, result any, commits []transactionmodel.RecordMutationCommit, audits []auditmodel.AuditEvent) error {
-	if transaction == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+	if transaction == nil || strings.TrimSpace(claim.Execution.OperationID) == "" {
 		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
 	}
 	resultMap, err := encodeExecutionResult(result)
@@ -130,7 +130,7 @@ func (s *ActionExecutionRuntime) BeginBulk(ctx context.Context, objectKey, actio
 }
 
 func (s *ActionExecutionRuntime) Complete(ctx context.Context, claim actionmodel.ActionExecutionClaimResult, result any) error {
-	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.OperationID) == "" {
 		return nil
 	}
 	resultMap, err := encodeExecutionResult(result)
@@ -138,7 +138,7 @@ func (s *ActionExecutionRuntime) Complete(ctx context.Context, claim actionmodel
 		return err
 	}
 	_, err = s.repository.CompleteExecution(ctx, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: resultMap, ResponseStatus: 200, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
 	})
 	if err != nil {
@@ -148,7 +148,7 @@ func (s *ActionExecutionRuntime) Complete(ctx context.Context, claim actionmodel
 }
 
 func (s *ActionExecutionRuntime) Fail(ctx context.Context, claim actionmodel.ActionExecutionClaimResult, result actionmodel.ActionInvocationResult, failure error, audits []auditmodel.AuditEvent) error {
-	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.OperationID) == "" {
 		return nil
 	}
 	resultMap, err := encodeExecutionResult(actionExecutionFailure{
@@ -160,7 +160,7 @@ func (s *ActionExecutionRuntime) Fail(ctx context.Context, claim actionmodel.Act
 		return err
 	}
 	completion := actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: resultMap, ErrorCode: result.ErrorCode, Retryable: result.Retryable,
 		ResponseStatus: actionFailureResponseStatus(apperror.KindOf(failure)),
 		AuditEvents:    append([]auditmodel.AuditEvent(nil), audits...),
@@ -249,7 +249,7 @@ func (s *ActionExecutionRuntime) begin(ctx context.Context, objectKey, recordID,
 		if s.fingerprintConflictAudit != nil {
 			if auditErr := s.fingerprintConflictAudit(ctx, ActionFingerprintConflictAudit{
 				ObjectKey: strings.TrimSpace(objectKey), RecordID: strings.TrimSpace(recordID), ActionKey: strings.TrimSuffix(strings.TrimSpace(actionKey), "#bulk"),
-				RequestID: owner, RequestFingerprintSHA256: fingerprint, OriginalReceiptID: strings.TrimSpace(claim.Execution.ID), Principal: principal,
+				RequestID: owner, RequestFingerprintSHA256: fingerprint, OriginalReceiptID: strings.TrimSpace(claim.Execution.OperationID), Principal: principal,
 			}); auditErr != nil {
 				return claim, false, apperror.New(apperror.KindInternal, "backend.action.audit_failed", auditErr, map[string]string{"action": strings.TrimSpace(actionKey)})
 			}
@@ -313,7 +313,7 @@ func actionRetryAfter(expiresAt string) string {
 func actionExecutionCompletion(claim actionmodel.ActionExecutionClaimResult, result map[string]any, audits []auditmodel.AuditEvent) actionmodel.ActionExecutionCompletion {
 	now := time.Now().UTC()
 	return actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: result, ResponseStatus: 200, AuditEvents: append([]auditmodel.AuditEvent(nil), audits...), ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now,
 	}
 }

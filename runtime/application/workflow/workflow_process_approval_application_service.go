@@ -44,9 +44,9 @@ func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process
 			title = node.Name
 		}
 		task := workflowmodel.WorkflowTask{
-			ID:                    workflowProcessID(ctx, "task"),
-			ProcessID:             process.ID,
-			NodeInstanceID:        nodeInstance.ID,
+			TaskID:                workflowProcessID(ctx, "task"),
+			ProcessID:             process.ProcessID,
+			NodeInstanceID:        nodeInstance.NodeInstanceID,
 			NodeID:                node.ID,
 			Title:                 title,
 			AssigneeUserID:        assignee.UserID,
@@ -73,7 +73,7 @@ func (e *WorkflowProcessEngine) createApprovalTasks(ctx context.Context, process
 		if err := e.scheduleApprovalDeadlineTimers(ctx, process, task, contract, nowTime); err != nil {
 			return 0, err
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence})
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, task.TaskID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": assignee.UserID, "assignee_role_key": assignee.RoleKey, "resolver_key": assignee.ResolverKey, "assignee_evidence": assignee.Evidence, "mode": mode, "sequence": task.Sequence})
 	}
 	return len(assignees), nil
 }
@@ -87,11 +87,11 @@ func (e *WorkflowProcessEngine) scheduleApprovalDeadlineTimers(ctx context.Conte
 	}
 	dueAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(task.DueAt))
 	if err != nil {
-		return badRequest("backend.workflow.approval_due_at_invalid", "task", task.ID)
+		return badRequest("backend.workflow.approval_due_at_invalid", "task", task.TaskID)
 	}
 	schedule := func(phase string, at time.Time) error {
 		_, scheduleErr := e.runtime.dependencies.ApprovalDeadlineTimers.ScheduleWorkflowApprovalDeadlineTimer(ctx, WorkflowApprovalDeadlineTimerRequest{
-			WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeID: task.NodeID, TaskID: task.ID,
+			WorkspaceID: process.WorkspaceID, ProcessID: process.ProcessID, NodeID: task.NodeID, TaskID: task.TaskID,
 			Phase: phase, DueAt: at, CreatedAt: createdAt,
 		})
 		if scheduleErr != nil {
@@ -398,7 +398,7 @@ func (e *WorkflowProcessEngine) workflowAssigneeRecord(ctx context.Context, work
 	if !found {
 		return workflowAssigneeRelatedRecord{}, badRequest("backend.workflow.resolver_record_not_found", "object", objectKey, "record", recordID)
 	}
-	return workflowAssigneeRelatedRecord{ObjectKey: objectKey, RecordID: record.ID, Data: record.Data}, nil
+	return workflowAssigneeRelatedRecord{ObjectKey: objectKey, RecordID: record.RecordID, Data: record.Data}, nil
 }
 
 func normalizedWorkflowRelationPath(path []string) []string {
@@ -528,8 +528,8 @@ func (e *WorkflowProcessEngine) usersForApprovalRole(ctx context.Context, roleKe
 	}
 	roleID := ""
 	for _, role := range roles {
-		if role.ID == roleKey || role.Key == roleKey {
-			roleID = role.ID
+		if role.RoleID == roleKey || role.Key == roleKey {
+			roleID = role.RoleID
 			break
 		}
 	}
@@ -555,15 +555,15 @@ func (e *WorkflowProcessEngine) usersForApprovalRole(ctx context.Context, roleKe
 		if user.Status != identitysdk.UserStatusActive {
 			continue
 		}
-		if _, ok := usersWithRole[user.ID]; ok {
-			out = append(out, user.ID)
+		if _, ok := usersWithRole[user.UserID]; ok {
+			out = append(out, user.UserID)
 		}
 	}
 	return uniqueSortedStrings(out), nil
 }
 
 func (e *WorkflowProcessEngine) aggregateApproval(ctx context.Context, process workflowmodel.WorkflowProcessInstance, nodeID string, principal principalmodel.Principal) (string, bool, error) {
-	tasks, err := e.runtime.dependencies.Processes.ListTasks(ctx, process.WorkspaceID, process.ID, "", "", 500)
+	tasks, err := e.runtime.dependencies.Processes.ListTasks(ctx, process.WorkspaceID, process.ProcessID, "", "", 500)
 	if err != nil {
 		return "", false, internalError("list approval tasks", err)
 	}
@@ -579,11 +579,11 @@ func (e *WorkflowProcessEngine) aggregateApproval(ctx context.Context, process w
 	sort.Slice(nodeTasks, func(i, j int) bool { return nodeTasks[i].Sequence < nodeTasks[j].Sequence })
 	for _, task := range nodeTasks {
 		if task.Status == "returned" {
-			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, task.ID, principal.UserID)
+			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, task.TaskID, principal.UserID)
 			return "returned", true, nil
 		}
 		if task.Status == "rejected" {
-			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, task.ID, principal.UserID)
+			e.cancelUnfinishedApprovalTasks(ctx, nodeTasks, task.TaskID, principal.UserID)
 			return "rejected", true, nil
 		}
 	}
@@ -619,7 +619,7 @@ func (e *WorkflowProcessEngine) aggregateApproval(ctx context.Context, process w
 				if err := e.openSequentialApprovalTask(ctx, process, task); err != nil {
 					return "", false, internalError("open sequential approval task", err)
 				}
-				e.appendEvent(ctx, process.WorkspaceID, process.ID, nodeID, task.ID, "task_opened", "system", task.Title, nil)
+				e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, nodeID, task.TaskID, "task_opened", "system", task.Title, nil)
 				break
 			}
 		}

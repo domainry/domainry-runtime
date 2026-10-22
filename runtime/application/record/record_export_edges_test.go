@@ -100,7 +100,7 @@ func TestExportSnapshotRepositoryAndCapacityFailures(t *testing.T) {
 
 	records := make([]recordmodel.Record, recordExportDirectMaxRows+1)
 	for index := range records {
-		records[index] = recordmodel.Record{ID: "record", Data: map[string]any{"name": "value"}}
+		records[index] = recordmodel.Record{RecordID: "record", Data: map[string]any{"name": "value"}}
 	}
 	tooMany := recordExportEdgeService(object, &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		return recordmodel.RecordPageResult{Items: records}, nil
@@ -111,7 +111,7 @@ func TestExportSnapshotRepositoryAndCapacityFailures(t *testing.T) {
 
 	tooLarge := recordExportEdgeService(object, &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		return recordmodel.RecordPageResult{Items: []recordmodel.Record{
-			{ID: "record-1", Data: map[string]any{"name": strings.Repeat("x", recordExportMaxBytes)}},
+			{RecordID: "record-1", Data: map[string]any{"name": strings.Repeat("x", recordExportMaxBytes)}},
 		}}, nil
 	}})
 	if _, _, err := exportRecordDirectForTest(t.Context(), tooLarge, object.Key, principal, RecordExportOptions{}); apperror.CodeOf(err) != "backend.export.output_too_large" {
@@ -125,22 +125,22 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 	pages := 0
 	repository := &exportEdgeRepository{list: func(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 		pages++
-		if query.Page != 1 || query.PageSize != recordExportBatchSize || !query.SkipTotal || len(query.Sort) != 1 || query.Sort[0].Field != "id" || query.Sort[0].Direction != "asc" {
+		if query.Page != 1 || query.PageSize != recordExportBatchSize || !query.SkipTotal || len(query.Sort) != 1 || query.Sort[0].Field != recordmodel.IDField || query.Sort[0].Direction != "asc" {
 			t.Fatalf("export did not use stable keyset pagination: %#v", query)
 		}
 		if query.AfterID == "" {
-			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "hidden", Data: map[string]any{"name": "Hidden"}}}, HasNext: true}, nil
+			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: 41, RecordID: "hidden", Data: map[string]any{"name": "Hidden"}}}, HasNext: true}, nil
 		}
-		if query.AfterID != "hidden" {
+		if query.AfterID != "41" {
 			t.Fatalf("second page cursor=%q", query.AfterID)
 		}
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "visible", Data: map[string]any{"name": "Visible"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: 42, RecordID: "visible", Data: map[string]any{"name": "Visible"}}}}, nil
 	}}
 	service := recordExportEdgeService(object, repository)
 	service.dependencies.ProjectRecords = func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, records []recordmodel.Record, _ string) ([]recordmodel.Record, error) {
 		visible := make([]recordmodel.Record, 0, len(records))
 		for _, record := range records {
-			if record.ID != "hidden" {
+			if record.RecordID != "hidden" {
 				visible = append(visible, record)
 			}
 		}
@@ -153,7 +153,7 @@ func TestExportPaginationAccessFilteringAndMidPageCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancelRepository := &exportEdgeRepository{list: func(context.Context, string, definitionmodel.ObjectSchema, recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "first", Data: map[string]any{"name": "First"}}, {ID: "second", Data: map[string]any{"name": "Second"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "first", Data: map[string]any{"name": "First"}}, {RecordID: "second", Data: map[string]any{"name": "Second"}}}}, nil
 	}}
 	cancelService := recordExportEdgeService(object, cancelRepository)
 	cancelService.dependencies.ProjectRecords = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, []recordmodel.Record, string) ([]recordmodel.Record, error) {
@@ -206,7 +206,7 @@ func TestExportRelationLabelFallbackEdges(t *testing.T) {
 		if query.PageSize != 1 {
 			t.Fatalf("query=%#v", query)
 		}
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1"}}}, nil
 	}
 	labels = service.relationLabels(t.Context(), source, []definitionmodel.FieldSchema{field}, records, principalmodel.Principal{})
 	if labels[field.Key]["customer-1"] != "customer-1" {
@@ -244,7 +244,7 @@ func TestExportRelationLabelCapsLookupAndIdentityProjectionFallbacks(t *testing.
 		t.Fatalf("failed projection labels=%#v", labels)
 	}
 	service.dependencies.ListIdentityUsers = func(context.Context) ([]identitysdk.User, error) {
-		return []identitysdk.User{{ID: "user-1", Name: " "}, {ID: "user-2", Name: "Other"}}, nil
+		return []identitysdk.User{{UserID: "user-1", Name: " "}, {UserID: "user-2", Name: "Other"}}, nil
 	}
 	service.identityLabels(t.Context(), map[string]bool{"user-1": true, "user-2": true}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, labels)
 	if labels["user-1"] != "user-1" || labels["user-2"] != "" {

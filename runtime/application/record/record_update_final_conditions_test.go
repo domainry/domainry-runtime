@@ -27,7 +27,7 @@ func recordUpdateFinalPrincipal() principalmodel.Principal {
 
 func TestRecordUpdateSchedulerAndOptimisticConditionEdges(t *testing.T) {
 	principal := recordUpdateFinalPrincipal()
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "run-1", UpdatedAt: "revision", Data: map[string]any{"version": "invalid"}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "run-1", UpdatedAt: "revision", Data: map[string]any{"version": "invalid"}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}}, nil
@@ -47,7 +47,7 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "pipeline_item", Fields: []definitionmodel.FieldSchema{
 		{Key: "name", Type: "text"}, {Key: "current_stage", Type: "text"}, {Key: "last_transition_at", Type: "datetime"}, {Key: "version", Type: "number"}, {Key: "status", Type: "text"},
 	}}
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "item-1", UpdatedAt: "revision", Data: map[string]any{"current_stage": "old", "version": "invalid", "status": "open"}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "item-1", UpdatedAt: "revision", Data: map[string]any{"current_stage": "old", "version": "invalid", "status": "open"}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return object, nil
@@ -59,17 +59,17 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 	if err != nil || updated.Data["version"] != float64(2) {
 		t.Fatalf("pipeline update=%#v err=%v", updated, err)
 	}
-	repository.record = recordmodel.Record{ID: "item-2", UpdatedAt: "revision", Data: map[string]any{"name": "before", "current_stage": "old", "version": float64(2), "status": "open"}}
+	repository.record = recordmodel.Record{RecordID: "item-2", UpdatedAt: "revision", Data: map[string]any{"name": "before", "current_stage": "old", "version": float64(2), "status": "open"}}
 	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), object.Key, "item-2", map[string]any{"name": "after"}, principal); err != nil {
 		t.Fatalf("pipeline non-stage patch error = %v", err)
 	}
-	repository.record = recordmodel.Record{ID: "item-3", UpdatedAt: "revision", Data: map[string]any{"current_stage": "old", "version": float64(2), "status": "open"}}
+	repository.record = recordmodel.Record{RecordID: "item-3", UpdatedAt: "revision", Data: map[string]any{"current_stage": "old", "version": float64(2), "status": "open"}}
 	if _, err := NewRecordUpdateApplicationService(dependencies).Update(t.Context(), object.Key, "item-3", map[string]any{"current_stage": "new"}, principal); err != nil {
 		t.Fatalf("pipeline valid-version transition error = %v", err)
 	}
 
 	// A transition candidate with no before-hook must still proceed safely.
-	regularRepository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}}
+	regularRepository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}}
 	regular := recordUpdateEdgeDependencies(regularRepository)
 	regular.RunBefore = nil
 	regular.AfterOutbox = func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
@@ -82,7 +82,7 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 	if _, err := NewRecordUpdateApplicationService(regular).Update(t.Context(), "customer", "customer-1", map[string]any{"status": "closed"}, principal); err != nil {
 		t.Fatalf("optional transition update error = %v", err)
 	}
-	regularRepository.record = recordmodel.Record{ID: "customer-2", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}
+	regularRepository.record = recordmodel.Record{RecordID: "customer-2", Data: map[string]any{"name": "before", "status": "open", "version": float64(1)}}
 	regular.UpdatedTriggers = nil
 	if _, err := NewRecordUpdateApplicationService(regular).Update(t.Context(), "customer", "customer-2", map[string]any{"name": "after"}, principal); err != nil {
 		t.Fatalf("non-transition outbox update error = %v", err)
@@ -91,7 +91,7 @@ func TestRecordUpdatePipelineStageAndOptionalShortCircuitEdges(t *testing.T) {
 
 func TestRecordUpdateSecondPassFailuresAndValidationEdges(t *testing.T) {
 	principal := recordUpdateFinalPrincipal()
-	baseRecord := recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "age": float64(20), "version": float64(1)}}
+	baseRecord := recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "before", "status": "open", "age": float64(20), "version": float64(1)}}
 	edgeErr := errors.New("second pass failed")
 
 	repository := &updateEdgeRepository{found: true, record: baseRecord}
@@ -138,12 +138,12 @@ func TestRecordUpdateSecondPassFailuresAndValidationEdges(t *testing.T) {
 
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{})
 	required := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Required: true}}}
-	if err := service.validateCandidate(t.Context(), required.Key, required, recordmodel.Record{ID: "customer-1"}, map[string]any{}, map[string]any{}, map[string]any{}, principal, principal, true); apperror.CodeOf(err) == "" {
+	if err := service.validateCandidate(t.Context(), required.Key, required, recordmodel.Record{RecordID: "customer-1"}, map[string]any{}, map[string]any{}, map[string]any{}, principal, principal, true); apperror.CodeOf(err) == "" {
 		t.Fatalf("direct candidate validation error = %v", err)
 	}
 	service.dependencies.CanWrite = nil
 	valid := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	if err := service.validateCandidate(t.Context(), valid.Key, valid, recordmodel.Record{ID: "customer-1"}, map[string]any{}, map[string]any{"name": "ok"}, map[string]any{}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), valid.Key, valid, recordmodel.Record{RecordID: "customer-1"}, map[string]any{}, map[string]any{"name": "ok"}, map[string]any{}, principal, principal, false); err != nil {
 		t.Fatalf("nil write guard validation error = %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestRecordUpdateRelationValidationOnlyReceivesChangedReferences(t *testing.
 	})
 	before := map[string]any{"created_by_identity_user_id": "manager_demo", "status": "draft"}
 	unchangedRelation := map[string]any{"created_by_identity_user_id": "manager_demo", "status": "paid"}
-	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{ID: "order-1"}, before, unchangedRelation, map[string]any{"status": "paid"}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{RecordID: "order-1"}, before, unchangedRelation, map[string]any{"status": "paid"}, principal, principal, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(validated) != 0 {
@@ -181,7 +181,7 @@ func TestRecordUpdateRelationValidationOnlyReceivesChangedReferences(t *testing.
 	}
 
 	changedRelation := map[string]any{"created_by_identity_user_id": "other_manager", "status": "paid"}
-	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{ID: "order-1"}, before, changedRelation, map[string]any{"created_by_identity_user_id": "other_manager"}, principal, principal, false); err != nil {
+	if err := service.validateCandidate(t.Context(), object.Key, object, recordmodel.Record{RecordID: "order-1"}, before, changedRelation, map[string]any{"created_by_identity_user_id": "other_manager"}, principal, principal, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := validated["created_by_identity_user_id"]; got != "other_manager" || len(validated) != 1 {

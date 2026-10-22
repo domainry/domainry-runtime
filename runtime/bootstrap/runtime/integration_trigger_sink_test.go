@@ -58,7 +58,7 @@ func (p *integrationAutomationProbe) RunWebhookAutomation(_ context.Context, req
 
 func (p *integrationWorkflowProbe) RunIntegrationWorkflow(_ context.Context, key string, payload map[string]any, principal principalmodel.Principal) (workflowmodel.WorkflowRunResult, error) {
 	p.key, p.payload, p.principal = key, payload, principal
-	return workflowmodel.WorkflowRunResult{Status: "succeeded", Execution: workflowmodel.WorkflowExecution{ID: "workflow-1", Status: "succeeded"}}, nil
+	return workflowmodel.WorkflowRunResult{Status: "succeeded", Execution: workflowmodel.WorkflowExecution{ExecutionID: "workflow-1", Status: "succeeded"}}, nil
 }
 
 func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing.T) {

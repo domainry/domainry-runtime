@@ -150,7 +150,7 @@ func TestRuntimeResolvedNotificationAndProjectRecordAuthorizersFailClosedAndDele
 	called := false
 	authorize = newProjectRecordNotificationActionAuthorizer(func(_ context.Context, objectKey, recordID string, _ principalmodel.Principal) (recordmodel.Record, error) {
 		called = objectKey == "order" && recordID == "order-1"
-		return recordmodel.Record{ID: recordID}, wantErr
+		return recordmodel.Record{RecordID: recordID}, wantErr
 	})
 	for name, routeParams := range map[string]map[string]string{
 		"missing object": {"resource_id": "order-1"},

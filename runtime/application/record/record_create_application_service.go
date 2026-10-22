@@ -19,7 +19,6 @@ import (
 
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
@@ -27,6 +26,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/mutation"
@@ -53,7 +53,7 @@ type RecordCreateDependencies struct {
 	ExecuteWorkflow       func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)
 	Audit                 func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any)
 	BuildAudit            func(context.Context, string, string, string, principalmodel.Principal, string, map[string]any, map[string]any, map[string]any) auditmodel.AuditEvent
-	NewRecordID           func(string) string
+	NewRecordID           func(string) (string, error)
 	Now                   func() time.Time
 	ExecutionRuntime      *recordruntime.RecordMutationExecutionRuntime
 }
@@ -116,7 +116,10 @@ func (s *RecordCreateApplicationService) PlanCreateMutation(ctx context.Context,
 	}
 	input := recordvalidation.RecordCloneData(data)
 	if strings.TrimSpace(recordID) == "" {
-		recordID = s.newRecordID(objectKey)
+		recordID, err = s.newRecordID(objectKey)
+		if err != nil {
+			return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordCreateError(apperror.KindInternal, "backend.record.id_generation_failed", err)
+		}
 	}
 	planned, err := s.planCreate(ctx, objectKey, object, data, input, recordID, nil, recordmodel.RecordMutationClaimResult{}, principal, authorizationPrincipal)
 	if err != nil {
@@ -159,33 +162,37 @@ func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey s
 		}
 		replay, acquired, found, err := s.dependencies.ExecutionRuntime.BeginCreate(ctx, objectKey, idempotencyKey, inputData, principal)
 		if err != nil {
-			if strings.TrimSpace(acquired.Execution.ID) != "" {
+			if strings.TrimSpace(acquired.Execution.OperationID) != "" {
 				s.auditIdempotency(ctx, "record_create_idempotency_"+string(acquired.Decision), objectKey, "", principal, claimAuditFacts(acquired, "record.create", string(acquired.Decision)))
 			}
 			return recordmodel.Record{}, err
 		}
 		if found {
-			s.auditIdempotency(ctx, "record_create_idempotent_replayed", objectKey, replay.ID, principal, claimAuditFacts(acquired, "record.create", "replayed"))
+			s.auditIdempotency(ctx, "record_create_idempotent_replayed", objectKey, replay.RecordID, principal, claimAuditFacts(acquired, "record.create", "replayed"))
 			return recordpolicy.RecordFilterReadable(principal, object, replay), nil
 		}
 		claim = acquired
 	}
 	defer func() { err = finalizeRecordMutationFailure(ctx, s.dependencies.ExecutionRuntime, claim, err) }()
-	planned, err := s.planCreate(ctx, objectKey, object, data, inputData, s.newRecordID(objectKey), localizedValues, claim, principal, principal)
+	recordID, err := s.newRecordID(objectKey)
+	if err != nil {
+		return recordmodel.Record{}, recordCreateError(apperror.KindInternal, "backend.record.id_generation_failed", err)
+	}
+	planned, err := s.planCreate(ctx, objectKey, object, data, inputData, recordID, localizedValues, claim, principal, principal)
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
 	if planned.replayed {
-		if strings.TrimSpace(claim.Execution.ID) != "" {
+		if strings.TrimSpace(claim.Execution.OperationID) != "" {
 			if err := s.dependencies.ExecutionRuntime.CompleteOperation(ctx, claim, planned.record); err != nil {
 				return recordmodel.Record{}, err
 			}
-			claim.Execution.ID = ""
+			claim.Execution.OperationID = ""
 		}
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), nil
 	}
 	var receipt recordmutation.MutationReceiptCommit
-	if strings.TrimSpace(claim.Execution.ID) != "" {
+	if strings.TrimSpace(claim.Execution.OperationID) != "" {
 		receipt = func(ctx context.Context, canonical transactionmodel.RecordMutationCommit) error {
 			return s.dependencies.ExecutionRuntime.Commit(ctx, claim, canonical)
 		}
@@ -193,10 +200,10 @@ func (s *RecordCreateApplicationService) create(ctx context.Context, objectKey s
 	if err := s.dependencies.MutationKernel.CommitPlan(ctx, planned.plan, receipt); err != nil {
 		return recordmodel.Record{}, recordCreateCommitError(err)
 	}
-	if strings.TrimSpace(claim.Execution.ID) != "" {
+	if strings.TrimSpace(claim.Execution.OperationID) != "" {
 		logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.create", "succeeded"), principal.RequestID)
 	}
-	claim.Execution.ID = ""
+	claim.Execution.OperationID = ""
 	if err := ctx.Err(); err != nil {
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), err
 	}
@@ -234,7 +241,7 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 			return recordCreatePlannedMutation{}, err
 		}
 	}
-	candidate := recordmodel.Record{ID: recordID, Data: data}
+	candidate := recordmodel.Record{RecordID: recordID, Data: data}
 	recordpolicy.RecordApplyOwnerDefault(&candidate, principal)
 	if invocation, ok := recordmutation.MutationInvocationFromContext(ctx); ok && invocation.Source == transactionmodel.MutationSourceAction {
 		if targetOrganizationID := strings.TrimSpace(invocation.TargetOrganizationID); targetOrganizationID != "" {
@@ -261,7 +268,7 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 		}
 		if found {
 			if s.dependencies.Audit != nil {
-				s.dependencies.Audit(ctx, "automation_create_idempotent_replay", objectKey, replay.ID, principal, "Replayed idempotent create for "+objectKey, nil, nil, idempotency.MergeAuditMetadata(map[string]any{"operation": "create"}, idempotency.AuditFacts{Scope: "record.create", Status: "replayed"}))
+				s.dependencies.Audit(ctx, "automation_create_idempotent_replay", objectKey, replay.RecordID, principal, "Replayed idempotent create for "+objectKey, nil, nil, idempotency.MergeAuditMetadata(map[string]any{"operation": "create"}, idempotency.AuditFacts{Scope: "record.create", Status: "replayed"}))
 			}
 			return recordCreatePlannedMutation{record: replay, replayed: true}, nil
 		}
@@ -312,7 +319,7 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	now := recordCanonicalMutationTimestamp(s.now(), "")
 	record := recordmodel.Record{
 		WorkspaceID: principal.WorkspaceID,
-		ID:          recordID,
+		RecordID:    recordID,
 		Data:        recordvalidation.RecordCloneData(data),
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -328,11 +335,11 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: localizedValues}
 	if s.dependencies.BuildAudit != nil {
 		var metadata map[string]any
-		if strings.TrimSpace(claim.Execution.ID) != "" {
+		if strings.TrimSpace(claim.Execution.OperationID) != "" {
 			metadata = idempotency.AuditMetadata(claimAuditFacts(claim, "record.create", "succeeded"))
 		}
 		metadata = recordLocalizationAuditMetadata(metadata, localizedValues)
-		audit := s.dependencies.BuildAudit(ctx, "record_created", objectKey, record.ID, principal, "Created "+objectKey+" record", nil, record.Data, metadata)
+		audit := s.dependencies.BuildAudit(ctx, "record_created", objectKey, record.RecordID, principal, "Created "+objectKey+" record", nil, record.Data, metadata)
 		commit.Audit = &audit
 	}
 	if s.dependencies.AfterOutbox != nil {
@@ -385,11 +392,11 @@ func claimAuditFacts(claim recordmodel.RecordMutationClaimResult, scope, status 
 	}
 }
 
-func (s *RecordCreateApplicationService) newRecordID(objectKey string) string {
+func (s *RecordCreateApplicationService) newRecordID(objectKey string) (string, error) {
 	if s.dependencies.NewRecordID != nil {
 		return s.dependencies.NewRecordID(objectKey)
 	}
-	return fmt.Sprintf("%s_%d", objectKey, time.Now().UnixNano())
+	return entityid.New("rec")
 }
 
 func (s *RecordCreateApplicationService) now() time.Time {

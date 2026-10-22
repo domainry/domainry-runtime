@@ -14,13 +14,13 @@ import (
 func workflowApprovalDecisionTasks(ctx context.Context, store workflowcontract.WorkflowProcessStore, process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask) ([]workflowmodel.WorkflowTask, error) {
 	node, _ := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, task.NodeID)
 	if strings.TrimSpace(workflowpolicy.WorkflowApprovalNodeContract(node).Mode) != "quorum" {
-		return store.ListTasks(ctx, process.WorkspaceID, process.ID, "", "", 500)
+		return store.ListTasks(ctx, process.WorkspaceID, process.ProcessID, "", "", 500)
 	}
 	reader, ok := store.(workflowcontract.WorkflowApprovalTaskReader)
 	if !ok {
 		return nil, fmt.Errorf("workflow quorum requires a complete node task reader")
 	}
-	tasks, err := reader.ListApprovalTasks(ctx, process.WorkspaceID, process.ID, task.NodeInstanceID)
+	tasks, err := reader.ListApprovalTasks(ctx, process.WorkspaceID, process.ProcessID, task.NodeInstanceID)
 	if err != nil {
 		return nil, err
 	}

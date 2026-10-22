@@ -38,7 +38,7 @@ func (p *breakGlassRepositoryProbe) CreateOperationsBreakGlass(_ context.Context
 			return false, nil
 		}
 	}
-	p.grants[grant.ID] = grant
+	p.grants[grant.BreakGlassGrantID] = grant
 	return true, nil
 }
 func (p *breakGlassRepositoryProbe) GetOperationsBreakGlass(_ context.Context, id string) (operationsmodel.OperationsBreakGlassGrant, bool, error) {
@@ -67,11 +67,11 @@ func (p *breakGlassRepositoryProbe) RevokeOperationsBreakGlass(_ context.Context
 	if p.revokeChanged != nil {
 		return *p.revokeChanged, nil
 	}
-	existing, ok := p.grants[grant.ID]
+	existing, ok := p.grants[grant.BreakGlassGrantID]
 	if !ok || existing.Revision != revision || existing.State != operationsmodel.OperationsBreakGlassActive {
 		return false, nil
 	}
-	p.grants[grant.ID] = grant
+	p.grants[grant.BreakGlassGrantID] = grant
 	return true, nil
 }
 
@@ -113,22 +113,22 @@ func TestOperationsBreakGlassIsTimeLimitedDualApprovedAuditedAndRevisionFenced(t
 		t.Fatalf("enabled=%#v alerts=%#v", enabled, alerts.events)
 	}
 	replay, err := service.EnableBreakGlass(t.Context(), command, "enable-key", principal)
-	if err != nil || replay.Grant.ID != enabled.Grant.ID || len(alerts.events) != 1 {
+	if err != nil || replay.Grant.BreakGlassGrantID != enabled.Grant.BreakGlassGrantID || len(alerts.events) != 1 {
 		t.Fatalf("replay=%#v alerts=%#v err=%v", replay, alerts.events, err)
 	}
-	current := repository.grants[enabled.Grant.ID]
+	current := repository.grants[enabled.Grant.BreakGlassGrantID]
 	current.State = operationsmodel.OperationsBreakGlassRevoked
-	repository.grants[enabled.Grant.ID] = current
+	repository.grants[enabled.Grant.BreakGlassGrantID] = current
 	replay, err = service.EnableBreakGlass(t.Context(), command, "enable-key", principal)
 	if err != nil || replay.Grant.State != operationsmodel.OperationsBreakGlassRevoked || len(alerts.events) != 1 {
 		t.Fatalf("current replay=%#v alerts=%#v err=%v", replay, alerts.events, err)
 	}
 	current.State = operationsmodel.OperationsBreakGlassActive
-	repository.grants[enabled.Grant.ID] = current
-	if _, err := service.DisableBreakGlass(t.Context(), enabled.Grant.ID, OperationsBreakGlassDisableCommand{ExpectedRevision: 2, Reason: "wrong revision", IncidentRef: "INC-42"}, "disable-bad", principal); apperror.CodeOf(err) != "backend.operations.break_glass_revision_conflict" {
+	repository.grants[enabled.Grant.BreakGlassGrantID] = current
+	if _, err := service.DisableBreakGlass(t.Context(), enabled.Grant.BreakGlassGrantID, OperationsBreakGlassDisableCommand{ExpectedRevision: 2, Reason: "wrong revision", IncidentRef: "INC-42"}, "disable-bad", principal); apperror.CodeOf(err) != "backend.operations.break_glass_revision_conflict" {
 		t.Fatalf("revision err=%v", err)
 	}
-	disabled, err := service.DisableBreakGlass(t.Context(), enabled.Grant.ID, OperationsBreakGlassDisableCommand{ExpectedRevision: 1, Reason: "incident ended", IncidentRef: "INC-42"}, "disable-key", principal)
+	disabled, err := service.DisableBreakGlass(t.Context(), enabled.Grant.BreakGlassGrantID, OperationsBreakGlassDisableCommand{ExpectedRevision: 1, Reason: "incident ended", IncidentRef: "INC-42"}, "disable-key", principal)
 	if err != nil || disabled.Grant.State != operationsmodel.OperationsBreakGlassRevoked || len(alerts.events) != 2 || alerts.operationIDs[1] == "" || disabled.Grant.AuditEventID == enabled.Grant.AuditEventID || disabled.Grant.AuditEventID != alerts.grants[1].AuditEventID {
 		t.Fatalf("disabled=%#v alerts=%#v err=%v", disabled, alerts.events, err)
 	}

@@ -57,7 +57,7 @@ func TestAgentTaskQueryAdapterRemainingBranches(t *testing.T) {
 	if _, err := adapter.QueryAgentRecords(t.Context(), "customer", nil, scope, principal); !errors.Is(err, wantErr) {
 		t.Fatalf("err=%v", err)
 	}
-	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada", "secret": "x"}}}}
+	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "one", Data: map[string]any{"name": "Ada", "secret": "x"}}}}
 	adapter = agentTaskToolQueryAdapter{records: agentTaskRecordStub{page: page}}
 	if _, err := adapter.QueryAgentRecords(t.Context(), "customer", nil, scope, principal); err != nil {
 		t.Fatal(err)

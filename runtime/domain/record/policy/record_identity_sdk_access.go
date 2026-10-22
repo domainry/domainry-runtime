@@ -200,7 +200,7 @@ func RecordSDKAllowsRecord(principal principalmodel.Principal, object definition
 		identitysdk.AccessRequest{
 			ObjectKey: object.Key,
 			Action:    normalizeSDKRecordAction(action),
-			RecordID:  record.ID,
+			RecordID:  record.RecordID,
 		},
 		recordSDKResourceFacts(object, record),
 		RecordSDKEvaluationContext(principal),
@@ -273,7 +273,7 @@ func recordSDKResourceFacts(_ definitionmodel.ObjectSchema, record recordmodel.R
 	}
 	// The ID remains available as an ordinary record fact for explicit custom
 	// policies and deny guardrails. Canonical `all` does not evaluate it.
-	facts["id"] = record.ID
+	facts["id"] = record.RecordID
 	facts[RecordOwnerUserIDSystemField] = record.OwnerUserID
 	facts[RecordOwnerOrgIDSystemField] = record.OwnerOrgID
 	return facts

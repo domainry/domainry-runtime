@@ -30,13 +30,14 @@ func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor modulehost
 	}
 	if _, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
 		if value.PublicationIntent == nil {
-			return fmt.Errorf("Notification SaaS publication intent is unavailable for event %q", value.ID)
+			return fmt.Errorf("Notification SaaS publication intent is unavailable for event %q", value.EventID)
 		}
-		if err := notificationpublication.NewPublicationOutboxStore(w.runtimeStore).InsertIntentTx(ctx, executor, *value.PublicationIntent); err != nil {
+		messageID, err := notificationpublication.NewPublicationOutboxStore(w.runtimeStore).InsertIntentTx(ctx, executor, *value.PublicationIntent)
+		if err != nil {
 			return err
 		}
 		if transactioncontract.ActiveTransaction(ctx) {
-			return w.registerSaaSAfterCommit(ctx, *value.PublicationIntent)
+			return w.registerSaaSAfterCommit(ctx, *value.PublicationIntent, messageID)
 		}
 		return nil
 	}
@@ -60,30 +61,44 @@ func (w InboxEventWriter) InsertEventTx(ctx context.Context, executor modulehost
 	return fmt.Errorf("Notification transaction topology is not bound")
 }
 
-func (w InboxEventWriter) registerSaaSAfterCommit(ctx context.Context, intent notificationmodel.NotificationIntent) error {
-	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake Notification SaaS publication " + intent.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error {
+func (w InboxEventWriter) registerSaaSAfterCommit(ctx context.Context, intent notificationmodel.NotificationIntent, messageID string) error {
+	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake Notification SaaS publication " + intent.SourceEventID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error {
 		workspace, err := principalmodel.NewWorkspaceID(intent.WorkspaceID)
 		if err == nil && w.runtimeStore != nil {
-			w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(intent.ID)})
+			w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(messageID)})
 		}
 		return nil
 	}})
 }
 
 func (w InboxEventWriter) registerAfterCommit(ctx context.Context, event notificationmodel.NotificationEvent) error {
-	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake notification inbox " + event.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error { w.PublishCommittedEventWakeup(event); return nil }})
+	return transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{Name: "wake notification inbox " + event.EventID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true, Run: func(context.Context) error { w.PublishCommittedEventWakeup(event); return nil }})
 }
 
 func (w InboxEventWriter) PublishCommittedEventWakeup(event notificationmodel.NotificationEvent) {
 	workspace, err := principalmodel.NewWorkspaceID(event.WorkspaceID)
-	if w.runtimeStore == nil || err != nil || strings.TrimSpace(event.ID) == "" {
+	if w.runtimeStore == nil || err != nil || strings.TrimSpace(event.EventID) == "" {
 		return
 	}
-	queue := "notification_inbox"
-	if _, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
-		queue = "notification_publication"
+	locator := workerplatform.DurableTaskLocator{QueueKind: "notification_inbox", WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(event.EventID)}
+	if scope, saas := w.runtimeStore.NotificationSaaSPublications(); saas {
+		statement, args, buildErr := query.NewWorkspaceSelectBuilder(w.runtimeStore.SQLRenderer, "_publication_outbox", workspace.String()).
+			Columns("message_id").Where(query.And(
+			query.Equal("publication_type", "notification.saas"),
+			query.Equal("application_key", scope.ApplicationKey),
+			query.Equal("source_event_id", event.SourceEventID),
+		)).OrderBy(query.Descending("id")).Limit(1).Build()
+		if buildErr != nil {
+			return
+		}
+		var messageID string
+		if queryErr := w.runtimeStore.DB().QueryRowContext(context.Background(), statement, args...).Scan(&messageID); queryErr != nil || strings.TrimSpace(messageID) == "" {
+			return
+		}
+		locator.QueueKind = "notification_publication"
+		locator.TaskID = strings.TrimSpace(messageID)
 	}
-	w.runtimeStore.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: queue, WorkspaceID: workspace.String(), TaskID: strings.TrimSpace(event.ID)})
+	w.runtimeStore.WorkerWakeups().Publish(locator)
 }
 
 func (w InboxEventWriter) CommittedCount(ctx context.Context, event notificationmodel.NotificationEvent) (int, error) {

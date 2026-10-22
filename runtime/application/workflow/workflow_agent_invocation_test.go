@@ -29,9 +29,9 @@ func TestAgentWorkflowInspectionDoesNotExecuteAndRejectsUnownedReceipts(t *testi
 	payload := map[string]any{"source": "conversation"}
 	key, _ := agentWorkflowInvocationKey(workflow.Key, "logical-start", principal)
 	fingerprint, _ := workflowExecutionFingerprint(workflow, payload, "agent", 1)
-	execution := workflowmodel.WorkflowExecution{ID: "execution", ProcessID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ActorID: principal.UserID, Trigger: "agent", IdempotencyKey: key, Status: "waiting"}
-	receipt := workflowmodel.WorkflowExecutionReceipt{WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, IdempotencyKey: key, RequestFingerprint: fingerprint, ExecutionID: execution.ID, Status: string(idempotency.StatusSucceeded), ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)}
-	probe := &agentWorkflowReceiptProbe{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ID: execution}}, receipt: receipt, found: true}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", ProcessID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ActorID: principal.UserID, Trigger: "agent", IdempotencyKey: key, Status: "waiting"}
+	receipt := workflowmodel.WorkflowExecutionReceipt{WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, IdempotencyKey: key, RequestFingerprint: fingerprint, ExecutionID: execution.ExecutionID, Status: string(idempotency.StatusSucceeded), ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)}
+	probe := &agentWorkflowReceiptProbe{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ExecutionID: execution}}, receipt: receipt, found: true}
 	service := newWorkflowExecutionService(&probe.workflowExecutionWorkerStub, workflow)
 	service.workerRepo = probe
 	got, found, err := service.InspectAgentWorkflowInvocation(t.Context(), workflow.Key, payload, "logical-start", principal)
@@ -44,10 +44,10 @@ func TestAgentWorkflowInspectionDoesNotExecuteAndRejectsUnownedReceipts(t *testi
 		func() { probe.receipt.WorkflowKey = "other" },
 		func() { probe.receipt.Status = string(idempotency.StatusProcessing) },
 		func() { probe.receipt.ExpiresAt = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano) },
-		func() { other := execution; other.ActorID = "other"; probe.executions[execution.ID] = other },
+		func() { other := execution; other.ActorID = "other"; probe.executions[execution.ExecutionID] = other },
 		func() { probe.err = errors.New("unavailable") },
 	} {
-		probe.receipt, probe.err, probe.executions[execution.ID] = receipt, nil, execution
+		probe.receipt, probe.err, probe.executions[execution.ExecutionID] = receipt, nil, execution
 		mutate()
 		if _, _, err := service.InspectAgentWorkflowInvocation(t.Context(), workflow.Key, payload, "logical-start", principal); err == nil {
 			t.Fatal("invalid receipt was accepted")

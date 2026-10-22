@@ -106,11 +106,11 @@ func (s *OperationsApplicationService) ActOnDeadLetter(ctx context.Context, owne
 		return OperationsDeadLetterActionResult{Item: current, Receipt: receipt}, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute owner-controlled dead-letter transition")
-	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsDeadLetterActionResult{}, err
 	}
-	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
+	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.OperationID)
 	item, ownerErr := adapter.Act(ownerContext, id, action, strings.TrimSpace(request.Reason), key, principal)
 	if ownerErr != nil {
 		receipt.Command.Status, receipt.FailureClass, receipt.ErrorCode = operationsmodel.OperationsStatusFailed, operationsmodel.OperationsFailureManualIntervention, "backend.operations.dead_letter_owner_rejected"

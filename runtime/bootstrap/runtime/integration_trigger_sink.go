@@ -113,7 +113,7 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 		setIntegrationTriggerDefault(payload, "integration_idempotency_key", request.IdempotencyKey)
 		executionPrincipal := principal.WithExactSystemCapabilities(workflowcontract.RunActionKey(request.Target.WorkflowKey))
 		result, runErr := s.workflows.RunIntegrationWorkflow(ctx, request.Target.WorkflowKey, payload, executionPrincipal)
-		receipt := runtimeIntegrationReceipt(request, result.Execution.ID, result.Status, "")
+		receipt := runtimeIntegrationReceipt(request, result.Execution.ExecutionID, result.Status, "")
 		if runErr != nil {
 			receipt.Status, receipt.ErrorCode = "failed", apperror.CodeOf(runErr)
 		}

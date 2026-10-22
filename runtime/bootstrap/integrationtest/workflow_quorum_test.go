@@ -34,7 +34,7 @@ func TestWorkflowQuorumDecisions(t *testing.T) {
 				t.Fatal(err)
 			}
 			repository := workflowProcessStore(store)
-			tasks, err := repository.ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
+			tasks, err := repository.ListTasks(t.Context(), "workspace-primary", process.ProcessID, "", "", 10)
 			if err != nil || len(tasks) != 3 {
 				t.Fatalf("tasks=%+v err=%v", tasks, err)
 			}
@@ -42,7 +42,7 @@ func TestWorkflowQuorumDecisions(t *testing.T) {
 			first := quorumPrincipal(tasks[0].AssigneeUserID, integrationWorkflowTaskDecisionPermissions()...)
 			request := workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", IdempotencyKey: "first-vote"}
 			for range 2 {
-				after, err := application.DecideTask(t.Context(), tasks[0].ID, request, first)
+				after, err := application.DecideTask(t.Context(), tasks[0].TaskID, request, first)
 				if err != nil || after.Status != "waiting" {
 					t.Fatalf("first vote/replay=%+v err=%v", after, err)
 				}
@@ -50,7 +50,7 @@ func TestWorkflowQuorumDecisions(t *testing.T) {
 			second := quorumPrincipal(tasks[1].AssigneeUserID, integrationWorkflowTaskDecisionPermissions()...)
 			request = workflowmodel.WorkflowTaskDecisionRequest{Decision: decision, IdempotencyKey: "second-vote"}
 			for range 2 {
-				after, err := application.DecideTask(t.Context(), tasks[1].ID, request, second)
+				after, err := application.DecideTask(t.Context(), tasks[1].TaskID, request, second)
 				want := "rejected"
 				if decision == "approved" {
 					want = "completed"
@@ -59,11 +59,11 @@ func TestWorkflowQuorumDecisions(t *testing.T) {
 					t.Fatalf("second vote/replay=%+v want=%s err=%v", after, want, err)
 				}
 			}
-			remaining, found, err := repository.GetTask(t.Context(), "workspace-primary", tasks[2].ID)
+			remaining, found, err := repository.GetTask(t.Context(), "workspace-primary", tasks[2].TaskID)
 			if err != nil || !found || remaining.Status != "cancelled" {
 				t.Fatalf("remaining=%+v found=%v err=%v", remaining, found, err)
 			}
-			events, err := repository.ListEvents(t.Context(), "workspace-primary", process.ID, 100)
+			events, err := repository.ListEvents(t.Context(), "workspace-primary", process.ProcessID, 100)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +101,7 @@ func TestWorkflowQuorumConcurrentVotesAdvanceOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := workflowProcessStore(store)
-	tasks, err := repository.ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
+	tasks, err := repository.ListTasks(t.Context(), "workspace-primary", process.ProcessID, "", "", 10)
 	if err != nil || len(tasks) != 3 {
 		t.Fatalf("tasks=%+v err=%v", tasks, err)
 	}
@@ -111,7 +111,7 @@ func TestWorkflowQuorumConcurrentVotesAdvanceOnce(t *testing.T) {
 	for _, task := range tasks[:2] {
 		group.Go(func() {
 			<-start
-			_, err := records.Applications().Workflows.DecideTask(t.Context(), task.ID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", IdempotencyKey: task.ID}, quorumPrincipal(task.AssigneeUserID, integrationWorkflowTaskDecisionPermissions()...))
+			_, err := records.Applications().Workflows.DecideTask(t.Context(), task.TaskID, workflowmodel.WorkflowTaskDecisionRequest{Decision: "approved", IdempotencyKey: task.TaskID}, quorumPrincipal(task.AssigneeUserID, integrationWorkflowTaskDecisionPermissions()...))
 			failures <- err
 		})
 	}
@@ -123,11 +123,11 @@ func TestWorkflowQuorumConcurrentVotesAdvanceOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	process, _, err = repository.GetProcess(t.Context(), "workspace-primary", process.ID)
+	process, _, err = repository.GetProcess(t.Context(), "workspace-primary", process.ProcessID)
 	if err != nil || process.Status != "completed" {
 		t.Fatalf("process=%+v err=%v", process, err)
 	}
-	tasks, err = repository.ListTasks(t.Context(), "workspace-primary", process.ID, "", "", 10)
+	tasks, err = repository.ListTasks(t.Context(), "workspace-primary", process.ProcessID, "", "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}

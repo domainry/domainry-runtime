@@ -44,7 +44,7 @@ func (p *operationsRepositoryProbe) GetOperationsReceipt(_ context.Context, scop
 		return operationsmodel.OperationsReceipt{}, false, p.getErr
 	}
 	for _, receipt := range p.receipts {
-		if receipt.Command.ID == id && receipt.Command.Scope.WorkspaceID == scope.WorkspaceID && receipt.Command.Scope.SystemPurpose == scope.SystemPurpose {
+		if receipt.Command.OperationID == id && receipt.Command.Scope.WorkspaceID == scope.WorkspaceID && receipt.Command.Scope.SystemPurpose == scope.SystemPurpose {
 			return receipt, true, nil
 		}
 	}
@@ -79,7 +79,7 @@ func (p *operationsRepositoryProbe) UpdateOperationsReceipt(_ context.Context, r
 		return false, p.updateErr
 	}
 	for key, existing := range p.receipts {
-		if existing.Command.ID == receipt.Command.ID && existing.Command.Status == expected {
+		if existing.Command.OperationID == receipt.Command.OperationID && existing.Command.Status == expected {
 			p.receipts[key] = receipt
 			return true, nil
 		}
@@ -95,11 +95,12 @@ func TestOperationsSubmitPersistsReplayableWorkspaceReceipt(t *testing.T) {
 	request := OperationsSubmitRequest{Kind: "retention.cleanup", ResourceType: "retention_policy", Reason: "release cleanup", Payload: map[string]any{"mode": "preview"}}
 
 	first, decision, err := service.Submit(t.Context(), request, "backup-1", principal)
-	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || first.Command.ID != "operation_fixed" || first.Command.Owner != "lifecycle" || first.StatusURL != "/operations/operation_fixed" {
+	expectedOperationID := operationsTestOperationID("fixed")
+	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || first.Command.OperationID != expectedOperationID || first.Command.Owner != "lifecycle" || first.StatusURL != "/operations/"+expectedOperationID {
 		t.Fatalf("first=%#v decision=%s err=%v", first, decision, err)
 	}
 	replayed, decision, err := service.Submit(t.Context(), request, "backup-1", principal)
-	if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replayed.Command.ID != first.Command.ID {
+	if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replayed.Command.OperationID != first.Command.OperationID {
 		t.Fatalf("replay=%#v decision=%s err=%v", replayed, decision, err)
 	}
 	request.Payload = map[string]any{"mode": "full"}

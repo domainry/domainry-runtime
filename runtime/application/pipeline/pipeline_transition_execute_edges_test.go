@@ -50,12 +50,12 @@ func TestPipelineTransitionExecuteBoundariesAndHappyPaths(t *testing.T) {
 	if !service.IsAction(action) || service.IsAction(definitionmodel.ActionSchema{Key: "other"}) {
 		t.Fatal("pipeline action classification mismatch")
 	}
-	result, err := service.Execute(t.Context(), object.Key, record.ID, action, map[string]any{"to_stage": "stage-new"}, principal)
-	if err != nil || result.RecordID != record.ID {
+	result, err := service.Execute(t.Context(), object.Key, record.RecordID, action, map[string]any{"to_stage": "stage-new"}, principal)
+	if err != nil || result.RecordID != record.RecordID {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	reopenService, _, _ := pipelineExecuteFixture(t)
-	result, err = reopenService.Execute(t.Context(), object.Key, record.ID, definitionmodel.ActionSchema{Key: "pipeline_item.reopen"}, map[string]any{"to_stage": "stage-new"}, principal)
+	result, err = reopenService.Execute(t.Context(), object.Key, record.RecordID, definitionmodel.ActionSchema{Key: "pipeline_item.reopen"}, map[string]any{"to_stage": "stage-new"}, principal)
 	if err != nil || result.Record.Data["current_stage"] != "stage-new" {
 		t.Fatalf("reopen=%+v err=%v", result, err)
 	}
@@ -98,7 +98,7 @@ func TestPipelineTransitionExecuteBoundariesAndHappyPaths(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			candidate, _, _ := pipelineExecuteFixture(t)
 			test.edit(candidate)
-			_, err := candidate.Execute(t.Context(), object.Key, record.ID, action, test.data, principal)
+			_, err := candidate.Execute(t.Context(), object.Key, record.RecordID, action, test.data, principal)
 			if err == nil || (test.code != "" && apperror.CodeOf(err) != test.code) {
 				t.Fatalf("error=%v code=%q", err, apperror.CodeOf(err))
 			}
@@ -107,7 +107,7 @@ func TestPipelineTransitionExecuteBoundariesAndHappyPaths(t *testing.T) {
 
 	missingCurrent, _, _ := pipelineExecuteFixture(t)
 	missingCurrent.dependencies.GetRecord = func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
-		return recordmodel.Record{ID: "item", Data: map[string]any{}}, true, nil
+		return recordmodel.Record{RecordID: "item", Data: map[string]any{}}, true, nil
 	}
 	if _, err := missingCurrent.Execute(t.Context(), object.Key, "item", action, nil, principal); apperror.CodeOf(err) != "backend.pipeline.current_stage_required" {
 		t.Fatalf("missing current stage error=%v", err)
@@ -138,11 +138,11 @@ func TestPipelineTransitionDestinationAndReopenEdges(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-1", UserID: "user-1"}}
 	service, object, record := pipelineExecuteFixture(t)
 	stage, err := service.destinationStage(t.Context(), principal.WorkspaceID, "", "stage-old", map[string]any{"to_stage": "stage-new"})
-	if err != nil || stage.ID != "stage-new" {
+	if err != nil || stage.RecordID != "stage-new" {
 		t.Fatalf("derived destination=%+v err=%v", stage, err)
 	}
 	stage, err = service.destinationStage(t.Context(), principal.WorkspaceID, "", "stage-old", nil)
-	if err != nil || stage.ID != "stage-new" {
+	if err != nil || stage.RecordID != "stage-new" {
 		t.Fatalf("next destination=%+v err=%v", stage, err)
 	}
 	if _, err := service.destinationStage(t.Context(), principal.WorkspaceID, "pipeline-1", "missing", nil); err == nil {
@@ -170,7 +170,7 @@ func TestPipelineTransitionDirectCommitFailures(t *testing.T) {
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-1"}}
 	service, object, record := pipelineExecuteFixtureWithCommit(t, wantErr)
 	action := definitionmodel.ActionSchema{Key: "pipeline_item.advance", ObjectKey: object.Key}
-	if _, err := service.Execute(t.Context(), object.Key, record.ID, action, map[string]any{"to_stage": "stage-new"}, principal); !errors.Is(err, wantErr) {
+	if _, err := service.Execute(t.Context(), object.Key, record.RecordID, action, map[string]any{"to_stage": "stage-new"}, principal); !errors.Is(err, wantErr) {
 		t.Fatalf("execute commit error=%v", err)
 	}
 	service, object, record = pipelineExecuteFixtureWithCommit(t, wantErr)

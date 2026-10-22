@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/entityid"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
@@ -36,9 +36,6 @@ func NewDatabaseRetirementApplicationService(repository operationsrepository.Dat
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	if newID == nil {
-		newID = requestcontext.NewRequestID
-	}
 	return &DatabaseRetirementApplicationService{repository: repository, executor: executor, now: now, newID: newID}
 }
 
@@ -50,7 +47,11 @@ func (s *DatabaseRetirementApplicationService) Discover(ctx context.Context, obj
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindInternal, "backend.operations.database_retirement_repository_unavailable", nil, nil)
 	}
 	now := s.now().UTC()
-	retirement := operationsmodel.DatabaseRetirement{ID: "database_retirement_" + strings.TrimSpace(s.newID()), Object: object, State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: strings.TrimSpace(owner)}, UpdatedAt: now}
+	operationID, generationErr := s.nextOperationID()
+	if generationErr != nil {
+		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindInternal, "backend.operations.id_generation_failed", generationErr, nil)
+	}
+	retirement := operationsmodel.DatabaseRetirement{OperationID: operationID, Object: object, State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: strings.TrimSpace(owner)}, UpdatedAt: now}
 	if err := validateDatabaseRetirementDiscovery(retirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindBadRequest, err.Error(), err, nil)
 	}
@@ -62,6 +63,17 @@ func (s *DatabaseRetirementApplicationService) Discover(ctx context.Context, obj
 		return operationsmodel.DatabaseRetirement{}, apperror.New(apperror.KindConflict, "backend.operations.database_retirement_exists", nil, nil)
 	}
 	return retirement, nil
+}
+
+func (s *DatabaseRetirementApplicationService) nextOperationID() (string, error) {
+	if s == nil || s.newID == nil {
+		return entityid.New("op")
+	}
+	candidate := strings.TrimSpace(s.newID())
+	if err := entityid.Validate("op", candidate); err == nil {
+		return candidate, nil
+	}
+	return entityid.Derive("op", "runtime.database-retirement.injected-id", candidate)
 }
 
 func (s *DatabaseRetirementApplicationService) Status(ctx context.Context, id string, principal principalmodel.Principal) (operationsmodel.DatabaseRetirement, error) {
@@ -267,7 +279,7 @@ func (s *DatabaseRetirementApplicationService) verifyDatabaseRetirementCompletio
 }
 
 func validateDatabaseRetirementDiscovery(retirement operationsmodel.DatabaseRetirement) error {
-	if strings.TrimSpace(retirement.ID) == "" || strings.TrimSpace(retirement.Object.Engine) == "" || strings.TrimSpace(retirement.Object.Database) == "" || strings.TrimSpace(retirement.Object.Kind) == "" || strings.TrimSpace(retirement.Object.Name) == "" || strings.TrimSpace(retirement.Evidence.Owner) == "" {
+	if entityid.Validate("op", retirement.OperationID) != nil || strings.TrimSpace(retirement.Object.Engine) == "" || strings.TrimSpace(retirement.Object.Database) == "" || strings.TrimSpace(retirement.Object.Kind) == "" || strings.TrimSpace(retirement.Object.Name) == "" || strings.TrimSpace(retirement.Evidence.Owner) == "" {
 		return fmt.Errorf("backend.operations.database_retirement_identity_required")
 	}
 	return nil

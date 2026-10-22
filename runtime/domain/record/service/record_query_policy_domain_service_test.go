@@ -48,7 +48,7 @@ func TestQueryPolicyServiceNormalizesExplicitListQuery(t *testing.T) {
 	if got := query.Filters["owner_id"]; got != "user-1" {
 		t.Fatalf("explicit owner filter = %#v", got)
 	}
-	if len(query.Sort) != 2 || query.Sort[0].Field != "name" || query.Sort[0].Direction != "desc" || query.Sort[1].Field != "id" || query.Sort[1].Direction != "asc" {
+	if len(query.Sort) != 2 || query.Sort[0].Field != "name" || query.Sort[0].Direction != "desc" || query.Sort[1].Field != recordmodel.IDField || query.Sort[1].Direction != "asc" {
 		t.Fatalf("sort normalization = %#v", query.Sort)
 	}
 	if query.AuthorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted || query.RootObjectKey != "" || query.ScopeExpression != nil {
@@ -61,13 +61,13 @@ func TestQueryPolicyServiceNormalizesBoundedInFilters(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "employee_profile", Fields: []definitionmodel.FieldSchema{{Key: "identity_user", Type: "relation", Config: map[string]any{"object_key": "identity_user"}}}}
 	query := service.NormalizeListQuery(object, recordmodel.RecordListQuery{Filters: map[string]any{
 		"identity_user__in": []any{"u2", "u1", "u1", ""},
-		"id__in":            []string{"p2", "p1"},
+		"record_id__in":     []string{"p2", "p1"},
 		"unknown__in":       []any{"leak"},
 	}}, accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{
 		Permissions:  []string{"employee_profile.read"},
 		DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "employee_profile", Scope: "all", Read: true}},
 	}))
-	if !reflect.DeepEqual(query.Filters["identity_user__in"], []any{"u2", "u1"}) || !reflect.DeepEqual(query.Filters["id__in"], []any{"p2", "p1"}) {
+	if !reflect.DeepEqual(query.Filters["identity_user__in"], []any{"u2", "u1"}) || !reflect.DeepEqual(query.Filters["record_id__in"], []any{"p2", "p1"}) {
 		t.Fatalf("normalized batch filters = %#v", query.Filters)
 	}
 	if _, exists := query.Filters["unknown__in"]; exists {
@@ -100,18 +100,18 @@ func TestQueryPolicyServiceAuthorizesCreateCandidateThroughPersistedRelationScop
 			return true, nil
 		},
 	})
-	allowed, err := service.CanWriteCandidateScope(t.Context(), principal, reservation, recordmodel.Record{ID: "reservation-new", Data: map[string]any{"order_id": "order-north"}})
+	allowed, err := service.CanWriteCandidateScope(t.Context(), principal, reservation, recordmodel.Record{RecordID: "reservation-new", Data: map[string]any{"order_id": "order-north"}})
 	if err != nil || !allowed || !called {
 		t.Fatalf("allowed=%v called=%v err=%v", allowed, called, err)
 	}
 	called = false
-	allowed, err = service.CanAccessPersistedRecordScope(t.Context(), principal, reservation, recordmodel.Record{ID: "reservation-existing", Data: map[string]any{"order_id": "order-north"}}, false)
+	allowed, err = service.CanAccessPersistedRecordScope(t.Context(), principal, reservation, recordmodel.Record{RecordID: "reservation-existing", Data: map[string]any{"order_id": "order-north"}}, false)
 	if err != nil || !allowed || !called {
 		t.Fatalf("persisted allowed=%v called=%v err=%v", allowed, called, err)
 	}
 
 	service = NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{reservation, order} }})
-	allowed, err = service.CanWriteCandidateScope(t.Context(), principal, reservation, recordmodel.Record{ID: "reservation-new", Data: map[string]any{"order_id": "order-north"}})
+	allowed, err = service.CanWriteCandidateScope(t.Context(), principal, reservation, recordmodel.Record{RecordID: "reservation-new", Data: map[string]any{"order_id": "order-north"}})
 	if allowed || apperror.CodeOf(err) != "backend.policy.candidate_scope_evaluator_unavailable" {
 		t.Fatalf("missing evaluator allowed=%v err=%v", allowed, err)
 	}

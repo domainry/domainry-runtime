@@ -178,7 +178,7 @@ func TestRecordCanonicalPredicatesCoversUpdatedAtNormalizationAndFailures(t *tes
 
 func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "counter", Fields: []definitionmodel.FieldSchema{{Key: "count", Type: "number"}, {Key: "rate", Type: "percent"}, {Key: "visits", Type: "integer"}}}
-	record := recordmodel.Record{ID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3), "rate": float64(1), "visits": int64(5)}}
+	record := recordmodel.Record{RecordID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3), "rate": float64(1), "visits": int64(5)}}
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	newService := func(repository *updateRepositoryProbe, objectForAction func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error), canAccess func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool) *RecordUpdateApplicationService {
 		return NewRecordUpdateApplicationService(RecordUpdateDependencies{Repository: repository, ObjectForAction: objectForAction, CanAccess: canAccess, CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true }})
@@ -189,7 +189,7 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 
 	repository := &updateRepositoryProbe{found: true, record: record}
 	service := newService(repository, objectForAction, nil)
-	plan, updated, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{
+	plan, updated, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{
 		Predicates: []transactionmodel.MutationPredicate{{Field: "count", Operator: "eq", Value: 3}},
 		Patch:      map[string]any{"rate": 2},
 		Arithmetic: []transactionmodel.MutationArithmetic{{Field: "count", Operation: "decrement", Operand: 1}, {Field: "visits", Operation: "increment", Operand: 2}},
@@ -198,21 +198,21 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 		t.Fatalf("plan=%#v updated=%#v err=%v", plan, updated, err)
 	}
 	facade := &RecordApplicationService{update: service}
-	if _, _, err := facade.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 3}}, principal); err != nil {
+	if _, _, err := facade.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 3}}, principal); err != nil {
 		t.Fatalf("facade plan err=%v", err)
 	}
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Predicates: []transactionmodel.MutationPredicate{{Field: "missing", Operator: "eq", Value: 3}}}, principal); apperror.CodeOf(err) != "backend.mutation.predicate_invalid" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Predicates: []transactionmodel.MutationPredicate{{Field: "missing", Operator: "eq", Value: 3}}}, principal); apperror.CodeOf(err) != "backend.mutation.predicate_invalid" {
 		t.Fatalf("predicate err=%v", err)
 	}
 
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization err=%v", err)
 	}
 	lookupFailure := errors.New("lookup failed")
 	service = newService(repository, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return definitionmodel.ObjectSchema{}, lookupFailure
 	}, nil)
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); !errors.Is(err, lookupFailure) {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); !errors.Is(err, lookupFailure) {
 		t.Fatalf("lookup err=%v", err)
 	}
 	timerObject := object
@@ -221,23 +221,23 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 	service = newService(repository, func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 		return timerObject, nil
 	}, nil)
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), timerObject.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), timerObject.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("record timer err=%v", err)
 	}
 
 	repository = &updateRepositoryProbe{err: errors.New("store unavailable")}
 	service = newService(repository, objectForAction, nil)
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.internal" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("repository err=%v", err)
 	}
 	repository = &updateRepositoryProbe{}
 	service = newService(repository, objectForAction, nil)
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record.not_found" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record.not_found" {
 		t.Fatalf("not found err=%v", err)
 	}
 	repository = &updateRepositoryProbe{found: true, record: record}
 	service = newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false })
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record.outside_scope" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); apperror.CodeOf(err) != "backend.record.outside_scope" {
 		t.Fatalf("scope err=%v", err)
 	}
 	scopeFailure := errors.New("scope unavailable")
@@ -247,19 +247,19 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 			return false, scopeFailure
 		},
 	})
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{}, principal); !errors.Is(err, scopeFailure) {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{}, principal); !errors.Is(err, scopeFailure) {
 		t.Fatalf("scope failure err=%v", err)
 	}
 
 	service = newService(repository, objectForAction, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true })
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Arithmetic: []transactionmodel.MutationArithmetic{{Field: "missing", Operation: "increment", Operand: 1}}}, principal); apperror.CodeOf(err) != "backend.mutation.arithmetic_field_invalid" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Arithmetic: []transactionmodel.MutationArithmetic{{Field: "missing", Operation: "increment", Operand: 1}}}, principal); apperror.CodeOf(err) != "backend.mutation.arithmetic_field_invalid" {
 		t.Fatalf("field err=%v", err)
 	}
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Arithmetic: []transactionmodel.MutationArithmetic{{Field: "count", Operation: "multiply", Operand: 1}}}, principal); apperror.CodeOf(err) != "backend.mutation.arithmetic_operation_invalid" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Arithmetic: []transactionmodel.MutationArithmetic{{Field: "count", Operation: "multiply", Operand: 1}}}, principal); apperror.CodeOf(err) != "backend.mutation.arithmetic_operation_invalid" {
 		t.Fatalf("arithmetic err=%v", err)
 	}
 	service = NewRecordUpdateApplicationService(RecordUpdateDependencies{Repository: repository, ObjectForAction: objectForAction, CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true }, CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return false }})
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 2}}, principal); apperror.CodeOf(err) != "backend.record.owner_write_denied" {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 2}}, principal); apperror.CodeOf(err) != "backend.record.owner_write_denied" {
 		t.Fatalf("planning err=%v", err)
 	}
 	var scopeChecks []bool
@@ -272,14 +272,14 @@ func TestPlanConditionalUpdateMutationCoversAuthorizationLookupScopeAndPlanning(
 			return true, nil
 		},
 	})
-	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.ID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 2}}, principal); err != nil || !reflect.DeepEqual(scopeChecks, []bool{false, true}) {
+	if _, _, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, record.RecordID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"rate": 2}}, principal); err != nil || !reflect.DeepEqual(scopeChecks, []bool{false, true}) {
 		t.Fatalf("contextual scope checks=%v err=%v", scopeChecks, err)
 	}
 }
 
 func TestConditionalUpdateCoversLifecycleErrorsAndWorkflow(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "counter", Fields: []definitionmodel.FieldSchema{{Key: "count", Type: "number"}}}
-	record := recordmodel.Record{ID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3)}}
+	record := recordmodel.Record{RecordID: "counter-1", UpdatedAt: "revision-1", Data: map[string]any{"count": float64(3)}}
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	input := transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"count": 4}}
 	newService := func(repository *updateRepositoryProbe, executeWorkflow func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal)) *RecordUpdateApplicationService {
@@ -296,32 +296,32 @@ func TestConditionalUpdateCoversLifecycleErrorsAndWorkflow(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := newService(&updateRepositoryProbe{}, nil).ConditionalUpdate(cancelled, object.Key, record.ID, input, principal); !errors.Is(err, context.Canceled) {
+	if _, err := newService(&updateRepositoryProbe{}, nil).ConditionalUpdate(cancelled, object.Key, record.RecordID, input, principal); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-cancel err=%v", err)
 	}
-	if _, err := newService(&updateRepositoryProbe{}, nil).ConditionalUpdate(t.Context(), object.Key, record.ID, input, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
+	if _, err := newService(&updateRepositoryProbe{}, nil).ConditionalUpdate(t.Context(), object.Key, record.RecordID, input, principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("plan err=%v", err)
 	}
 	commitFailure := errors.New("commit unavailable")
-	if _, err := newService(&updateRepositoryProbe{found: true, record: record, commitErr: commitFailure}, nil).ConditionalUpdate(t.Context(), object.Key, record.ID, input, principal); apperror.CodeOf(err) != "backend.internal" {
+	if _, err := newService(&updateRepositoryProbe{found: true, record: record, commitErr: commitFailure}, nil).ConditionalUpdate(t.Context(), object.Key, record.RecordID, input, principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("commit err=%v", err)
 	}
 
 	postCommit, cancelPostCommit := context.WithCancel(t.Context())
 	repository := &updateRepositoryProbe{found: true, record: record, commitHook: cancelPostCommit}
-	if _, err := newService(repository, nil).ConditionalUpdate(postCommit, object.Key, record.ID, input, principal); !errors.Is(err, context.Canceled) {
+	if _, err := newService(repository, nil).ConditionalUpdate(postCommit, object.Key, record.RecordID, input, principal); !errors.Is(err, context.Canceled) {
 		t.Fatalf("post-commit err=%v", err)
 	}
 	workflowCalls := 0
 	repository = &updateRepositoryProbe{found: true, record: record}
 	updated, err := newService(repository, func(context.Context, []workflowmodel.WorkflowExecution, principalmodel.Principal) {
 		workflowCalls++
-	}).ConditionalUpdate(t.Context(), object.Key, record.ID, input, principal)
+	}).ConditionalUpdate(t.Context(), object.Key, record.RecordID, input, principal)
 	if err != nil || updated.Data["count"] != float64(4) || workflowCalls != 1 {
 		t.Fatalf("updated=%#v workflowCalls=%d err=%v", updated, workflowCalls, err)
 	}
 	repository = &updateRepositoryProbe{found: true, record: record}
-	if _, err := newService(repository, nil).ConditionalUpdate(t.Context(), object.Key, record.ID, input, principal); err != nil {
+	if _, err := newService(repository, nil).ConditionalUpdate(t.Context(), object.Key, record.RecordID, input, principal); err != nil {
 		t.Fatalf("nil workflow callback err=%v", err)
 	}
 }

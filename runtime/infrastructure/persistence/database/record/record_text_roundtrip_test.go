@@ -20,23 +20,17 @@ func TestRecordStorePreservesEmptyTextOnRead(t *testing.T) {
 		{Key: "bank_name", Type: "text"}, {Key: "account_number", Type: "text"}, {Key: "code", Type: "text"}, {Key: "note", Type: "long_text"},
 	}}
 	columns := []ormschema.ColumnDefinition{}
-	for _, field := range []string{"workspace_id", "id", "created_at", "updated_at", "bank_name", "account_number", "code", "note"} {
+	for _, field := range []string{"bank_name", "account_number", "code", "note"} {
 		columns = append(columns, ormschema.Column(field, ormschema.Text()))
 	}
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), object.Key).Columns(columns...).PrimaryKey("workspace_id", "id").Build()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, args...); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, object.Key, columns...)
 	repository := NewRecordStore(store)
 	want := map[string]any{"bank_name": "", "account_number": "", "code": "  vendor code  ", "note": " \n "}
-	row := recordmodel.Record{ID: "row-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}
+	row := recordmodel.Record{RecordID: "row-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}
 	if err := repository.InsertRecord(t.Context(), "workspace", object, row); err != nil {
 		t.Fatal(err)
 	}
-	got, found, err := repository.GetRecord(t.Context(), "workspace", object, row.ID)
+	got, found, err := repository.GetRecord(t.Context(), "workspace", object, row.RecordID)
 	if err != nil || !found {
 		t.Fatalf("get found=%v err=%v", found, err)
 	}

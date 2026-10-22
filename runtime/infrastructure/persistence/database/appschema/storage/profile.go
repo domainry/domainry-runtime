@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
@@ -115,6 +116,7 @@ type BatchColumnAdder interface {
 type Profile interface {
 	IDColumnType() string
 	FieldColumnType(definitionmodel.FieldSchema, bool) string
+	FieldType(definitionmodel.FieldSchema, bool) ormschema.ColumnType
 	Columns(context.Context, Queryer, query.Renderer, string, string) (map[string]bool, error)
 	ColumnTypes(context.Context, Queryer, query.Renderer, string, string) (map[string]string, error)
 	Indexes(context.Context, Queryer, query.Renderer, string, string) (map[string]bool, error)

@@ -55,7 +55,7 @@ func RecordClaimFirstEligible(ctx context.Context, repository recordrepository.R
 		query.Filters = map[string]any{}
 	}
 	query.Filters[request.StatusField+"__in"] = eligible
-	query.Sort = []recordmodel.RecordSortRule{{Field: request.PriorityField, Direction: "desc"}, {Field: request.SequenceField, Direction: "asc"}, {Field: "created_at", Direction: "asc"}, {Field: "id", Direction: "asc"}}
+	query.Sort = []recordmodel.RecordSortRule{{Field: request.PriorityField, Direction: "desc"}, {Field: request.SequenceField, Direction: "asc"}, {Field: "created_at", Direction: "asc"}, {Field: recordmodel.IDField, Direction: "asc"}}
 	for attempt := 0; attempt < 32; attempt++ {
 		page, err := repository.ListRecords(ctx, request.WorkspaceID, request.Object, query)
 		if err != nil {

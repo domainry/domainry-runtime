@@ -39,7 +39,7 @@ func recordOwnedEffectAuthorizationPrincipal(ctx context.Context, principal prin
 	parent := object.AuthorizationParent
 	ownerIDs := []string{}
 	for id, record := range recordservice.RecordPlannedRelations(ctx)[parent.ObjectKey] {
-		if id != "" && record.ID == id && !record.Deleted && record.WorkspaceID == principal.WorkspaceID && principal.WorkspaceID != "" {
+		if id != "" && record.RecordID == id && !record.Deleted && record.WorkspaceID == principal.WorkspaceID && principal.WorkspaceID != "" {
 			ownerIDs = append(ownerIDs, id)
 		}
 	}
@@ -88,7 +88,7 @@ func recordValidateOwnedEffectCandidate(ctx context.Context, object definitionmo
 	ownerID = strings.TrimSpace(ownerID)
 	owner, found := recordservice.RecordPlannedRelations(ctx)[parent.ObjectKey][ownerID]
 	invocation, actionOwned := recordmutation.MutationInvocationFromContext(ctx)
-	if !valid || ownerID == "" || !found || owner.ID != ownerID || owner.Deleted || principal.WorkspaceID == "" || owner.WorkspaceID != principal.WorkspaceID || !actionOwned || invocation.Source != transactionmodel.MutationSourceAction || len(invocation.EffectAuthority[object.Key]) == 0 {
+	if !valid || ownerID == "" || !found || owner.RecordID != ownerID || owner.Deleted || principal.WorkspaceID == "" || owner.WorkspaceID != principal.WorkspaceID || !actionOwned || invocation.Source != transactionmodel.MutationSourceAction || len(invocation.EffectAuthority[object.Key]) == 0 {
 		return ownedRecordEffectDenied()
 	}
 	return nil

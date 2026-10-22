@@ -18,9 +18,20 @@ func stringsJoinIdentifiers(store *database.RuntimeStore, columns ...string) str
 	return strings.Join(values, ", ")
 }
 
-func recordFieldIsSystemOwned(fieldKey string) bool {
-	_, owned := recordschema.SystemColumn(fieldKey)
+func recordFieldIsSystemOwned(objectKey, fieldKey string) bool {
+	_, owned := recordschema.SystemColumn(objectKey, fieldKey)
 	return owned
+}
+
+func recordBusinessIDColumn(objectKey string) string {
+	return recordschema.EntityIDColumn(objectKey)
+}
+
+func recordPhysicalField(objectKey, fieldKey string) string {
+	if strings.TrimSpace(fieldKey) == "record_id" {
+		return recordBusinessIDColumn(objectKey)
+	}
+	return fieldKey
 }
 
 func appendRecordInsertMetadata(columns []string, values []any, record recordmodel.Record) ([]string, []any, error) {

@@ -33,7 +33,7 @@ func (d runtimePublicationDelivery) Accept(ctx context.Context, request integrat
 		return integrationsdk.DeliveryReceipt{}, fmt.Errorf("decode automation delivery payload: %w", err)
 	}
 	message := publicationmodel.Message{
-		ID: request.MessageID, WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey,
+		MessageID: request.MessageID, WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey,
 		ConnectionKey: request.ConnectionKey, Operation: request.Operation, DedupKey: request.DeduplicationKey,
 		EventID: request.MessageID, Payload: payload,
 	}

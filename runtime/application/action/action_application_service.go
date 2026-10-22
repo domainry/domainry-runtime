@@ -287,8 +287,8 @@ func (s *ActionApplicationService) Invoke(ctx context.Context, source actionmode
 	result.Status = "success"
 	if executed.Record != nil {
 		result.Output = ActionRecordInvocationOutput(*executed.Record)
-		if executed.Record.Record.ID != "" {
-			result.RecordVersions = map[string]string{executed.Record.Record.ID: executed.Record.Record.UpdatedAt}
+		if executed.Record.Record.RecordID != "" {
+			result.RecordVersions = map[string]string{executed.Record.Record.RecordID: executed.Record.Record.UpdatedAt}
 		}
 	} else if executed.Object != nil {
 		result.Status, result.Output = executed.Object.Status, ActionObjectInvocationOutput(*executed.Object)

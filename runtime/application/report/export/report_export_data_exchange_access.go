@@ -51,7 +51,7 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 		total = payload.ExactTotal
 	}
 	projection := ExchangeJob{
-		ID: job.ID, AuditID: job.ReferenceID, ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey,
+		ID: job.ID, JobID: job.JobID, AuditID: job.ReferenceID, ReportKey: payload.ReportKey, ObjectKey: payload.ObjectKey,
 		Status: status, PagesCompleted: job.ResultChunks, RowsExported: job.Checkpoint, Total: total, Scope: payload.Scope,
 		ArtifactID: job.ArtifactID, ErrorCode: job.ErrorCode,
 		CreatedAt: job.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: job.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -59,17 +59,17 @@ func (p *DataExchangeProvider) ProjectJob(ctx context.Context, job dataexchange.
 	if status != "completed" {
 		return projection, nil
 	}
-	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.ID, job.ArtifactID); err != nil {
+	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.JobID, job.ArtifactID); err != nil {
 		return ExchangeJob{}, err
 	}
-	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID, Provider: DataExchangeProviderKey, Operation: "export"})
+	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.JobID, Provider: DataExchangeProviderKey, Operation: "export"})
 	if err != nil {
 		return ExchangeJob{}, err
 	}
 	if artifact.Content != nil {
 		_ = artifact.Content.Close()
 	}
-	projection.ArtifactID, projection.ContentSHA256 = artifact.ID, artifact.SHA256
+	projection.ArtifactID, projection.ContentSHA256 = artifact.ArtifactID, artifact.SHA256
 	projection.ExpiresAt = artifact.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	return projection, nil
 }
@@ -85,14 +85,14 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 	if err != nil {
 		return dataexchange.Artifact{}, err
 	}
-	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.ID, job.ArtifactID); err != nil {
+	if err = p.verifyCompletedReportExportReceipt(ctx, payload, job.JobID, job.ArtifactID); err != nil {
 		return dataexchange.Artifact{}, err
 	}
 	prepared, err := p.prepare(ctx, payload, principal, false)
 	if err != nil {
 		return dataexchange.Artifact{}, err
 	}
-	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.ID, Provider: DataExchangeProviderKey, Operation: "export"})
+	artifact, err := p.dependencies.Binding.Download(ctx, dataexchange.JobRequest{Scope: Scope(principal), JobID: job.JobID, Provider: DataExchangeProviderKey, Operation: "export"})
 	if err != nil {
 		return dataexchange.Artifact{}, err
 	}
@@ -108,7 +108,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 		if strings.TrimSpace(status) != "" && p.dependencies.Records != nil {
 			_ = p.dependencies.Records.TransitionReportExportAuditStatus(ctx, payload.WorkspaceID, prepared.control.AuditObject, payload.AuditID, prepared.control.RecordMapping.AuditStatusField, prepared.control.RecordMapping.AuditPreparedStatus, status)
 		}
-		_ = p.audit(ctx, "", event, payload.ObjectKey, principal, payload.AuditID, map[string]any{"report_key": payload.ReportKey, "artifact_id": artifact.ID, "reason": reason}, false)
+		_ = p.audit(ctx, "", event, payload.ObjectKey, principal, payload.AuditID, map[string]any{"report_key": payload.ReportKey, "artifact_id": artifact.ArtifactID, "reason": reason}, false)
 		return &apperror.AppError{Kind: apperror.KindForbidden, Code: code}
 	}
 	if artifact.ExpiresAt.IsZero() || !p.dependencies.Clock().UTC().Before(artifact.ExpiresAt) {
@@ -135,7 +135,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 		return dataexchange.Artifact{}, deny("backend.report.export_audit_status_invalid", "audit_status_changed")
 	}
 	if status != mapping.AuditDownloadedStatus {
-		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.ID,
+		won, transitionErr := p.dependencies.Records.TransitionReportExportAudit(ctx, payload.WorkspaceID, prepared.control.AuditObject, auditRecord.RecordID,
 			mapping.AuditStatusField, mapping.AuditPreparedStatus, map[string]any{mapping.AuditStatusField: mapping.AuditDownloadedStatus})
 		if transitionErr != nil {
 			return dataexchange.Artifact{}, transitionErr
@@ -154,7 +154,7 @@ func (p *DataExchangeProvider) openDataExchangeArtifact(ctx context.Context, job
 	}
 	parametersHash, _ := reportcontract.CanonicalJSONSHA256(prepared.normalizedScope.Parameters)
 	if err = p.audit(ctx, "", "report_export_downloaded", payload.ObjectKey, principal, payload.AuditID, map[string]any{
-		"report_key": payload.ReportKey, "artifact_id": artifact.ID, "expires_at": artifact.ExpiresAt.UTC().UnixMilli(),
+		"report_key": payload.ReportKey, "artifact_id": artifact.ArtifactID, "expires_at": artifact.ExpiresAt.UTC().UnixMilli(),
 		"watermarked": prepared.control.Watermark, "content_sha256": artifact.SHA256, "row_count": job.Checkpoint,
 		"scope_sha256": scopeHash, "parameters_sha256": parametersHash,
 	}, true); err != nil {

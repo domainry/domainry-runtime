@@ -96,7 +96,7 @@ func TestRecordEffectAuthorizationPrincipalScopesCreateAndRejectsOtherVerbs(t *t
 
 func TestActionEffectAuthorityAllowsInternalUpdateWithoutObjectUpdatePermission(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "secret", Type: "text"}}}
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "order-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "pending", "secret": "sealed"}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "order-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "pending", "secret": "sealed"}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {
 		if objectKey != object.Key || action != "update" {
@@ -126,7 +126,7 @@ func TestActionEffectAuthorityAllowsInternalUpdateWithoutObjectUpdatePermission(
 		t.Fatalf("updated=%#v principal=%#v commit=%#v err=%v", updated, principal, repository.commit, err)
 	}
 
-	repository.record = recordmodel.Record{ID: "order-1", UpdatedAt: "revision-2", Data: map[string]any{"status": "approved", "secret": "sealed"}}
+	repository.record = recordmodel.Record{RecordID: "order-1", UpdatedAt: "revision-2", Data: map[string]any{"status": "approved", "secret": "sealed"}}
 	_, err = service.Update(ctx, object.Key, "order-1", map[string]any{"secret": "exposed"}, principal)
 	if apperror.CodeOf(err) != "backend.mutation.effect_authority_denied" {
 		t.Fatalf("out-of-effect update error=%v", err)
@@ -136,7 +136,7 @@ func TestActionEffectAuthorityAllowsInternalUpdateWithoutObjectUpdatePermission(
 func TestActionEffectAuthorityAllowsGovernedConditionalUpdateWithoutObjectUpdatePermission(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{
-		ID: "order-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "pending"},
+		RecordID: "order-1", UpdatedAt: "revision-1", Data: map[string]any{"status": "pending"},
 	}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.ObjectForAction = func(principal principalmodel.Principal, objectKey, action string) (definitionmodel.ObjectSchema, error) {
@@ -197,7 +197,7 @@ func TestActionEffectAuthorityAllowsGovernedInternalCreateWithoutObjectCreatePer
 		Source: transactionmodel.MutationSourceAction, ActionKey: "customer.register", ActionResource: "customer", ActionOperation: "register", EffectAuthority: map[string][]string{"customer": {"mobile", "status", "policy_value"}},
 	})
 	plan, candidate, err := service.PlanCreateMutation(ctx, object.Key, map[string]any{"mobile": "10000000001", "status": "pending", "policy_value": 20}, "customer-1", principal)
-	if err != nil || candidate.ID != "customer-1" || plan.CanonicalCommit().Record.ID != candidate.ID || principal.HasPermission("customer.create") {
+	if err != nil || candidate.RecordID != "customer-1" || plan.CanonicalCommit().Record.RecordID != candidate.RecordID || principal.HasPermission("customer.create") {
 		t.Fatalf("plan=%#v candidate=%#v principal=%#v err=%v", plan, candidate, principal, err)
 	}
 

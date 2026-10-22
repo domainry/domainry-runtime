@@ -22,7 +22,7 @@ func TestDatabaseRetirementStorePersistsTransitionsAndAccessObservations(t *test
 	repository := NewOperationsStore(store)
 	now := time.Date(2026, 7, 19, 14, 0, 0, 0, time.UTC)
 	retirement := operationsmodel.DatabaseRetirement{
-		ID: "retire-old-table", Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old_table"},
+		OperationID: "retire-old-table", Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old_table"},
 		State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record", Observation: operationsmodel.DatabaseAccessObservation{WindowStarted: now, WindowEnds: now.Add(24 * time.Hour)}}, UpdatedAt: now,
 	}
 	created, err := repository.RegisterDatabaseRetirement(t.Context(), retirement)
@@ -30,17 +30,17 @@ func TestDatabaseRetirementStorePersistsTransitionsAndAccessObservations(t *test
 		t.Fatalf("register retirement: created=%v err=%v", created, err)
 	}
 	var operationRows int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE id = ? AND system_purpose = ? AND owner = ? AND kind = ?`, retirement.ID, databaseRetirementSystemPurpose, databaseRetirementOwner, databaseRetirementKind).Scan(&operationRows); err != nil || operationRows != 1 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE operation_id = ? AND system_purpose = ? AND owner = ? AND kind = ?`, retirement.OperationID, databaseRetirementSystemPurpose, databaseRetirementOwner, databaseRetirementKind).Scan(&operationRows); err != nil || operationRows != 1 {
 		t.Fatalf("shared operation rows=%d err=%v", operationRows, err)
 	}
 	var legacyTables int
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_operation_database_retirements'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
 		t.Fatalf("dedicated database retirement table remains=%d err=%v", legacyTables, err)
 	}
-	if err := repository.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "read", "runtime", now.Add(time.Minute)); err != nil {
+	if err := repository.RecordDatabaseRetirementAccess(t.Context(), retirement.OperationID, "read", "runtime", now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	observed, found, err := repository.GetDatabaseRetirement(t.Context(), retirement.ID)
+	observed, found, err := repository.GetDatabaseRetirement(t.Context(), retirement.OperationID)
 	if err != nil || !found || observed.Evidence.Observation.ReadCount != 1 || observed.Evidence.Observation.SourceCounts["runtime"] != 1 || observed.Evidence.Observation.LastReadAt == nil {
 		t.Fatalf("observed retirement=%+v found=%v err=%v", observed, found, err)
 	}

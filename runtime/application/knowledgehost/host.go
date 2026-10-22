@@ -92,6 +92,21 @@ func (h *Host) ValidateKnowledgeLibraryMember(ctx context.Context, userID string
 	return nil
 }
 
+func (h *Host) ValidateKnowledgeLibraryOrganizationMember(ctx context.Context, organizationID string, authority knowledgesdk.Authority) error {
+	organizationID = strings.TrimSpace(organizationID)
+	if organizationID == "" || len(organizationID) > 255 {
+		return &knowledgesdk.Error{Class: "bad_request", Code: "knowledge.library_organization_member_unavailable"}
+	}
+	if _, err := h.resolve(ctx, authority); err != nil {
+		return err
+	}
+	organization, found, err := h.projection.FindOrganizationUnit(requestcontext.WithWorkspaceID(ctx, authority.WorkspaceID), identitysdk.OrganizationUnitLookup{OrgID: organizationID})
+	if err != nil || !found || organization.OrganizationUnitID != organizationID || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
+		return &knowledgesdk.Error{Class: "bad_request", Code: "knowledge.library_organization_member_unavailable"}
+	}
+	return nil
+}
+
 func (h *Host) AuthorizeKnowledgeDocumentSource(ctx context.Context, source knowledgesdk.KnowledgeDocumentSourceAccess, authority knowledgesdk.Authority) error {
 	if source.Namespace != knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord || strings.TrimSpace(source.ResourceType) == "" || strings.TrimSpace(source.ResourceID) == "" {
 		return denied("knowledge.document_source_access_denied")
@@ -104,7 +119,7 @@ func (h *Host) AuthorizeKnowledgeDocumentSource(ctx context.Context, source know
 	if err != nil {
 		return classify("knowledge.document_source_unavailable", err)
 	}
-	if record.ID != source.ResourceID {
+	if record.RecordID != source.ResourceID {
 		return denied("knowledge.document_source_access_denied")
 	}
 	return nil
@@ -127,13 +142,13 @@ func (h *Host) SearchKnowledgePrincipals(ctx context.Context, query, after strin
 	needle := strings.ToLower(strings.TrimSpace(query))
 	items := make([]knowledgesdk.KnowledgePrincipal, 0, len(users))
 	for _, user := range users {
-		if user.Status != identitysdk.UserStatusActive || user.ID <= after {
+		if user.Status != identitysdk.UserStatusActive || user.UserID <= after {
 			continue
 		}
-		if needle != "" && !strings.Contains(strings.ToLower(user.ID+"\n"+user.Name+"\n"+user.Email), needle) {
+		if needle != "" && !strings.Contains(strings.ToLower(user.UserID+"\n"+user.Name+"\n"+user.Email), needle) {
 			continue
 		}
-		items = append(items, knowledgesdk.KnowledgePrincipal{UserID: user.ID, DisplayName: user.Name, Email: user.Email, Status: user.Status})
+		items = append(items, knowledgesdk.KnowledgePrincipal{UserID: user.UserID, DisplayName: user.Name, Email: user.Email, Status: user.Status})
 	}
 	sort.Slice(items, func(left, right int) bool { return items[left].UserID < items[right].UserID })
 	result := knowledgesdk.KnowledgePrincipalPage{Items: items, Complete: true}
@@ -162,9 +177,48 @@ func (h *Host) ResolveKnowledgePrincipals(ctx context.Context, userIDs []string,
 			result = append(result, knowledgesdk.KnowledgePrincipal{UserID: userID, DisplayName: "账号不可用", Status: "unavailable"})
 			continue
 		}
-		result = append(result, knowledgesdk.KnowledgePrincipal{UserID: user.ID, DisplayName: user.Name, Email: user.Email, Status: user.Status})
+		result = append(result, knowledgesdk.KnowledgePrincipal{UserID: user.UserID, DisplayName: user.Name, Email: user.Email, Status: user.Status})
 	}
 	return result, nil
+}
+
+func (h *Host) ResolveKnowledgeOrganizationPrincipals(ctx context.Context, organizationIDs []string, authority knowledgesdk.Authority) ([]knowledgesdk.KnowledgeOrganizationPrincipal, error) {
+	if len(organizationIDs) > 100 {
+		return nil, &knowledgesdk.Error{Class: "bad_request", Code: "knowledge.principal_limit_invalid"}
+	}
+	if _, err := h.resolve(ctx, authority); err != nil {
+		return nil, err
+	}
+	result := make([]knowledgesdk.KnowledgeOrganizationPrincipal, 0, len(organizationIDs))
+	for _, organizationID := range organizationIDs {
+		organizationID = strings.TrimSpace(organizationID)
+		organization, found, err := h.projection.FindOrganizationUnit(requestcontext.WithWorkspaceID(ctx, authority.WorkspaceID), identitysdk.OrganizationUnitLookup{OrgID: organizationID})
+		if err != nil {
+			return nil, classify("knowledge.principal_directory_unavailable", err)
+		}
+		if !found || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
+			result = append(result, knowledgesdk.KnowledgeOrganizationPrincipal{OrganizationID: organizationID, DisplayName: "组织不可用", Status: "unavailable"})
+			continue
+		}
+		result = append(result, knowledgesdk.KnowledgeOrganizationPrincipal{OrganizationID: organization.OrganizationUnitID, DisplayName: organization.Name, NodeType: organization.NodeType, Status: organization.Status})
+	}
+	return result, nil
+}
+
+func (h *Host) ResolveKnowledgeAccessAuthority(ctx context.Context, userID string, authority knowledgesdk.Authority) (knowledgesdk.Authority, error) {
+	userID = strings.TrimSpace(userID)
+	if !authority.Known || authority.RuntimeID != h.runtimeID || authority.WorkspaceID != string(h.application.WorkspaceID) || userID == "" || len(userID) > 255 {
+		return knowledgesdk.Authority{}, &knowledgesdk.Error{Class: "bad_request", Code: "knowledge.access_explain_invalid"}
+	}
+	resolution, err := h.principals.Resolve(requestcontext.WithWorkspaceID(ctx, authority.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(userID)})
+	if err != nil {
+		return knowledgesdk.Authority{}, classify("knowledge.identity_unavailable", err)
+	}
+	principal := resolution.Principal
+	if !principal.Known || principal.WorkspaceID != authority.WorkspaceID || principal.UserID != userID {
+		return knowledgesdk.Authority{}, &knowledgesdk.Error{Class: "not_found", Code: "knowledge.access_principal_unavailable"}
+	}
+	return knowledgesdk.Authority{Known: true, RuntimeID: authority.RuntimeID, WorkspaceID: principal.WorkspaceID, UserID: principal.UserID, RoleKey: principal.RoleKey, OrgID: principal.OrgID, OrgScopeIDs: append([]string(nil), principal.OrgScopeIDs...), AccountType: principal.User.AccountType}, nil
 }
 
 func (h *Host) ExplainKnowledgeAccess(ctx context.Context, input knowledgesdk.KnowledgeAccessExplainRequest, library knowledgesdk.KnowledgeLibrary, authority knowledgesdk.Authority) (knowledgesdk.KnowledgeAccessExplanation, error) {

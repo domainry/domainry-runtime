@@ -166,7 +166,7 @@ func TestAutomationBeforeCreateReplayCoversIncompleteMissingAmbiguousAndAccess(t
 		return nil, nil
 	}
 	rule := automationmodel.AutomationRuleSchema{Key: "rule", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "before", Operation: "create"}, Execution: automationmodel.AutomationExecutionPolicy{IdempotencyKeys: []string{"external_id"}}}
-	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{{Key: "no-keys", ObjectKey: "order", Enabled: true, Trigger: rule.Trigger}, rule}, automationReplayRecordProbe{}, object, map[string]any{}, principal, nil, nil); err != nil || found || record.ID != "" {
+	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{{Key: "no-keys", ObjectKey: "order", Enabled: true, Trigger: rule.Trigger}, rule}, automationReplayRecordProbe{}, object, map[string]any{}, principal, nil, nil); err != nil || found || record.RecordID != "" {
 		t.Fatalf("incomplete record=%#v found=%v err=%v", record, found, err)
 	}
 	input := map[string]any{"external_id": "A"}
@@ -189,7 +189,7 @@ func TestAutomationBeforeCreateReplayCoversIncompleteMissingAmbiguousAndAccess(t
 	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{}, object, input, principal, resolveScope, nil); err != nil || found {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
-	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "a"}, {ID: "b"}}}
+	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "a"}, {RecordID: "b"}}}
 	if _, _, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, nil); apperror.CodeOf(err) != "backend.automation.idempotency_ambiguous" {
 		t.Fatalf("ambiguous err=%v", err)
 	}
@@ -198,7 +198,7 @@ func TestAutomationBeforeCreateReplayCoversIncompleteMissingAmbiguousAndAccess(t
 		t.Fatalf("access err=%v", err)
 	}
 	record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true })
-	if err != nil || !found || record.ID != "a" {
+	if err != nil || !found || record.RecordID != "a" {
 		t.Fatalf("record=%#v found=%v err=%v", record, found, err)
 	}
 	blankKeyRule := rule
@@ -206,7 +206,7 @@ func TestAutomationBeforeCreateReplayCoversIncompleteMissingAmbiguousAndAccess(t
 	if _, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{blankKeyRule}, automationReplayRecordProbe{}, object, input, principal, nil, nil); err != nil || found {
 		t.Fatalf("blank key found=%v err=%v", found, err)
 	}
-	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, nil); err != nil || !found || record.ID != "a" {
+	if record, found, err := AutomationFindBeforeCreateReplay(t.Context(), []automationmodel.AutomationRuleSchema{rule}, automationReplayRecordProbe{page: page}, object, input, principal, resolveScope, nil); err != nil || !found || record.RecordID != "a" {
 		t.Fatalf("nil access record=%+v found=%v err=%v", record, found, err)
 	}
 }

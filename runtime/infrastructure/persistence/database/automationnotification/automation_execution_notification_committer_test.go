@@ -28,7 +28,7 @@ func TestAutomationExecutionOnlyCommitIsReplaySafe(t *testing.T) {
 	if err := committer.CommitAutomationExecution(t.Context(), execution); err != nil {
 		t.Fatalf("execution replay failed: %v", err)
 	}
-	assertAutomationNotificationCounts(t, store, execution.ID, 1, 0)
+	assertAutomationNotificationCounts(t, store, execution.RunID, 1, 0)
 }
 
 func TestAutomationExecutionAndNotificationAreAtomicAndReplaySafe(t *testing.T) {
@@ -41,18 +41,18 @@ func TestAutomationExecutionAndNotificationAreAtomicAndReplaySafe(t *testing.T) 
 	if err := committer.CommitAutomationExecutionNotification(t.Context(), execution, event); err != nil {
 		t.Fatal(err)
 	}
-	assertAutomationNotificationCounts(t, store, execution.ID, 1, 1)
+	assertAutomationNotificationCounts(t, store, execution.RunID, 1, 1)
 	if err := committer.CommitAutomationExecutionNotification(t.Context(), execution, event); err != nil {
 		t.Fatalf("idempotent replay failed: %v", err)
 	}
-	assertAutomationNotificationCounts(t, store, execution.ID, 1, 1)
+	assertAutomationNotificationCounts(t, store, execution.RunID, 1, 1)
 
 	rollbackExecution := automationNotificationExecution("execution-rollback")
-	primaryKeyConflict := automationNotificationEvent(event.ID, "automation:execution-rollback:completed")
+	primaryKeyConflict := automationNotificationEvent(event.EventID, "automation:execution-rollback:completed")
 	if err := committer.CommitAutomationExecutionNotification(t.Context(), rollbackExecution, primaryKeyConflict); err == nil {
 		t.Fatal("expected notification primary-key conflict")
 	}
-	assertAutomationNotificationCounts(t, store, rollbackExecution.ID, 0, 1)
+	assertAutomationNotificationCounts(t, store, rollbackExecution.RunID, 0, 1)
 }
 
 func TestAutomationExecutionNotificationErrorAndConsistencyEdges(t *testing.T) {
@@ -240,14 +240,14 @@ func openAutomationNotificationStore(t *testing.T) *database.RuntimeStore {
 
 func automationNotificationExecution(id string) automationmodel.AutomationRuleExecution {
 	return automationmodel.AutomationRuleExecution{
-		ID: id, WorkspaceID: "workspace-a", RuleKey: "sync-order", ObjectKey: "order", RecordID: "order-1",
+		RunID: id, WorkspaceID: "workspace-a", RuleKey: "sync-order", ObjectKey: "order", RecordID: "order-1",
 		Phase: "after", Operation: "update", Status: "succeeded", ActorID: "user-1", Candidate: map[string]any{}, Trace: map[string]any{},
 	}
 }
 
 func automationNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
-		ID: id, WorkspaceID: "workspace-a", Source: "automation", SourceEventID: sourceID, EventType: "automation.execution.completed",
+		EventID: id, WorkspaceID: "workspace-a", Source: "automation", SourceEventID: sourceID, EventType: "automation.execution.completed",
 		Category: "automation", Severity: "info", RecipientUserIDs: []string{"user-1"},
 		SubjectType: "automation_rule", SubjectID: "sync-order", OccurredAt: "2026-07-28T01:00:00Z", Status: "queued",
 		CreatedAt: "2026-07-28T01:00:00Z", UpdatedAt: "2026-07-28T01:00:00Z",
@@ -257,7 +257,7 @@ func automationNotificationEvent(id, sourceID string) notificationmodel.Notifica
 func assertAutomationNotificationCounts(t *testing.T, store *database.RuntimeStore, executionID string, wantExecutions, wantEvents int) {
 	t.Helper()
 	var executions, events int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_automation_runs")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("run_kind")+" = "+store.Placeholder(2)+" AND "+store.Identifier("id")+" = "+store.Placeholder(3), "workspace-a", "rule", executionID).Scan(&executions); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_automation_runs")+" WHERE "+store.Identifier("workspace_id")+" = "+store.Placeholder(1)+" AND "+store.Identifier("run_kind")+" = "+store.Placeholder(2)+" AND "+store.Identifier("run_id")+" = "+store.Placeholder(3), "workspace-a", "rule", executionID).Scan(&executions); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.TableIdentifier("_notification_events")).Scan(&events); err != nil {

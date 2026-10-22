@@ -53,7 +53,7 @@ func (p *recordDataExchangeBindingProbe) submit(scope dataexchange.Scope, provid
 	}
 	id := "data_exchange:" + strings.TrimSpace(key)
 	now := time.Now().UTC()
-	job := dataexchange.Job{ID: id, Provider: provider, Operation: operation, Status: "queued", WorkspaceID: scope.WorkspaceID, ObjectKey: objectKey, ActorID: scope.ActorID, RoleKey: scope.RoleKey, Options: append([]byte(nil), options...), CreatedAt: now, UpdatedAt: now}
+	job := dataexchange.Job{JobID: id, Provider: provider, Operation: operation, Status: "queued", WorkspaceID: scope.WorkspaceID, ObjectKey: objectKey, ActorID: scope.ActorID, RoleKey: scope.RoleKey, Options: append([]byte(nil), options...), CreatedAt: now, UpdatedAt: now}
 	p.jobs[id] = job
 	return job
 }

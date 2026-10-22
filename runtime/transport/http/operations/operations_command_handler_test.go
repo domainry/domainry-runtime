@@ -83,8 +83,8 @@ func TestOperationsHTTPExposesReceiptsButNotUnownedCommandSubmission(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	operationID := created.Command.ID
-	if operationID != "operation_http-1" {
+	operationID := created.Command.OperationID
+	if operationID != operationsHTTPTestOperationID("http-1") {
 		t.Fatalf("operation id=%s", operationID)
 	}
 	if actionKey := created.Command.ActionKey; actionKey != operationscontract.ActionEnableAutomationRule {

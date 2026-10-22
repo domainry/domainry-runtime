@@ -77,7 +77,7 @@ func TestReferenceServiceFailureAndEmptyAggregationMatrix(t *testing.T) {
 			}
 		})
 	}
-	repository := &referenceFailureRepository{found: true, record: recordmodel.Record{ID: "customer-1"}}
+	repository := &referenceFailureRepository{found: true, record: recordmodel.Record{RecordID: "customer-1"}}
 	service := NewRecordReferenceDomainService(RecordReferenceDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {

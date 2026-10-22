@@ -12,7 +12,7 @@ func routeProjectionProcess() workflowmodel.WorkflowProcessInstance {
 		Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Route: &definitionmodel.WorkflowApprovalRouteContract{Source: "instance", MinSteps: 1, MaxSteps: 3, MaxAssigneesPerStep: 2, DeferredSteps: "allow"}},
 	}}
 	return workflowmodel.WorkflowProcessInstance{
-		ID: "process_1", InitiatorID: "initiator",
+		ProcessID: "process_1", InitiatorID: "initiator",
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{node}}},
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	foundationartifact "github.com/domainry/domainry-foundation/artifact"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	operationsrepository "github.com/domainry/domainry-runtime/runtime/domain/operations/repository"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
@@ -48,7 +49,7 @@ func TestOperationsResultRegistrationFailureDeletesOnlyUnreferencedBlob(t *testi
 
 	artifacts.commitThenFail = true
 	reference, err := store.PutOperationsResult(t.Context(), value)
-	if err != nil || reference.ID == "" {
+	if err != nil || reference.ArtifactID == "" {
 		t.Fatalf("uncertain registration reference=%#v err=%v", reference, err)
 	}
 	if _, err = blobs.Stat(t.Context(), value.WorkspaceID, blobKey); err != nil {
@@ -75,8 +76,11 @@ func (s *failingOperationsArtifactStore) Register(ctx context.Context, value fou
 
 func operationsResultBlobKey(value operationsrepository.OperationsResultArtifact) string {
 	digest := sha256.Sum256(value.Content)
-	identityDigest := sha256.Sum256([]byte(value.WorkspaceID + "\x00" + value.OperationID))
-	return "operations-result-" + hex.EncodeToString(identityDigest[:16]) + "-" + hex.EncodeToString(digest[:]) + ".json"
+	artifactID, err := entityid.Derive("art", "runtime.operations-result", value.WorkspaceID, value.OperationID)
+	if err != nil {
+		panic(err)
+	}
+	return "operations-result-" + strings.TrimPrefix(artifactID, "art_") + "-" + hex.EncodeToString(digest[:]) + ".json"
 }
 
 func TestOperationsResultArtifactStorePersistsBytesAndOperationBinding(t *testing.T) {
@@ -101,7 +105,7 @@ func TestOperationsResultArtifactStorePersistsBytesAndOperationBinding(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaded, loadedReference, err := store.GetOperationsResult(t.Context(), "workspace-a", "operation-1", reference.ID)
+	loaded, loadedReference, err := store.GetOperationsResult(t.Context(), "workspace-a", "operation-1", reference.ArtifactID)
 	if err != nil || !bytes.Equal(loaded, content) || loadedReference != reference {
 		t.Fatalf("loaded bytes=%d reference=%#v err=%v", len(loaded), loadedReference, err)
 	}

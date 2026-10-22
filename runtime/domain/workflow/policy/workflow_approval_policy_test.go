@@ -56,21 +56,21 @@ func TestWorkflowTerminalApprovalOutcomeMatrix(t *testing.T) {
 	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, nil, workflowmodel.WorkflowTask{Decision: "returned"}); outcome != "returned" || !terminal {
 		t.Fatalf("returned = %q/%v", outcome, terminal)
 	}
-	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, nil, workflowmodel.WorkflowTask{ID: "missing", NodeID: "any"}); outcome != "" || terminal {
+	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, nil, workflowmodel.WorkflowTask{TaskID: "missing", NodeID: "any"}); outcome != "" || terminal {
 		t.Fatalf("no tasks = %q/%v", outcome, terminal)
 	}
-	tasks := []workflowmodel.WorkflowTask{{ID: "one", NodeID: "any", Status: "pending"}, {ID: "two", NodeID: "any", Status: "pending"}, {ID: "other", NodeID: "other", Status: "approved"}}
-	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, tasks, workflowmodel.WorkflowTask{ID: "one", NodeID: "any", Status: "approved"}); outcome != "approved" || !terminal {
+	tasks := []workflowmodel.WorkflowTask{{TaskID: "one", NodeID: "any", Status: "pending"}, {TaskID: "two", NodeID: "any", Status: "pending"}, {TaskID: "other", NodeID: "other", Status: "approved"}}
+	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, tasks, workflowmodel.WorkflowTask{TaskID: "one", NodeID: "any", Status: "approved"}); outcome != "approved" || !terminal {
 		t.Fatalf("any approved = %q/%v", outcome, terminal)
 	}
-	if _, terminal := WorkflowTerminalApprovalOutcome(process, tasks, workflowmodel.WorkflowTask{ID: "one", NodeID: "any", Status: "pending"}); terminal {
+	if _, terminal := WorkflowTerminalApprovalOutcome(process, tasks, workflowmodel.WorkflowTask{TaskID: "one", NodeID: "any", Status: "pending"}); terminal {
 		t.Fatal("any pending became terminal")
 	}
-	allTasks := []workflowmodel.WorkflowTask{{ID: "one", NodeID: "all", Status: "approved"}, {ID: "two", NodeID: "all", Status: "pending"}}
-	if _, terminal := WorkflowTerminalApprovalOutcome(process, allTasks, workflowmodel.WorkflowTask{ID: "two", NodeID: "all", Status: "pending"}); terminal {
+	allTasks := []workflowmodel.WorkflowTask{{TaskID: "one", NodeID: "all", Status: "approved"}, {TaskID: "two", NodeID: "all", Status: "pending"}}
+	if _, terminal := WorkflowTerminalApprovalOutcome(process, allTasks, workflowmodel.WorkflowTask{TaskID: "two", NodeID: "all", Status: "pending"}); terminal {
 		t.Fatal("partial all became terminal")
 	}
-	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, allTasks, workflowmodel.WorkflowTask{ID: "two", NodeID: "all", Status: "approved"}); outcome != "approved" || !terminal {
+	if outcome, terminal := WorkflowTerminalApprovalOutcome(process, allTasks, workflowmodel.WorkflowTask{TaskID: "two", NodeID: "all", Status: "approved"}); outcome != "approved" || !terminal {
 		t.Fatalf("all approved = %q/%v", outcome, terminal)
 	}
 }

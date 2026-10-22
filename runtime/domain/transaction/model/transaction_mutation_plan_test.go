@@ -17,7 +17,7 @@ func TestMutationPlanSnapshotsCommitAndBuildsDeterministicWriteSet(t *testing.T)
 	commit := RecordMutationCommit{
 		Operation:       " update ",
 		Object:          definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "status", Config: map[string]any{"nested": map[string]any{"enabled": true}}}}},
-		Record:          recordmodel.Record{ID: "order-1", Data: map[string]any{"total": "12.30", "status": "paid"}},
+		Record:          recordmodel.Record{RecordID: "order-1", Data: map[string]any{"total": "12.30", "status": "paid"}},
 		Conditions:      map[string]any{"status": map[string]any{"eq": "draft"}},
 		Audit:           &auditmodel.AuditEvent{After: map[string]any{"status": "paid"}},
 		Audits:          []auditmodel.AuditEvent{{Metadata: map[string]any{"sequence": []any{map[string]any{"value": 1}}}}},
@@ -51,7 +51,7 @@ func TestMutationPlanSnapshotsCommitAndBuildsDeterministicWriteSet(t *testing.T)
 }
 
 func TestMutationPlanEnforcesEffectAuthorityIncludingDeleteWildcard(t *testing.T) {
-	commit := RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"secret": true}}}
+	commit := RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"secret": true}}}
 	_, err := NewMutationPlan(mutationPlanTestContext(t, map[string][]string{"order": {"status"}}), commit, nil)
 	var typed *MutationPlanError
 	if !errors.As(err, &typed) || typed.Code != "backend.mutation.effect_authority_denied" || typed.Field != "order.secret" {
@@ -66,7 +66,7 @@ func TestMutationPlanEnforcesEffectAuthorityIncludingDeleteWildcard(t *testing.T
 
 func TestMutationPlanValidatesCanonicalCoordinates(t *testing.T) {
 	context := mutationPlanTestContext(t, nil)
-	valid := RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1"}}
+	valid := RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1"}}
 	for _, test := range []struct {
 		name   string
 		ctx    MutationContext
@@ -75,7 +75,7 @@ func TestMutationPlanValidatesCanonicalCoordinates(t *testing.T) {
 	}{
 		{name: "operation", ctx: context, commit: func() RecordMutationCommit { value := valid; value.Operation = "merge"; return value }(), field: "operation"},
 		{name: "object", ctx: context, commit: func() RecordMutationCommit { value := valid; value.Object.Key = ""; return value }(), field: "object_key"},
-		{name: "record", ctx: context, commit: func() RecordMutationCommit { value := valid; value.Record.ID = ""; return value }(), field: "record_id"},
+		{name: "record", ctx: context, commit: func() RecordMutationCommit { value := valid; value.Record.RecordID = ""; return value }(), field: "record_id"},
 		{name: "context", ctx: MutationContext{}, commit: valid, field: "mutation_context"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestMutationPlanValidatesPredicateCoordinatesOperatorsAndStableCodes(t *tes
 		{Field: "updated_at", Operator: "gte"},
 	}
 	commit := RecordMutationCommit{
-		Operation: "update", Object: object, Record: recordmodel.Record{ID: "order-1"},
+		Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "order-1"},
 		Predicates: valid,
 	}
 	plan, err := NewMutationPlan(mutationPlanTestContext(t, nil), commit, nil)
@@ -193,7 +193,7 @@ func TestMutationObjectWritePolicyAndRestoreOperation(t *testing.T) {
 	}
 	commit := RecordMutationCommit{
 		Operation: "restore", Object: definitionmodel.ObjectSchema{Key: "order"},
-		Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "active"}},
+		Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "active"}},
 	}
 	if _, err := NewMutationPlan(mutationPlanTestContext(t, nil), commit, nil); err != nil {
 		t.Fatal(err)

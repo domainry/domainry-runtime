@@ -168,7 +168,7 @@ func WorkflowTerminalRouteApprovalOutcome(step workflowmodel.WorkflowRouteStep, 
 		if task.NodeID != decided.NodeID || task.NodeInstanceID != decided.NodeInstanceID {
 			continue
 		}
-		if task.ID == decided.ID {
+		if task.TaskID == decided.TaskID {
 			task = decided
 		}
 		total++

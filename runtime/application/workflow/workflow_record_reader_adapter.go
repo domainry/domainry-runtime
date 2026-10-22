@@ -30,7 +30,7 @@ func (a WorkflowRecordReaderAdapter) GetWorkflowRecord(ctx context.Context, work
 	if a.normalize == nil {
 		return recordmodel.Record{}, false, fmt.Errorf("workflow record scope normalizer is unavailable")
 	}
-	query := a.normalize(object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, SkipTotal: true, Filters: map[string]any{"id__in": []any{recordID}}}, principal)
+	query := a.normalize(object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, SkipTotal: true, Filters: map[string]any{"record_id__in": []any{recordID}}}, principal)
 	page, err := a.repository.ListRecords(ctx, workspaceID, object, query)
 	if err != nil || len(page.Items) == 0 {
 		return recordmodel.Record{}, false, err

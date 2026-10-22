@@ -342,7 +342,7 @@ func businessSelectFields(object definitionmodel.ObjectSchema, requested, option
 }
 
 func businessRecord(record recordmodel.Record, fields []string) (agentsdk.ConversationBusinessRecord, error) {
-	out := agentsdk.ConversationBusinessRecord{ID: record.ID, Version: record.UpdatedAt, Data: map[string]json.RawMessage{}}
+	out := agentsdk.ConversationBusinessRecord{ID: record.RecordID, Version: record.UpdatedAt, Data: map[string]json.RawMessage{}}
 	for _, key := range fields {
 		if value, ok := record.Data[key]; ok {
 			raw, err := json.Marshal(value)

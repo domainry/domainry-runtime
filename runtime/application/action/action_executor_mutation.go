@@ -8,6 +8,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -152,7 +153,7 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 			dedupKey = fmt.Sprintf("%s:intent:%d", e.identity.ExecutionID, index)
 		}
 		commits[len(commits)-1].Outbox = append(commits[len(commits)-1].Outbox, publicationmodel.Message{
-			ID:          intent.IntentID,
+			MessageID:   intent.IntentID,
 			WorkspaceID: e.workspace.ID, ConnectorKey: intent.ConsumerKey, ConnectionKey: intent.ConnectionKey, Operation: intent.OperationKey,
 			Payload: intent.Payload, DedupKey: dedupKey, RequestFingerprint: intent.ContractSHA256,
 			RequestRef: e.identity.ExecutionID, CreatedBy: e.principal.UserID,
@@ -161,8 +162,12 @@ func (e *businessActionExecution) canonicalCommits() ([]transactionmodel.RecordM
 	if len(e.notifications) > 0 {
 		commits[len(commits)-1].NotificationEvents = append(commits[len(commits)-1].NotificationEvents, e.notifications...)
 		for index, event := range e.notifications {
+			auditEventID, err := entityid.Derive("audevt", "runtime.action.notification-audit", e.workspace.ID, e.identity.ExecutionID, fmt.Sprint(index))
+			if err != nil {
+				return nil, err
+			}
 			commits[len(commits)-1].Audits = append(commits[len(commits)-1].Audits, auditmodel.AuditEvent{
-				ID: fmt.Sprintf("notification_audit:%s:%d", e.identity.ExecutionID, index), WorkspaceID: e.workspace.ID,
+				AuditEventID: auditEventID, WorkspaceID: e.workspace.ID,
 				OperationID: strings.TrimSpace(e.identity.ReceiptID), CausationID: strings.TrimSpace(e.principal.CausationID),
 				Family: auditmodel.EventFamilyRuntimeNotification,
 				Event:  runtimeext.NotificationDispatchOperationKey, ObjectKey: event.SubjectType, RecordID: event.SubjectID,
@@ -234,7 +239,7 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_delete")
 		}
 		plans, err = e.dependencies.PlanDeleteMutation(ctx, mutation.ObjectKey, mutation.RecordID, mutation.ExpectedUpdatedAt, e.actionMutationPrincipal())
-		record = recordmodel.Record{ID: mutation.RecordID}
+		record = recordmodel.Record{RecordID: mutation.RecordID}
 	case runtimeext.MutationRestore:
 		if e.dependencies.PlanRestoreMutation == nil {
 			return runtimeext.RecordMutationResult{}, missingExecutorPort("plan_restore")
@@ -260,8 +265,8 @@ func (e *businessActionExecution) ApplyRecordMutation(ctx context.Context, mutat
 	if e.mutatedRecords == nil {
 		e.mutatedRecords = map[string]recordmodel.Record{}
 	}
-	e.mutatedRecords[strings.TrimSpace(mutation.ObjectKey)+"\x00"+strings.TrimSpace(record.ID)] = record
-	e.trackRecordMutation(mutation.Operation, mutation.ObjectKey, record.ID)
+	e.mutatedRecords[strings.TrimSpace(mutation.ObjectKey)+"\x00"+strings.TrimSpace(record.RecordID)] = record
+	e.trackRecordMutation(mutation.Operation, mutation.ObjectKey, record.RecordID)
 	return runtimeext.RecordMutationResult{Record: toRuntimeextRecord(mutation.ObjectKey, record), Applied: true}, nil
 }
 
@@ -280,14 +285,14 @@ func canonicalMutationResultRecord(mutation runtimeext.RecordMutation, plans []t
 		if strings.TrimSpace(commit.Operation) != operation || strings.TrimSpace(commit.Object.Key) != objectKey {
 			continue
 		}
-		candidateID := strings.TrimSpace(commit.Record.ID)
+		candidateID := strings.TrimSpace(commit.Record.RecordID)
 		if candidateID == "" {
 			candidateID = strings.TrimSpace(commit.RecordID)
 		}
 		if candidateID == "" || recordID != "" && candidateID != recordID {
 			continue
 		}
-		commit.Record.ID = candidateID
+		commit.Record.RecordID = candidateID
 		return commit.Record, true
 	}
 	return recordmodel.Record{}, false
@@ -318,7 +323,7 @@ func (e *businessActionExecution) withPlannedRelationRecords(ctx context.Context
 			records[objectKey] = map[string]recordmodel.Record{}
 		}
 		record := commit.Record
-		record.ID = recordID
+		record.RecordID = recordID
 		records[objectKey][recordID] = record
 	}
 	return recordservice.RecordWithPlannedRelations(ctx, records)
@@ -326,7 +331,7 @@ func (e *businessActionExecution) withPlannedRelationRecords(ctx context.Context
 
 func plannedRelationRecordIdentity(commit transactionmodel.RecordMutationCommit) (string, string, bool) {
 	objectKey := strings.TrimSpace(commit.Object.Key)
-	recordID := strings.TrimSpace(commit.Record.ID)
+	recordID := strings.TrimSpace(commit.Record.RecordID)
 	if recordID == "" {
 		recordID = strings.TrimSpace(commit.RecordID)
 	}

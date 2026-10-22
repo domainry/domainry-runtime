@@ -173,7 +173,7 @@ func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, ob
 	}
 	cached, claim, replay, err := s.dependencies.Execution.BeginImport(ctx, objectKey, operationKey, input, principal)
 	if err != nil {
-		if strings.TrimSpace(claim.Execution.ID) != "" {
+		if strings.TrimSpace(claim.Execution.OperationID) != "" {
 			logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.import", string(claim.Decision)), principal.RequestID)
 			s.audit(ctx, "record_import_idempotency_"+string(claim.Decision), object.Key, "", principal, "Observed idempotent record import decision", nil, nil, idempotency.AuditMetadata(claimAuditFacts(claim, "record.import", string(claim.Decision))))
 		}
@@ -201,7 +201,7 @@ func (s *RecordImportApplicationService) applyIdempotent(ctx context.Context, ob
 	if err := s.dependencies.Execution.CompleteOperation(ctx, claim, result); err != nil {
 		return recordmodel.RecordImportApplyResult{}, false, err
 	}
-	claim.Execution.ID = ""
+	claim.Execution.OperationID = ""
 	logging.LogIdempotency(ctx, claimAuditFacts(claim, "record.import", "succeeded"), principal.RequestID)
 	s.audit(ctx, "record_import_applied", object.Key, "", principal, fmt.Sprintf("Imported %d %s records", result.Created, object.Key), nil, map[string]any{"created": result.Created}, idempotency.AuditMetadata(claimAuditFacts(claim, "record.import", "succeeded")))
 	return result, false, nil

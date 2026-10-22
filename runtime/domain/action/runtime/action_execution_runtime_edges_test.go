@@ -106,7 +106,7 @@ func TestActionExecutionRuntimeDecisionAndRepositoryEdges(t *testing.T) {
 
 func TestActionExecutionRuntimeAuditsFingerprintConflictWithoutMutatingReceipt(t *testing.T) {
 	stored := actionmodel.ActionBusinessExecution{
-		ID: "receipt-1", WorkspaceID: "workspace-primary", ObjectKey: "order", RecordID: "order-1",
+		OperationID: "receipt-1", WorkspaceID: "workspace-primary", ObjectKey: "order", RecordID: "order-1",
 		ActionKey: "order.approve", RequestFingerprint: "original-fingerprint", Status: string(idempotency.StatusSucceeded),
 	}
 	repository := &executionRepositoryEdgeStub{claim: actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionFingerprintConflict, Execution: stored}}
@@ -121,7 +121,7 @@ func TestActionExecutionRuntimeAuditsFingerprintConflictWithoutMutatingReceipt(t
 	if apperror.CodeOf(err) != idempotency.ErrorCodeKeyReused {
 		t.Fatalf("conflict err=%v", err)
 	}
-	if claim.Execution.ID != stored.ID || claim.Execution.RequestFingerprint != stored.RequestFingerprint || captured.ObjectKey != "order" || captured.RecordID != "order-1" || captured.ActionKey != "order.approve" || captured.RequestID != "request-1" || captured.OriginalReceiptID != "receipt-1" || len(captured.RequestFingerprintSHA256) != 64 {
+	if claim.Execution.OperationID != stored.OperationID || claim.Execution.RequestFingerprint != stored.RequestFingerprint || captured.ObjectKey != "order" || captured.RecordID != "order-1" || captured.ActionKey != "order.approve" || captured.RequestID != "request-1" || captured.OriginalReceiptID != "receipt-1" || len(captured.RequestFingerprintSHA256) != 64 {
 		t.Fatalf("claim=%#v audit=%#v", claim, captured)
 	}
 	if repository.completeCalls != 0 {
@@ -135,7 +135,7 @@ func TestActionExecutionRuntimeAuditsFingerprintConflictWithoutMutatingReceipt(t
 }
 
 func TestActionExecutionRuntimeCompletionEncodingAndReplayEdges(t *testing.T) {
-	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution", LeaseOwner: "owner", FencingToken: 1}}
+	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution", LeaseOwner: "owner", FencingToken: 1}}
 	backendErr := errors.New("backend")
 	service := NewActionExecutionRuntime(&executionRepositoryEdgeStub{completeErr: backendErr})
 	if err := service.Complete(t.Context(), claim, map[string]any{"ok": true}); err == nil || apperror.CodeOf(err) != "backend.internal" {
@@ -266,7 +266,7 @@ func TestActionExecutionRuntimeTransactionEdges(t *testing.T) {
 	if nilService.TransactionAvailable() || NewActionExecutionRuntime(nil).TransactionAvailable() || NewActionExecutionRuntime(&executionRepositoryEdgeStub{}).TransactionAvailable() {
 		t.Fatal("transaction availability accepted an unsupported runtime")
 	}
-	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution", LeaseOwner: "owner", FencingToken: 2}}
+	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution", LeaseOwner: "owner", FencingToken: 2}}
 	if err := service.CommitTransaction(t.Context(), nil, claim, map[string]any{}, nil, nil); apperror.CodeOf(err) != idempotency.ErrorCodeReceiptUnavailable {
 		t.Fatalf("nil commit transaction error=%v", err)
 	}
@@ -281,20 +281,20 @@ func TestActionExecutionRuntimeTransactionEdges(t *testing.T) {
 		t.Fatalf("commit transaction error=%v", err)
 	}
 	transaction.commitErr = nil
-	if err := service.CommitTransaction(t.Context(), transaction, claim, map[string]any{"ok": true}, nil, []auditmodel.AuditEvent{{ID: "audit"}}); err != nil {
+	if err := service.CommitTransaction(t.Context(), transaction, claim, map[string]any{"ok": true}, nil, []auditmodel.AuditEvent{{AuditEventID: "audit"}}); err != nil {
 		t.Fatal(err)
 	}
-	if transaction.completion.ExecutionID != "execution" || len(transaction.completion.AuditEvents) != 1 {
+	if transaction.completion.OperationID != "execution" || len(transaction.completion.AuditEvents) != 1 {
 		t.Fatalf("completion=%+v", transaction.completion)
 	}
 }
 
 func TestActionExecutionRuntimeFailTransactionEdges(t *testing.T) {
 	backendErr := errors.New("backend")
-	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution", LeaseOwner: "owner", FencingToken: 1}}
+	claim := actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution", LeaseOwner: "owner", FencingToken: 1}}
 	result := actionmodel.ActionInvocationResult{Status: "failed", ErrorCode: "business.failed"}
 	failure := apperror.New(apperror.KindConflict, result.ErrorCode, nil, nil)
-	audits := []auditmodel.AuditEvent{{ID: "audit"}}
+	audits := []auditmodel.AuditEvent{{AuditEventID: "audit"}}
 
 	for _, runtime := range []*ActionExecutionRuntime{nil, NewActionExecutionRuntime(nil), NewActionExecutionRuntime(&executionRepositoryEdgeStub{})} {
 		if err := runtime.Fail(t.Context(), actionmodel.ActionExecutionClaimResult{}, result, failure, audits); err != nil {

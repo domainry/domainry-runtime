@@ -71,7 +71,7 @@ func TestUpdateValidatesOnlyChangedStructuredFileReferencesBeforeCommit(t *testi
 		"file_id": "file-1", "filename": "old.pdf", "content_type": "application/pdf", "size": int64(7),
 		"content_sha256": strings.Repeat("a", 64),
 	}
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "document-1", UpdatedAt: "v1", Data: map[string]any{"title": "Old", "attachment": current}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "document-1", UpdatedAt: "v1", Data: map[string]any{"title": "Old", "attachment": current}}}
 	object := definitionmodel.ObjectSchema{Key: "document", Fields: []definitionmodel.FieldSchema{
 		{Key: "title", Type: "text"},
 		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}},
@@ -90,7 +90,7 @@ func TestUpdateValidatesOnlyChangedStructuredFileReferencesBeforeCommit(t *testi
 		},
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "uploader"}})
-	if _, err := service.Update(t.Context(), object.Key, repository.record.ID, map[string]any{"title": "New"}, principal); err != nil {
+	if _, err := service.Update(t.Context(), object.Key, repository.record.RecordID, map[string]any{"title": "New"}, principal); err != nil {
 		t.Fatal(err)
 	}
 	if len(verified) != 1 || len(verified[0]) != 0 {
@@ -102,7 +102,7 @@ func TestUpdateValidatesOnlyChangedStructuredFileReferencesBeforeCommit(t *testi
 		"file_id": "file-2", "filename": "new.pdf", "content_type": "application/pdf", "size": float64(8),
 		"content_sha256": strings.Repeat("b", 64),
 	}
-	if _, err := service.Update(t.Context(), object.Key, repository.record.ID, map[string]any{"attachment": next}, principal); err != nil {
+	if _, err := service.Update(t.Context(), object.Key, repository.record.RecordID, map[string]any{"attachment": next}, principal); err != nil {
 		t.Fatal(err)
 	}
 	if len(verified) != 2 || len(verified[1]) != 1 {
@@ -125,7 +125,7 @@ func (r *updateRepositoryProbe) CommitRecordMutation(_ context.Context, _ string
 }
 
 func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", OwnerUserID: "original-user", OwnerOrgID: "original-org", UpdatedAt: "version-1", Data: map[string]any{"status": "open", "name": "Before", "version": 7}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "case-1", OwnerUserID: "original-user", OwnerOrgID: "original-org", UpdatedAt: "version-1", Data: map[string]any{"status": "open", "name": "Before", "version": 7}}}
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "name", Type: "text"}, {Key: "version", Type: "number"}}}
 	var beforeOperations []string
 	var outboxOperations []string
@@ -171,12 +171,12 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 		ValidateDuplicate: func(context.Context, string, definitionmodel.ObjectSchema, string, map[string]any) error { return nil },
 		AfterOutbox: func(_ context.Context, _ string, operation string, _ map[string]any, _ recordmodel.Record, _ principalmodel.Principal) ([]publicationmodel.Message, error) {
 			outboxOperations = append(outboxOperations, operation)
-			return []publicationmodel.Message{{ID: "outbox-" + operation}}, nil
+			return []publicationmodel.Message{{MessageID: "outbox-" + operation}}, nil
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string { return []string{"record_updated:case.status"} },
 		PrepareWorkflow: func(_ context.Context, _ string, _ recordmodel.Record, _ map[string]any, _ principalmodel.Principal, trigger string) ([]workflowmodel.WorkflowExecution, error) {
 			preparedTriggers = append(preparedTriggers, trigger)
-			return []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, nil
 		},
 		ExecuteWorkflow: func(_ context.Context, intents []workflowmodel.WorkflowExecution, _ principalmodel.Principal) {
 			executed = append(executed, intents...)
@@ -211,7 +211,7 @@ func TestUpdateServiceOwnsCompleteUpdateTransaction(t *testing.T) {
 func TestUpdateIdempotentCommitsThroughReceiptAndReplaysWithoutSecondMutation(t *testing.T) {
 	repository := &updateRepositoryProbe{
 		found:  true,
-		record: recordmodel.Record{ID: "member-1", UpdatedAt: "version-1", Data: map[string]any{"status": "active"}},
+		record: recordmodel.Record{RecordID: "member-1", UpdatedAt: "version-1", Data: map[string]any{"status": "active"}},
 	}
 	executions := &createExecutionProbe{}
 	object := definitionmodel.ObjectSchema{Key: "member_profile", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
@@ -264,7 +264,7 @@ func TestUpdateIdempotentCommitsThroughReceiptAndReplaysWithoutSecondMutation(t 
 }
 
 func TestUpdateIdempotentRequiresExecutionRuntime(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "member-1", UpdatedAt: "v1", Data: map[string]any{"status": "active"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "member-1", UpdatedAt: "v1", Data: map[string]any{"status": "active"}}}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -278,7 +278,7 @@ func TestUpdateIdempotentRequiresExecutionRuntime(t *testing.T) {
 }
 
 func TestUpdateIdempotentVersionConflictCompletesAndReplaysTerminalReceipt(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "category-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Current"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "category-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Current"}}}
 	executions := &createExecutionProbe{}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
@@ -303,7 +303,7 @@ func TestUpdateIdempotentVersionConflictCompletesAndReplaysTerminalReceipt(t *te
 }
 
 func TestUpdateIdempotentCommitRaceCompletesTerminalVersionConflict(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "category-1", UpdatedAt: "observed-version", Data: map[string]any{"name": "Current"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "category-1", UpdatedAt: "observed-version", Data: map[string]any{"name": "Current"}}}
 	executions := &createExecutionProbe{commitErr: mutation.MutationConflict("floor_category", "category-1", mutation.MutationConflictOptimistic, nil)}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
@@ -324,7 +324,7 @@ func TestUpdateIdempotentCommitRaceCompletesTerminalVersionConflict(t *testing.T
 }
 
 func TestUpdateServiceRejectsVersionConflictWithoutMutatingCallerPatch(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", UpdatedAt: "version-2", Data: map[string]any{"name": "Before"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "case-1", UpdatedAt: "version-2", Data: map[string]any{"name": "Before"}}}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -342,7 +342,7 @@ func TestUpdateServiceRejectsVersionConflictWithoutMutatingCallerPatch(t *testin
 }
 
 func TestUpdateServiceAlwaysCarriesReadRevisionIntoStorageCAS(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}}}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -360,7 +360,7 @@ func TestUpdateServiceAlwaysCarriesReadRevisionIntoStorageCAS(t *testing.T) {
 }
 
 func TestUpdateServiceMapsStorageCASFailureToStableVersionConflict(t *testing.T) {
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}}, commitErr: mutation.MutationConflict("case", "case-1", mutation.MutationConflictOptimistic, nil)}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}}, commitErr: mutation.MutationConflict("case", "case-1", mutation.MutationConflictOptimistic, nil)}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -376,7 +376,7 @@ func TestUpdateServiceMapsStorageCASFailureToStableVersionConflict(t *testing.T)
 func TestUpdateServiceMapsIdempotencyCommitFailureToStableConflict(t *testing.T) {
 	repository := &updateRepositoryProbe{
 		found:     true,
-		record:    recordmodel.Record{ID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}},
+		record:    recordmodel.Record{RecordID: "case-1", UpdatedAt: "revision-9", Data: map[string]any{"name": "Before"}},
 		commitErr: mutation.MutationConflict("workflow_execution", "workflow-1", mutation.MutationConflictIdempotency, errors.New("Error 1062: Duplicate entry")),
 	}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
@@ -397,7 +397,7 @@ func TestUpdateServiceMapsIdempotencyCommitFailureToStableConflict(t *testing.T)
 
 func TestUpdateServiceIgnoresFieldWritePolicyAfterObjectAndRowAuthorization(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "employee_profile", Fields: []definitionmodel.FieldSchema{{Key: "identity_user", Type: "relation"}}}
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "profile-1", Data: map[string]any{"identity_user": "u1"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "profile-1", Data: map[string]any{"identity_user": "u1"}}}
 	deniedReason := ""
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,
@@ -419,7 +419,7 @@ func TestUpdateServiceIgnoresFieldWritePolicyAfterObjectAndRowAuthorization(t *t
 
 func TestUpdateServiceAuditsScopeDenialAndWrapsCommitFailure(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "case", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{ID: "case-1", Data: map[string]any{"name": "Before"}}}
+	repository := &updateRepositoryProbe{found: true, record: recordmodel.Record{RecordID: "case-1", Data: map[string]any{"name": "Before"}}}
 	deniedReason := ""
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: repository,

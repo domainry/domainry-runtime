@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	reportsdk "github.com/domainry/domainry-report-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -157,8 +158,12 @@ func compileTestkitReportNotification(intent notificationmodel.NotificationInten
 	if severity == "" {
 		severity = "info"
 	}
+	eventID, err := entityid.Derive("notevt", "runtime.testkit-report-notification", intent.WorkspaceID, intent.SourceEventID)
+	if err != nil {
+		return notificationmodel.NotificationEvent{}, err
+	}
 	return notificationmodel.NotificationEvent{
-		ID: intent.ID, WorkspaceID: intent.WorkspaceID, Source: "report", SourceEventID: intent.SourceEventID,
+		EventID: eventID, WorkspaceID: intent.WorkspaceID, Source: "report", SourceEventID: intent.SourceEventID,
 		EventType: intent.EventType, Category: "long_task", Severity: severity,
 		RecipientUserIDs: append([]string(nil), intent.RecipientUserIDs...), SubjectType: intent.SubjectType,
 		SubjectID: intent.SubjectID, SubjectVersion: intent.SubjectVersion, DedupeKey: intent.DedupeKey,

@@ -66,7 +66,7 @@ func (a scheduledNotificationTargetRuntimeAdapter) ExecuteNotificationTarget(ctx
 	}
 	identity := scheduledReminderIdentity(dispatch.Owner.WorkspaceID, dispatch.PlanID, request.IdempotencyKey)
 	event, created, err := a.publish(ctx, notificationmodel.NotificationIntent{
-		ID: identity, WorkspaceID: principal.WorkspaceID, SourceEventID: identity, EventType: scheduledReminderEventType,
+		WorkspaceID: principal.WorkspaceID, SourceEventID: identity, EventType: scheduledReminderEventType,
 		RecipientUserIDs: []string{principal.UserID}, DedupeKey: identity, OccurredAt: request.ScheduledFor.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"), Locale: strings.TrimSpace(principal.User.Locale),
 		Variables:     map[string]any{"title": input.Title, "message": input.Message, "scheduled_for": request.ScheduledFor.UTC().Format("2006-01-02T15:04:05Z07:00")},
 		CorrelationID: strings.TrimSpace(request.ExecutionID),

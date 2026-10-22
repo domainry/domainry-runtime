@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ type workflowProcessCursor struct {
 	Version   int    `json:"v"`
 	Scope     string `json:"scope"`
 	CreatedAt string `json:"created_at"`
-	ID        string `json:"id"`
+	ID        int64  `json:"id"`
 }
 
 // A cursor is a position, never authority. Each page runs the same live
@@ -44,13 +45,13 @@ func (s *WorkflowApplicationService) workflowProcessPage(ctx context.Context, pr
 			return workflowmodel.WorkflowProcessPage{}, badRequest("backend.workflow.cursor_invalid")
 		}
 		data, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || json.Unmarshal(data, &cursor) != nil || cursor.Version != 1 || cursor.Scope != scope || strings.TrimSpace(cursor.ID) == "" {
+		if err != nil || json.Unmarshal(data, &cursor) != nil || cursor.Version != 1 || cursor.Scope != scope || cursor.ID < 1 {
 			return workflowmodel.WorkflowProcessPage{}, badRequest("backend.workflow.cursor_invalid")
 		}
 		if _, err := time.Parse(time.RFC3339Nano, cursor.CreatedAt); err != nil {
 			return workflowmodel.WorkflowProcessPage{}, badRequest("backend.workflow.cursor_invalid")
 		}
-		filter.AfterCreatedAt, filter.AfterID = cursor.CreatedAt, cursor.ID
+		filter.AfterCreatedAt, filter.AfterID = cursor.CreatedAt, strconv.FormatInt(cursor.ID, 10)
 	} else {
 		filter.AfterCreatedAt, filter.AfterID = "", ""
 	}

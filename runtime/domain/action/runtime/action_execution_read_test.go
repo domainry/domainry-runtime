@@ -37,7 +37,7 @@ func TestExecutionRuntimeReadReceiptRequiresOwnedExactUnexpiredScope(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := actionmodel.ActionBusinessExecution{ID: "receipt", WorkspaceID: p.WorkspaceID, ObjectKey: "customer", RecordID: "customer-1", ActionKey: "customer.rename", IdempotencyKey: "call", ActorID: p.UserID, RequestFingerprint: fingerprint, Status: string(idempotency.StatusSucceeded), Result: map[string]any{"action_key": "customer.rename"}, ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)}
+	base := actionmodel.ActionBusinessExecution{OperationID: "receipt", WorkspaceID: p.WorkspaceID, ObjectKey: "customer", RecordID: "customer-1", ActionKey: "customer.rename", IdempotencyKey: "call", ActorID: p.UserID, RequestFingerprint: fingerprint, Status: string(idempotency.StatusSucceeded), Result: map[string]any{"action_key": "customer.rename"}, ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)}
 	for _, status := range []idempotency.Status{idempotency.StatusSucceeded, idempotency.StatusProcessing, idempotency.StatusFailedTerminal, idempotency.StatusFailedRetryable} {
 		receipt := base
 		receipt.Status = string(status)
@@ -72,7 +72,7 @@ func TestExecutionRuntimeReadReceiptRequiresOwnedExactUnexpiredScope(t *testing.
 			}
 			repo := &actionReceiptReadProbe{executionRepositoryProbe: executionRepositoryProbe{execution: receipt}, found: true}
 			got, found, err := NewActionExecutionRuntime(repo).ReadReceipt(t.Context(), "customer", "customer-1", "customer.rename", "call", input, p)
-			if err == nil || found || got.ID != "" || !reflect.DeepEqual(repo.execution, receipt) {
+			if err == nil || found || got.OperationID != "" || !reflect.DeepEqual(repo.execution, receipt) {
 				t.Fatal("invalid receipt accepted or modified", got, found, err)
 			}
 		})

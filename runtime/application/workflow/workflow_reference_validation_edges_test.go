@@ -216,7 +216,7 @@ func TestWorkflowReferenceDependencyMapRecursiveAndActionBindingOutcomes(t *test
 }
 
 func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.T) {
-	identity := workflowReferenceIdentityEdgeStub{users: []identitysdk.User{{ID: "user"}}, roles: []identitysdk.Role{{Key: "projection-role"}}}
+	identity := workflowReferenceIdentityEdgeStub{users: []identitysdk.User{{UserID: "user"}}, roles: []identitysdk.Role{{Key: "projection-role"}}}
 	validator := workflowReferenceValidatorFixture(identity)
 	users, roles := validator.workflowIdentityReferenceCatalog(t.Context())
 	if !users["user"] || !roles["projection-role"] || roles["sender"] {
@@ -243,7 +243,7 @@ func TestWorkflowReferenceIdentityResolversRunAsAndGraphNodeOutcomes(t *testing.
 	}
 	validResolvers := []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"unchecked"}}, {Type: "role", RoleKey: "sender"}, {Type: "record_user_field", Field: "owner"}, {Type: "variable_user", Field: "owner_variable"}, {Type: "manager_of", UserField: "owner"}, {Type: "initiator_manager"}}
 	validValidator := workflowReferenceValidatorFixture(workflowReferenceIdentityEdgeStub{
-		users: []identitysdk.User{{ID: "unchecked"}},
+		users: []identitysdk.User{{UserID: "unchecked"}},
 		roles: []identitysdk.Role{{Key: "sender"}},
 	})
 	validUsers, validRoles := validValidator.workflowIdentityReferenceCatalog(t.Context())

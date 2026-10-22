@@ -190,7 +190,7 @@ func TestExecuteOwnerOperationRejectsRunningReplayWithoutRepeatingOwner(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Start(t.Context(), receipt.Command.ID, receipt.Command.Scope, operationsOwnerSystemScope()); err != nil {
+	if _, err := service.Start(t.Context(), receipt.Command.OperationID, receipt.Command.Scope, operationsOwnerSystemScope()); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0

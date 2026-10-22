@@ -23,7 +23,7 @@ func NewActionAssuranceStore(store *database.RuntimeStore) ActionAssuranceStore 
 
 func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, grant actionmodel.ActionAssuranceGrant) error {
 	methods, _ := database.MarshalTimeJSON(grant.Methods)
-	columns := []string{"id", "token_hash", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
+	columns := []string{"grant_id", "token_hash", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
 	values := []any{grant.ID, grant.TokenHash, grant.UserID, grant.ActionKey, grant.ObjectKey, grant.RecordID, grant.PayloadDigest, string(methods), grant.ApprovalVersion, grant.ApprovalHash, timevalue.Millis(grant.IssuedAt), timevalue.Millis(grant.ExpiresAt), timevalue.Millis(grant.ConsumedAt)}
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, grant.WorkspaceID, "_action_assurance_grants", columns, values); err != nil {
 		return err
@@ -39,8 +39,8 @@ func (s ActionAssuranceStore) SaveActionAssuranceGrant(ctx context.Context, gran
 }
 
 func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id string) (actionmodel.ActionAssuranceGrant, bool, error) {
-	columns := []string{"id", "token_hash", "workspace_id", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
-	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_action_assurance_grants").Columns(columns...).Where(query.Equal("id", id)).Build()
+	columns := []string{"grant_id", "token_hash", "workspace_id", "user_id", "action_key", "object_key", "record_id", "payload_digest", "methods_json", "approval_version", "approval_hash", "issued_at", "expires_at", "consumed_at"}
+	queryValue, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_action_assurance_grants").Columns(columns...).Where(query.Equal("grant_id", id)).Build()
 	if err != nil {
 		return actionmodel.ActionAssuranceGrant{}, false, fmt.Errorf("build action assurance lookup: %w", err)
 	}
@@ -64,7 +64,7 @@ func (s ActionAssuranceStore) GetActionAssuranceGrant(ctx context.Context, id st
 func (s ActionAssuranceStore) ConsumeActionAssuranceGrant(ctx context.Context, workspaceID, id string, now time.Time) (bool, error) {
 	value := now.UTC().UnixMilli()
 	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_action_assurance_grants", workspaceID).Set("consumed_at", value).Where(query.And(
-		query.Equal("id", id), query.Equal("consumed_at", int64(0)), query.GreaterThan("expires_at", value),
+		query.Equal("grant_id", id), query.Equal("consumed_at", int64(0)), query.GreaterThan("expires_at", value),
 	)).Build()
 	if err != nil {
 		return false, fmt.Errorf("build action assurance consume: %w", err)

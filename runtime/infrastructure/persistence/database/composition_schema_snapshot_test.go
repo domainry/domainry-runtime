@@ -50,7 +50,7 @@ func TestSQLiteCompositionSchemasMatchExactSourceOwnedSnapshotsAndBudgets(t *tes
 	}{
 		{minimalComposition, 30, 45},
 		{fullNoAgentComposition, 70, 85},
-		{fullAgentComposition, 85, 126},
+		{fullAgentComposition, 150, 160},
 	}
 	for _, test := range tests {
 		t.Run(string(test.composition), func(t *testing.T) {
@@ -107,6 +107,8 @@ func openCompositionSchemaStore(t *testing.T, composition schemaComposition) *Ru
 		applyORMMigrations(t, store, ownerOf(t, agentmodule.SchemaOwnership()), mustMigrations(t, agentMigrations, err))
 		knowledgeMigrations, err := knowledgemodule.SchemaMigrations(store.SQLRenderer)
 		applyORMMigrations(t, store, knowledgemodule.MigrationOwner, mustMigrations(t, knowledgeMigrations, err))
+		recordMigrations, err := knowledgemodule.RecordSchemaMigrations(store.SQLRenderer)
+		applyORMMigrations(t, store, knowledgemodule.RecordMigrationOwner, mustMigrations(t, recordMigrations, err))
 		todoMigrations, err := todomodule.SchemaMigrations(store.SQLRenderer)
 		applyORMMigrations(t, store, todomodule.MigrationOwner, mustMigrations(t, todoMigrations, err))
 	}
@@ -236,7 +238,7 @@ func expectedCompositionTables(t *testing.T, composition schemaComposition) []st
 
 func TestCompositionSnapshotCountsRemainStable(t *testing.T) {
 	for composition, want := range map[schemaComposition]int{
-		minimalComposition: 41, fullNoAgentComposition: 83, fullAgentComposition: 126,
+		minimalComposition: 41, fullNoAgentComposition: 85, fullAgentComposition: 155,
 	} {
 		if got := len(expectedCompositionTables(t, composition)); got != want {
 			t.Fatalf("%s target table count=%d want=%d", composition, got, want)

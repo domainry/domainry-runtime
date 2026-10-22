@@ -114,7 +114,7 @@ func (s databaseRetirementEdgeStub) OperationalStatus(context.Context, string, p
 	return operationsmodel.DatabaseRetirementOperationalStatus{}, s.err
 }
 func (s databaseRetirementEdgeStub) Preview(context.Context, string, principalmodel.Principal) (operationsmodel.DatabaseDropPlan, error) {
-	return operationsmodel.DatabaseDropPlan{RetirementID: "retirement"}, s.err
+	return operationsmodel.DatabaseDropPlan{OperationID: "retirement"}, s.err
 }
 func (s databaseRetirementEdgeStub) Advance(context.Context, string, operationsmodel.DatabaseRetirementState, operationsmodel.DatabaseRetirementEvidence, principalmodel.Principal) (operationsmodel.DatabaseRetirement, error) {
 	return operationsmodel.DatabaseRetirement{}, s.err

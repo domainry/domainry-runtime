@@ -23,8 +23,8 @@ func runtimeIdentityFixtureSession(t *testing.T, login, role string) identitysdk
 		AccessToken:  integrationIdentityAccessTokenFor(login, role),
 		RefreshToken: integrationIdentityAccessTokenFor(login, role),
 		TokenType:    "Bearer",
-		User:         identitysdk.User{ID: login, Status: "active"},
-		Roles:        []identitysdk.Role{{ID: role, Key: role, Status: "active"}},
+		User:         identitysdk.User{UserID: login, Status: "active"},
+		Roles:        []identitysdk.Role{{RoleID: role, Key: role, Status: "active"}},
 		DefaultRole:  role,
 	}
 }

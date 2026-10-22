@@ -23,7 +23,7 @@ var reviewedWorkspaceSQLTables = map[string]bool{
 	"_notification_delivery_reservations": true,
 	"_lifecycle_cleanup_jobs":             true,
 	"_lifecycle_legal_holds":              true,
-	"_subject_requests":         true,
+	"_subject_requests":                   true,
 	"_notification_recipient_preferences": true,
 	"_workflow_node_instances":            true,
 	"_workflow_process_events":            true, "_workflow_process_instances": true, "_workflow_tasks": true,

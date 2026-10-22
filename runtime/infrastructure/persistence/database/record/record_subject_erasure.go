@@ -36,7 +36,7 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 		if !found || strings.TrimSpace(mutation.RecordID) == "" || mutation.AfterUpdatedAt == "" || mutation.AfterUpdatedAt == mutation.BeforeUpdatedAt {
 			return fmt.Errorf("invalid prepared subject record mutation")
 		}
-		statement, args, err := query.NewWorkspaceSelectBuilder(r.store.RuntimeRenderer(), object.Key, workspaceID).Columns("updated_at").Where(query.Equal("id", mutation.RecordID)).Build()
+		statement, args, err := query.NewWorkspaceSelectBuilder(r.store.RuntimeRenderer(), object.Key, workspaceID).Columns("updated_at").Where(query.Equal(recordBusinessIDColumn(object.Key), mutation.RecordID)).Build()
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 		builder := query.NewWorkspaceUpdateBuilder(r.store.RuntimeRenderer(), object.Key, workspaceID).Set("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, mutation.AfterUpdatedAt))
 		for _, key := range keys {
 			field, found := fields[key]
-			if !found || recordFieldIsSystemOwned(key) || recordpolicy.RecordSubjectEraseMode(field) == recordpolicy.RecordLifecycleEraseRetain {
+			if !found || recordFieldIsSystemOwned(object.Key, key) || recordpolicy.RecordSubjectEraseMode(field) == recordpolicy.RecordLifecycleEraseRetain {
 				return fmt.Errorf("subject erasure field is not declared: %s.%s", object.Key, key)
 			}
 			builder.Set(key, dbFieldValue(r.store.RuntimeEngine, field, mutation.Values[key]))
@@ -83,7 +83,7 @@ func (r RecordStore) ApplySubjectErasure(ctx context.Context, workspaceID string
 				}
 			}
 		}
-		statement, args, err = builder.Where(query.And(query.Equal("id", mutation.RecordID), query.Equal("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, mutation.BeforeUpdatedAt)))).Build()
+		statement, args, err = builder.Where(query.And(query.Equal(recordBusinessIDColumn(object.Key), mutation.RecordID), query.Equal("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, mutation.BeforeUpdatedAt)))).Build()
 		if err != nil {
 			return err
 		}

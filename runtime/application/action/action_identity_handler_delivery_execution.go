@@ -2,11 +2,10 @@ package action
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
@@ -26,12 +25,12 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindConflict, "identity.handler_delivery_already_used", nil, nil)
 	}
 	request.User.User.Name = strings.TrimSpace(request.User.User.Name)
-	request.User.User.ID = strings.TrimSpace(request.User.User.ID)
+	request.User.User.UserID = strings.TrimSpace(request.User.User.UserID)
 	request.User.User.OrgID = strings.TrimSpace(request.User.User.OrgID)
 	if request.User.ExpectedVersion < 0 {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_request_invalid", nil, nil)
 	}
-	if request.User.User.ID != "" || request.User.User.OrgID != "" {
+	if request.User.User.UserID != "" || request.User.User.OrgID != "" {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindForbidden, "identity.handler_delivery_runtime_owned_identity_fields", nil, nil)
 	}
 	workspaceCreate := request.User.Operation == runtimeext.IdentityHandlerCreateWorkspace
@@ -47,7 +46,11 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 		if request.User.ExpectedVersion != 0 || request.User.LoginMode != runtimeext.IdentityHandlerLoginNone && request.User.LoginMode != runtimeext.IdentityHandlerLoginPassword {
 			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_login_mode_invalid", nil, nil)
 		}
-		request.User.User.ID = stableIdentityUserID(e.workspace.ID, e.identity.ExecutionID)
+		userID, err := stableIdentityUserID(e.workspace.ID, e.identity.ExecutionID)
+		if err != nil {
+			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_user_identity_invalid", err, nil)
+		}
+		request.User.User.UserID = userID
 		request.User.User.OrgID = targetID
 	} else if request.User.ExpectedVersion < 1 || request.User.LoginMode != "" {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_login_mode_invalid", nil, nil)
@@ -71,7 +74,11 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 			if request.User.Operation != runtimeext.IdentityHandlerCreate || request.ProfileBinding.ProfileID != "" || request.ProfileBinding.ExpectedVersion != 0 {
 				return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_profile_create_invalid", nil, nil)
 			}
-			request.ProfileBinding.ProfileID = stableIdentityProfileID(e.workspace.ID, e.identity.ExecutionID, request.ProfileBinding.ObjectKey)
+			profileID, err := stableIdentityProfileID(e.workspace.ID, e.identity.ExecutionID, request.ProfileBinding.ObjectKey)
+			if err != nil {
+				return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_profile_identity_invalid", err, nil)
+			}
+			request.ProfileBinding.ProfileID = profileID
 		} else if request.ProfileBinding.ProfileID == "" {
 			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindBadRequest, "identity.handler_delivery_profile_cas_required", nil, nil)
 		}
@@ -96,7 +103,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 			if err != nil {
 				return runtimeext.IdentityHandlerDeliveryResult{}, err
 			}
-			if strings.TrimSpace(profile.ID) != request.ProfileBinding.ProfileID || strings.TrimSpace(profile.OwnerOrgID) != targetID || strings.TrimSpace(profile.UpdatedAt) == "" {
+			if strings.TrimSpace(profile.RecordID) != request.ProfileBinding.ProfileID || strings.TrimSpace(profile.OwnerOrgID) != targetID || strings.TrimSpace(profile.UpdatedAt) == "" {
 				return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindForbidden, "identity.handler_delivery_profile_target_mismatch", nil, nil)
 			}
 			if request.User.Operation != runtimeext.IdentityHandlerCreate {
@@ -104,7 +111,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 				if boundUserID == "" {
 					return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindConflict, "identity.handler_delivery_profile_unbound", nil, nil)
 				}
-				request.User.User.ID = boundUserID
+				request.User.User.UserID = boundUserID
 				request.User.User.OrgID = targetID
 			}
 		}
@@ -116,7 +123,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 					return runtimeext.IdentityHandlerDeliveryResult{}, err
 				}
 			}
-			planned, err := e.planIdentityProfileCreate(txCtx, request.ProfileBinding, relationField, request.User.User.ID)
+			planned, err := e.planIdentityProfileCreate(txCtx, request.ProfileBinding, relationField, request.User.User.UserID)
 			if err != nil {
 				return runtimeext.IdentityHandlerDeliveryResult{}, err
 			}
@@ -164,13 +171,13 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 	if err != nil {
 		return runtimeext.IdentityHandlerDeliveryResult{}, normalizeIdentityCapabilityError(err, "identity.handler_delivery_failed")
 	}
-	if strings.TrimSpace(sdkResult.User.ID) != request.User.User.ID || strings.TrimSpace(sdkResult.User.OrgID) != targetID {
+	if strings.TrimSpace(sdkResult.User.UserID) != request.User.User.UserID || strings.TrimSpace(sdkResult.User.OrgID) != targetID {
 		return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_target_identity_mismatch", nil, nil)
 	}
 	if request.ProfileBinding != nil {
 		binding := sdkResult.ProfileBinding
 		if binding == nil || strings.TrimSpace(binding.BindingKey) != request.ProfileBinding.BindingKey || strings.TrimSpace(binding.ObjectKey) != request.ProfileBinding.ObjectKey ||
-			strings.TrimSpace(binding.ProfileID) != request.ProfileBinding.ProfileID || strings.TrimSpace(binding.IdentityUserID) != request.User.User.ID {
+			strings.TrimSpace(binding.ProfileID) != request.ProfileBinding.ProfileID || strings.TrimSpace(binding.IdentityUserID) != request.User.User.UserID {
 			return runtimeext.IdentityHandlerDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.handler_delivery_profile_binding_mismatch", nil, nil)
 		}
 	}
@@ -340,14 +347,12 @@ func (e *businessActionExecution) identityProfileBindingGranted(bindingKey, obje
 	return false
 }
 
-func stableIdentityProfileID(workspaceID, executionID, objectKey string) string {
-	digest := sha256.Sum256([]byte("runtime-action-identity-profile-v1\x00" + strings.TrimSpace(workspaceID) + "\x00" + strings.TrimSpace(executionID) + "\x00" + strings.TrimSpace(objectKey)))
-	return "profile_" + hex.EncodeToString(digest[:16])
+func stableIdentityProfileID(workspaceID, executionID, objectKey string) (string, error) {
+	return entityid.Derive("profile", "runtime.action.identity-profile", workspaceID, executionID, objectKey)
 }
 
-func stableIdentityUserID(workspaceID, executionID string) string {
-	digest := sha256.Sum256([]byte("runtime-action-identity-user-v1\x00" + strings.TrimSpace(workspaceID) + "\x00" + strings.TrimSpace(executionID)))
-	return "user_" + hex.EncodeToString(digest[:16])
+func stableIdentityUserID(workspaceID, executionID string) (string, error) {
+	return entityid.Derive("user", "runtime.action.identity-user", workspaceID, executionID)
 }
 
 func toStringOrEmpty(value any) string {
@@ -398,8 +403,8 @@ func (e *businessActionExecution) planIdentityProfileCreate(ctx context.Context,
 	if e.mutatedRecords == nil {
 		e.mutatedRecords = map[string]recordmodel.Record{}
 	}
-	e.mutatedRecords[strings.TrimSpace(binding.ObjectKey)+"\x00"+strings.TrimSpace(record.ID)] = record
-	e.trackRecordMutation(runtimeext.MutationCreate, binding.ObjectKey, record.ID)
+	e.mutatedRecords[strings.TrimSpace(binding.ObjectKey)+"\x00"+strings.TrimSpace(record.RecordID)] = record
+	e.trackRecordMutation(runtimeext.MutationCreate, binding.ObjectKey, record.RecordID)
 	return record, nil
 }
 
@@ -481,7 +486,7 @@ func toString(value any) string {
 
 func toSDKIdentityUser(value runtimeext.IdentityUser) identitysdk.User {
 	return identitysdk.User{
-		ID: value.ID, Name: value.Name, GivenName: value.GivenName, MiddleName: value.MiddleName, FamilyName: value.FamilyName,
+		UserID: value.UserID, Name: value.Name, GivenName: value.GivenName, MiddleName: value.MiddleName, FamilyName: value.FamilyName,
 		NamePrefix: value.NamePrefix, NameSuffix: value.NameSuffix, NativeName: value.NativeName, NameLocale: value.NameLocale,
 		Email: value.Email, Phone: value.Phone, AccountType: value.AccountType, Locale: value.Locale, Timezone: value.Timezone,
 		OrgID: value.OrgID, SupportOrgID: value.SupportOrgID, ManagerUserID: value.ManagerUserID, ReportingPath: value.ReportingPath,
@@ -492,7 +497,7 @@ func toSDKIdentityUser(value runtimeext.IdentityUser) identitysdk.User {
 
 func fromSDKIdentityUser(value identitysdk.User) runtimeext.IdentityUser {
 	return runtimeext.IdentityUser{
-		ID: value.ID, Name: value.Name, GivenName: value.GivenName, MiddleName: value.MiddleName, FamilyName: value.FamilyName,
+		UserID: value.UserID, Name: value.Name, GivenName: value.GivenName, MiddleName: value.MiddleName, FamilyName: value.FamilyName,
 		NamePrefix: value.NamePrefix, NameSuffix: value.NameSuffix, NativeName: value.NativeName, NameLocale: value.NameLocale,
 		Email: value.Email, Phone: value.Phone, AccountType: value.AccountType, Locale: value.Locale, Timezone: value.Timezone,
 		OrgID: value.OrgID, SupportOrgID: value.SupportOrgID, ManagerUserID: value.ManagerUserID, ReportingPath: value.ReportingPath,

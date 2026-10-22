@@ -33,7 +33,7 @@ func TestRuleServiceTriggerTargetStopsBeforeContextInitialization(t *testing.T) 
 	service := NewAutomationRuleApplicationService(repository, nil, nil)
 	trace, err := service.Execute(WithSimulation(t.Context(), "trigger"), RuleExecutionRequest{
 		Rule:  automationmodel.AutomationRuleSchema{Key: "notify", ObjectKey: "order", Trigger: automationmodel.AutomationTriggerSchema{Operation: "create"}},
-		Phase: "after", Record: &recordmodel.Record{ID: "order-1", UpdatedAt: "version-1"}, Candidate: map[string]any{"status": "draft"}, WorkspaceID: "workspace-1",
+		Phase: "after", Record: &recordmodel.Record{RecordID: "order-1", UpdatedAt: "version-1"}, Candidate: map[string]any{"status": "draft"}, WorkspaceID: "workspace-1",
 		Principal:  principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}},
 		Initialize: func() { initialized = true },
 	})
@@ -77,7 +77,7 @@ func TestRuleServiceBeforeRecordEmptyAliasAndActionTarget(t *testing.T) {
 	repository := &executionRepositoryStub{}
 	rule := automationmodel.AutomationRuleSchema{Key: "rule", ObjectKey: "order", Trigger: automationmodel.AutomationTriggerSchema{Operation: "update"}, Instructions: []automationmodel.AutomationInstructionSchema{{Key: "send", Type: "emit_event"}}}
 	request := RuleExecutionRequest{
-		Rule: rule, Phase: "before", Record: &recordmodel.Record{ID: "order-1"}, Candidate: map[string]any{}, WorkspaceID: "workspace-1",
+		Rule: rule, Phase: "before", Record: &recordmodel.Record{RecordID: "order-1"}, Candidate: map[string]any{}, WorkspaceID: "workspace-1",
 		Principal:      principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}},
 		MatchCondition: func(automationmodel.AutomationConditionClause) bool { return true },
 		ExecuteInstruction: func(context.Context, automationmodel.AutomationInstructionSchema) (automationmodel.AutomationInstructionResult, error) {

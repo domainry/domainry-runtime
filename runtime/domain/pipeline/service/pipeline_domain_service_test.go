@@ -23,7 +23,7 @@ func (r *pipelineRepositoryProbe) ListRecords(_ context.Context, _ string, _ def
 
 func (r *pipelineRepositoryProbe) GetRecord(_ context.Context, _ string, _ definitionmodel.ObjectSchema, recordID string) (recordmodel.Record, bool, error) {
 	for _, stage := range r.stages {
-		if stage.ID == recordID {
+		if stage.RecordID == recordID {
 			return stage, true, nil
 		}
 	}
@@ -48,9 +48,9 @@ func TestServiceAppliesStageSLAWithFixedClock(t *testing.T) {
 
 func TestServiceSelectsOrderedPipelineStages(t *testing.T) {
 	repository := &pipelineRepositoryProbe{stages: []recordmodel.Record{
-		{ID: "stage-3", Data: map[string]any{"pipeline": "sales", "sort_order": 30}},
-		{ID: "stage-1", Data: map[string]any{"pipeline": "sales", "sort_order": 10}},
-		{ID: "stage-2", Data: map[string]any{"pipeline": "sales", "sort_order": 20}},
+		{RecordID: "stage-3", Data: map[string]any{"pipeline": "sales", "sort_order": 30}},
+		{RecordID: "stage-1", Data: map[string]any{"pipeline": "sales", "sort_order": 10}},
+		{RecordID: "stage-2", Data: map[string]any{"pipeline": "sales", "sort_order": 20}},
 	}}
 	service := NewPipelineDomainService(PipelineDependencies{
 		Repository: repository,
@@ -59,11 +59,11 @@ func TestServiceSelectsOrderedPipelineStages(t *testing.T) {
 		},
 	})
 	first, err := service.FirstStage(t.Context(), "workspace-a", "sales")
-	if err != nil || first.ID != "stage-1" {
+	if err != nil || first.RecordID != "stage-1" {
 		t.Fatalf("first=%#v err=%v", first, err)
 	}
 	next, err := service.NextStage(t.Context(), "workspace-a", "sales", first)
-	if err != nil || next.ID != "stage-2" {
+	if err != nil || next.RecordID != "stage-2" {
 		t.Fatalf("next=%#v err=%v", next, err)
 	}
 }

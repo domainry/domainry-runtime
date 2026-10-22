@@ -11,7 +11,6 @@ import (
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
@@ -53,18 +52,28 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 	reserved := map[string]bool{
 		"deleted": true, "ext_info": true, "create_by": true, "update_by": true,
 		"owner_user_id": true, "owner_org_id": true,
+		recordschema.EntityIDColumn(object.Key): true,
 	}
 	for _, field := range object.Fields {
 		if reserved[strings.TrimSpace(field.Key)] {
 			return fmt.Errorf("object %s field %s conflicts with a Record system column", object.Key, field.Key)
 		}
 	}
-	// Record identity, timestamps, deletion metadata, extension metadata and
-	// actor metadata are owned by domainry-orm. Runtime only adds business
-	// fields below; redeclaring system columns here would override the ORM's
-	// canonical cross-dialect types and defaults.
+	// Declare the complete fresh table at once. Creating only system columns
+	// and then appending business fields would bypass the ORM's column order.
+	// System columns remain owned by recordschema; only active business fields
+	// are supplied here using the storage profile's exact typed definitions.
 	if len(existingTypes) == 0 {
-		createStatement, createArgs, buildErr := recordschema.NewTable(r.store.SQLRenderer, object.Key).IfNotExists().Build()
+		columns := []ormschema.ColumnDefinition{}
+		for _, field := range object.Fields {
+			field = metadataConstraintIndexedField(field, constraintIndexed[field.Key])
+			fieldKey := strings.TrimSpace(field.Key)
+			if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" || recordSystemField(object.Key, fieldKey) {
+				continue
+			}
+			columns = append(columns, ormschema.Column(fieldKey, r.storage.FieldType(field, metadataFieldIndexed(field))))
+		}
+		createStatement, createArgs, buildErr := recordschema.NewTable(r.store.SQLRenderer, object.Key).IfNotExists().Columns(columns...).Build()
 		if buildErr != nil {
 			return fmt.Errorf("build object table %s: %w", object.Key, buildErr)
 		}
@@ -101,23 +110,16 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 		indexes[name] = true
 		return nil
 	}
-	if !existing["workspace_id"] {
-		if _, err := schemaDB.ExecContext(ctx, "ALTER TABLE "+r.store.TableIdentifier(object.Key)+" ADD COLUMN "+r.store.Identifier("workspace_id")+" "+r.metadataIDColumnType()); err != nil {
-			return fmt.Errorf("add column %s.workspace_id: %w", object.Key, err)
+	for _, required := range []string{"id", "workspace_id", recordschema.EntityIDColumn(object.Key)} {
+		if !existing[required] {
+			return fmt.Errorf("object %s is missing required Record system column %s", object.Key, required)
 		}
-		if _, err := schemaDB.ExecContext(ctx, "UPDATE "+r.store.TableIdentifier(object.Key)+" SET "+r.store.Identifier("workspace_id")+" = "+r.store.Placeholder(1)+" WHERE "+r.store.Identifier("workspace_id")+" IS NULL OR "+r.store.Identifier("workspace_id")+" = ''", principalmodel.InstallationWorkspaceID); err != nil {
-			return fmt.Errorf("backfill column %s.workspace_id: %w", object.Key, err)
-		}
-		existing["workspace_id"] = true
-	}
-	if !existing["id"] {
-		return fmt.Errorf("object %s is missing required Record system column id", object.Key)
 	}
 	for _, columnName := range []string{"deleted", "ext_info", "create_by", "update_by", "owner_user_id", "owner_org_id"} {
 		if existing[columnName] {
 			continue
 		}
-		column, ok := recordschema.SystemColumn(columnName)
+		column, ok := recordschema.SystemColumn(object.Key, columnName)
 		if !ok {
 			return fmt.Errorf("record system column %s is unavailable", columnName)
 		}
@@ -136,7 +138,7 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 		for _, field := range object.Fields {
 			field = metadataConstraintIndexedField(field, constraintIndexed[field.Key])
 			fieldKey := strings.TrimSpace(field.Key)
-			if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" || existing[fieldKey] || pending[fieldKey] {
+			if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" || recordSystemField(object.Key, fieldKey) || existing[fieldKey] || pending[fieldKey] {
 				continue
 			}
 			additions = append(additions, appschemastorage.ColumnDefinition{Name: fieldKey, Type: r.metadataSQLTypeForField(field)})
@@ -155,8 +157,8 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 			}
 		}
 	}
-	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "workspace_id_id", true), true, "workspace_id", "id"); err != nil {
-		return fmt.Errorf("create workspace record identity index for %s: %w", object.Key, err)
+	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "workspace_id_id", false), false, "workspace_id", "id"); err != nil {
+		return fmt.Errorf("create workspace record page index for %s: %w", object.Key, err)
 	}
 	if err := ensureIndex(r.metadataFieldIndexName(object.Key, "owner_user_id", false), false, "workspace_id", "owner_user_id"); err != nil {
 		return fmt.Errorf("create owner user index for %s: %w", object.Key, err)
@@ -167,7 +169,7 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 	for _, field := range object.Fields {
 		field = metadataConstraintIndexedField(field, constraintIndexed[field.Key])
 		fieldKey := strings.TrimSpace(field.Key)
-		if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" {
+		if fieldKey == "" || strings.TrimSpace(field.DisabledAt) != "" || recordSystemField(object.Key, fieldKey) {
 			continue
 		}
 		if existing[fieldKey] && metadataRequiresExactPhysicalType(field) {
@@ -185,14 +187,15 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 			}
 		}
 		if !existing[fieldKey] {
-			// Raw DDL is justified here: business column types come from the
-			// dialect storage profile (NUMERIC vs DECIMAL on PostgreSQL, bounded
-			// VARCHAR for indexed MySQL text), which ormschema.NewAddColumn cannot
-			// render byte-identically; see TestMetadataAddColumnTypeDivergesFromORM.
-			// The column stays nullable so rows that predate it remain readable
-			// until the receipted backfill below fills them.
-			addColumn := "ALTER TABLE " + r.store.TableIdentifier(object.Key) + " ADD COLUMN " + r.store.Identifier(fieldKey) + " " + r.metadataSQLTypeForField(field)
-			if _, err := schemaDB.ExecContext(ctx, addColumn); err != nil {
+			// Source-model additions use the same exact typed declarations as
+			// fresh tables. Backfills below run before required-field validation.
+			addColumn, args, buildErr := ormschema.NewAddColumn(r.store.SQLRenderer, object.Key,
+				ormschema.Column(fieldKey, r.storage.FieldType(field, metadataFieldIndexed(field))),
+			).Build()
+			if buildErr != nil {
+				return fmt.Errorf("build object column %s.%s: %w", object.Key, fieldKey, buildErr)
+			}
+			if _, err := schemaDB.ExecContext(ctx, addColumn, args...); err != nil {
 				return fmt.Errorf("add column %s.%s: %w", object.Key, fieldKey, err)
 			}
 			existing[fieldKey] = true
@@ -349,6 +352,11 @@ func (r ApplicationSchemaStore) ensureObjectStorageWithPhysicalSchema(ctx contex
 		}
 	}
 	return nil
+}
+
+func recordSystemField(objectKey, fieldKey string) bool {
+	_, ok := recordschema.SystemColumn(objectKey, fieldKey)
+	return ok
 }
 
 func metadataConstraintIndexedFields(object definitionmodel.ObjectSchema) map[string]bool {

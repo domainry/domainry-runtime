@@ -50,7 +50,7 @@ func TestRestoreDependencyFailuresAndStateGuards(t *testing.T) {
 	for _, stage := range []string{"object", "not found", "not deleted", "relations", "write scope", "policies", "unique", "duplicate", "workflow", "commit"} {
 		t.Run(stage, func(t *testing.T) {
 			failure := errors.New(stage + " failed")
-			repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{
+			repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{
 				"status": "deleted", "deleted_at": "before", "deleted_by": "user-1", "version": "invalid", "name": "Acme",
 			}}}
 			dependencies := recordRestoreEdgeDependencies(repository)
@@ -114,7 +114,7 @@ func TestRestoreDependencyFailuresAndStateGuards(t *testing.T) {
 }
 
 func TestRestoreInvalidStoredVersionFallsBackAndIncrements(t *testing.T) {
-	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{
+	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{
 		"status": "deleted", "deleted_at": "before", "deleted_by": "user-1", "version": "invalid", "name": "Acme",
 	}}}
 	restored, err := NewRecordRestoreApplicationService(recordRestoreEdgeDependencies(repository)).Restore(t.Context(), "customer", "customer-1", recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
@@ -124,7 +124,7 @@ func TestRestoreInvalidStoredVersionFallsBackAndIncrements(t *testing.T) {
 }
 
 func TestPlanRestoreWithMatchingExplicitRevision(t *testing.T) {
-	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{
+	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{
 		"status": "deleted", "deleted_at": "before", "deleted_by": "user-1", "version": float64(1), "name": "Acme",
 	}}}
 	plan, _, err := NewRecordRestoreApplicationService(recordRestoreEdgeDependencies(repository)).PlanRestoreMutation(t.Context(), "customer", "customer-1", "revision-1", recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
@@ -135,7 +135,7 @@ func TestPlanRestoreWithMatchingExplicitRevision(t *testing.T) {
 
 func TestRestoreBusinessConflictAndPlannerLifecycleFailures(t *testing.T) {
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
-	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{
+	repository := &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{
 		"status": "deleted", "deleted_at": "before", "deleted_by": "user", "version": float64(1), "name": "Acme",
 	}}, commitErr: mutation.PolicyConflict("backend.restore.conflict", "customer", "customer-1", "status")}
 	if _, err := NewRecordRestoreApplicationService(recordRestoreEdgeDependencies(repository)).Restore(t.Context(), "customer", "customer-1", principal); apperror.CodeOf(err) != "backend.restore.conflict" {
@@ -143,7 +143,7 @@ func TestRestoreBusinessConflictAndPlannerLifecycleFailures(t *testing.T) {
 	}
 	immutable := restoreTestObject()
 	immutable.LifecyclePolicy = &definitionmodel.ObjectLifecyclePolicy{Mode: definitionmodel.ObjectLifecycleImmutableAfterState, StateField: "status", ImmutableStates: []string{"deleted"}}
-	repository = &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{
+	repository = &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{
 		"status": "deleted", "deleted_at": "before", "deleted_by": "user", "version": float64(1), "name": "Acme",
 	}}}
 	dependencies := recordRestoreEdgeDependencies(repository)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/recordschema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	publicresourcemodel "github.com/domainry/domainry-runtime/runtime/domain/publicresource/model"
 	publicresourcerepository "github.com/domainry/domainry-runtime/runtime/domain/publicresource/repository"
@@ -25,8 +26,9 @@ func (store *Store) Find(ctx context.Context, object definitionmodel.ObjectSchem
 	if accessKey == "" {
 		return publicresourcemodel.Projection{}, false, nil
 	}
-	columns := []string{"workspace_id", "id"}
-	seen := map[string]bool{"workspace_id": true, "id": true}
+	entityIDColumn := recordschema.EntityIDColumn(object.Key)
+	columns := []string{"workspace_id", entityIDColumn}
+	seen := map[string]bool{"workspace_id": true, entityIDColumn: true}
 	for _, fieldKey := range resource.Fields {
 		fieldKey = strings.TrimSpace(fieldKey)
 		if fieldKey != "" && !seen[fieldKey] {
@@ -79,7 +81,7 @@ func (store *Store) Find(ctx context.Context, object definitionmodel.ObjectSchem
 			switch column {
 			case "workspace_id":
 				projection.WorkspaceID = strings.TrimSpace(fmt.Sprint(value))
-			case "id":
+			case entityIDColumn:
 				projection.RecordID = strings.TrimSpace(fmt.Sprint(value))
 			default:
 				if value != nil {

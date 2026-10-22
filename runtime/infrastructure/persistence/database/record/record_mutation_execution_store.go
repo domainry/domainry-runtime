@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
@@ -55,7 +56,10 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	}
 	value.WorkspaceID = workspaceID
 	value.Operation, value.ObjectKey, value.TargetID, value.IdempotencyKey = strings.TrimSpace(value.Operation), strings.TrimSpace(value.ObjectKey), strings.TrimSpace(value.TargetID), strings.TrimSpace(value.IdempotencyKey)
-	value.ID = recordMutationExecutionID(value)
+	value.OperationID, err = recordMutationOperationID(value)
+	if err != nil {
+		return recordmodel.RecordMutationClaimResult{}, err
+	}
 	value.RequestFingerprint, value.Status = strings.TrimSpace(request.RequestFingerprint), string(idempotency.StatusProcessing)
 	value.LeaseOwner, value.LeaseExpiresAt, value.FencingToken = strings.TrimSpace(request.LeaseOwner), now.Add(request.LeaseTTL).Format(time.RFC3339Nano), 1
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
@@ -65,8 +69,8 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 		return recordmodel.RecordMutationClaimResult{}, beginErr
 	}
 	if guardErr := r.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID, sharedoperation.TableName,
-		[]string{"id", "owner", "resource_type", "resource_id", "requested_by"},
-		[]any{value.ID, recordMutationOwner, value.ObjectKey, value.TargetID, value.ActorID}); guardErr != nil {
+		[]string{"operation_id", "owner", "resource_type", "resource_id", "requested_by"},
+		[]any{value.OperationID, recordMutationOwner, value.ObjectKey, value.TargetID, value.ActorID}); guardErr != nil {
 		_ = tx.Rollback()
 		return recordmodel.RecordMutationClaimResult{}, guardErr
 	}
@@ -84,7 +88,7 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 		return recordmodel.RecordMutationClaimResult{}, err
 	}
 	if !found {
-		return recordmodel.RecordMutationClaimResult{}, database.MutationConstraintError(insertErr, "record_mutation_execution", value.ID, mutation.MutationConflictIdempotency)
+		return recordmodel.RecordMutationClaimResult{}, database.MutationConstraintError(insertErr, "record_mutation_execution", value.OperationID, mutation.MutationConflictIdempotency)
 	}
 	decision := idempotency.Classify(idempotency.ReceiptState{Status: idempotency.Status(current.Status), Fingerprint: current.RequestFingerprint, Lease: recordMutationLease(current)}, value.RequestFingerprint, now)
 	if decision != idempotency.DecisionAcquired {
@@ -94,7 +98,7 @@ func (r RecordStore) tryBeginRecordMutationOnce(ctx context.Context, request rec
 	status, empty := string(idempotency.StatusProcessing), ""
 	resultJSON, metadataJSON := json.RawMessage(`{}`), json.RawMessage(recordMutationMetadataJSON(0))
 	changed, err := operationStore.PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: value.ID, Owner: recordMutationOwner, Kind: recordMutationKind,
+		WorkspaceID: workspaceID, OperationID: value.OperationID, Owner: recordMutationOwner, Kind: recordMutationKind,
 		RequestFingerprint: value.RequestFingerprint, LeaseExpiresAtOrBefore: now.Format(time.RFC3339Nano),
 		ReclaimableStatus: string(idempotency.StatusFailedRetryable), ExpiredLeaseStatus: string(idempotency.StatusProcessing),
 	}, sharedoperation.RecordChanges{
@@ -147,13 +151,13 @@ func (r RecordStore) CommitRecordMutationExecution(ctx context.Context, commit t
 		return recordmodel.RecordMutationExecution{}, err
 	}
 	if !changed {
-		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.ExecutionID)
-		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.ExecutionID, mutation.MutationConflictLeaseLost, nil)
+		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.OperationID)
+		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.OperationID, mutation.MutationConflictLeaseLost, nil)
 	}
 	if err := tx.Commit(); err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.ExecutionID)
+	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.OperationID)
 }
 
 func (r RecordStore) CommitRecordMutationBatchExecution(ctx context.Context, commits []transactionmodel.RecordMutationCommit, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
@@ -188,13 +192,13 @@ func (r RecordStore) CommitRecordMutationBatchExecution(ctx context.Context, com
 		return recordmodel.RecordMutationExecution{}, err
 	}
 	if !changed {
-		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.ExecutionID)
-		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.ExecutionID, mutation.MutationConflictLeaseLost, nil)
+		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.OperationID)
+		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.OperationID, mutation.MutationConflictLeaseLost, nil)
 	}
 	if err := tx.Commit(); err != nil {
 		return recordmodel.RecordMutationExecution{}, err
 	}
-	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.ExecutionID)
+	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.OperationID)
 }
 
 func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
@@ -220,10 +224,10 @@ func (r RecordStore) CompleteRecordMutationExecution(ctx context.Context, comple
 		return recordmodel.RecordMutationExecution{}, err
 	}
 	if !changed {
-		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.ExecutionID)
-		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.ExecutionID, mutation.MutationConflictLeaseLost, nil)
+		r.observeRecordMutationLeaseLost(ctx, workspaceID, completion.OperationID)
+		return recordmodel.RecordMutationExecution{}, mutation.MutationConflict("record_mutation_execution", completion.OperationID, mutation.MutationConflictLeaseLost, nil)
 	}
-	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.ExecutionID)
+	return r.findRecordMutationExecutionByID(ctx, workspaceID, completion.OperationID)
 }
 
 func (r RecordStore) observeRecordMutationLeaseLost(ctx context.Context, workspaceID, executionID string) {
@@ -233,9 +237,12 @@ func (r RecordStore) observeRecordMutationLeaseLost(ctx context.Context, workspa
 }
 
 func (r RecordStore) findRecordMutationExecution(ctx context.Context, scope recordmodel.RecordMutationExecution) (recordmodel.RecordMutationExecution, bool, error) {
-	id := recordMutationExecutionID(scope)
+	operationID, err := recordMutationOperationID(scope)
+	if err != nil {
+		return recordmodel.RecordMutationExecution{}, false, err
+	}
 	record, found, err := sharedoperation.NewSQLStore(r.database(), r.store.SQLRenderer).GetRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: scope.WorkspaceID, ID: id, Owner: recordMutationOwner, Kind: recordMutationKind,
+		WorkspaceID: scope.WorkspaceID, OperationID: operationID, Owner: recordMutationOwner, Kind: recordMutationKind,
 	})
 	if err != nil || !found {
 		return recordmodel.RecordMutationExecution{}, found, err
@@ -254,7 +261,7 @@ func (r RecordStore) findRecordMutationExecutionByID(ctx context.Context, worksp
 		return recordmodel.RecordMutationExecution{}, err
 	}
 	record, found, err := sharedoperation.NewSQLStore(r.database(), r.store.SQLRenderer).GetRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: strings.TrimSpace(id), Owner: recordMutationOwner, Kind: recordMutationKind,
+		WorkspaceID: workspaceID, OperationID: strings.TrimSpace(id), Owner: recordMutationOwner, Kind: recordMutationKind,
 	})
 	if err != nil {
 		return recordmodel.RecordMutationExecution{}, err
@@ -283,12 +290,12 @@ func recordMutationCompletionPatch(workspaceID string, completion recordmodel.Re
 	statusValue, metadataJSON := string(status), json.RawMessage(recordMutationMetadataJSON(responseStatus))
 	expiresAt, finishedAt, token := completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), completion.FencingToken
 	return sharedoperation.RecordFilter{
-			WorkspaceID: workspaceID, ID: completion.ExecutionID, Owner: recordMutationOwner, Kind: recordMutationKind,
-			LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
-		}, sharedoperation.RecordChanges{
-			Status: &statusValue, ResultJSON: &resultJSON, MetadataJSON: &metadataJSON, ErrorCode: &errorCode,
-			FailureClass: &failureClass, ExpiresAt: &expiresAt, FinishedAt: &finishedAt, UpdatedAt: &finishedAt,
-		}
+		WorkspaceID: workspaceID, OperationID: completion.OperationID, Owner: recordMutationOwner, Kind: recordMutationKind,
+		LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
+	}, sharedoperation.RecordChanges{
+		Status: &statusValue, ResultJSON: &resultJSON, MetadataJSON: &metadataJSON, ErrorCode: &errorCode,
+		FailureClass: &failureClass, ExpiresAt: &expiresAt, FinishedAt: &finishedAt, UpdatedAt: &finishedAt,
+	}
 }
 
 func recordMutationRecord(value recordmodel.RecordMutationExecution, resultJSON json.RawMessage) sharedoperation.Record {
@@ -299,12 +306,12 @@ func recordMutationRecord(value recordmodel.RecordMutationExecution, resultJSON 
 		failureClass = "terminal"
 	}
 	return sharedoperation.Record{
-		ID: value.ID, WorkspaceID: value.WorkspaceID, Owner: recordMutationOwner, Kind: recordMutationKind,
+		ID: value.ID, OperationID: value.OperationID, WorkspaceID: value.WorkspaceID, Owner: recordMutationOwner, Kind: recordMutationKind,
 		ActionKey: value.Operation, ResourceType: value.ObjectKey, ResourceID: value.TargetID,
-		IdempotencyKey: value.ID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
-		Status: value.Status, StatusURL: "/operations/" + value.ID, ResultJSON: resultJSON,
+		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
+		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: resultJSON,
 		MetadataJSON: json.RawMessage(recordMutationMetadataJSON(value.ResponseStatus)), ErrorCode: value.ErrorCode,
-		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.ID, EvidenceJSON: json.RawMessage(`[]`),
+		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -321,12 +328,12 @@ func recordMutationMetadataJSON(responseStatus int) string {
 
 func recordMutationExecution(record sharedoperation.Record) (recordmodel.RecordMutationExecution, error) {
 	value := recordmodel.RecordMutationExecution{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, Operation: record.ActionKey, ObjectKey: record.ResourceType, TargetID: record.ResourceID,
+		ID: record.ID, OperationID: record.OperationID, WorkspaceID: record.WorkspaceID, Operation: record.ActionKey, ObjectKey: record.ResourceType, TargetID: record.ResourceID,
 		RequestFingerprint: record.RequestFingerprint, ActorID: record.RequestedBy, IdempotencyKey: record.Reference, Status: record.Status,
 		ErrorCode: record.ErrorCode, LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != recordMutationOwner || record.Kind != recordMutationKind || record.IdempotencyKey != value.ID || record.Correlation != value.ID {
+	if record.Owner != recordMutationOwner || record.Kind != recordMutationKind || record.IdempotencyKey != value.OperationID || record.Correlation != value.OperationID {
 		return recordmodel.RecordMutationExecution{}, fmt.Errorf("record mutation operation identity is invalid")
 	}
 	var metadata recordMutationOperationMetadata
@@ -341,9 +348,9 @@ func recordMutationExecution(record sharedoperation.Record) (recordmodel.RecordM
 	return value, nil
 }
 
-func recordMutationExecutionID(value recordmodel.RecordMutationExecution) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.Operation), strings.TrimSpace(value.ObjectKey), strings.TrimSpace(value.TargetID), strings.TrimSpace(value.IdempotencyKey)}, ":")))
-	return "record_mutation:" + hex.EncodeToString(sum[:])[:20]
+func recordMutationOperationID(value recordmodel.RecordMutationExecution) (string, error) {
+	sum := sha256.Sum256([]byte(strings.Join([]string{strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.Operation), strings.TrimSpace(value.ObjectKey), strings.TrimSpace(value.TargetID), strings.TrimSpace(value.IdempotencyKey)}, "\x00")))
+	return entityid.Derive("op", "runtime.record-mutation", hex.EncodeToString(sum[:]))
 }
 
 func recordMutationLease(value recordmodel.RecordMutationExecution) idempotency.Lease {

@@ -25,7 +25,7 @@ func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *test
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}, RequestID: "request-1"}, accessfixture.Bundle{
 		Key: "cashier", Permissions: []string{"order.update"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"order.update"}, "owner"),
 	})
-	plan, err := planner.Plan(ctx, principal, transactionmodel.RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "paid"}}}, map[string]any{"status": "draft"})
+	plan, err := planner.Plan(ctx, principal, transactionmodel.RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "paid"}}}, map[string]any{"status": "draft"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *test
 
 func TestMutationPlannerUsesDeterministicObjectRevisionWithoutRepositoryResolver(t *testing.T) {
 	planner := NewMutationPlannerApplicationService(nil)
-	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1"}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1"}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}
 	first, err := planner.Plan(t.Context(), principal, commit, nil)
 	if err != nil {
@@ -51,7 +51,7 @@ func TestMutationPlannerUsesDeterministicObjectRevisionWithoutRepositoryResolver
 
 func TestMutationPlannerRejectsMissingPublishedRevision(t *testing.T) {
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "", nil })
-	_, err := planner.Plan(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1"}}, nil)
+	_, err := planner.Plan(t.Context(), principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1"}}, nil)
 	var typed *MutationPlannerError
 	if !errors.As(err, &typed) || typed.Code != "backend.mutation.metadata_revision_unavailable" {
 		t.Fatalf("error=%#v", err)
@@ -60,7 +60,7 @@ func TestMutationPlannerRejectsMissingPublishedRevision(t *testing.T) {
 
 func TestMutationPlannerEnforcesPublishedObjectWritePolicy(t *testing.T) {
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "revision-1", nil })
-	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "payment", Config: map[string]any{"write_policy": "action_only"}}, Record: recordmodel.Record{ID: "payment-1", Data: map[string]any{"status": "settled"}}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: definitionmodel.ObjectSchema{Key: "payment", Config: map[string]any{"write_policy": "action_only"}}, Record: recordmodel.Record{RecordID: "payment-1", Data: map[string]any{"status": "settled"}}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}
 	_, err := planner.Plan(t.Context(), principal, commit, map[string]any{"status": "pending"})
 	var typed *MutationPlannerError
@@ -80,7 +80,7 @@ func TestMutationPlannerEnforcesPublishedObjectWritePolicy(t *testing.T) {
 func TestMutationPlannerEnforcesLifecyclePolicyForEveryInvocationSource(t *testing.T) {
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "revision-1", nil })
 	object := definitionmodel.ObjectSchema{Key: "ledger_entry", LifecyclePolicy: &definitionmodel.ObjectLifecyclePolicy{Mode: definitionmodel.ObjectLifecycleAppendOnly}}
-	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "entry-1"}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "entry-1"}}
 	for _, source := range []transactionmodel.MutationSource{transactionmodel.MutationSourceHTTP, transactionmodel.MutationSourceAction, transactionmodel.MutationSourceAutomation, transactionmodel.MutationSourceWorkflow, transactionmodel.MutationSourceInternal} {
 		ctx := WithMutationInvocation(t.Context(), MutationInvocation{Source: source})
 		_, err := planner.Plan(ctx, principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}, commit, map[string]any{"amount": 10})
@@ -115,7 +115,7 @@ func TestMutationPlannerContextHelpersAndRemainingPlanBranches(t *testing.T) {
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "update",
 		Object:    definitionmodel.ObjectSchema{Key: "order"},
-		Record:    recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "active"}},
+		Record:    recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "active"}},
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}}
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) {
@@ -151,7 +151,7 @@ func TestMutationPlannerRemainingRevisionAndErrorBranches(t *testing.T) {
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create",
 		Object:    definitionmodel.ObjectSchema{Key: "order"},
-		Record:    recordmodel.Record{ID: "order-1"},
+		Record:    recordmodel.Record{RecordID: "order-1"},
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a"}}
 	revisionErr := errors.New("revision unavailable")

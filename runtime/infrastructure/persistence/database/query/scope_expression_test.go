@@ -26,7 +26,7 @@ func TestRelationExistenceScopeDoesNotRequireComparisonValues(t *testing.T) {
 				t.Fatalf("existence scope became empty: %+v %v", resolved, err)
 			}
 			called = false
-			matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", recordmodel.Record{ID: "event-a", Data: map[string]any{"deal": "deal-a"}}, expression, func(statement string, args ...any) (bool, error) {
+			matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", recordmodel.Record{RecordID: "event-a", Data: map[string]any{"deal": "deal-a"}}, expression, func(statement string, args ...any) (bool, error) {
 				called = true
 				return true, nil
 			})
@@ -45,7 +45,7 @@ func TestResolveScopeMembershipQueriesPermissionIDsBeforeRootFieldIN(t *testing.
 			{SourceObjectKey: "ledger", Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"},
 			{SourceObjectKey: "account", Direction: "forward", RelationFieldKey: "card_id", TargetObjectKey: "card"},
 			{SourceObjectKey: "card", Direction: "forward", RelationFieldKey: "member_id", TargetObjectKey: "member"},
-		}, FieldKey: "id", Values: []string{"member-1"}},
+		}, FieldKey: "record_id", Values: []string{"member-1"}},
 	}}
 	var lookupSQL string
 	var lookupArgs []any
@@ -57,7 +57,7 @@ func TestResolveScopeMembershipQueriesPermissionIDsBeforeRootFieldIN(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fragment := range []string{`SELECT DISTINCT "permission_0"."id" FROM "member" AS "permission_2"`, `CROSS JOIN "card" AS "permission_1"`, `CROSS JOIN "account" AS "permission_0"`, `"permission_2"."id" = $2`, `LIMIT $3`} {
+	for _, fragment := range []string{`SELECT DISTINCT "permission_0"."account_id" FROM "member" AS "permission_2"`, `CROSS JOIN "card" AS "permission_1"`, `CROSS JOIN "account" AS "permission_0"`, `"permission_2"."member_id" = $2`, `LIMIT $3`} {
 		if !strings.Contains(lookupSQL, fragment) {
 			t.Fatalf("permission lookup missing %q in %s", fragment, lookupSQL)
 		}
@@ -95,10 +95,10 @@ func TestBuildTenantWhereCompilesReverseExistenceAndDenyAllClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	where, _, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: &resolved})
-	if err != nil || !strings.Contains(where, `"member"."id" IN ($2)`) || strings.Contains(where, "package") {
+	if err != nil || !strings.Contains(where, `"member"."member_id" IN ($2)`) || strings.Contains(where, "package") {
 		t.Fatalf("reverse root where=%s err=%v", where, err)
 	}
-	deny := &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "id"}
+	deny := &recordmodel.RecordScopeExpression{Operator: "in", FieldKey: "record_id"}
 	where, args, err := BuildTenantWhere(store, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: deny})
 	if err != nil || !strings.Contains(where, "1 = 0") || !reflect.DeepEqual(args, []any{"workspace-a"}) {
 		t.Fatalf("deny where=%s args=%#v err=%v", where, args, err)
@@ -106,7 +106,7 @@ func TestBuildTenantWhereCompilesReverseExistenceAndDenyAllClaim(t *testing.T) {
 }
 
 func TestBuildTenantWhereRejectsUnresolvedRelationPath(t *testing.T) {
-	expression := &recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"}}, FieldKey: "id", Values: []string{"account-1"}}
+	expression := &recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"}}, FieldKey: "record_id", Values: []string{"account-1"}}
 	if _, _, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "ledger", ScopeExpression: expression}); err == nil || !strings.Contains(err.Error(), "resolved to permission IDs") {
 		t.Fatalf("unresolved relation path err=%v", err)
 	}
@@ -117,7 +117,7 @@ func TestCandidateScopeMatchesConstrainsRelationLookupToUnpersistedCandidate(t *
 		{Operator: "eq", FieldKey: "status", Values: []string{"active"}},
 		{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "reservation", Direction: "forward", RelationFieldKey: "order_id", TargetObjectKey: "order"}}, FieldKey: "warehouse_id", Values: []string{"warehouse-north"}},
 	}}
-	candidate := recordmodel.Record{ID: "reservation-new", Data: map[string]any{"status": "active", "order_id": "order-north"}}
+	candidate := recordmodel.Record{RecordID: "reservation-new", Data: map[string]any{"status": "active", "order_id": "order-north"}}
 	var statement string
 	var args []any
 	matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", candidate, expression, func(query string, queryArgs ...any) (bool, error) {
@@ -128,7 +128,7 @@ func TestCandidateScopeMatchesConstrainsRelationLookupToUnpersistedCandidate(t *
 	if err != nil || !matched {
 		t.Fatalf("candidate match=%v err=%v", matched, err)
 	}
-	for _, fragment := range []string{`FROM "order" AS "permission_0"`, `"permission_0"."warehouse_id" = $2`, `"permission_0"."id" = $3`, `LIMIT $4`} {
+	for _, fragment := range []string{`FROM "order" AS "permission_0"`, `"permission_0"."warehouse_id" = $2`, `"permission_0"."order_id" = $3`, `LIMIT $4`} {
 		if !strings.Contains(statement, fragment) {
 			t.Fatalf("candidate relation lookup missing %q in %s", fragment, statement)
 		}
@@ -150,7 +150,7 @@ func TestCandidateScopeMatchesConstrainsRelationLookupToUnpersistedCandidate(t *
 
 func TestCandidateScopeMatchesUsesCandidateIDForReverseRelation(t *testing.T) {
 	expression := recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{SourceObjectKey: "order", Direction: "reverse", RelationFieldKey: "order_id", TargetObjectKey: "grant"}}, FieldKey: "warehouse_id", Values: []string{"warehouse-north"}}
-	matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", recordmodel.Record{ID: "order-new"}, expression, func(statement string, args ...any) (bool, error) {
+	matched, err := CandidateScopeMatches(fuzzQueryStore{}, "workspace-a", recordmodel.Record{RecordID: "order-new"}, expression, func(statement string, args ...any) (bool, error) {
 		if !strings.Contains(statement, `"permission_0"."order_id" = $3`) || args[2] != "order-new" || args[3] != 1 {
 			t.Fatalf("reverse candidate lookup=%s args=%#v", statement, args)
 		}
@@ -180,7 +180,7 @@ func TestResolveScopeMembershipFallsBackToSingleExistsAboveThreshold(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fragment := range []string{`EXISTS (SELECT * FROM "member" AS "permission_2"`, `CROSS JOIN "card" AS "permission_1"`, `CROSS JOIN "account" AS "permission_0"`, `"permission_0"."id" = "ledger"."account_id"`} {
+	for _, fragment := range []string{`EXISTS (SELECT * FROM "member" AS "permission_2"`, `CROSS JOIN "card" AS "permission_1"`, `CROSS JOIN "account" AS "permission_0"`, `"permission_0"."account_id" = "ledger"."account_id"`} {
 		if !strings.Contains(where, fragment) {
 			t.Fatalf("overflow EXISTS missing %q in %s", fragment, where)
 		}
@@ -206,7 +206,7 @@ func TestResolveScopeMembershipUsesINAtOneThousand(t *testing.T) {
 		t.Fatalf("threshold boundary resolution values=%d exists=%v err=%v", len(resolved.Values), resolved.RelationExists, err)
 	}
 	where, args, err := BuildTenantWhere(fuzzQueryStore{}, "workspace-a", recordmodel.RecordListQuery{AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: "member", ScopeExpression: &resolved})
-	if err != nil || strings.Contains(where, "EXISTS") || strings.Count(where, `"member"."id" IN (`) != 1 || len(args) != 1001 {
+	if err != nil || strings.Contains(where, "EXISTS") || strings.Count(where, `"member"."member_id" IN (`) != 1 || len(args) != 1001 {
 		t.Fatalf("threshold boundary where=%s args=%d err=%v", where, len(args), err)
 	}
 }
@@ -270,7 +270,7 @@ func TestScopeMembershipRejectsInvalidInputsAndCoversEveryRelationDirection(t *t
 		{Direction: "forward", RelationFieldKey: "account_id", TargetObjectKey: "account"},
 		{Direction: "reverse", RelationFieldKey: "account_id", TargetObjectKey: "grant"},
 	})
-	if statement, _, err := buildScopeMembershipLookup(store, "workspace-a", reverseInner, 2); err != nil || !strings.Contains(statement, `"permission_0"."id" = "permission_1"."account_id"`) {
+	if statement, _, err := buildScopeMembershipLookup(store, "workspace-a", reverseInner, 2); err != nil || !strings.Contains(statement, `"permission_0"."account_id" = "permission_1"."account_id"`) {
 		t.Fatalf("reverse inner lookup statement=%s err=%v", statement, err)
 	}
 	invalidInner := reverseInner
@@ -288,14 +288,14 @@ func TestScopeMembershipRejectsInvalidInputsAndCoversEveryRelationDirection(t *t
 		t.Fatalf("empty EXISTS path err=%v", err)
 	}
 	reverseFirst := leaf([]recordmodel.RecordScopePathSegment{{Direction: "reverse", RelationFieldKey: "root_id", TargetObjectKey: "grant"}})
-	if statement, err := buildScopeRelationExists(store, `root`, reverseFirst, &args); err != nil || !strings.Contains(statement, `"permission_0"."root_id" = "root"."id"`) {
+	if statement, err := buildScopeRelationExists(store, `root`, reverseFirst, &args); err != nil || !strings.Contains(statement, `"permission_0"."root_id" = "root"."root_id"`) {
 		t.Fatalf("reverse root EXISTS statement=%s err=%v", statement, err)
 	}
 	if _, err := buildScopeRelationExists(store, `root`, invalidFirst, &args); err == nil {
 		t.Fatal("invalid first EXISTS direction was accepted")
 	}
 	args = nil
-	if statement, err := buildScopeRelationExists(store, `root`, reverseInner, &args); err != nil || !strings.Contains(statement, `"permission_0"."id" = "permission_1"."account_id"`) {
+	if statement, err := buildScopeRelationExists(store, `root`, reverseInner, &args); err != nil || !strings.Contains(statement, `"permission_0"."account_id" = "permission_1"."account_id"`) {
 		t.Fatalf("reverse inner EXISTS statement=%s err=%v", statement, err)
 	}
 	if _, err := buildScopeRelationExists(store, `root`, invalidInner, &args); err == nil {

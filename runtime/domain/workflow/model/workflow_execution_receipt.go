@@ -7,7 +7,8 @@ import (
 )
 
 type WorkflowExecutionReceipt struct {
-	ID                 string
+	ID                 int64
+	OperationID        string
 	WorkspaceID        string
 	WorkflowKey        string
 	IdempotencyKey     string
@@ -40,7 +41,7 @@ type WorkflowExecutionClaimResult struct {
 
 type WorkflowExecutionReceiptCompletion struct {
 	WorkspaceID  string
-	ReceiptID    string
+	OperationID  string
 	ExecutionID  string
 	LeaseOwner   string
 	FencingToken int64

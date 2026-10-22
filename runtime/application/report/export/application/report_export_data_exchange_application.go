@@ -107,7 +107,7 @@ func (s *ReportExportApplicationService) executeReportExportPrepareClaim(ctx con
 	if err != nil {
 		return reportexport.ExchangeJob{}, s.releaseFreshReportExportPrepare(ctx, receipt, err)
 	}
-	payload.PrepareReceiptID = receipt.ID
+	payload.PrepareOperationID = receipt.OperationID
 	payload.RetryOfJobID = receipt.RetryOfJobID
 	receipt.BusinessJobKey = reportExportBusinessJobKey(receipt)
 	payload.ArtifactIdempotencyKey = reportExportArtifactKey(receipt)
@@ -116,7 +116,7 @@ func (s *ReportExportApplicationService) executeReportExportPrepareClaim(ctx con
 		return reportexport.ExchangeJob{}, s.releaseFreshReportExportPrepare(ctx, receipt, err)
 	}
 	receipt, err = s.prepareReceipts.SaveReportExportPreparePayload(ctx, runtimereportmodel.ReportExportPreparePayload{
-		WorkspaceID: receipt.WorkspaceID, ReceiptID: receipt.ID, PayloadJSON: string(payloadJSON), BusinessJobKey: receipt.BusinessJobKey,
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, PayloadJSON: string(payloadJSON), BusinessJobKey: receipt.BusinessJobKey,
 		LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: s.clock().UTC(),
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func (s *ReportExportApplicationService) submitClaimedReportExport(ctx context.C
 	finalizeCtx, cancel := reportExportFinalizeContext(ctx)
 	defer cancel()
 	if err := s.prepareReceipts.CompleteReportExportPrepare(finalizeCtx, runtimereportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: receipt.WorkspaceID, ReceiptID: receipt.ID, JobID: job.ID,
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, JobID: job.JobID,
 		LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: now, ExpiresAt: now.Add(reportExportReceiptRetention),
 	}); err != nil {
 		return reportexport.ExchangeJob{}, s.failRetryableReportExportPrepare(ctx, receipt, reportApplicationError(err))
@@ -350,7 +350,7 @@ func reportExportPayloadFromReceipt(receipt runtimereportmodel.ReportExportPrepa
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: idempotency.ErrorCodeReceiptUnavailable, Err: err}
 	}
 	fingerprint, err := reportExportPrepareFingerprint(payload)
-	if err != nil || strings.TrimSpace(payload.PrepareReceiptID) != receipt.ID || fingerprint != receipt.RequestFingerprint ||
+	if err != nil || strings.TrimSpace(payload.PrepareOperationID) != receipt.OperationID || fingerprint != receipt.RequestFingerprint ||
 		payload.WorkspaceID != receipt.WorkspaceID || payload.RequesterUserID != receipt.RequesterUserID || payload.ReportKey != receipt.ReportKey || payload.ObjectKey != receipt.ObjectKey || payload.AuditID != receipt.AuditID || payload.RetryOfJobID != receipt.RetryOfJobID ||
 		receipt.BusinessJobKey != reportExportBusinessJobKey(receipt) || payload.ArtifactIdempotencyKey != reportExportArtifactKey(receipt) {
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: idempotency.ErrorCodeReceiptUnavailable, Err: err}
@@ -361,7 +361,7 @@ func reportExportPayloadFromReceipt(receipt runtimereportmodel.ReportExportPrepa
 func validateReportExportReceiptJob(job dataexchange.Job, receipt runtimereportmodel.ReportExportPrepareReceipt, expectedOptions []byte) error {
 	if job.Provider != reportexport.DataExchangeProviderKey || job.Operation != "export" || job.WorkspaceID != receipt.WorkspaceID ||
 		job.ActorID != receipt.RequesterUserID || job.ObjectKey != receipt.ObjectKey || job.ReferenceID != receipt.AuditID ||
-		(strings.TrimSpace(receipt.JobID) != "" && job.ID != receipt.JobID) || !bytes.Equal(job.Options, expectedOptions) {
+		(strings.TrimSpace(receipt.JobID) != "" && job.JobID != receipt.JobID) || !bytes.Equal(job.Options, expectedOptions) {
 		return &apperror.AppError{Kind: apperror.KindConflict, Code: idempotency.ErrorCodeReceiptUnavailable}
 	}
 	return nil
@@ -393,7 +393,7 @@ func reportExportBusinessJobKey(receipt runtimereportmodel.ReportExportPrepareRe
 }
 
 func reportExportArtifactKey(receipt runtimereportmodel.ReportExportPrepareReceipt) string {
-	digest := sha256.Sum256([]byte("domainry-runtime/report-export-artifact/v1\x00" + receipt.ID))
+	digest := sha256.Sum256([]byte("domainry-runtime/report-export-artifact/v1\x00" + receipt.OperationID))
 	return "report-export-artifact:" + hex.EncodeToString(digest[:])
 }
 
@@ -413,7 +413,7 @@ func (s *ReportExportApplicationService) releaseFreshReportExportPrepare(ctx con
 	finalizeCtx, cancel := reportExportFinalizeContext(ctx)
 	defer cancel()
 	err := s.prepareReceipts.ReleaseReportExportPrepare(finalizeCtx, runtimereportmodel.ReportExportPrepareFailure{
-		WorkspaceID: receipt.WorkspaceID, ReceiptID: receipt.ID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: s.clock().UTC(),
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: s.clock().UTC(),
 	})
 	if err != nil {
 		return &apperror.AppError{Kind: apperror.KindConflict, Code: idempotency.ErrorCodeLeaseLost, Err: errors.Join(cause, err)}
@@ -426,7 +426,7 @@ func (s *ReportExportApplicationService) failRetryableReportExportPrepare(ctx co
 	finalizeCtx, cancel := reportExportFinalizeContext(ctx)
 	defer cancel()
 	err := s.prepareReceipts.FailReportExportPrepareRetryable(finalizeCtx, runtimereportmodel.ReportExportPrepareFailure{
-		WorkspaceID: receipt.WorkspaceID, ReceiptID: receipt.ID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: s.clock().UTC(),
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken, Now: s.clock().UTC(),
 		ErrorCode: apperror.CodeOf(cause), ExpiresAt: now.Add(reportExportReceiptRetention),
 	})
 	if err != nil {
@@ -444,7 +444,7 @@ func (s *ReportExportApplicationService) failTerminalReportExportPrepare(ctx con
 	finalizeCtx, cancel := reportExportFinalizeContext(ctx)
 	defer cancel()
 	err := s.prepareReceipts.FailReportExportPrepareTerminal(finalizeCtx, runtimereportmodel.ReportExportPrepareFailure{
-		WorkspaceID: receipt.WorkspaceID, ReceiptID: receipt.ID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken,
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, LeaseOwner: receipt.LeaseOwner, FencingToken: receipt.FencingToken,
 		ErrorCode: code, Now: now, ExpiresAt: now.Add(reportExportReceiptRetention),
 	})
 	if err != nil {

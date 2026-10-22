@@ -31,7 +31,7 @@ func ActionNotificationAuditMetadata(action definitionmodel.ActionSchema, source
 	}
 	body := actionFirstRenderedString(rendered, "body", "message")
 	if body == "" {
-		body = "Action " + action.Key + " prepared notification for " + sourceObject.Key + " " + record.ID
+		body = "Action " + action.Key + " prepared notification for " + sourceObject.Key + " " + record.RecordID
 	}
 	severity := actionFirstRenderedString(rendered, "severity", "priority")
 	if severity == "" {

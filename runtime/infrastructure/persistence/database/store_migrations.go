@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	ormschema "github.com/domainry/domainry-orm/schema"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -188,11 +189,24 @@ func (s *RuntimeStore) applyMigrationFile(ctx context.Context, path string) erro
 	return nil
 }
 
-func (s *RuntimeStore) schemaMigrationSQL() string {
-	types := s.sqlBase().RuntimeEngine.MigrationLedgerTypes()
-	pathType := types.Key
-	timeType := types.Timestamp
-	return "CREATE TABLE IF NOT EXISTS " + s.tableIdentifier("_schema_migrations") + " (" + s.identifier("path") + " " + pathType + " PRIMARY KEY, " + s.identifier("version") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("name") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("kind") + " " + pathType + " NOT NULL DEFAULT 'schema', " + s.identifier("checksum") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("dirty") + " BOOLEAN NOT NULL DEFAULT FALSE, " + s.identifier("applied_at") + " " + timeType + " NOT NULL, " + s.identifier("runtime_version") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("duration_ms") + " BIGINT NOT NULL DEFAULT 0, " + s.identifier("operator") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("instance_id") + " " + pathType + " NOT NULL DEFAULT '', " + s.identifier("backup_id") + " " + pathType + " NOT NULL DEFAULT '')"
+func (s *RuntimeStore) schemaMigrationSQL() (string, error) {
+	key := func(name, value string) ormschema.ColumnDefinition {
+		return ormschema.Column(name, ormschema.TextKey(255)).NotNull().DefaultValue(value)
+	}
+	statement, _, err := ormschema.NewTable(s.RuntimeRenderer(), "_schema_migrations").IfNotExists().Columns(
+		ormschema.Column("id", ormschema.BigInt()).NotNull().AutoIncrement(),
+		ormschema.Column("path", ormschema.TextKey(255)).NotNull(),
+		key("version", ""), key("name", ""), key("kind", "schema"), key("checksum", ""),
+		ormschema.Column("dirty", ormschema.Boolean()).NotNull().DefaultValue(false),
+		ormschema.Column("applied_at", ormschema.BigInt()).NotNull(),
+		key("runtime_version", ""),
+		ormschema.Column("duration_ms", ormschema.BigInt()).NotNull().DefaultValue(int64(0)),
+		key("operator", ""), key("instance_id", ""), key("backup_id", ""),
+	).PrimaryKey("id").Unique("path").Build()
+	if err != nil {
+		return "", fmt.Errorf("build canonical migration ledger: %w", err)
+	}
+	return statement, nil
 }
 
 func (s *RuntimeStore) ensureMigrationLedger(ctx context.Context) error {
@@ -201,7 +215,11 @@ func (s *RuntimeStore) ensureMigrationLedger(ctx context.Context) error {
 	if err := base.RuntimeEngine.EnsureMigrationNamespace(ctx, db, base.SQLRenderer, base.DatabaseSchema); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, s.schemaMigrationSQL()); err != nil {
+	statement, err := s.schemaMigrationSQL()
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, statement); err != nil {
 		return err
 	}
 	textType := base.RuntimeEngine.MigrationLedgerTypes().Key + " NOT NULL DEFAULT ''"

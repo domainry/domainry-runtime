@@ -26,18 +26,19 @@ func (a operationsBreakGlassAuditAlert) BreakGlassAlert(ctx context.Context, eve
 		return fmt.Errorf("Runtime break-glass operation identity is required")
 	}
 	request := auditapplication.AuditAppendRequest{
+		AuditEventID:   grant.AuditEventID,
 		IdempotencyKey: operationsapplication.BreakGlassAuditIdempotencyKey(event, operationID),
 		Family:         auditmodel.EventFamilyRuntimeOperations,
 		Event:          event,
 		ObjectKey:      "runtime_break_glass",
-		RecordID:       grant.ID,
+		RecordID:       grant.BreakGlassGrantID,
 		Principal:      principal,
 		Summary:        "Runtime break-glass state changed",
 		After:          map[string]any{"state": grant.State, "expires_at": grant.ExpiresAt, "incident_ref": grant.IncidentRef},
 		Metadata:       map[string]any{"alert_target": grant.AlertTarget, "approver_ids": grant.ApproverIDs, "revision": grant.Revision},
 	}
 	prepared := a.audit.NewAuditEvent(ctx, request)
-	if prepared.ID == "" || strings.TrimSpace(prepared.ID) != strings.TrimSpace(grant.AuditEventID) {
+	if prepared.AuditEventID == "" || strings.TrimSpace(prepared.AuditEventID) != strings.TrimSpace(grant.AuditEventID) {
 		return fmt.Errorf("Runtime break-glass Audit identity mismatch")
 	}
 	return a.audit.AppendAudit(ctx, request)

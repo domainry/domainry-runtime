@@ -11,6 +11,7 @@ import (
 	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
+	"github.com/domainry/domainry-foundation/entityid"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
@@ -83,8 +84,11 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 		actionKey = workspaceprovisionapplication.ReactivateWorkspaceActionKey
 	}
 	fingerprint := workspaceAdministrationFingerprint(actionKey, canonicalCode, expectedRevision, status)
-	receiptID := workspaceAdministrationReceiptID(actor, actionKey, idempotencyKey)
-	if replay, found, err := store.lifecycleReceipt(ctx, store.runtime.DB(), receiptID, fingerprint); found || err != nil {
+	operationID, err := workspaceAdministrationOperationID(actor, actionKey, idempotencyKey)
+	if err != nil {
+		return workspaceprovisionmodel.LifecycleResult{}, err
+	}
+	if replay, found, err := store.lifecycleReceipt(ctx, store.runtime.DB(), operationID, fingerprint); found || err != nil {
 		return replay, err
 	}
 	tx, err := store.beginAdministrationTransaction(ctx)
@@ -92,7 +96,7 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 		return workspaceprovisionmodel.LifecycleResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if replay, found, err := store.lifecycleReceipt(ctx, tx, receiptID, fingerprint); found || err != nil {
+	if replay, found, err := store.lifecycleReceipt(ctx, tx, operationID, fingerprint); found || err != nil {
 		return replay, err
 	}
 	workspaceID, initial, before, err := store.workspaceForUpdate(ctx, tx, canonicalCode)
@@ -111,7 +115,7 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	update, arguments, err := query.NewUpdateBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
 		Set("status", status).SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
-		Where(query.And(query.Equal("id", workspaceID), query.Equal("revision", expectedRevision), query.Equal("status", before.Status))).Build()
+		Where(query.And(query.Equal("workspace_id", workspaceID), query.Equal("revision", expectedRevision), query.Equal("status", before.Status))).Build()
 	if err != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, err
 	}
@@ -134,13 +138,13 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 		return workspaceprovisionmodel.LifecycleResult{}, err
 	}
 	response := workspaceprovisionmodel.LifecycleResult{Workspace: after, RevokedSessions: revoked}
-	if err := store.appendAdministrationAudit(ctx, tx, receiptID, workspaceID, actor, actionKey, canonicalCode,
+	if err := store.appendAdministrationAudit(ctx, tx, operationID, workspaceID, actor, actionKey, canonicalCode,
 		map[string]any{"status": before.Status, "revision": before.Revision},
 		map[string]any{"status": after.Status, "revision": after.Revision},
 		map[string]any{"revoked_sessions": revoked}); err != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, err
 	}
-	if err := store.insertReceipt(ctx, tx, actor, receiptID, fingerprint, actionKey, workspaceID, response, now); err != nil {
+	if err := store.insertReceipt(ctx, tx, actor, operationID, fingerprint, actionKey, workspaceID, response, now); err != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -155,8 +159,11 @@ func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguratio
 	}
 	actionKey := workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey
 	fingerprint := workspaceAdministrationFingerprint(actionKey, canonicalCode, request.ExpectedRevision, request.Configuration)
-	receiptID := workspaceAdministrationReceiptID(actor, actionKey, idempotencyKey)
-	if replay, found, err := store.commercialReceipt(ctx, store.runtime.DB(), receiptID, fingerprint); found || err != nil {
+	operationID, err := workspaceAdministrationOperationID(actor, actionKey, idempotencyKey)
+	if err != nil {
+		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
+	}
+	if replay, found, err := store.commercialReceipt(ctx, store.runtime.DB(), operationID, fingerprint); found || err != nil {
 		return replay, err
 	}
 	tx, err := store.beginAdministrationTransaction(ctx)
@@ -164,7 +171,7 @@ func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguratio
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if replay, found, err := store.commercialReceipt(ctx, tx, receiptID, fingerprint); found || err != nil {
+	if replay, found, err := store.commercialReceipt(ctx, tx, operationID, fingerprint); found || err != nil {
 		return replay, err
 	}
 	workspaceID, _, before, err := store.workspaceForUpdate(ctx, tx, canonicalCode)
@@ -188,7 +195,7 @@ func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguratio
 		SetExpression("commercial_revision", query.Add(query.Column("commercial_revision"), query.Value(1))).
 		SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
 		Where(query.And(
-			query.Equal("id", workspaceID),
+			query.Equal("workspace_id", workspaceID),
 			query.Equal("revision", request.ExpectedRevision),
 			query.Equal("commercial_revision", before.CommercialConfiguration.Revision),
 		)).Build()
@@ -207,13 +214,13 @@ func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguratio
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
 	}
 	response := workspaceprovisionmodel.CommercialConfigurationUpdateResult{Workspace: after}
-	if err := store.appendAdministrationAudit(ctx, tx, receiptID, workspaceID, actor, actionKey, canonicalCode,
+	if err := store.appendAdministrationAudit(ctx, tx, operationID, workspaceID, actor, actionKey, canonicalCode,
 		map[string]any{"revision": before.Revision},
 		map[string]any{"revision": after.Revision},
 		map[string]any{"updated_fields": []string{"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact"}}); err != nil {
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
 	}
-	if err := store.insertReceipt(ctx, tx, actor, receiptID, fingerprint, actionKey, workspaceID, response, now); err != nil {
+	if err := store.insertReceipt(ctx, tx, actor, operationID, fingerprint, actionKey, workspaceID, response, now); err != nil {
 		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -226,7 +233,7 @@ func (store *WorkspaceAdministrationStore) WorkspaceActive(ctx context.Context, 
 	if store == nil || store.runtime == nil || store.runtime.DB() == nil || strings.TrimSpace(workspaceID) == "" {
 		return false, workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("status").Where(query.Equal("id", strings.TrimSpace(workspaceID))).Limit(1).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("status").Where(query.Equal("workspace_id", strings.TrimSpace(workspaceID))).Limit(1).Build()
 	if err != nil {
 		return false, err
 	}
@@ -270,7 +277,7 @@ type workspaceAdministrationTx interface {
 }
 
 func (store *WorkspaceAdministrationStore) workspaceForUpdate(ctx context.Context, tx workspaceAdministrationTx, canonicalCode string) (string, bool, workspaceprovisionmodel.CatalogEntry, error) {
-	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id", "initial_installation_identity").Where(query.Equal("canonical_code", canonicalCode)).Limit(1)
+	builder := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("workspace_id", "initial_installation_identity").Where(query.Equal("canonical_code", canonicalCode)).Limit(1)
 	builder, err := store.runtime.RuntimeProfile().ApplyClaimLock(builder, false)
 	if err != nil {
 		return "", false, workspaceprovisionmodel.CatalogEntry{}, err
@@ -293,7 +300,7 @@ func (store *WorkspaceAdministrationStore) workspaceForUpdate(ctx context.Contex
 func (store *WorkspaceAdministrationStore) workspaceEntryByID(ctx context.Context, tx workspaceAdministrationTx, workspaceID string) (workspaceprovisionmodel.CatalogEntry, error) {
 	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(workspaceCatalogProjections()...).
-		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "id"), query.Value(workspaceID))).Limit(1).Build()
+		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "workspace_id"), query.Value(workspaceID))).Limit(1).Build()
 	if err != nil {
 		return workspaceprovisionmodel.CatalogEntry{}, err
 	}
@@ -399,8 +406,12 @@ func (store *WorkspaceAdministrationStore) appendAdministrationAudit(ctx context
 	metadata["action_key"] = actionKey
 	metadata["request_id"] = actor.RequestID
 	metadata["authorization_revision"] = actor.AuthorizationRevision
+	auditEventID, err := workspaceAdministrationAuditEventID(id)
+	if err != nil {
+		return err
+	}
 	event := auditmodel.AuditEvent{
-		ID: id, WorkspaceID: workspaceID, Event: actionKey, ObjectKey: "workspace", RecordID: canonicalCode,
+		AuditEventID: auditEventID, WorkspaceID: workspaceID, Event: actionKey, ObjectKey: "workspace", RecordID: canonicalCode,
 		OperationID: id, CausationID: strings.TrimSpace(actor.CausationID),
 		Family:  auditmodel.EventFamilyRuntimeWorkspace,
 		ActorID: actor.UserID, RoleKey: actor.RoleKey, Summary: "Governed Workspace administration",
@@ -443,7 +454,7 @@ func (store *WorkspaceAdministrationStore) receiptJSON(ctx context.Context, exec
 	}
 	record, found, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).GetRecord(
 		sharedoperation.WithExecutor(ctx, executor),
-		sharedoperation.RecordFilter{SystemPurpose: workspaceAdministrationPurpose, ID: id, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind},
+		sharedoperation.RecordFilter{SystemPurpose: workspaceAdministrationPurpose, OperationID: id, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind},
 	)
 	if err != nil || !found {
 		return false, err
@@ -465,11 +476,15 @@ func (store *WorkspaceAdministrationStore) insertReceipt(ctx context.Context, tx
 		return err
 	}
 	related, _ := database.MarshalTimeJSON([]string{workspaceID})
-	evidence, _ := database.MarshalTimeJSON([]string{id})
+	auditEventID, err := workspaceAdministrationAuditEventID(id)
+	if err != nil {
+		return err
+	}
+	evidence, _ := database.MarshalTimeJSON([]string{auditEventID})
 	inserted, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).InsertRecord(
 		sharedoperation.WithExecutor(ctx, tx),
 		sharedoperation.Record{
-			ID: id, SystemPurpose: workspaceAdministrationPurpose, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind,
+			OperationID: id, SystemPurpose: workspaceAdministrationPurpose, Owner: workspaceAdministrationOwner, Kind: workspaceAdministrationKind,
 			ActionKey: actionKey, ResourceType: "workspace", ResourceID: workspaceID, IdempotencyKey: id,
 			RequestFingerprint: fingerprint, RequestedBy: actor.UserID, Reason: "Governed Workspace administration", Reference: actor.RequestID,
 			Status: "succeeded", StatusURL: "/operations/" + id, ResultJSON: payload, MetadataJSON: metadata,
@@ -486,9 +501,13 @@ func (store *WorkspaceAdministrationStore) insertReceipt(ctx context.Context, tx
 	return nil
 }
 
-func workspaceAdministrationReceiptID(actor workspaceprovisionmodel.AdministrationActor, actionKey, idempotencyKey string) string {
+func workspaceAdministrationOperationID(actor workspaceprovisionmodel.AdministrationActor, actionKey, idempotencyKey string) (string, error) {
 	digest := sha256.Sum256([]byte(strings.Join([]string{"workspace-administration-v1", actor.WorkspaceID, actor.UserID, actionKey, strings.TrimSpace(idempotencyKey)}, "\x00")))
-	return "workspace_admin_" + hex.EncodeToString(digest[:16])
+	return entityid.Derive("op", "runtime.workspace-administration", hex.EncodeToString(digest[:]))
+}
+
+func workspaceAdministrationAuditEventID(operationID string) (string, error) {
+	return entityid.Derive("audevt", "runtime.workspace-administration", operationID)
 }
 
 func workspaceAdministrationFingerprint(values ...any) string {

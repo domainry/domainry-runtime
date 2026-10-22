@@ -9,7 +9,9 @@ import (
 
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
+	sharedsubject "github.com/domainry/domainry-foundation/subjectlifecycle"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
 
@@ -169,8 +171,18 @@ func sqliteTableHasIndexPrefix(t *testing.T, db *sql.DB, quotedTable string, pre
 }
 
 func globallyOwnedUniqueConstraint(table, indexName string, columns []string) bool {
-	if (table == sharedoperation.TableName || table == sharedoperation.BreakGlassTableName || table == sharedartifact.TableName || table == sharedartifact.BindingTableName) && len(columns) == 1 && columns[0] == "id" {
-		return true
+	if len(columns) == 1 {
+		owned := append(runtimeschema.RuntimeSchemaOwnership(), sharedoperation.SchemaOwnership()...)
+		owned = append(owned, sharedartifact.SchemaOwnership()...)
+		owned = append(owned, sharedsubject.SchemaOwnership()...)
+		for _, definition := range owned {
+			if definition.Name == table && definition.EntityIDColumn != "" && columns[0] == definition.EntityIDColumn {
+				return true
+			}
+		}
+		if table == "_workspaces" && (indexName == "uniq_initial_workspace_installation" || indexName == "uniq_workspace_code") {
+			return true
+		}
 	}
 	if len(columns) != 1 || columns[0] != "token_hash" {
 		return false

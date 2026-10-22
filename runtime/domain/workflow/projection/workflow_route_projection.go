@@ -67,7 +67,7 @@ func WorkflowRouteForPrincipal(process workflowmodel.WorkflowProcessInstance, st
 	ordered := append([]workflowmodel.WorkflowRouteStep(nil), steps...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].StepNo < ordered[j].StepNo })
 	route, _ := workflowRouteContract(process, ordered)
-	view := WorkflowRouteView{ProcessID: process.ID, Steps: make([]WorkflowRouteStepView, 0, len(ordered)), PendingConfiguration: []string{}}
+	view := WorkflowRouteView{ProcessID: process.ProcessID, Steps: make([]WorkflowRouteStepView, 0, len(ordered)), PendingConfiguration: []string{}}
 	approvals := map[string]int{}
 	for _, task := range tasks {
 		if task.Status == "approved" {

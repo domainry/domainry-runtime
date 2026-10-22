@@ -15,14 +15,14 @@ import (
 
 func TestRecordTimerFailureRecoveryOwnsStateAndEvidence(t *testing.T) {
 	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
-	failed := recordmodel.Record{ID: "timer-1", UpdatedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), Data: map[string]any{
+	failed := recordmodel.Record{RecordID: "timer-1", UpdatedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), Data: map[string]any{
 		"status": "failed", "object_key": "order", "record_id": "order-1", "purpose": "payment_timeout",
 		"attempt": 3, "max_attempts": 3, "fencing_token": 7, "last_error": "backend.payment.failed",
 	}}
 	var committed []transactionmodel.RecordMutationCommit
 	repository := &recordTimerRepositoryFake{
 		get: func(_ context.Context, workspaceID string, object definitionmodel.ObjectSchema, id string) (recordmodel.Record, bool, error) {
-			if workspaceID != "workspace-a" || object.Key != "record_timer" || id != failed.ID {
+			if workspaceID != "workspace-a" || object.Key != "record_timer" || id != failed.RecordID {
 				t.Fatalf("get %q %q %q", workspaceID, object.Key, id)
 			}
 			return failed, true, nil
@@ -36,19 +36,19 @@ func TestRecordTimerFailureRecoveryOwnsStateAndEvidence(t *testing.T) {
 		},
 	}
 	service := NewRecordTimerApplicationServiceWithWorker(recordTimerTestSchema(), nil, repository, workerplatform.Dependencies{Clock: recordTimerFixedClock{now: now}})
-	inspected, err := service.InspectFailure(t.Context(), failed.ID, recordTimerTestPrincipal(operationscontract.ActionInspectDeadLetter))
-	if err != nil || inspected.ID != failed.ID {
+	inspected, err := service.InspectFailure(t.Context(), failed.RecordID, recordTimerTestPrincipal(operationscontract.ActionInspectDeadLetter))
+	if err != nil || inspected.RecordID != failed.RecordID {
 		t.Fatalf("inspect=%#v err=%v", inspected, err)
 	}
 	recoveryContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-retry")
-	requeued, err := service.RetryFailure(recoveryContext, failed.ID, "dependency restored", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
+	requeued, err := service.RetryFailure(recoveryContext, failed.RecordID, "dependency restored", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if requeued.Data["status"] != "scheduled" || requeued.Data["operation_id"] != "operation-retry" || requeued.Data["attempt"] != 0 || len(committed) != 2 || committed[1].Record.Data["event_type"] != "requeued" {
 		t.Fatalf("requeued=%#v commits=%#v", requeued, committed)
 	}
-	resolved, err := service.ResolveFailure(t.Context(), failed.ID, "obsolete", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
+	resolved, err := service.ResolveFailure(t.Context(), failed.RecordID, "obsolete", recordTimerTestPrincipal(operationscontract.ActionRetryDeadLetter))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -126,7 +126,7 @@ func (s *RecordDataExchangeApplicationService) DownloadExport(ctx context.Contex
 	if job.Status != "completed" || strings.TrimSpace(job.ArtifactID) == "" {
 		return dataexchange.Artifact{}, apperror.New(apperror.KindConflict, "backend.export.download_not_ready", nil, nil)
 	}
-	artifact, err := s.dependencies.DataExchange.Download(ctx, dataexchange.JobRequest{Scope: scope, JobID: job.ID})
+	artifact, err := s.dependencies.DataExchange.Download(ctx, dataexchange.JobRequest{Scope: scope, JobID: job.JobID})
 	if err != nil {
 		return dataexchange.Artifact{}, err
 	}
@@ -163,5 +163,5 @@ func recordDataExchangeScope(principal principalmodel.Principal) dataexchange.Sc
 }
 
 func recordBatchJobFromDataExchange(job dataexchange.Job) recordmodel.RecordBatchJob {
-	return recordmodel.RecordBatchJob{ID: job.ID, WorkspaceID: job.WorkspaceID, Kind: job.Operation, ObjectKey: job.ObjectKey, ActorID: job.ActorID, RoleKey: job.RoleKey, Status: job.Status, Checkpoint: job.Checkpoint, Total: job.Total, ResultArtifactID: job.ArtifactID, ErrorCode: job.ErrorCode, CreatedAt: job.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: job.UpdatedAt.Format(time.RFC3339Nano)}
+	return recordmodel.RecordBatchJob{ID: job.ID, JobID: job.JobID, WorkspaceID: job.WorkspaceID, Kind: job.Operation, ObjectKey: job.ObjectKey, ActorID: job.ActorID, RoleKey: job.RoleKey, Status: job.Status, Checkpoint: job.Checkpoint, Total: job.Total, ResultArtifactID: job.ArtifactID, ErrorCode: job.ErrorCode, CreatedAt: job.CreatedAt.Format(time.RFC3339Nano), UpdatedAt: job.UpdatedAt.Format(time.RFC3339Nano)}
 }

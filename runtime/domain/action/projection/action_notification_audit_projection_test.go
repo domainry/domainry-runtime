@@ -14,7 +14,7 @@ func TestActionNotificationAuditMetadataOwnsDefaultsAndOverrides(t *testing.T) {
 	metadata := ActionNotificationAuditMetadata(
 		definitionmodel.ActionSchema{Key: "order.notify", Label: "Notify order"},
 		definitionmodel.ObjectSchema{Key: "order"},
-		recordmodel.Record{ID: "order-1", Data: map[string]any{"owner": "owner-1"}},
+		recordmodel.Record{RecordID: "order-1", Data: map[string]any{"owner": "owner-1"}},
 		principalmodel.Principal{Principal: identitysdk.Principal{UserID: "actor-1"}},
 		map[string]any{"channel": "email", "subject": "Ready"},
 	)
@@ -26,7 +26,7 @@ func TestActionNotificationAuditMetadataOwnsDefaultsAndOverrides(t *testing.T) {
 func TestActionNotificationAuditMetadataCoversExplicitAndFallbackMatrix(t *testing.T) {
 	action := definitionmodel.ActionSchema{Key: "order.notify", Label: "Notify order"}
 	object := definitionmodel.ObjectSchema{Key: "order"}
-	record := recordmodel.Record{ID: "order-1", Data: map[string]any{}}
+	record := recordmodel.Record{RecordID: "order-1", Data: map[string]any{}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{UserID: "actor-1"}}
 
 	defaults := ActionNotificationAuditMetadata(action, object, record, principal, map[string]any{})

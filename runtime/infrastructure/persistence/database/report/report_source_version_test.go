@@ -24,7 +24,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE ticket (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, note TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE ticket (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, ticket_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, ext_info TEXT NOT NULL DEFAULT '{}', create_by TEXT, update_by TEXT, owner_user_id TEXT, owner_org_id TEXT, status TEXT, note TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,7 +37,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	insert := func(workspaceID, id, status, note string) {
 		t.Helper()
 		if err := records.InsertRecord(t.Context(), workspaceID, object, recordmodel.Record{
-			ID: id, CreatedAt: stamp, UpdatedAt: stamp,
+			RecordID: id, CreatedAt: stamp, UpdatedAt: stamp,
 			Data: map[string]any{"status": status, "note": note},
 		}); err != nil {
 			t.Fatal(err)
@@ -72,7 +72,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	// Keep the timestamp unchanged to prove that content, rather than
 	// count+MAX(updated_at), invalidates evidence for a non-latest row.
 	if err := records.UpdateRecord(t.Context(), "workspace-a", object, recordmodel.Record{
-		ID: "older", UpdatedAt: stamp, Data: map[string]any{"status": "closed"},
+		RecordID: "older", UpdatedAt: stamp, Data: map[string]any{"status": "closed"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	}
 
 	if err := records.UpdateRecord(t.Context(), "workspace-a", object, recordmodel.Record{
-		ID: "older", UpdatedAt: stamp, Data: map[string]any{"note": "not projected"},
+		RecordID: "older", UpdatedAt: stamp, Data: map[string]any{"note": "not projected"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestReportSnapshotSourceVersionHashesEffectiveScopedProjection(t *testing.T
 	}
 
 	if err := records.UpdateRecord(t.Context(), "workspace-b", object, recordmodel.Record{
-		ID: "other", UpdatedAt: stamp, Data: map[string]any{"status": "closed"},
+		RecordID: "other", UpdatedAt: stamp, Data: map[string]any{"status": "closed"},
 	}); err != nil {
 		t.Fatal(err)
 	}

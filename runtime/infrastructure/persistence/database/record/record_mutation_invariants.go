@@ -37,7 +37,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			continue
 		}
 		relationID := strings.TrimSpace(fmt.Sprint(commit.Record.Data[policy.RelationField]))
-		limitBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, policy.TargetObjectKey, workspaceID).Columns(policy.LimitField).Where(query.Equal("id", relationID)).Limit(1)
+		limitBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, policy.TargetObjectKey, workspaceID).Columns(policy.LimitField).Where(query.Equal(recordBusinessIDColumn(policy.TargetObjectKey), relationID)).Limit(1)
 		if r.store.RuntimeEngine.Capabilities().RowLock {
 			limitBuilder.ForUpdate()
 		}
@@ -48,18 +48,18 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 		var rawLimit any
 		if err := tx.QueryRowContext(ctx, limitQuery, limitArgs...).Scan(&rawLimit); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return mutation.PolicyConflict("backend.policy.related_record_missing", commit.Object.Key, commit.Record.ID, policy.RelationField)
+				return mutation.PolicyConflict("backend.policy.related_record_missing", commit.Object.Key, commit.Record.RecordID, policy.RelationField)
 			}
 			return fmt.Errorf("lock related aggregate limit %s: %w", policy.Key, err)
 		}
-		columns := []string{"id"}
+		columns := []string{recordBusinessIDColumn(commit.Object.Key)}
 		if policy.Aggregate == "sum" {
 			columns = append(columns, policy.ValueField)
 		}
 		if policy.StatusField != "" {
 			columns = append(columns, policy.StatusField)
 		}
-		predicates := []query.Predicate{query.Equal(policy.RelationField, relationID), query.NotEqual("id", commit.Record.ID)}
+		predicates := []query.Predicate{query.Equal(policy.RelationField, relationID), query.NotEqual(recordBusinessIDColumn(commit.Object.Key), commit.Record.RecordID)}
 		if policy.StatusField != "" && len(policy.IncludedStatuses) > 0 {
 			statuses := make([]any, 0, len(policy.IncludedStatuses))
 			for _, status := range policy.IncludedStatuses {
@@ -128,7 +128,7 @@ func (r RecordStore) validateRelatedAggregateInvariantsTx(ctx context.Context, t
 			return err
 		}
 		if !matched {
-			return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
+			return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.RecordID, policy.Key)
 		}
 	}
 	return nil
@@ -252,7 +252,7 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		if !applies {
 			continue
 		}
-		predicates := []query.Predicate{query.NotEqual("id", commit.Record.ID)}
+		predicates := []query.Predicate{query.NotEqual(recordBusinessIDColumn(commit.Object.Key), commit.Record.RecordID)}
 		for _, field := range policy.ScopeFields {
 			predicates = append(predicates, query.Equal(field, recordConditionDBValue(r.store.RuntimeEngine, commit.Object, field, commit.Record.Data[field])))
 		}
@@ -265,7 +265,7 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 			}
 			predicates = append(predicates, query.Or(query.IsNull(policy.StatusField), query.NotIn(policy.StatusField, statuses...)))
 		}
-		conflictBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns("id").Where(query.And(predicates...)).Limit(1)
+		conflictBuilder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).Columns(recordBusinessIDColumn(commit.Object.Key)).Where(query.And(predicates...)).Limit(1)
 		if r.store.RuntimeEngine.Capabilities().RowLock {
 			conflictBuilder.ForUpdate()
 		}
@@ -281,7 +281,7 @@ func (r RecordStore) validateTemporalExclusionTx(ctx context.Context, tx Transac
 		if err != nil {
 			return fmt.Errorf("validate temporal exclusion %s: %w", policy.Key, err)
 		}
-		return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.ID, policy.Key)
+		return mutation.PolicyConflict(policy.ErrorCode, commit.Object.Key, commit.Record.RecordID, policy.Key)
 	}
 	return nil
 }

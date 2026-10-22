@@ -40,7 +40,7 @@ func recordRepositoryMutationTargetLoader(repository recordrepository.RecordRepo
 			Page:              1,
 			PageSize:          1,
 			SkipTotal:         true,
-			Filters:           map[string]any{"id__in": []any{candidateID}},
+			Filters:           map[string]any{"record_id__in": []any{candidateID}},
 			AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
 			AfterID:           "",
 			LockIntent:        recordmodel.RecordQueryLockNone,

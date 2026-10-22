@@ -76,7 +76,7 @@ func WorkflowTerminalApprovalOutcome(process workflowmodel.WorkflowProcessInstan
 		if task.NodeID != decided.NodeID || task.NodeInstanceID != decided.NodeInstanceID {
 			continue
 		}
-		if task.ID == decided.ID {
+		if task.TaskID == decided.TaskID {
 			task = decided
 		}
 		nodeTasks = append(nodeTasks, task)

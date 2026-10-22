@@ -43,7 +43,7 @@ func TestWorkflowContinuationRecoveryDiscoversRegisteredWorkspaces(t *testing.T)
 
 func workflowWorkerEdgeExecution(id string) workflowmodel.WorkflowExecution {
 	return workflowmodel.WorkflowExecution{
-		ID: id, OperationID: "operation-1", WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", ActionType: "record",
+		ExecutionID: id, OperationID: "operation-1", WorkflowKey: "approval", Name: "Approval", Trigger: "manual", Status: "pending", ActionType: "record",
 		Action: map[string]any{"kind": "record"}, Payload: map[string]any{"id": id}, Result: map[string]any{},
 		ActorID: "user", Attempt: 0, MaxAttempts: 3, CreatedAt: "2026-07-20T00:00:00Z", UpdatedAt: "2026-07-20T00:00:00Z",
 	}
@@ -63,13 +63,13 @@ func TestWorkflowWorkerExecutionCRUDAndBoundaryEdges(t *testing.T) {
 	if err := repository.InsertExecution(t.Context(), " workspace-a ", execution); err != nil {
 		t.Fatal(err)
 	}
-	if got, found, err := repository.GetExecution(t.Context(), "workspace-a", execution.ID); err != nil || !found || got.WorkspaceID != "workspace-a" || got.OperationID != "operation-1" {
+	if got, found, err := repository.GetExecution(t.Context(), "workspace-a", execution.ExecutionID); err != nil || !found || got.WorkspaceID != "workspace-a" || got.OperationID != "operation-1" {
 		t.Fatalf("execution=%+v found=%v error=%v", got, found, err)
 	}
 	if _, found, err := repository.GetExecution(t.Context(), "workspace-a", "missing"); err != nil || found {
 		t.Fatalf("missing found=%v error=%v", found, err)
 	}
-	if _, _, err := repository.GetExecution(t.Context(), " ", execution.ID); err == nil {
+	if _, _, err := repository.GetExecution(t.Context(), " ", execution.ExecutionID); err == nil {
 		t.Fatal("blank get workspace accepted")
 	}
 	for _, limit := range []int{0, 1001} {
@@ -93,7 +93,7 @@ func TestWorkflowWorkerExecutionCRUDAndBoundaryEdges(t *testing.T) {
 		t.Fatal("invalid update JSON accepted")
 	}
 	missing := execution
-	missing.ID = "missing"
+	missing.ExecutionID = "missing"
 	if err := repository.UpdateExecution(t.Context(), "workspace-a", missing); err == nil {
 		t.Fatal("missing execution updated")
 	}
@@ -114,10 +114,10 @@ func TestWorkflowWorkerCancellationAndScanFailureEdges(t *testing.T) {
 	if err := repository.InsertExecution(t.Context(), "workspace-a", execution); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.store.DB().ExecContext(t.Context(), `UPDATE _workflow_executions SET attempt = 'invalid' WHERE id = ?`, execution.ID); err != nil {
+	if _, err := repository.store.DB().ExecContext(t.Context(), `UPDATE _workflow_executions SET attempt = 'invalid' WHERE execution_id = ?`, execution.ExecutionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := repository.GetExecution(t.Context(), "workspace-a", execution.ID); err == nil {
+	if _, _, err := repository.GetExecution(t.Context(), "workspace-a", execution.ExecutionID); err == nil {
 		t.Fatal("corrupt execution scanned")
 	}
 	if _, err := repository.ListExecutions(t.Context(), "workspace-a", 1); err == nil {
@@ -126,7 +126,10 @@ func TestWorkflowWorkerCancellationAndScanFailureEdges(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	checks := map[string]func() error{
-		"get execution":  func() error { _, _, err := repository.GetExecution(cancelled, "workspace-a", execution.ID); return err },
+		"get execution": func() error {
+			_, _, err := repository.GetExecution(cancelled, "workspace-a", execution.ExecutionID)
+			return err
+		},
 		"list execution": func() error { _, err := repository.ListExecutions(cancelled, "workspace-a", 1); return err },
 		"conditional update": func() error {
 			_, err := repository.UpdateExecutionWhere(cancelled, "workspace-a", workflowWorkerEdgeExecution("x"), nil)
@@ -139,10 +142,10 @@ func TestWorkflowWorkerCancellationAndScanFailureEdges(t *testing.T) {
 			return err
 		},
 		"insert event": func() error {
-			return repository.InsertProcessEvent(cancelled, "workspace-a", workflowmodel.WorkflowProcessEvent{ID: "event"})
+			return repository.InsertProcessEvent(cancelled, "workspace-a", workflowmodel.WorkflowProcessEvent{EventID: "event"})
 		},
 		"update task": func() error {
-			return repository.UpdateTask(cancelled, "workspace-a", workflowmodel.WorkflowTask{ID: "task"})
+			return repository.UpdateTask(cancelled, "workspace-a", workflowmodel.WorkflowTask{TaskID: "task"})
 		},
 	}
 	for name, check := range checks {
@@ -158,13 +161,13 @@ func TestWorkflowWorkerTaskDeadlineAndEventEdges(t *testing.T) {
 	repository := openWorkflowWorkerEdgeStore(t)
 	processStore := NewWorkflowProcessStore(repository.store)
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process-edge", WorkflowKey: "approval", WorkflowName: "Approval", DefinitionVersionID: "version", DefinitionVersion: 1,
+		ProcessID: "process-edge", WorkflowKey: "approval", WorkflowName: "Approval", DefinitionVersionID: "version", DefinitionVersion: 1,
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "approval"}, InitiatorID: "user", Status: "running", Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: "now", UpdatedAt: "now",
 	}
 	if err := processStore.InsertProcess(t.Context(), "workspace-a", process); err != nil {
 		t.Fatal(err)
 	}
-	task := workflowmodel.WorkflowTask{ID: "task-edge", ProcessID: process.ID, NodeInstanceID: "node", NodeID: "approve", Title: "Approve", Status: "open", DueAt: "2026-07-20T01:00:00Z", CreatedAt: "now", UpdatedAt: "now"}
+	task := workflowmodel.WorkflowTask{TaskID: "task-edge", ProcessID: process.ProcessID, NodeInstanceID: "node", NodeID: "approve", Title: "Approve", Status: "open", DueAt: "2026-07-20T01:00:00Z", CreatedAt: "now", UpdatedAt: "now"}
 	if err := processStore.InsertTask(t.Context(), "workspace-a", task); err != nil {
 		t.Fatal(err)
 	}
@@ -179,19 +182,19 @@ func TestWorkflowWorkerTaskDeadlineAndEventEdges(t *testing.T) {
 	if _, found, err := repository.GetProcess(t.Context(), "workspace-a", "missing"); err != nil || found {
 		t.Fatalf("missing process found=%v error=%v", found, err)
 	}
-	if _, _, err := repository.GetProcess(t.Context(), " ", process.ID); err == nil {
+	if _, _, err := repository.GetProcess(t.Context(), " ", process.ProcessID); err == nil {
 		t.Fatal("blank process workspace accepted")
 	}
-	event := workflowmodel.WorkflowProcessEvent{ID: "event-edge", ProcessID: process.ID, Event: "created", Metadata: map[string]any{"ok": true}, CreatedAt: "now"}
+	event := workflowmodel.WorkflowProcessEvent{EventID: "event-edge", ProcessID: process.ProcessID, Event: "created", Metadata: map[string]any{"ok": true}, CreatedAt: "now"}
 	if err := repository.InsertProcessEvent(t.Context(), "workspace-a", event); err != nil {
 		t.Fatal(err)
 	}
 	for _, limit := range []int{0, 1001} {
-		if events, err := repository.ListProcessEvents(t.Context(), "workspace-a", process.ID, limit); err != nil || len(events) != 1 {
+		if events, err := repository.ListProcessEvents(t.Context(), "workspace-a", process.ProcessID, limit); err != nil || len(events) != 1 {
 			t.Fatalf("limit=%d events=%v error=%v", limit, events, err)
 		}
 	}
-	if _, err := repository.ListProcessEvents(t.Context(), " ", process.ID, 1); err == nil {
+	if _, err := repository.ListProcessEvents(t.Context(), " ", process.ProcessID, 1); err == nil {
 		t.Fatal("blank event workspace accepted")
 	}
 	if err := repository.InsertProcessEvent(t.Context(), " ", event); err == nil {
@@ -200,7 +203,7 @@ func TestWorkflowWorkerTaskDeadlineAndEventEdges(t *testing.T) {
 	if err := repository.UpdateTask(t.Context(), " ", task); err == nil {
 		t.Fatal("blank task update workspace accepted")
 	}
-	task.ID = "missing"
+	task.TaskID = "missing"
 	if err := repository.UpdateTask(t.Context(), "workspace-a", task); err == nil {
 		t.Fatal("missing task updated")
 	}

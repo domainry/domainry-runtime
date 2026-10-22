@@ -32,7 +32,7 @@ func managerRecipientExecution(t *testing.T) *businessActionExecution {
 				return definitionmodel.ObjectSchema{Key: key, Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}, {Key: "title", Type: "text"}}}, true
 			},
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "task-1", Data: map[string]any{"owner": "alice"}}, nil
+				return recordmodel.Record{RecordID: "task-1", Data: map[string]any{"owner": "alice"}}, nil
 			},
 			FindIdentityUser: func(ctx context.Context, id string) (identitysdk.User, bool, error) {
 				if requestcontext.WorkspaceID(ctx) != "workspace-a" {
@@ -40,9 +40,9 @@ func managerRecipientExecution(t *testing.T) *businessActionExecution {
 				}
 				switch id {
 				case "alice":
-					return identitysdk.User{ID: id, ManagerUserID: "manager"}, true, nil
+					return identitysdk.User{UserID: id, ManagerUserID: "manager"}, true, nil
 				case "manager":
-					return identitysdk.User{ID: id, Status: identitysdk.UserStatusActive}, true, nil
+					return identitysdk.User{UserID: id, Status: identitysdk.UserStatusActive}, true, nil
 				default:
 					return identitysdk.User{}, false, nil
 				}
@@ -74,9 +74,9 @@ func TestRecordManagerRecipientDoesNotReturnInactiveManager(t *testing.T) {
 		execution := managerRecipientExecution(t)
 		execution.dependencies.FindIdentityUser = func(_ context.Context, id string) (identitysdk.User, bool, error) {
 			if id == "alice" {
-				return identitysdk.User{ID: id, ManagerUserID: "manager"}, true, nil
+				return identitysdk.User{UserID: id, ManagerUserID: "manager"}, true, nil
 			}
-			state.ID = id
+			state.UserID = id
 			return state, true, nil
 		}
 		manager, err := execution.ResolveRecordManagerRecipient(t.Context(), runtimeext.RecordManagerRecipientRequest{ObjectKey: "crm_task", RecordID: "task-1", UserFieldKey: "owner"})

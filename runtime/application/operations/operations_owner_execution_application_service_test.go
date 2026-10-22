@@ -32,8 +32,8 @@ func TestExecuteOwnerOperationPersistsTerminalReceiptAndNeverRepeatsOwner(t *tes
 	if err != nil || first.Receipt.Command.Status != operationsmodel.OperationsStatusSucceeded || first.Replayed || calls != 1 {
 		t.Fatalf("first=%+v calls=%d err=%v", first, calls, err)
 	}
-	if ownerOperationID != first.Receipt.Command.ID {
-		t.Fatalf("owner operation id=%q receipt=%q", ownerOperationID, first.Receipt.Command.ID)
+	if ownerOperationID != first.Receipt.Command.OperationID {
+		t.Fatalf("owner operation id=%q receipt=%q", ownerOperationID, first.Receipt.Command.OperationID)
 	}
 	replay, err := service.ExecuteOwnerOperation(t.Context(), request, principal, execute)
 	if err != nil || !replay.Replayed || calls != 1 || readinessCalls != 1 {
@@ -63,7 +63,7 @@ func TestExecuteWorkflowRetryAcceptsRuntimeCapabilityAndReplaysExactlyOnce(t *te
 		t.Fatalf("first=%+v calls=%d err=%v", first, calls, err)
 	}
 	replay, err := service.ExecuteOwnerOperation(t.Context(), request, principal, execute)
-	if err != nil || !replay.Replayed || calls != 1 || replay.Receipt.Command.ID != first.Receipt.Command.ID {
+	if err != nil || !replay.Replayed || calls != 1 || replay.Receipt.Command.OperationID != first.Receipt.Command.OperationID {
 		t.Fatalf("replay=%+v calls=%d err=%v", replay, calls, err)
 	}
 }

@@ -20,7 +20,7 @@ type executionRepositoryProbe struct {
 }
 
 func (p *executionRepositoryProbe) TryBeginExecution(_ context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
-	if p.execution.ID != "" {
+	if p.execution.OperationID != "" {
 		if idempotency.Status(p.execution.Status) == idempotency.StatusFailedRetryable {
 			p.execution.Status = string(idempotency.StatusProcessing)
 			p.execution.LeaseOwner = request.LeaseOwner
@@ -30,7 +30,7 @@ func (p *executionRepositoryProbe) TryBeginExecution(_ context.Context, request 
 		return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionReplay, Execution: p.execution}, nil
 	}
 	p.execution = request.Execution
-	p.execution.ID, p.execution.RequestFingerprint = "execution-1", request.RequestFingerprint
+	p.execution.OperationID, p.execution.RequestFingerprint = "execution-1", request.RequestFingerprint
 	p.execution.Status, p.execution.LeaseOwner, p.execution.FencingToken = string(idempotency.StatusProcessing), request.LeaseOwner, 1
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: p.execution}, nil
 }

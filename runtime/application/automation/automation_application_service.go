@@ -18,7 +18,6 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 	"context"
-	"fmt"
 
 	automationcontract "github.com/domainry/domainry-runtime/runtime/domain/automation/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -29,6 +28,8 @@ import (
 
 	"strings"
 	"time"
+
+	"github.com/domainry/domainry-foundation/entityid"
 
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -163,11 +164,15 @@ func (s *AutomationApplicationService) RunBefore(ctx context.Context, objectKey,
 		ExecuteRule: func(execCtx context.Context, rule automationmodel.AutomationRuleSchema, input, before, candidate map[string]any, recordID string, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
 			started := time.Now()
 			trace, executeErr := executeBeforeRule(execCtx, rule, input, before, candidate, principal)
-			trace.ExecutionID = fmt.Sprintf("automation_execution_%d", time.Now().UnixNano())
+			runID, idErr := entityid.New("autorun")
+			if idErr != nil {
+				return automationprojection.AutomationRuleTrace{}, managementError(apperror.KindInternal, "backend.internal", idErr)
+			}
+			trace.ExecutionID = runID
 			trace.DurationMS = time.Since(started).Milliseconds()
 			if s.executionRepo != nil {
 				_, _ = s.executionRepo.InsertExecution(execCtx, automationWorkspaceID(principal), automationmodel.AutomationRuleExecution{
-					ID:            trace.ExecutionID,
+					RunID:         trace.ExecutionID,
 					WorkspaceID:   automationWorkspaceID(principal),
 					RuleKey:       rule.Key,
 					ObjectKey:     rule.ObjectKey,
@@ -246,7 +251,7 @@ func (s *AutomationApplicationService) RunWebhookAutomation(ctx context.Context,
 	principal.CorrelationID = valueOrDefault(principal.CorrelationID, request.EventID)
 	principal.CausationID = request.EventID
 	input := recordvalidation.RecordCloneData(request.Input)
-	record := recordmodel.Record{ID: request.EventID, Data: recordvalidation.RecordCloneData(input)}
+	record := recordmodel.Record{RecordID: request.EventID, Data: recordvalidation.RecordCloneData(input)}
 	automationruntime.AutomationBindRecordVersion(&record, request.EventID+":"+request.MappingRevision)
 	return s.executeRule(ctx, rule, "webhook", input, nil, recordvalidation.RecordCloneData(input), &record, principal)
 }
@@ -288,7 +293,7 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 			}
 			if record != nil {
 				actionContext.Record = recordvalidation.RecordCloneData(record.Data)
-				actionContext.Record["id"] = record.ID
+				actionContext.Record["id"] = record.RecordID
 				actionContext.Record["created_at"] = record.CreatedAt
 				actionContext.Record["updated_at"] = record.UpdatedAt
 			}

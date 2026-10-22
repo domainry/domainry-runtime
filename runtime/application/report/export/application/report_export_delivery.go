@@ -22,7 +22,7 @@ func (s *ReportExportApplicationService) PrepareResolvedExportDelivery(ctx conte
 	}
 	result := reportmodel.ReportExportPreparation{Job: job}
 	exchangeJob, err := s.dataExchange.Job(ctx, dataexchange.JobRequest{
-		Scope: reportexport.Scope(principal), JobID: job.ID, Provider: reportexport.DataExchangeProviderKey, Operation: "export",
+		Scope: reportexport.Scope(principal), JobID: job.JobID, Provider: reportexport.DataExchangeProviderKey, Operation: "export",
 	})
 	if err != nil {
 		return reportmodel.ReportExportPreparation{}, reportExportDataExchangeError(err)
@@ -39,7 +39,7 @@ func (s *ReportExportApplicationService) PrepareResolvedExportDelivery(ctx conte
 		return result, nil
 	}
 	exchangeJob, err = inline.MaterializeExport(ctx, dataexchange.JobRequest{
-		Scope: reportexport.Scope(principal), JobID: job.ID, Provider: reportexport.DataExchangeProviderKey, Operation: "export",
+		Scope: reportexport.Scope(principal), JobID: job.JobID, Provider: reportexport.DataExchangeProviderKey, Operation: "export",
 	})
 	if err != nil {
 		return reportmodel.ReportExportPreparation{}, reportExportDataExchangeError(err)
@@ -56,7 +56,7 @@ func (s *ReportExportApplicationService) PrepareResolvedExportDelivery(ctx conte
 		return reportmodel.ReportExportPreparation{}, err
 	}
 	result.Artifact = &reportmodel.ReportExportArtifact{
-		ID: artifact.ID, Filename: artifact.Filename, ContentType: artifact.ContentType, ContentSHA256: artifact.SHA256,
+		ID: artifact.ID, ArtifactID: artifact.ArtifactID, Filename: artifact.Filename, ContentType: artifact.ContentType, ContentSHA256: artifact.SHA256,
 		Size: artifact.Size, ExpiresAt: artifact.ExpiresAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"), Content: artifact.Content,
 	}
 	return result, nil

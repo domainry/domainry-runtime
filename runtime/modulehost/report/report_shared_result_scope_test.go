@@ -33,7 +33,7 @@ func TestSharedReportSourceScopeCoversOriginalRowsWithActualReaderFields(t *test
 	owner := &record.RecordScopeExpression{Operator: "eq", FieldKey: "owner_user_id", Values: []string{"producer"}}
 	p := &sharedResultScopeAccess{objectSQLSourceAccessProbe: objectSQLSourceAccessProbe{objects: map[string]definition.ObjectSchema{"sale": {Key: "sale"}}}, queries: map[string]record.RecordListQuery{"producer": {AuthorizationMode: record.RecordQueryAuthorizationPredicate, ScopeExpression: owner}, "reader": {AuthorizationMode: record.RecordQueryAuthorizationUnrestricted}}}
 	h := NewReportModuleQueryHost(ReportModuleQueryHostDependencies{Access: p})
-	r := model.ReportSchema{ObjectSQLV1: &model.ReportObjectSQLSchema{SQL: `SELECT s.id AS id FROM sale s LIMIT 10`, ResultSchema: []model.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
+	r := model.ReportSchema{ObjectSQLV1: &model.ReportObjectSQLSchema{SQL: `SELECT s.record_id AS id FROM sale s LIMIT 10`, ResultSchema: []model.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
 	var source, reader model.ReportSubject
 	source.Principal.Known, reader.Principal.Known = true, true
 	source.Principal.WorkspaceID, reader.Principal.WorkspaceID = "workspace", "workspace"

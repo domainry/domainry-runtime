@@ -42,7 +42,7 @@ func TestBusinessActionConversationRecoveryNeverReclaimsExistingExecution(t *tes
 	if _, found, err := repo.FindExecution(t.Context(), missing); err != nil || found {
 		t.Fatal("cross-workspace receipt lookup", found, err)
 	}
-	completion := actionmodel.ActionExecutionCompletion{Execution: first.Execution, ExecutionID: first.Execution.ID, LeaseOwner: first.Execution.LeaseOwner, FencingToken: first.Execution.FencingToken, Result: map[string]any{"status": "failed"}, ErrorCode: "connector_unknown", Retryable: true, ResponseStatus: 503, Now: now.Add(time.Second), ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: first.Execution, OperationID: first.Execution.OperationID, LeaseOwner: first.Execution.LeaseOwner, FencingToken: first.Execution.FencingToken, Result: map[string]any{"status": "failed"}, ErrorCode: "connector_unknown", Retryable: true, ResponseStatus: 503, Now: now.Add(time.Second), ExpiresAt: now.Add(time.Hour)}
 	if _, err := repo.CompleteExecution(t.Context(), completion); err != nil {
 		t.Fatal(err)
 	}

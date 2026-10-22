@@ -44,7 +44,7 @@ func (store *Store) ListActive(ctx context.Context, scope principalmodel.SystemS
 		return nil, fmt.Errorf("Workspace aggregate catalog limit is invalid")
 	}
 	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code").Where(query.Equal("status", "active")).
+		Columns("workspace_id", "canonical_code").Where(query.Equal("status", "active")).
 		OrderBy(query.Ascending("canonical_code"), query.Ascending("id")).Limit(limit + 1).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build Workspace aggregate catalog query: %w", err)
@@ -95,7 +95,7 @@ func (store *Store) ResolveActive(ctx context.Context, scope principalmodel.Syst
 	}
 	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(
-			query.Project(query.QualifiedColumn("workspace", "id")),
+			query.Project(query.QualifiedColumn("workspace", "workspace_id")),
 			query.Project(query.QualifiedColumn("workspace", "canonical_code")),
 			query.Project(query.QualifiedColumn("workspace", "name")),
 			query.Project(query.QualifiedColumn("workspace", "plan")),
@@ -103,7 +103,7 @@ func (store *Store) ResolveActive(ctx context.Context, scope principalmodel.Syst
 			query.Project(query.QualifiedColumn("workspace", "max_user_limit")),
 		).
 		Where(query.And(
-			query.InExpression(query.QualifiedColumn("workspace", "id"), values...),
+			query.InExpression(query.QualifiedColumn("workspace", "workspace_id"), values...),
 			query.EqualValue(query.QualifiedColumn("workspace", "status"), "active"),
 		)).Build()
 	if err != nil {
@@ -196,7 +196,7 @@ func scanWorkspaceUsage(scanner workspaceUsageScanner) (aggregatecontract.Worksp
 
 func workspaceUsageProjections() []query.Projection {
 	result := make([]query.Projection, 0, 20)
-	for _, column := range []string{"id", "canonical_code", "name", "status", "revision"} {
+	for _, column := range []string{"workspace_id", "canonical_code", "name", "status", "revision"} {
 		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
 	}
 	for _, column := range []string{

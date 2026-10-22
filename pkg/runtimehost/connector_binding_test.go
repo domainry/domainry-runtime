@@ -245,39 +245,39 @@ type integrationAccountReadsProbe struct {
 }
 
 type knowledgeDocumentServiceProbe struct {
-	agentsdk.KnowledgeDocumentService
+	knowledgesdk.KnowledgeDocumentService
 	uploadLibrary string
 	upload        agentsdk.KnowledgeDocumentUpload
 	uploadSource  agentsdk.KnowledgeDocumentSourceAccess
 	readLibrary   string
 	readDocument  string
-	authority     agentsdk.ConversationAuthority
+	authority     knowledgesdk.Authority
 	result        agentsdk.KnowledgeDocument
 }
 
 type knowledgeLibraryServiceProbe struct {
-	agentsdk.KnowledgeLibraryService
+	knowledgesdk.KnowledgeLibraryService
 	libraryID string
-	authority agentsdk.ConversationAuthority
+	authority knowledgesdk.Authority
 	result    agentsdk.KnowledgeLibrary
 }
 
-func (probe *knowledgeLibraryServiceProbe) KnowledgeLibrary(_ context.Context, id string, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeLibrary, error) {
+func (probe *knowledgeLibraryServiceProbe) KnowledgeLibrary(_ context.Context, id string, authority knowledgesdk.Authority) (agentsdk.KnowledgeLibrary, error) {
 	probe.libraryID, probe.authority = id, authority
 	return probe.result, nil
 }
 
-func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocument(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeDocument, error) {
+func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocument(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, authority knowledgesdk.Authority) (agentsdk.KnowledgeDocument, error) {
 	probe.uploadLibrary, probe.upload, probe.authority = library, upload, authority
 	return probe.result, nil
 }
 
-func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocumentForSource(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, source agentsdk.KnowledgeDocumentSourceAccess, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeDocument, error) {
+func (probe *knowledgeDocumentServiceProbe) UploadKnowledgeDocumentForSource(_ context.Context, library string, upload agentsdk.KnowledgeDocumentUpload, source agentsdk.KnowledgeDocumentSourceAccess, authority knowledgesdk.Authority) (agentsdk.KnowledgeDocument, error) {
 	probe.uploadLibrary, probe.upload, probe.uploadSource, probe.authority = library, upload, source, authority
 	return probe.result, nil
 }
 
-func (probe *knowledgeDocumentServiceProbe) KnowledgeDocument(_ context.Context, library, document string, authority agentsdk.ConversationAuthority) (agentsdk.KnowledgeDocument, error) {
+func (probe *knowledgeDocumentServiceProbe) KnowledgeDocument(_ context.Context, library, document string, authority knowledgesdk.Authority) (agentsdk.KnowledgeDocument, error) {
 	probe.readLibrary, probe.readDocument, probe.authority = library, document, authority
 	return probe.result, nil
 }
@@ -475,12 +475,12 @@ func TestIntegrationRuntimeConnectorGatewayUsesAuthorizedKnowledgeDocumentServic
 	if probe.uploadSource != (agentsdk.KnowledgeDocumentSourceAccess{Namespace: knowledgesdk.KnowledgeDocumentSourceNamespaceRuntimeRecord, ResourceType: "meeting", ResourceID: "meeting-a"}) {
 		t.Fatalf("source=%+v", probe.uploadSource)
 	}
-	wantAuthority := agentsdk.ConversationAuthority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}
-	if probe.authority != wantAuthority {
+	wantAuthority := knowledgesdk.Authority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}
+	if !probe.authority.Equal(wantAuthority) {
 		t.Fatalf("authority=%+v", probe.authority)
 	}
 	result, err = gateway.ReadKnowledgeDocument(t.Context(), execution, KnowledgeDocumentReadRequest{LibraryID: "library-a", DocumentID: "document-a"})
-	if err != nil || result.ID != "document-a" || probe.readLibrary != "library-a" || probe.readDocument != "document-a" || probe.authority != wantAuthority {
+	if err != nil || result.ID != "document-a" || probe.readLibrary != "library-a" || probe.readDocument != "document-a" || !probe.authority.Equal(wantAuthority) {
 		t.Fatalf("result=%+v read=%q/%q authority=%+v err=%v", result, probe.readLibrary, probe.readDocument, probe.authority, err)
 	}
 }
@@ -491,7 +491,7 @@ func TestIntegrationRuntimeConnectorGatewayRequiresSourceAwareKnowledgeService(t
 		principal: runtimeext.Principal{UserID: "user-a", RoleKey: "sales_rep"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
 	}
 	service := struct {
-		agentsdk.KnowledgeDocumentService
+		knowledgesdk.KnowledgeDocumentService
 	}{}
 	_, err := (integrationRuntimeConnectorGateway{runtimeID: "aurora-runtime", knowledgeDocuments: service}).UploadKnowledgeDocument(t.Context(), execution, KnowledgeDocumentUploadRequest{
 		LibraryID: "library-a", ClientID: "meeting:meeting-a:hash", Filename: "meeting-a.txt", Data: []byte("transcript"),
@@ -511,7 +511,7 @@ func TestIntegrationRuntimeConnectorGatewayReadsCurrentKnowledgeLibrary(t *testi
 	if err != nil || result.ID != "library-a" || result.Kind != "personal" || result.OwnerUserID != "user-a" || result.Role != "manager" {
 		t.Fatalf("library=%+v err=%v", result, err)
 	}
-	if probe.libraryID != "library-a" || probe.authority != (agentsdk.ConversationAuthority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}) {
+	if probe.libraryID != "library-a" || !probe.authority.Equal(knowledgesdk.Authority{Known: true, RuntimeID: "aurora-runtime", WorkspaceID: "workspace-a", UserID: "user-a", RoleKey: "sales_rep"}) {
 		t.Fatalf("request=%q authority=%+v", probe.libraryID, probe.authority)
 	}
 }

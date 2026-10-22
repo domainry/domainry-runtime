@@ -27,7 +27,7 @@ func recordAuthorizationParentReadScope(object definitionmodel.ObjectSchema, obj
 		return nil, err
 	}
 	path := recordmodel.RecordScopePathSegment{SourceObjectKey: object.Key, Direction: "forward", RelationFieldKey: binding.RelationField, TargetObjectKey: parent.Key}
-	exists := recordmodel.RecordScopeExpression{Operator: "exists", FieldKey: "id", Path: []recordmodel.RecordScopePathSegment{path}}
+	exists := recordmodel.RecordScopeExpression{Operator: "exists", FieldKey: "record_id", Path: []recordmodel.RecordScopePathSegment{path}}
 	if scope == nil {
 		// Even unrestricted parents must exist in the same Workspace. An
 		// orphaned or cross-Workspace child is never a readable record.

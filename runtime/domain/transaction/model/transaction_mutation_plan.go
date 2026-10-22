@@ -57,7 +57,7 @@ func NewMutationPlan(mutationContext MutationContext, commit RecordMutationCommi
 	if objectKey == "" {
 		return MutationPlan{}, mutationPlanError("object_key")
 	}
-	recordID := strings.TrimSpace(commit.Record.ID)
+	recordID := strings.TrimSpace(commit.Record.RecordID)
 	if recordID == "" {
 		recordID = strings.TrimSpace(commit.RecordID)
 	}

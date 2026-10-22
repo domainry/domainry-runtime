@@ -177,7 +177,7 @@ func (r RuntimeStatusStore) ListIdempotencyReceipts(ctx context.Context, workspa
 				key = record.IdempotencyKey
 			}
 			scope := idempotencyReceiptScope(spec.owner, scopeValue, targetValue)
-			values = append(values, idempotency.ReceiptSummaryFromValues(spec.owner, record.ID, record.WorkspaceID, scope, key, record.RequestFingerprint, record.Status, record.FencingToken, record.UpdatedAt, record.ExpiresAt))
+			values = append(values, idempotency.ReceiptSummaryFromValues(spec.owner, record.OperationID, record.WorkspaceID, scope, key, record.RequestFingerprint, record.Status, record.FencingToken, record.UpdatedAt, record.ExpiresAt))
 		}
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].UpdatedAt > values[j].UpdatedAt })
@@ -236,7 +236,7 @@ func (r RuntimeStatusStore) transitionIdempotencyReceipt(ctx context.Context, wo
 	}
 	empty, updatedAt := "", time.Now().UTC().Format(time.RFC3339Nano)
 	return r.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspace.String(), ID: strings.TrimSpace(id), Owner: selected.rowOwner, Status: fromStatus,
+		WorkspaceID: workspace.String(), OperationID: strings.TrimSpace(id), Owner: selected.rowOwner, Status: fromStatus,
 	}, sharedoperation.RecordChanges{
 		Status: &toStatus, LeaseOwner: &empty, LeaseExpiresAt: &empty, IncrementFencingToken: true, UpdatedAt: &updatedAt,
 	})

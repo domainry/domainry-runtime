@@ -80,7 +80,8 @@ type DatabaseRetirementEvidence struct {
 }
 
 type DatabaseRetirement struct {
-	ID            string                     `json:"id"`
+	ID            int64                      `json:"id"`
+	OperationID   string                     `json:"operation_id"`
 	Object        DatabaseObjectIdentity     `json:"object"`
 	State         DatabaseRetirementState    `json:"state"`
 	Evidence      DatabaseRetirementEvidence `json:"evidence"`
@@ -95,7 +96,7 @@ type DatabaseRetirementOperationalStatus struct {
 }
 
 type DatabaseDropPlan struct {
-	RetirementID          string                   `json:"retirement_id"`
+	OperationID           string                   `json:"operation_id"`
 	Object                DatabaseObjectIdentity   `json:"object"`
 	Dependencies          []DatabaseObjectIdentity `json:"dependencies"`
 	Statements            []string                 `json:"statements"`

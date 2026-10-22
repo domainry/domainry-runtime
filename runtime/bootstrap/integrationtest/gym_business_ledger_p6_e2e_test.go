@@ -47,7 +47,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 	previousHash := ""
 	for index, data := range entries {
 		now := fmt.Sprintf("2026-07-21T09:%02d:00Z", index)
-		record, buildErr := recordservice.RecordLedgerBuildEvidence(object, recordmodel.Record{ID: fmt.Sprintf("ledger-%d", index+1), Data: data, CreatedAt: now, UpdatedAt: now}, previousHash, secret)
+		record, buildErr := recordservice.RecordLedgerBuildEvidence(object, recordmodel.Record{RecordID: fmt.Sprintf("ledger-%d", index+1), Data: data, CreatedAt: now, UpdatedAt: now}, previousHash, secret)
 		if buildErr != nil {
 			t.Fatalf("build entry %d: %v", index+1, buildErr)
 		}
@@ -100,7 +100,7 @@ func TestGymLedgerReplaysExactBalancesAndLocatesTampering(t *testing.T) {
 	}
 	gymLedgerP6AssertBalances(t, partial, map[string]string{"bonus": "20.00", "principal": "70.00"})
 
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE gym_financial_ledger SET source_reference = ? WHERE workspace_id = ? AND id = ?`, "tampered-source", "workspace-primary", "ledger-4"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE gym_financial_ledger SET source_reference = ? WHERE workspace_id = ? AND gym_financial_ledger_id = ?`, "tampered-source", "workspace-primary", "ledger-4"); err != nil {
 		t.Fatal(err)
 	}
 	tampered, err := repository.ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 20, Sort: []recordmodel.RecordSortRule{{Field: "sequence", Direction: "asc"}}, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted})

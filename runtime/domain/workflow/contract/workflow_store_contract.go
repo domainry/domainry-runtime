@@ -51,6 +51,7 @@ type WorkflowWorkerStore interface {
 	TryBeginExecution(context.Context, workflowmodel.WorkflowExecutionClaimRequest) (workflowmodel.WorkflowExecutionClaimResult, error)
 	CompleteExecutionReceipt(context.Context, workflowmodel.WorkflowExecutionReceiptCompletion) error
 	GetExecution(context.Context, string, string) (workflowmodel.WorkflowExecution, bool, error)
+	GetExecutionByProcessID(context.Context, string, string) (workflowmodel.WorkflowExecution, bool, error)
 	ListExecutions(context.Context, string, int) ([]workflowmodel.WorkflowExecution, error)
 	UpdateExecution(context.Context, string, workflowmodel.WorkflowExecution) error
 	UpdateExecutionWhere(context.Context, string, workflowmodel.WorkflowExecution, map[string]any) (bool, error)

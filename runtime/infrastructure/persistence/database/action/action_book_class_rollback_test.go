@@ -41,23 +41,25 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 	}
 	for _, statement := range []string{
 		`CREATE TABLE p8_fault_group_class (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			workspace_id TEXT NOT NULL,
-			id TEXT NOT NULL,
+			p8_fault_group_class_id TEXT NOT NULL UNIQUE,
 			created_at BIGINT NOT NULL,
 			updated_at BIGINT NOT NULL,
 			remaining_capacity INTEGER NOT NULL,
 			remaining_waitlist_capacity INTEGER NOT NULL,
-			UNIQUE (workspace_id, id)
+			UNIQUE (workspace_id, p8_fault_group_class_id)
 		)`,
 		`CREATE TABLE p8_fault_class_booking (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			workspace_id TEXT NOT NULL,
-			id TEXT NOT NULL,
+			p8_fault_class_booking_id TEXT NOT NULL UNIQUE,
 			created_at BIGINT NOT NULL,
 			updated_at BIGINT NOT NULL,
 			class_id TEXT NOT NULL,
 			member_id TEXT NOT NULL,
 			status TEXT NOT NULL,
-			UNIQUE (workspace_id, id)
+			UNIQUE (workspace_id, p8_fault_class_booking_id)
 		)`,
 	} {
 		if _, err := store.DB().Exec(statement); err != nil {
@@ -78,7 +80,7 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 	}}
 	records := recordpersistence.NewRecordStore(store)
 	if err := records.InsertRecord(t.Context(), "workspace-a", groupClass, recordmodel.Record{
-		ID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
+		RecordID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
 		Data: map[string]any{"remaining_capacity": int64(1), "remaining_waitlist_capacity": int64(1)},
 	}); err != nil {
 		t.Fatal(err)
@@ -98,10 +100,10 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		t.Fatal(err)
 	}
 
-	classAuditID := "p8-fault-class-audit"
-	bookingAuditID := "p8-fault-booking-audit"
-	actionAuditID := "p8-fault-action-audit"
-	outboxID := "durable_intent:" + claim.Execution.ID + ":0"
+	classAuditID := actionAuditTestID("p8-fault-class-audit")
+	bookingAuditID := actionAuditTestID("p8-fault-booking-audit")
+	actionAuditID := actionAuditTestID("p8-fault-action-audit")
+	outboxID := "durable_intent:" + claim.Execution.OperationID + ":0"
 	if _, err := store.DB().Exec(bookClassFailureTriggerSQL(
 		stage,
 		groupClass.Key,
@@ -118,42 +120,42 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 		{
 			Operation: "update", Object: groupClass,
 			Record: recordmodel.Record{
-				ID: "class-1", CreatedAt: stamp, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano),
+				RecordID: "class-1", CreatedAt: stamp, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano),
 				Data: map[string]any{"remaining_capacity": int64(0), "remaining_waitlist_capacity": int64(1)},
 			},
 			Predicates: []transactionmodel.MutationPredicate{{
 				Field: "remaining_capacity", Operator: "gte", Value: int64(1), ErrorCode: "gym.class_capacity_full",
 			}},
 			Audit: &auditmodel.AuditEvent{
-				ID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
+				AuditEventID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
 				ObjectKey: groupClass.Key, RecordID: "class-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 		},
 		{
 			Operation: "create", Object: classBooking,
 			Record: recordmodel.Record{
-				ID: "booking-1", CreatedAt: stamp, UpdatedAt: stamp,
+				RecordID: "booking-1", CreatedAt: stamp, UpdatedAt: stamp,
 				Data: map[string]any{"class_id": "class-1", "member_id": "member-1", "status": "booked"},
 			},
 			Audit: &auditmodel.AuditEvent{
-				ID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
+				AuditEventID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 			Outbox: []publicationmodel.Message{{
-				ID: outboxID, WorkspaceID: "workspace-a",
+				MessageID: outboxID, WorkspaceID: "workspace-a",
 				ConnectorKey: "member_center", ConnectionKey: "primary", Operation: "send_notice",
-				RequestRef: claim.Execution.ID, DedupKey: claim.Execution.ID + ":intent:0",
+				RequestRef: claim.Execution.OperationID, DedupKey: claim.Execution.OperationID + ":intent:0",
 				RequestFingerprint: strings.Repeat("c", 64),
 				Payload:            map[string]any{"member_id": "member-1", "sequence": int64(1)},
 			}},
 		},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, commits, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID,
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"booking_id": "booking-1", "status": "booked"}, ResponseStatus: 200,
 		AuditEvents: []auditmodel.AuditEvent{{
-			ID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
+			AuditEventID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
 			ObjectKey: groupClass.Key, ActorID: "member-1", CreatedAt: stamp,
 		}},
 		ExpiresAt: now.Add(24 * time.Hour), Now: now.Add(time.Second),
@@ -176,8 +178,14 @@ func testBookClassAtomicStageRollback(t *testing.T, stage string) {
 	} {
 		for _, id := range ids {
 			var count int
+			idColumn := "id"
+			if table == "_publication_outbox" {
+				idColumn = "message_id"
+			} else if table == "_audit_events" {
+				idColumn = "audit_event_id"
+			}
 			if err := store.DB().QueryRow(
-				"SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE id = "+store.Placeholder(1),
+				"SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(idColumn)+" = "+store.Placeholder(1),
 				id,
 			).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("%s leaked %s/%s count=%d error=%v", stage, table, id, count, err)
@@ -225,12 +233,19 @@ func bookClassFailureTriggerSQL(stage, groupClass, classBooking, classAuditID, b
 }
 
 func bookClassIDFailureTrigger(name, table, id string) string {
+	idColumn := "id"
+	if table == "_publication_outbox" {
+		idColumn = "message_id"
+	} else if table == "_audit_events" {
+		idColumn = "audit_event_id"
+	}
 	return fmt.Sprintf(
 		`CREATE TRIGGER %s BEFORE INSERT ON %s
-		WHEN NEW.id = %s
+		WHEN NEW.%s = %s
 		BEGIN SELECT RAISE(ABORT, 'injected %s failure'); END`,
 		quoteSQLiteTestIdentifier(name),
 		quoteSQLiteTestIdentifier(table),
+		quoteSQLiteTestIdentifier(idColumn),
 		quoteSQLiteTestString(id),
 		stageLabel(name),
 	)

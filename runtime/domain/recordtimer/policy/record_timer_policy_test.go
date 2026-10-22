@@ -136,7 +136,7 @@ func TestDeclarativeBusinessCalendarCatalogEdges(t *testing.T) {
 
 func TestRecordTimerClaimAndRetryPoliciesAreFencedAndBounded(t *testing.T) {
 	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
-	candidate := recordmodel.Record{ID: "timer-1", Data: map[string]any{
+	candidate := recordmodel.Record{RecordID: "timer-1", Data: map[string]any{
 		"status": "leased", "lease_expires_at": now.Add(-time.Second).Format(time.RFC3339Nano),
 		"fencing_token": 4, "attempt": 2, "retry_delay_seconds": 10, "retry_max_delay_seconds": 15,
 	}}

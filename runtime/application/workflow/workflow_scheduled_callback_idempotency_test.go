@@ -23,11 +23,11 @@ func TestScheduledCallbackKeyClosesWorkflowReceiptCrashWindow(t *testing.T) {
 		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}},
 		updateWhereResult:           true,
 		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
-			ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+			OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 		}},
 	}
 	service := workflowRecordExecutionService(worker, workflow)
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "candidate-1", Data: map[string]any{"status": "approved"}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "candidate-1", Data: map[string]any{"status": "approved"}}}}}}
 	service.schemaMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"candidate": {Key: "candidate"}}
 	}
@@ -41,15 +41,15 @@ func TestScheduledCallbackKeyClosesWorkflowReceiptCrashWindow(t *testing.T) {
 		t.Fatal("callback key did not produce a Workflow owner receipt key")
 	}
 	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{
-		ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: first[0].ID,
+		OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: first[0].ExecutionID,
 	}}
 	replayed, err := service.processScheduledWorkflowExecutionsForTargetWindowWithKey(t.Context(), "scheduled:activate", 1, principal, now, now, "callback-key-1")
-	if err != nil || len(replayed) != 1 || replayed[0].ID != first[0].ID || replayed[0].Status != "duplicate" || len(worker.inserted) != 1 || len(worker.claimRequests) != 2 || worker.claimRequests[1].Receipt.IdempotencyKey != firstKey || worker.claimRequests[1].RequestFingerprint != worker.claimRequests[0].RequestFingerprint {
+	if err != nil || len(replayed) != 1 || replayed[0].ExecutionID != first[0].ExecutionID || replayed[0].Status != "duplicate" || len(worker.inserted) != 1 || len(worker.claimRequests) != 2 || worker.claimRequests[1].Receipt.IdempotencyKey != firstKey || worker.claimRequests[1].RequestFingerprint != worker.claimRequests[0].RequestFingerprint {
 		t.Fatalf("replayed=%+v claims=%+v err=%v", replayed, worker.claimRequests, err)
 	}
 
 	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
-		ID: "receipt-2", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+		OperationID: "receipt-2", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 	}}
 	second, err := service.processScheduledWorkflowExecutionsForTargetWindowWithKey(t.Context(), "scheduled:activate", 1, principal, now, now, "callback-key-2")
 	if err != nil || len(second) != 1 || len(worker.claimRequests) != 3 || worker.claimRequests[2].Receipt.IdempotencyKey == firstKey {

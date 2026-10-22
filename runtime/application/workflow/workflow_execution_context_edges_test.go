@@ -34,7 +34,7 @@ func TestWorkflowExecutionContextPrincipalAndRendering(t *testing.T) {
 	}
 
 	payload := map[string]any{"record_id": "record", "name": "Ada", "count": 2, "approval_comment": "needs revision", "approval_decision": "rejected"}
-	source := recordmodel.Record{ID: "source", Data: map[string]any{"name": "Grace"}}
+	source := recordmodel.Record{RecordID: "source", Data: map[string]any{"name": "Grace"}}
 	for name, testCase := range map[string]struct {
 		value    any
 		expected any
@@ -122,7 +122,7 @@ func TestWorkflowExecutionContextPrincipalAndRendering(t *testing.T) {
 }
 
 func TestWorkflowExecutionContextPayloadRetryAndAuditProjection(t *testing.T) {
-	record := recordmodel.Record{ID: "record", Data: map[string]any{"name": "new", "count": 2}, CreatedAt: "created", UpdatedAt: "updated"}
+	record := recordmodel.Record{RecordID: "record", Data: map[string]any{"name": "new", "count": 2}, CreatedAt: "created", UpdatedAt: "updated"}
 	payload := WorkflowPayloadForRecord("order", record)
 	if payload["object_key"] != "order" || payload["record_id"] != "record" {
 		t.Fatalf("payload=%v", payload)
@@ -137,7 +137,7 @@ func TestWorkflowExecutionContextPayloadRetryAndAuditProjection(t *testing.T) {
 	service := &WorkflowApplicationService{schemaMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": object}
 	}, recordReader: reader}
-	previous := workflowmodel.WorkflowExecution{ID: "previous", Status: "failed", ObjectKey: "order", RecordID: "record", LastError: "provider.timeout", Payload: map[string]any{
+	previous := workflowmodel.WorkflowExecution{ExecutionID: "previous", Status: "failed", ObjectKey: "order", RecordID: "record", LastError: "provider.timeout", Payload: map[string]any{
 		"request_id": "request", "initiating_user_id": "user", "initiating_role_key": "role", "scheduled_at": "time", "empty": "",
 	}}
 	retryPrincipal := workflowExecutionPrincipal()
@@ -181,7 +181,7 @@ func TestWorkflowExecutionContextPayloadRetryAndAuditProjection(t *testing.T) {
 		t.Fatalf("base=%v", base)
 	}
 	execution := workflowmodel.WorkflowExecution{
-		ID: "execution", WorkflowKey: "flow", Name: "Flow", Status: "failed", Trigger: "updated", ObjectKey: "fallback-object", RecordID: "fallback-record",
+		ExecutionID: "execution", WorkflowKey: "flow", Name: "Flow", Status: "failed", Trigger: "updated", ObjectKey: "fallback-object", RecordID: "fallback-record",
 		Payload: map[string]any{"object_key": "order", "record_id": "record", "initiating_user_id": "initiator", "initiating_role_key": "initiator-role"},
 		Result:  map[string]any{"created_record_id": "created-record", "updated_items": []any{"item"}, "coupon_id": "", "ignored": "value"},
 		Attempt: 2, MaxAttempts: 3, RunAs: "service", ActionType: "workflow_graph", IdempotencyKey: "key", NextRunAt: time.Now().UTC().Format(time.RFC3339), LastError: "timeout",

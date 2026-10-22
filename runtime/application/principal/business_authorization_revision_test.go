@@ -54,12 +54,12 @@ func TestBusinessResolutionPreservesIdentityRevisionAndInvalidatesBusinessEviden
 	if resolve(empty, "").EffectiveAuthorizationRevision() != empty.EffectiveAuthorizationRevision() {
 		t.Fatal("resolution is not idempotent")
 	}
-	records.rows["staff"] = recordmodel.Record{ID: "staff-1", UpdatedAt: "v1"}
+	records.rows["staff"] = recordmodel.Record{RecordID: "staff-1", UpdatedAt: "v1"}
 	staff := resolve(base, "")
 	if staff.EffectiveAuthorizationRevision() == empty.EffectiveAuthorizationRevision() {
 		t.Fatal("new Profile did not invalidate business revision")
 	}
-	records.rows["vendor"] = recordmodel.Record{ID: "vendor-1", UpdatedAt: "v1"}
+	records.rows["vendor"] = recordmodel.Record{RecordID: "vendor-1", UpdatedAt: "v1"}
 	staff = resolve(base, "staff")
 	vendor := resolve(base, "vendor")
 	if vendor.EffectiveAuthorizationRevision() == staff.EffectiveAuthorizationRevision() {

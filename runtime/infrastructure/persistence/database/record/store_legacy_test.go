@@ -1,6 +1,9 @@
 package record_test
 
 import (
+	"strconv"
+
+	ormschema "github.com/domainry/domainry-orm/schema"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -23,19 +26,10 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 
-	table := store.Identifier("scoped_record")
-	createSQL := "CREATE TABLE " + table + " (" +
-		store.Identifier("workspace_id") + " TEXT NOT NULL, " +
-		store.Identifier("id") + " TEXT PRIMARY KEY, " +
-		store.Identifier("created_at") + " TEXT NOT NULL, " +
-		store.Identifier("updated_at") + " TEXT NOT NULL, " +
-		store.Identifier("name") + " TEXT NOT NULL, " +
-		store.Identifier("status") + " TEXT NOT NULL, " +
-		store.Identifier("owner_org_id") + " TEXT" +
-		")"
-	if _, err := store.DB().Exec(createSQL); err != nil {
-		t.Fatalf("create scoped table: %v", err)
-	}
+	createGeneratedRecordTable(t, store, "scoped_record",
+		ormschema.Column("name", ormschema.Text()).NotNull(),
+		ormschema.Column("status", ormschema.Text()).NotNull(),
+	)
 
 	object := definitionmodel.ObjectSchema{
 		Key:  "scoped_record",
@@ -57,11 +51,11 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	page, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
 		Page:              2,
 		PageSize:          1,
-		AfterID:           "r1",
+		AfterID:           "1",
 		Search:            "North",
 		SearchFields:      []string{"name"},
 		Filters:           map[string]any{"status": "active"},
-		Sort:              []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		Sort:              []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}},
 		AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key, ScopeExpression: &orgScope,
 	})
 	if err != nil {
@@ -70,7 +64,7 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	if page.Page != 2 || page.PageSize != 1 || page.Total != 2 || page.HasNext {
 		t.Fatalf("expected second page of two scoped matches, got %#v", page)
 	}
-	if len(page.Items) != 1 || page.Items[0].ID != "r2" {
+	if len(page.Items) != 1 || page.Items[0].RecordID != "r2" {
 		t.Fatalf("expected sorted second scoped record r2, got %#v", page.Items)
 	}
 
@@ -90,29 +84,29 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 	if err != nil {
 		t.Fatalf("list special-character scoped records: %v", err)
 	}
-	if specialPage.Total != 2 || len(specialPage.Items) != 2 || specialPage.Items[0].ID != "r8" || specialPage.Items[1].ID != "r7" {
+	if specialPage.Total != 2 || len(specialPage.Items) != 2 || specialPage.Items[0].RecordID != "r8" || specialPage.Items[1].RecordID != "r7" {
 		t.Fatalf("expected escaped LIKE query to include only exact and child special-character paths, got %#v", specialPage)
 	}
 
 	batchPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{"r1", "r3"}}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"record_id__in": []any{"r1", "r3"}}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
 	})
 	if err != nil {
 		t.Fatalf("list records by batched IDs: %v", err)
 	}
-	if batchPage.Total != 2 || len(batchPage.Items) != 2 || batchPage.Items[0].ID != "r1" || batchPage.Items[1].ID != "r3" {
+	if batchPage.Total != 2 || len(batchPage.Items) != 2 || batchPage.Items[0].RecordID != "r1" || batchPage.Items[1].RecordID != "r3" {
 		t.Fatalf("expected generic id__in batch filter, got %#v", batchPage)
 	}
 	firstWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true,
+		Page: 1, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}, SkipTotal: true,
 	})
 	if err != nil || firstWithoutTotal.Total != 0 || !firstWithoutTotal.HasNext || len(firstWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free first page with lookahead, got %#v err=%v", firstWithoutTotal, err)
 	}
 	cursorPage, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 99, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: firstWithoutTotal.Items[len(firstWithoutTotal.Items)-1].ID,
+		Page: 99, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}, SkipTotal: true, AfterID: strconv.FormatInt(firstWithoutTotal.Items[len(firstWithoutTotal.Items)-1].ID, 10),
 	})
-	if err != nil || len(cursorPage.Items) != 2 || cursorPage.Items[0].ID <= firstWithoutTotal.Items[1].ID {
+	if err != nil || len(cursorPage.Items) != 2 || cursorPage.Items[0].RecordID <= firstWithoutTotal.Items[1].RecordID {
 		t.Fatalf("expected keyset page strictly after cursor, got %#v err=%v", cursorPage, err)
 	}
 	if _, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
@@ -121,7 +115,7 @@ func TestListRecordsComposesStableOrgScopeWithSearchFiltersPaginationAndSorting(
 		t.Fatal("expected non-id keyset sort to be rejected")
 	}
 	lastWithoutTotal, err := recordStore(store).ListRecords(t.Context(), "workspace-primary", object, recordmodel.RecordListQuery{
-		Page: 5, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}, SkipTotal: true, AfterID: "r7",
+		Page: 5, PageSize: 2, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}, SkipTotal: true, AfterID: "8",
 	})
 	if err != nil || lastWithoutTotal.Total != 0 || lastWithoutTotal.HasNext || len(lastWithoutTotal.Items) != 2 {
 		t.Fatalf("expected count-free final page, got %#v err=%v", lastWithoutTotal, err)
@@ -132,18 +126,12 @@ func TestUpdateRecordWherePreventsStaleRecordTimerLeaseClaim(t *testing.T) {
 	store := openStoreForGeneratedListTest(t)
 	defer store.Close()
 
-	if _, err := store.DB().Exec("CREATE TABLE " + store.Identifier("record_timer_claim") + " (" +
-		store.Identifier("workspace_id") + " TEXT NOT NULL, " +
-		store.Identifier("id") + " TEXT PRIMARY KEY, " +
-		store.Identifier("created_at") + " TEXT NOT NULL, " +
-		store.Identifier("updated_at") + " TEXT NOT NULL, " +
-		store.Identifier("status") + " TEXT NOT NULL, " +
-		store.Identifier("lease_owner") + " TEXT, " +
-		store.Identifier("lease_expires_at") + " TEXT, " +
-		store.Identifier("attempt") + " REAL" +
-		")"); err != nil {
-		t.Fatalf("create record timer claim table: %v", err)
-	}
+	createGeneratedRecordTable(t, store, "record_timer_claim",
+		ormschema.Column("status", ormschema.Text()).NotNull(),
+		ormschema.Column("lease_owner", ormschema.Text()),
+		ormschema.Column("lease_expires_at", ormschema.BigInt()),
+		ormschema.Column("attempt", ormschema.Decimal(38, 10)),
+	)
 	object := definitionmodel.ObjectSchema{
 		Key:  "record_timer_claim",
 		Name: "Record Timer Claim",
@@ -155,7 +143,7 @@ func TestUpdateRecordWherePreventsStaleRecordTimerLeaseClaim(t *testing.T) {
 		},
 	}
 	record := recordmodel.Record{
-		ID:        "timer_1",
+		RecordID:  "timer_1",
 		CreatedAt: "2026-01-01T00:00:00Z",
 		UpdatedAt: "2026-01-01T00:00:00Z",
 		Data: map[string]any{
@@ -306,7 +294,7 @@ func openStoreForGeneratedListTest(t *testing.T) *RuntimeStore {
 func insertGeneratedScopedRecord(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema, id, name, status, orgID string) {
 	t.Helper()
 	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{
-		ID:         id,
+		RecordID:   id,
 		CreatedAt:  "2026-01-01T00:00:00Z",
 		UpdatedAt:  "2026-01-01T00:00:00Z",
 		OwnerOrgID: orgID,

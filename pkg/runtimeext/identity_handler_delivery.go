@@ -82,7 +82,7 @@ func (value IdentityHandlerDeliveryCapability) Valid() bool {
 }
 
 type IdentityUser struct {
-	ID            string
+	UserID        string
 	Name          string
 	GivenName     string
 	MiddleName    string

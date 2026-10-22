@@ -48,7 +48,7 @@ func fieldQueryFixture() (definitionmodel.ObjectSchema, principalmodel.Principal
 		},
 	})
 	repository := &fieldQueryRepositoryProbe{readRepositoryProbe: readRepositoryProbe{page: recordmodel.RecordPageResult{
-		Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"message": "public", "reason": "private", "phone": "12345678901"}}}, Total: 1,
+		Items: []recordmodel.Record{{RecordID: "one", Data: map[string]any{"message": "public", "reason": "private", "phone": "12345678901"}}}, Total: 1,
 	}}}
 	service := NewRecordReadDomainService(RecordReadDependencies{Repository: repository, Policy: fieldQueryPolicyProbe{readPolicyProbe{object: object, allow: true}}})
 	return object, principal, repository, service
@@ -100,7 +100,7 @@ func TestReadQuerySearchWithNoClearFieldsFailsClosed(t *testing.T) {
 
 func TestReadQueryPreservesPublicFiltersMetadataAndActionAuthority(t *testing.T) {
 	object, principal, repository, service := fieldQueryFixture()
-	public := recordmodel.RecordListQuery{Filters: map[string]any{"message": "public", "id__in": []any{"one"}}, Sort: []recordmodel.RecordSortRule{{Field: "created_at", Direction: "desc"}}}
+	public := recordmodel.RecordListQuery{Filters: map[string]any{"message": "public", "record_id__in": []any{"one"}}, Sort: []recordmodel.RecordSortRule{{Field: "created_at", Direction: "desc"}}}
 	if _, err := service.ListRecords(t.Context(), object.Key, public, principal); err != nil {
 		t.Fatal(err)
 	}

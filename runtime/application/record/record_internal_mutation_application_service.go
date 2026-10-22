@@ -126,7 +126,7 @@ func (s *RecordUpdateApplicationService) PlanConditionalUpdateLockedRecord(ctx c
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	if strings.TrimSpace(record.ID) == "" {
+	if strings.TrimSpace(record.RecordID) == "" {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, recordUpdateError(apperror.KindBadRequest, "backend.record.id_required", nil)
 	}
 	allowed, err := s.canAccessScope(ctx, authorizationPrincipal, object, record, false)

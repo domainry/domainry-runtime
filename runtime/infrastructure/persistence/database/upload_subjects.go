@@ -2,9 +2,9 @@ package database
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -33,8 +33,8 @@ func (s *RuntimeStore) InsertUploadSubject(ctx context.Context, value uploadappl
 	if err != nil {
 		return err
 	}
-	columns := []string{"id", "artifact_id", "owner", "kind", "resource_type", "resource_id", "field_key", "metadata_json", "created_at"}
-	values := []any{uploadSubjectBindingID(value.WorkspaceID, value.Filename), value.FileID, foundationartifact.OwnerUploads, foundationartifact.BindingSubject, uploadSubjectResourceType, value.UserID, value.FieldKey, string(metadata), time.Now().UTC().UnixMilli()}
+	columns := []string{"artifact_id", "owner", "kind", "resource_type", "resource_id", "field_key", "metadata_json", "created_at"}
+	values := []any{value.FileID, foundationartifact.OwnerUploads, foundationartifact.BindingSubject, uploadSubjectResourceType, value.UserID, value.FieldKey, string(metadata), time.Now().UTC().UnixMilli()}
 	builder, err := s.SubjectEvidenceInsertBuilder(value.WorkspaceID, foundationartifact.BindingTableName, columns, values, s.SubjectActorWriteAllowed(value.WorkspaceID, value.UserID))
 	if err != nil {
 		return err
@@ -62,27 +62,56 @@ func (s *RuntimeStore) FindUploadSubject(ctx context.Context, workspace, identif
 	if strings.TrimSpace(workspace) == "" || strings.TrimSpace(identifier) == "" {
 		return value, fmt.Errorf("upload subject scope is required")
 	}
+	base := query.And(
+		query.Equal("owner", foundationartifact.OwnerUploads),
+		query.Equal("kind", foundationartifact.BindingSubject),
+		query.Equal("resource_type", uploadSubjectResourceType),
+	)
 	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, foundationartifact.BindingTableName, workspace).
 		Columns("workspace_id", "artifact_id", "resource_id", "field_key", "metadata_json").
-		Where(query.And(
-			query.Equal("owner", foundationartifact.OwnerUploads),
-			query.Equal("kind", foundationartifact.BindingSubject),
-			query.Equal("resource_type", uploadSubjectResourceType),
-			query.Or(query.Equal("artifact_id", identifier), query.Equal("id", uploadSubjectBindingID(workspace, identifier))),
-		)).Limit(1).Build()
+		Where(query.And(base, query.Equal("artifact_id", identifier))).Limit(1).Build()
 	if err != nil {
 		return value, err
 	}
 	var metadata string
-	if err = s.db.QueryRowContext(ctx, statement, args...).Scan(&value.WorkspaceID, &value.FileID, &value.UserID, &value.FieldKey, &metadata); err != nil {
+	if err = s.db.QueryRowContext(ctx, statement, args...).Scan(&value.WorkspaceID, &value.FileID, &value.UserID, &value.FieldKey, &metadata); err == nil {
+		return decodeUploadSubject(value, metadata)
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return value, err
 	}
-	var decoded uploadSubjectBindingMetadata
-	if err = json.Unmarshal([]byte(metadata), &decoded); err != nil {
-		return value, fmt.Errorf("decode upload subject binding: %w", err)
+	statement, args, err = query.NewWorkspaceSelectBuilder(s.SQLRenderer, foundationartifact.BindingTableName, workspace).
+		Columns("workspace_id", "artifact_id", "resource_id", "field_key", "metadata_json").
+		Where(base).OrderBy(query.Ascending("artifact_id")).Limit(10001).Build()
+	if err != nil {
+		return value, err
 	}
-	value.Filename, value.ObjectKey, value.SHA256 = decoded.Filename, decoded.ObjectKey, decoded.SHA256
-	return value, nil
+	rows, err := s.db.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return value, err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+		if count > 10000 {
+			return value, fmt.Errorf("upload subject lookup limit exceeded")
+		}
+		var candidate uploadapplication.UploadSubjectBinding
+		if err = rows.Scan(&candidate.WorkspaceID, &candidate.FileID, &candidate.UserID, &candidate.FieldKey, &metadata); err != nil {
+			return value, err
+		}
+		candidate, err = decodeUploadSubject(candidate, metadata)
+		if err != nil {
+			return value, err
+		}
+		if candidate.Filename == identifier {
+			return candidate, nil
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return value, err
+	}
+	return value, sql.ErrNoRows
 }
 
 // SubjectUploadReferences includes abandoned, replaced and current uploads.
@@ -92,12 +121,12 @@ func (s *RuntimeStore) SubjectUploadReferences(ctx context.Context, workspace, s
 		return nil, fmt.Errorf("upload subject scope is required")
 	}
 	statement, args, err := query.NewWorkspaceSelectBuilder(s.SQLRenderer, foundationartifact.BindingTableName, workspace).
-		Columns("id", "metadata_json").Where(query.And(
+		Columns("artifact_id", "metadata_json").Where(query.And(
 		query.Equal("owner", foundationartifact.OwnerUploads),
 		query.Equal("kind", foundationartifact.BindingSubject),
 		query.Equal("resource_type", uploadSubjectResourceType),
 		query.Equal("resource_id", subject),
-	)).OrderBy(query.Ascending("id")).Limit(10001).Build()
+	)).OrderBy(query.Ascending("artifact_id")).Limit(10001).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +159,11 @@ func (s *RuntimeStore) SubjectUploadReferences(ctx context.Context, workspace, s
 	return refs, nil
 }
 
-func uploadSubjectBindingID(workspace, filename string) string {
-	digest := sha256.Sum256([]byte(strings.TrimSpace(workspace) + "\x00" + strings.TrimSpace(filename)))
-	return "upload-subject-" + hex.EncodeToString(digest[:])
+func decodeUploadSubject(value uploadapplication.UploadSubjectBinding, metadata string) (uploadapplication.UploadSubjectBinding, error) {
+	var decoded uploadSubjectBindingMetadata
+	if err := json.Unmarshal([]byte(metadata), &decoded); err != nil {
+		return uploadapplication.UploadSubjectBinding{}, fmt.Errorf("decode upload subject binding: %w", err)
+	}
+	value.Filename, value.ObjectKey, value.SHA256 = decoded.Filename, decoded.ObjectKey, decoded.SHA256
+	return value, nil
 }

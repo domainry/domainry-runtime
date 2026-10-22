@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v55"
-	ContractSHA256  = "6e04519b60adff2662730668fb9e2ae2847540199f25407c58519292bee18f10"
+	ContractVersion = "runtimeext-v56"
+	ContractSHA256  = "1329e0e0203d48c660fe85a153f758f69be7476c7f6db1be1f32e19d6f7a08de"
 )
 
-const contractDefinitionV55 = `runtimeext-v55
+const contractDefinitionV56 = `runtimeext-v56
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -191,7 +191,7 @@ func stableContractTypeName(current reflect.Type) string {
 // by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV55)
+	definition.WriteString(contractDefinitionV56)
 	for _, current := range contractStructTypes() {
 		definition.WriteString(current.Name())
 		definition.WriteByte('{')

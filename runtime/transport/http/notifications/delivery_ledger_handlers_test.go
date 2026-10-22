@@ -53,8 +53,8 @@ func (s *notificationDeliveryLedgerStub) ListPublicationMessages(_ context.Conte
 func TestNotificationDeliveryLedgerProjectsOnlyNotificationOutbox(t *testing.T) {
 	handler, response, _ := newNotificationHTTPHandler(&notificationHTTPRepository{})
 	ledger := &notificationDeliveryLedgerStub{values: []publicationmodel.Message{
-		{ID: "notification-1", WorkspaceID: "workspace-1", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send_email", Status: "delivered", Payload: map[string]any{"template_key": "account.welcome", "recipient": "person@example.com"}, ResponseRef: "provider-1", AttemptCount: 1},
-		{ID: "automation-1", ConnectorKey: "__automation__", Operation: "record.after_create", Status: "queued", Payload: map[string]any{"rule_key": "rule-1"}},
+		{MessageID: "notification-1", WorkspaceID: "workspace-1", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send_email", Status: "delivered", Payload: map[string]any{"template_key": "account.welcome", "recipient": "person@example.com"}, ResponseRef: "provider-1", AttemptCount: 1},
+		{MessageID: "automation-1", ConnectorKey: "__automation__", Operation: "record.after_create", Status: "queued", Payload: map[string]any{"rule_key": "rule-1"}},
 	}}
 	handler.deliveryLedger = ledger
 
@@ -109,7 +109,7 @@ func TestNotificationDeliveryProjectionRejectsBlankTemplateKeys(t *testing.T) {
 	if notificationOutboxMessage(publicationmodel.Message{Payload: map[string]any{"template_key": " "}}) {
 		t.Fatal("blank template key must not enter the notification ledger")
 	}
-	projected := projectNotificationDelivery(publicationmodel.Message{ID: "delivery", ConnectorKey: "email", Status: "sent", Payload: map[string]any{"template_key": "notice"}})
+	projected := projectNotificationDelivery(publicationmodel.Message{MessageID: "delivery", ConnectorKey: "email", Status: "sent", Payload: map[string]any{"template_key": "notice"}})
 	if projected.ID != "delivery" || projected.ConnectorKey != "email" || projected.Status != "sent" {
 		t.Fatalf("projection = %#v", projected)
 	}

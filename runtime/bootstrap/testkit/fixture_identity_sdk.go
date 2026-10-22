@@ -66,7 +66,7 @@ func NewIdentityFactory(config IdentityFixtureConfig) identitysdk.Factory {
 	}
 	users := map[string]identitysdk.User{}
 	for _, user := range config.Users {
-		id := strings.TrimSpace(string(user.ID))
+		id := strings.TrimSpace(user.UserID)
 		if id == "" {
 			continue
 		}
@@ -86,8 +86,8 @@ func NewDefaultIdentityFactory() identitysdk.Factory {
 	return NewIdentityFactory(IdentityFixtureConfig{
 		Roles: []IdentityFixtureRole{{Key: "admin", Name: "Administrator", Permissions: defaultIdentityFixturePermissions(), AllowAllBusinessData: true}},
 		Users: []identitysdk.User{
-			{ID: "admin", Name: "Administrator", Status: "active"},
-			{ID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active"},
+			{UserID: "admin", Name: "Administrator", Status: "active"},
+			{UserID: "runtime_fixture_user", Name: "Runtime fixture user", Email: "runtime-fixture@example.com", Status: "active"},
 		},
 		UserRoleAssignments: map[string][]string{"admin": {"admin"}, "runtime_fixture_user": {"admin"}},
 	})
@@ -210,7 +210,7 @@ func (binding *fixtureIdentityBinding) CurrentSession(_ context.Context, request
 	role := binding.roles[session.role]
 	return identitysdk.SessionView{
 		SessionID: "plane-testkit-session", WorkspaceID: binding.application.WorkspaceID, SubjectID: identitysdk.SubjectID(session.subject), AuthorizationRevision: "plane-testkit-authorization",
-		User: binding.users[session.subject], Roles: []identitysdk.Role{{ID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}}, DefaultRole: role.Key, Permissions: append([]string(nil), role.Permissions...),
+		User: binding.users[session.subject], Roles: []identitysdk.Role{{RoleID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}}, DefaultRole: role.Key, Permissions: append([]string(nil), role.Permissions...),
 	}, nil
 }
 
@@ -271,7 +271,7 @@ func (binding *fixtureIdentityBinding) Resolve(ctx context.Context, request iden
 	bundle := binding.accessBundle(subject, roleKey)
 	principal := identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: string(binding.application.WorkspaceID), UserID: subject, RoleKey: roleKey,
-		AuthorizationRevision: "plane-testkit-authorization", User: binding.users[subject], Roles: []identitysdk.Role{{ID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}},
+		AuthorizationRevision: "plane-testkit-authorization", User: binding.users[subject], Roles: []identitysdk.Role{{RoleID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}},
 		Permissions: append([]string(nil), role.Permissions...), AccessBundle: &bundle,
 	}
 	return identitysdk.PrincipalResolution{Principal: principal, AccessBundle: bundle}, nil
@@ -375,8 +375,8 @@ func (binding *fixtureIdentityBinding) resolveWorkflowWorkload(request identitys
 	bundle := binding.accessBundle(string(subjectID), current.RoleKey)
 	principal := identitysdk.Principal{
 		ContractVersion: identitysdk.PrincipalContextContractVersion, Known: true, WorkspaceID: string(binding.application.WorkspaceID), UserID: string(subjectID), RoleKey: current.RoleKey,
-		AuthorizationRevision: "plane-testkit-workload-authorization", User: identitysdk.User{ID: string(subjectID), Name: workflowKey, Status: "active"},
-		Roles: []identitysdk.Role{{ID: current.RoleKey, Key: current.RoleKey, Label: role.Name, Status: "active"}}, Permissions: append([]string(nil), role.Permissions...), AccessBundle: &bundle,
+		AuthorizationRevision: "plane-testkit-workload-authorization", User: identitysdk.User{UserID: string(subjectID), Name: workflowKey, Status: "active"},
+		Roles: []identitysdk.Role{{RoleID: current.RoleKey, Key: current.RoleKey, Label: role.Name, Status: "active"}}, Permissions: append([]string(nil), role.Permissions...), AccessBundle: &bundle,
 		Workload: &identitysdk.WorkflowWorkloadPrincipalContext{
 			WorkflowKey: workflowKey, DefinitionVersionID: workload.DefinitionVersionID, DefinitionVersion: workload.DefinitionVersion,
 			ReleaseID: workload.ReleaseID, ReleaseDigest: workload.ReleaseDigest, TaskID: strings.TrimSpace(workload.TaskID), SourceEventID: strings.TrimSpace(workload.SourceEventID), InitiatorSubjectID: workload.InitiatorSubjectID,
@@ -420,7 +420,7 @@ func (binding *fixtureIdentityBinding) ListRoles(context.Context, identitysdk.Pr
 	roles := make([]identitysdk.Role, 0, len(keys))
 	for _, key := range keys {
 		role := binding.roles[key]
-		roles = append(roles, identitysdk.Role{ID: role.Key, Key: role.Key, Label: role.Name, Status: "active"})
+		roles = append(roles, identitysdk.Role{RoleID: role.Key, Key: role.Key, Label: role.Name, Status: "active"})
 	}
 	return roles, nil
 }
@@ -564,7 +564,7 @@ func (binding *fixtureIdentityBinding) authSession(token, subject, roleKey strin
 	role := binding.roles[roleKey]
 	return identitysdk.AuthSession{
 		SessionID: "plane-testkit-session", WorkspaceID: string(binding.application.WorkspaceID), AccessToken: token, RefreshToken: token, TokenType: "Bearer", ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano),
-		User: binding.users[subject], Roles: []identitysdk.Role{{ID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}}, DefaultRole: role.Key, Permissions: append([]string(nil), role.Permissions...),
+		User: binding.users[subject], Roles: []identitysdk.Role{{RoleID: role.Key, Key: role.Key, Label: role.Name, Status: "active"}}, DefaultRole: role.Key, Permissions: append([]string(nil), role.Permissions...),
 	}
 }
 

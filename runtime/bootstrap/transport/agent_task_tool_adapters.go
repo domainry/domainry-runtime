@@ -65,7 +65,7 @@ func (a agentTaskToolQueryAdapter) expandRelations(ctx context.Context, objectKe
 			if !allowed {
 				return nil, apperror.New(apperror.KindForbidden, "agent.tool.relation_denied", nil, nil)
 			}
-			result, err := a.records.RelatedRecords(ctx, objectKey, record.ID, relation.ObjectKey, recordservice.RecordRelatedRecordsRequest{Page: 1, PageSize: relation.Limit, FieldKey: relation.FieldKey}, principal)
+			result, err := a.records.RelatedRecords(ctx, objectKey, record.RecordID, relation.ObjectKey, recordservice.RecordRelatedRecordsRequest{Page: 1, PageSize: relation.Limit, FieldKey: relation.FieldKey}, principal)
 			if err != nil {
 				return nil, err
 			}

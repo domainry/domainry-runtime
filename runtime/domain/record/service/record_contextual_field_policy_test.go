@@ -23,7 +23,7 @@ func (r *contextualFieldRepositoryProbe) ListRecords(_ context.Context, _ string
 	if query.ScopeExpression == nil || query.ScopeExpression.FieldKey != "owner_id" || len(query.ScopeExpression.Path) != 1 {
 		return recordmodel.RecordPageResult{}, nil
 	}
-	return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "member-1"}}, Total: 1}, nil
+	return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "member-1"}}, Total: 1}, nil
 }
 
 func TestContextualFieldPolicyBatchesOnePredicateForPageFieldsAndRecords(t *testing.T) {
@@ -43,8 +43,8 @@ func TestContextualFieldPolicyBatchesOnePredicateForPageFieldsAndRecords(t *test
 	repository := &contextualFieldRepositoryProbe{}
 	service := NewRecordContextualFieldPolicyDomainService(RecordContextualFieldPolicyDependencies{Repository: repository, Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object, account} }})
 	records, _, err := service.ApplyReadPage(t.Context(), principal, object, []recordmodel.Record{
-		{ID: "member-1", Data: map[string]any{"account_id": "account-1", "phone": "10000000004", "email": "owner@example.com"}},
-		{ID: "member-2", Data: map[string]any{"account_id": "account-2", "phone": "10000000005", "email": "other@example.com"}},
+		{RecordID: "member-1", Data: map[string]any{"account_id": "account-1", "phone": "10000000004", "email": "owner@example.com"}},
+		{RecordID: "member-2", Data: map[string]any{"account_id": "account-2", "phone": "10000000005", "email": "other@example.com"}},
 	}, "read")
 	if err != nil {
 		t.Fatal(err)
@@ -67,10 +67,10 @@ func TestContextualFieldPolicyValidatesWriteAgainstCandidateRecord(t *testing.T)
 		{ObjectKey: "profile", FieldKey: "health_note", Write: false, Policies: []accessfixture.FieldRuleFixture{{Key: "owner-write", Priority: 100, Actions: []string{"write"}, Effect: "allow", Predicate: predicate}}},
 	}})
 	service := NewRecordContextualFieldPolicyDomainService(RecordContextualFieldPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} }})
-	if err := service.ValidateWrite(t.Context(), principal, object, recordmodel.Record{ID: "new-profile", Data: map[string]any{"owner_id": "user-1"}}, map[string]any{"health_note": "allowed"}); err != nil {
+	if err := service.ValidateWrite(t.Context(), principal, object, recordmodel.Record{RecordID: "new-profile", Data: map[string]any{"owner_id": "user-1"}}, map[string]any{"health_note": "allowed"}); err != nil {
 		t.Fatalf("owner candidate write denied: %v", err)
 	}
-	if err := service.ValidateWrite(t.Context(), principal, object, recordmodel.Record{ID: "other-profile", Data: map[string]any{"owner_id": "user-2"}}, map[string]any{"health_note": "denied"}); err == nil {
+	if err := service.ValidateWrite(t.Context(), principal, object, recordmodel.Record{RecordID: "other-profile", Data: map[string]any{"owner_id": "user-2"}}, map[string]any{"health_note": "denied"}); err == nil {
 		t.Fatal("non-owner candidate write should be denied")
 	}
 }
@@ -84,7 +84,7 @@ func TestContextualFieldPolicyKeepsSensitiveFieldClosedWithoutExactPolicy(t *tes
 		{ObjectKey: "contact", FieldKey: "*", Read: true, Write: true},
 	}})
 	service := NewRecordContextualFieldPolicyDomainService(RecordContextualFieldPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{object} }})
-	record := recordmodel.Record{ID: "contact-1", Data: map[string]any{"name": "Ada", "primary_email": "ada@example.test"}}
+	record := recordmodel.Record{RecordID: "contact-1", Data: map[string]any{"name": "Ada", "primary_email": "ada@example.test"}}
 
 	projected, _, err := service.ApplyRead(t.Context(), principal, object, record, "read")
 	if err != nil {

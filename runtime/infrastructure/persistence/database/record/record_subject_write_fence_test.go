@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	sharedsubject "github.com/domainry/domainry-foundation/subjectlifecycle"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -11,25 +13,18 @@ import (
 
 func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T) {
 	store := openRuntimeStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE member_profile(workspace_id TEXT NOT NULL,id TEXT NOT NULL,created_at BIGINT NOT NULL,updated_at BIGINT NOT NULL,name TEXT,create_by TEXT,update_by TEXT,owner_user_id TEXT,PRIMARY KEY(workspace_id,id))`); err != nil {
+	createTestRecordTable(t, store, "member_profile", ormschema.Column("name", ormschema.Text()))
+	if err := sharedsubject.EnsureSchema(t.Context(), store.SQLRenderer, store); err != nil {
 		t.Fatal(err)
-	}
-	for _, statement := range []string{
-		`CREATE TABLE _subject_requests (id TEXT NOT NULL, workspace_id TEXT NOT NULL, request_type TEXT NOT NULL, kind TEXT NOT NULL, resolved_identity TEXT NOT NULL, PRIMARY KEY(workspace_id,id))`,
-		`CREATE TABLE _subject_steps (workspace_id TEXT NOT NULL, request_id TEXT NOT NULL, owner TEXT NOT NULL, operation TEXT NOT NULL, payload_json TEXT NOT NULL, completed_at BIGINT NOT NULL, PRIMARY KEY(workspace_id,request_id,owner,operation))`,
-	} {
-		if _, err := store.DB().ExecContext(t.Context(), statement); err != nil {
-			t.Fatal(err)
-		}
 	}
 	object := definitionmodel.ObjectSchema{Key: "member_profile", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text", Config: map[string]any{"localized": true}}}}
 	records := NewRecordStore(store)
-	for _, item := range []struct{ workspace, id string }{{"workspace-a", "alice"}, {"workspace-a", "bob"}, {"workspace-b", "alice"}} {
-		if err := records.InsertRecord(t.Context(), item.workspace, object, recordmodel.Record{ID: item.id, CreatedAt: "before", UpdatedAt: "before", Data: map[string]any{"name": "cleaned"}}); err != nil {
+	for _, item := range []struct{ workspace, id string }{{"workspace-a", "alice"}, {"workspace-a", "bob"}, {"workspace-b", "alice-b"}} {
+		if err := records.InsertRecord(t.Context(), item.workspace, object, recordmodel.Record{RecordID: item.id, CreatedAt: "before", UpdatedAt: "before", Data: map[string]any{"name": "cleaned"}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(id,workspace_id,request_type,kind,resolved_identity) VALUES('erase-alice','workspace-a','subject_request','erase','alice')`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_requests(request_id,workspace_id,request_type,kind,status,subject_id,resolved_identity,updated_at,payload_json) VALUES('erase-alice','workspace-a','subject_request','erase','completed','alice','alice',?,'{}')`, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _subject_steps(workspace_id,request_id,owner,operation,payload_json,completed_at) VALUES('workspace-a','erase-alice','lifecycle','erase_fence','{}',?)`, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()); err != nil {
@@ -40,7 +35,7 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 		t.Fatal(err)
 	}
 	store.BindSubjectLifecyclePersistence()
-	late := recordmodel.Record{ID: "alice", CreatedAt: "before", UpdatedAt: "late", Data: map[string]any{"name": "alice@private.example"}}
+	late := recordmodel.Record{RecordID: "alice", CreatedAt: "before", UpdatedAt: "late", Data: map[string]any{"name": "alice@private.example"}}
 	if err := records.UpdateRecord(t.Context(), "workspace-a", object, late); err == nil {
 		t.Fatal("raw update restored erased fields")
 	}
@@ -59,7 +54,7 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 	if err == nil {
 		t.Fatal("localized insert restored erased fields")
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `DELETE FROM member_profile WHERE workspace_id='workspace-a' AND id='alice'`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `DELETE FROM member_profile WHERE workspace_id='workspace-a' AND member_profile_id='alice'`); err != nil {
 		t.Fatal(err)
 	}
 	if err := records.InsertRecord(t.Context(), "workspace-a", object, late); err == nil {
@@ -68,13 +63,13 @@ func TestErasedRecordCannotBeRecreatedByRawCommitOrLocalizedWriters(t *testing.T
 	if err := records.CommitRecordMutation(t.Context(), "workspace-a", transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: late}); err == nil {
 		t.Fatal("commit insert recreated erased root")
 	}
-	late.ID, late.CreateBy = "new-alice-record", "alice"
+	late.RecordID, late.CreateBy = "new-alice-record", "alice"
 	if err := records.InsertRecord(t.Context(), "workspace-a", object, late); err == nil {
 		t.Fatal("raw insert accepted erased creator")
 	}
-	for _, item := range []struct{ workspace, id string }{{"workspace-a", "bob"}, {"workspace-b", "alice"}} {
+	for _, item := range []struct{ workspace, id string }{{"workspace-a", "bob"}, {"workspace-b", "alice-b"}} {
 		peer := late
-		peer.ID, peer.CreateBy = item.id, ""
+		peer.RecordID, peer.CreateBy = item.id, ""
 		if err := records.UpdateRecord(t.Context(), item.workspace, object, peer); err != nil {
 			t.Fatal("peer write was denied", item, err)
 		}

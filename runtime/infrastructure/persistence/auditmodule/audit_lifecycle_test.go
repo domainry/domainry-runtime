@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -34,17 +35,18 @@ func TestAuditLifecyclePreservesHeldEvidenceAndPurgesOnlyArchivedExpiredRows(t *
 		t.Fatal(err)
 	}
 	defer store.Close()
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _audit_events (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id,id))`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE _audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, audit_event_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL, created_at INTEGER NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)
 	old := now.Add(-8 * 365 * 24 * time.Hour).UnixMilli()
 	fresh := now.Add(-24 * time.Hour).UnixMilli()
-	for _, row := range []struct {
+	rows := []struct {
 		id        string
 		createdAt int64
-	}{{"held", old}, {"expired", old}, {"fresh", fresh}} {
-		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _audit_events (workspace_id,id,created_at) VALUES (?,?,?)`, "workspace-a", row.id, row.createdAt); err != nil {
+	}{{auditLifecycleTestID(t, "held"), old}, {auditLifecycleTestID(t, "expired"), old}, {auditLifecycleTestID(t, "fresh"), fresh}}
+	for _, row := range rows {
+		if _, err := store.DB().ExecContext(t.Context(), `INSERT INTO _audit_events (workspace_id,audit_event_id,created_at) VALUES (?,?,?)`, "workspace-a", row.id, row.createdAt); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -52,9 +54,9 @@ func TestAuditLifecyclePreservesHeldEvidenceAndPurgesOnlyArchivedExpiredRows(t *
 	executor := LifecycleExecutor(store, archives)
 	policy := lifecyclemodel.PolicyVersion{Policy: lifecyclemodel.RetentionPolicy{Key: "audit.evidence.v1", DefaultRetention: 7 * 365 * 24 * time.Hour}}
 	result, err := executor.ProcessBatch(t.Context(), lifecyclemodel.CleanupJob{
-		ID: "cleanup-audit", WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now,
+		JobID: auditLifecycleEntityID(t, "cleanup", "cleanup-audit"), WorkspaceID: "workspace-a", Operation: lifecyclemodel.OperationPurge, UpdatedAt: now,
 	}, policy, []lifecyclemodel.LegalHold{{
-		ID: "hold-audit", WorkspaceID: "workspace-a", Owner: "audit", ResourceType: "_audit_events", ResourceID: "held", StartsAt: now.Add(-time.Hour), ReviewAt: now.Add(time.Hour),
+		HoldID: auditLifecycleEntityID(t, "hold", "hold-audit"), WorkspaceID: "workspace-a", Owner: "audit", ResourceType: "_audit_events", ResourceID: rows[0].id, StartsAt: now.Add(-time.Hour), ReviewAt: now.Add(time.Hour),
 	}}, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -62,10 +64,23 @@ func TestAuditLifecyclePreservesHeldEvidenceAndPurgesOnlyArchivedExpiredRows(t *
 	if result.Scanned != 2 || result.Archived != 1 || result.Purged != 1 || result.Skipped != 1 || !result.Done {
 		t.Fatalf("cleanup result=%+v", result)
 	}
-	for id, want := range map[string]int{"held": 1, "expired": 0, "fresh": 1} {
+	for id, want := range map[string]int{rows[0].id: 1, rows[1].id: 0, rows[2].id: 1} {
 		var count int
-		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE workspace_id = ? AND id = ?`, "workspace-a", id).Scan(&count); err != nil || count != want {
+		if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE workspace_id = ? AND audit_event_id = ?`, "workspace-a", id).Scan(&count); err != nil || count != want {
 			t.Fatalf("event %s count=%d want=%d err=%v", id, count, want, err)
 		}
 	}
+}
+
+func auditLifecycleTestID(t *testing.T, label string) string {
+	return auditLifecycleEntityID(t, "audevt", label)
+}
+
+func auditLifecycleEntityID(t *testing.T, prefix, label string) string {
+	t.Helper()
+	id, err := entityid.Derive(prefix, "runtime-audit-lifecycle-test", label)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

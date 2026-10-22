@@ -16,7 +16,7 @@ import (
 func TestRecordNotificationRecipientExposesOnlyGrantedRuntimeOwnerIdentity(t *testing.T) {
 	execution := &businessActionExecution{
 		objectGrants:    []runtimeext.ActionObjectCapability{{ObjectKey: "lead", Operations: []string{runtimeext.RecordNotificationRecipientOperation}}},
-		observedRecords: map[string]recordmodel.Record{"lead\x00lead-1": {ID: "lead-1", OwnerUserID: "sales-1", OwnerOrgID: "department-1", Data: map[string]any{"name": "private"}}},
+		observedRecords: map[string]recordmodel.Record{"lead\x00lead-1": {RecordID: "lead-1", OwnerUserID: "sales-1", OwnerOrgID: "department-1", Data: map[string]any{"name": "private"}}},
 	}
 	recipient, err := execution.ResolveRecordNotificationRecipient(context.Background(), runtimeext.RecordNotificationRecipientRequest{ObjectKey: "lead", RecordID: "lead-1"})
 	if err != nil || recipient != "sales-1" {
@@ -43,7 +43,7 @@ func TestRecordNotificationRecipientUsesCurrentActionReadAndCallerRecordScope(t 
 		objectGrants: []runtimeext.ActionObjectCapability{{ObjectKey: "lead", Operations: []string{runtimeext.RecordNotificationRecipientOperation}}},
 		dependencies: BusinessHandlerExecutionDependencies{GetRecord: func(_ context.Context, _ string, recordID string, got principalmodel.Principal) (recordmodel.Record, error) {
 			authorized = got
-			return recordmodel.Record{ID: recordID, OwnerUserID: "sales-1", OwnerOrgID: "east", Data: map[string]any{"private": "hidden"}}, nil
+			return recordmodel.Record{RecordID: recordID, OwnerUserID: "sales-1", OwnerOrgID: "east", Data: map[string]any{"private": "hidden"}}, nil
 		}},
 	}
 	recipient, err := execution.ResolveRecordNotificationRecipient(t.Context(), runtimeext.RecordNotificationRecipientRequest{ObjectKey: "lead", RecordID: "lead-1"})

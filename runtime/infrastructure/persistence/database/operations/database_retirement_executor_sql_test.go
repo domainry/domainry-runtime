@@ -3,6 +3,7 @@ package operations
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 	"time"
@@ -97,7 +98,7 @@ func TestDatabaseRetirementExecutionSQLStages(t *testing.T) {
 		t.Fatal("invalid evidence accepted")
 	}
 	mismatch := plan
-	mismatch.RetirementID = "other"
+	mismatch.OperationID = "other"
 	if _, err := base.ExecuteDatabaseRetirement(t.Context(), retirement, mismatch); err == nil {
 		t.Fatal("identity mismatch accepted")
 	}
@@ -133,7 +134,7 @@ func TestDatabaseRetirementExecutionSQLStages(t *testing.T) {
 	}
 	unsafe := retirement
 	unsafe.Object.Name = "unsafe;drop"
-	unsafe.ID = "retire-unsafe"
+	unsafe.OperationID = "retire-unsafe"
 	unsafePreview := *base
 	unsafePreview.inspect = func(context.Context, *sql.DB, datamigration.Engine, string) (datamigration.Inventory, error) {
 		return datamigration.Inventory{Engine: datamigration.EngineSQLite, Tables: []datamigration.TableInventory{{Name: unsafe.Object.Name}}}, nil
@@ -149,7 +150,7 @@ func TestDatabaseRetirementExecutionSQLStages(t *testing.T) {
 		{name: "begin", state: operationsSQLState{beginErr: errOperationsSQL}},
 		{name: "lock", state: operationsSQLState{execSteps: []operationsSQLExecStep{{err: errOperationsSQL}}}},
 		{name: "statement", state: operationsSQLState{execSteps: []operationsSQLExecStep{{rows: 1}, {err: errOperationsSQL}}}},
-		{name: "commit", state: operationsSQLState{execSteps: []operationsSQLExecStep{{rows: 1}, {rows: 1}}, commitErr: errOperationsSQL}},
+		{name: "commit", state: operationsSQLState{execSteps: []operationsSQLExecStep{{rows: 1}, {rows: 1}}, querySteps: []operationsSQLQueryStep{{columns: []string{"id"}, rows: [][]driver.Value{{int64(1)}}}}, commitErr: errOperationsSQL}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			executor := withExecutorSQL(t, *base, &test.state)
@@ -171,7 +172,7 @@ func TestDatabaseRetirementExecutionSQLStages(t *testing.T) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	mysqlPlan.Statements = []string{"DROP TABLE one"}
-	state = operationsSQLState{}
+	state = operationsSQLState{querySteps: []operationsSQLQueryStep{{columns: []string{"id"}, rows: [][]driver.Value{{int64(1)}}}}}
 	executor = withExecutorSQL(t, *base, &state)
 	if result, err := executor.ExecuteDatabaseRetirement(t.Context(), mysqlRetirement, mysqlPlan); err != nil || result.Dirty {
 		t.Fatalf("successful MySQL result=%+v err=%v", result, err)

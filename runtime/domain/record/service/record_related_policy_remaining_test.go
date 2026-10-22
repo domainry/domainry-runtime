@@ -64,7 +64,7 @@ func TestValidateRecordPoliciesMissingAndErrorBranches(t *testing.T) {
 	assertRecordCause(t, err, fault)
 
 	repository.err, repository.found = nil, true
-	repository.record = recordmodel.Record{ID: "account-1", Data: map[string]any{"state": "active"}}
+	repository.record = recordmodel.Record{RecordID: "account-1", Data: map[string]any{"state": "active"}}
 	if err := validator.ValidateRecordPolicies(t.Context(), object, map[string]any{"account_id": "account-1"}, "update", principal); err != nil {
 		t.Fatalf("custom status field rejected: %v", err)
 	}
@@ -89,13 +89,13 @@ func TestValidateNumericLimitPoliciesPropagatesRelationAndMatchFailures(t *testi
 	assertRecordCause(t, err, fault)
 
 	repository.err, repository.found = nil, true
-	repository.record = recordmodel.Record{ID: "source-1", Data: map[string]any{"code": "A"}}
+	repository.record = recordmodel.Record{RecordID: "source-1", Data: map[string]any{"code": "A"}}
 	repository.pages = map[int]recordmodel.RecordPageResult{1: {}}
 	err = validator.ValidateNumericLimitPolicies(t.Context(), match, map[string]any{"amount": 10, "source_id": "source-1"}, "create", principal)
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.policy.related_record_missing", nil)
 
 	match.Validations[0].Config["source_relation_field"] = ""
-	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "budget-A", Data: map[string]any{"remaining": 5.0}}}}
+	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "budget-A", Data: map[string]any{"remaining": 5.0}}}}
 	err = validator.ValidateNumericLimitPolicies(t.Context(), match, map[string]any{"amount": 10, "code": "A"}, "create", principal)
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.expense.budget_exceeded", nil)
 }
@@ -124,7 +124,7 @@ func TestValidateBlockingRecordPoliciesBranches(t *testing.T) {
 	repository.err = nil
 	policy.Config["filters"] = []any{map[string]any{"field": ""}, map[string]any{"field": "owner_id", "source_field": "missing"}}
 	repository.pages = map[int]recordmodel.RecordPageResult{
-		1: {HasNext: true, Items: []recordmodel.Record{{ID: "hidden", Data: map[string]any{"status": "active"}}}},
+		1: {HasNext: true, Items: []recordmodel.Record{{RecordID: "hidden", Data: map[string]any{"status": "active"}}}},
 		2: {},
 	}
 	allow = false
@@ -174,13 +174,13 @@ func TestValidateTimeOverlapPoliciesErrorAndNoConflictBranches(t *testing.T) {
 	assertRecordCause(t, err, fault)
 
 	repository.err = nil
-	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "candidate", Data: map[string]any{"owner": "room-1", "starts_at": "bad", "ends_at": "2026-07-19T12:00:00Z"}}}}
+	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "candidate", Data: map[string]any{"owner": "room-1", "starts_at": "bad", "ends_at": "2026-07-19T12:00:00Z"}}}}
 	err = validator.ValidateTimeOverlapPolicies(t.Context(), object, data, "", "create", principal)
 	if err == nil {
 		t.Fatal("invalid candidate range was accepted")
 	}
 
-	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "candidate", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-19T11:00:00Z", "ends_at": "2026-07-19T12:00:00Z"}}}}
+	repository.pages[1] = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "candidate", Data: map[string]any{"owner": "room-1", "starts_at": "2026-07-19T11:00:00Z", "ends_at": "2026-07-19T12:00:00Z"}}}}
 	if err := validator.ValidateTimeOverlapPolicies(t.Context(), object, data, "", "create", principal); err != nil {
 		t.Fatalf("non-overlapping range rejected: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestRelatedTimeOverlapRemainingPolicyShapes(t *testing.T) {
 	policy.Config["excluded_statuses"] = []any{}
 	object.Validations = []definitionmodel.ValidationSchema{policy}
 	repository := &relatedPolicyRepositoryProbe{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{
-		ID: "candidate", Data: map[string]any{"owner": "room", "starts_at": "2026-07-19T12:00:00Z", "ends_at": "2026-07-19T13:00:00Z"},
+		RecordID: "candidate", Data: map[string]any{"owner": "room", "starts_at": "2026-07-19T12:00:00Z", "ends_at": "2026-07-19T13:00:00Z"},
 	}}}}}
 	validator = newRelatedPolicyValidatorForTest(repository, nil, nil)
 	if err := validator.ValidateTimeOverlapPolicies(t.Context(), object, map[string]any{"owner": "room", "starts_at": "2026-07-19T10:00:00Z", "ends_at": "2026-07-19T11:00:00Z"}, "", "create", principal); err != nil {

@@ -22,7 +22,7 @@ func TestCommercialConfigurationStoreResolvesWorkspaceLimitsWithoutOrganizationB
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	insertTestBuilder(t, store, query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").Columns(
-		"id", "canonical_code", "name", "status",
+		"workspace_id", "canonical_code", "name", "status",
 		"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day",
 		"billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
 	).Values("workspace-a", "primary", "Primary", "active", "standard", 1, 10, 0, 100, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, 1, now, now))

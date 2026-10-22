@@ -20,8 +20,8 @@ func workflowTerminalFixture(mode string, next *definitionmodel.WorkflowGraphNod
 		nodes = append(nodes, *next)
 		edges = append(edges, definitionmodel.WorkflowGraphEdge{Source: "approval", Target: next.ID, Branch: "approved"})
 	}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace-1", WorkflowKey: "flow", WorkflowName: "Flow", InitiatorID: "admin", Status: "waiting", CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: nodes, Edges: edges}}}
-	task := workflowmodel.WorkflowTask{ID: "task", WorkspaceID: "workspace-1", ProcessID: "process", NodeID: "approval", AssigneeUserID: "admin", Status: "open", Sequence: 1}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace-1", WorkflowKey: "flow", WorkflowName: "Flow", InitiatorID: "admin", Status: "waiting", CurrentNodeIDs: []string{"approval"}, Variables: map[string]any{}, Result: map[string]any{}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: nodes, Edges: edges}}}
+	task := workflowmodel.WorkflowTask{TaskID: "task", WorkspaceID: "workspace-1", ProcessID: "process", NodeID: "approval", AssigneeUserID: "admin", Status: "open", Sequence: 1}
 	return process, task
 }
 
@@ -50,7 +50,7 @@ func TestRecoverWorkflowDecisionStoreAndCommitOutcomes(t *testing.T) {
 		t.Fatalf("state error=%v", err)
 	}
 	decisions.stateErr = nil
-	if recovered, err := engine.recoverWorkflowDecision(t.Context(), process, nil, []workflowmodel.WorkflowTask{task}, task, decisionErr, "actor", nil); !errors.Is(err, decisionErr) || recovered.ID != process.ID || len(decisions.states) == 0 {
+	if recovered, err := engine.recoverWorkflowDecision(t.Context(), process, nil, []workflowmodel.WorkflowTask{task}, task, decisionErr, "actor", nil); !errors.Is(err, decisionErr) || recovered.ProcessID != process.ProcessID || len(decisions.states) == 0 {
 		t.Fatalf("recovered=%+v states=%v err=%v", recovered, decisions.states, err)
 	}
 }
@@ -129,7 +129,7 @@ func TestDecideTerminalWorkflowTaskCommitPaths(t *testing.T) {
 	}
 
 	process, task := workflowTerminalFixture("all", nil)
-	other := workflowmodel.WorkflowTask{ID: "other", ProcessID: "process", NodeID: "approval", Status: "open", Sequence: 2}
+	other := workflowmodel.WorkflowTask{TaskID: "other", ProcessID: "process", NodeID: "approval", Status: "open", Sequence: 2}
 	decisions := &workflowStateDecisionEdgeStub{committed: true}
 	runtime, _ := makeRuntime(process, task, []workflowmodel.WorkflowTask{task, other}, decisions, nil, nil)
 	if actual, handled, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", request, principal); err != nil || !handled || actual.Status != "waiting" || len(decisions.commits) != 1 {
@@ -138,11 +138,11 @@ func TestDecideTerminalWorkflowTaskCommitPaths(t *testing.T) {
 
 	process, task = workflowTerminalFixture("any", nil)
 	decisions = &workflowStateDecisionEdgeStub{committed: true}
-	workers := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"process": {ID: "process", Result: map[string]any{"node_id": "approval"}}}}
-	sibling := workflowmodel.WorkflowTask{ID: "sibling", ProcessID: "process", NodeID: "approval", Status: "pending"}
-	otherNode := workflowmodel.WorkflowTask{ID: "other-node", ProcessID: "process", NodeID: "other", Status: "open"}
-	completedSibling := workflowmodel.WorkflowTask{ID: "completed-sibling", ProcessID: "process", NodeID: "approval", Status: "approved"}
-	openSibling := workflowmodel.WorkflowTask{ID: "open-sibling", ProcessID: "process", NodeID: "approval", Status: "open"}
+	workers := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"execution": {ExecutionID: "execution", ProcessID: "process", Result: map[string]any{"node_id": "approval"}}}}
+	sibling := workflowmodel.WorkflowTask{TaskID: "sibling", ProcessID: "process", NodeID: "approval", Status: "pending"}
+	otherNode := workflowmodel.WorkflowTask{TaskID: "other-node", ProcessID: "process", NodeID: "other", Status: "open"}
+	completedSibling := workflowmodel.WorkflowTask{TaskID: "completed-sibling", ProcessID: "process", NodeID: "approval", Status: "approved"}
+	openSibling := workflowmodel.WorkflowTask{TaskID: "open-sibling", ProcessID: "process", NodeID: "approval", Status: "open"}
 	runtime, _ = makeRuntime(process, task, []workflowmodel.WorkflowTask{task, sibling, otherNode, completedSibling, openSibling}, decisions, workers, nil)
 	actual, handled, err := decideTerminalWorkflowTaskWithContext(t.Context(), runtime, "task", request, principal)
 	if err != nil || !handled || actual.Status != "completed" || actual.Variables["approval_decision"] != "approved" || actual.Variables["approval_comment"] != "ok" || decisions.commits[0].WorkflowExecution == nil {
@@ -289,7 +289,7 @@ func TestLegacyWorkflowProcessEngineDecideTaskSuccessAndFailures(t *testing.T) {
 	allProcess, allTask := workflowTerminalFixture("all", nil)
 	allDecided := allTask
 	allDecided.Status, allDecided.Decision = "approved", "approved"
-	other := workflowmodel.WorkflowTask{ID: "other", ProcessID: "process", NodeID: "approval", Status: "open", Sequence: 2}
+	other := workflowmodel.WorkflowTask{TaskID: "other", ProcessID: "process", NodeID: "approval", Status: "open", Sequence: 2}
 	allStore := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": allProcess}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{NodeID: "approval", Status: "waiting"}}}}, getTaskValue: allTask, getTaskFound: true, tasks: []workflowmodel.WorkflowTask{allDecided, other}, decideTaskValue: allDecided, decidedTask: true}
 	if waiting, err := workflowEngineEdge(allStore, nil, nil).DecideTask(t.Context(), "task", request, principal); err != nil || waiting.Status != "waiting" {
 		t.Fatalf("nonterminal=%+v err=%v", waiting, err)
@@ -311,7 +311,7 @@ func TestLegacyWorkflowProcessEngineDecideTaskSuccessAndFailures(t *testing.T) {
 	sequentialProcess, sequentialTask := workflowTerminalFixture("sequential", nil)
 	sequentialDecided := sequentialTask
 	sequentialDecided.Status, sequentialDecided.Decision = "approved", "approved"
-	pending := workflowmodel.WorkflowTask{ID: "pending", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 2}
+	pending := workflowmodel.WorkflowTask{TaskID: "pending", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 2}
 	sequentialStore := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": sequentialProcess}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{NodeID: "approval", Status: "waiting"}}}}, getTaskValue: sequentialTask, getTaskFound: true, tasks: []workflowmodel.WorkflowTask{sequentialDecided, pending}, decideTaskValue: sequentialDecided, decidedTask: true, updateTaskErr: errors.New("open")}
 	state := &workflowStateDecisionEdgeStub{}
 	engine := NewWorkflowProcessEngine(WorkflowDependencies{Processes: sequentialStore, Decisions: state, Schema: workflowSchemaProviderEdgeStub{}})
@@ -374,9 +374,9 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 	}
 
 	process, task := workflowTerminalFixture("sequential", nil)
-	pending := workflowmodel.WorkflowTask{ID: "pending", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 2}
-	later := workflowmodel.WorkflowTask{ID: "later", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 3}
-	unrelatedPending := workflowmodel.WorkflowTask{ID: "unrelated", ProcessID: "process", NodeID: "other", Status: "pending"}
+	pending := workflowmodel.WorkflowTask{TaskID: "pending", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 2}
+	later := workflowmodel.WorkflowTask{TaskID: "later", ProcessID: "process", NodeID: "approval", Status: "pending", Sequence: 3}
+	unrelatedPending := workflowmodel.WorkflowTask{TaskID: "unrelated", ProcessID: "process", NodeID: "other", Status: "pending"}
 	store := makeStore(process, task, []workflowmodel.WorkflowTask{task, unrelatedPending, later, pending}, []workflowmodel.WorkflowNodeInstance{{NodeID: "approval", Status: "waiting"}})
 	decisions := &workflowStateDecisionEdgeStub{committed: true}
 	runtime := workflowTerminalRuntime(store, decisions, nil, nil)
@@ -399,7 +399,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 	replayRequest := request
 	replayRequest.IdempotencyKey = "replay"
 	store = makeStore(process, task, []workflowmodel.WorkflowTask{task, pending}, []workflowmodel.WorkflowNodeInstance{{NodeID: "approval", Status: "waiting"}})
-	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ID != process.ID {
+	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ProcessID != process.ProcessID {
 		t.Fatalf("nonterminal replay=%+v err=%v", replay, err)
 	}
 
@@ -424,7 +424,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 	process, task = workflowTerminalFixture("any", &nextApproval)
 	for name, worker := range map[string]*workflowExecutionWorkerStub{
 		"load error": {executions: map[string]workflowmodel.WorkflowExecution{}, getErr: errors.New("load")},
-		"found":      {executions: map[string]workflowmodel.WorkflowExecution{"process": {ID: "process", Result: map[string]any{}}}},
+		"found":      {executions: map[string]workflowmodel.WorkflowExecution{"execution": {ExecutionID: "execution", ProcessID: "process", Result: map[string]any{}}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			decision := &workflowStateDecisionEdgeStub{committed: true}
@@ -448,7 +448,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 		})
 	}
 	store = makeStore(process, task, []workflowmodel.WorkflowTask{task}, []workflowmodel.WorkflowNodeInstance{{NodeID: "approval", Status: "waiting"}})
-	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, workflowApprovalIdentityStub{}), "task", replayRequest, principal); err != nil || replay.ID != process.ID {
+	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, workflowApprovalIdentityStub{}), "task", replayRequest, principal); err != nil || replay.ProcessID != process.ProcessID {
 		t.Fatalf("approval replay=%+v err=%v", replay, err)
 	}
 
@@ -456,7 +456,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 	process, task = workflowTerminalFixture("any", &nextCondition)
 	for name, worker := range map[string]*workflowExecutionWorkerStub{
 		"load error": {executions: map[string]workflowmodel.WorkflowExecution{}, getErr: errors.New("load")},
-		"found":      {executions: map[string]workflowmodel.WorkflowExecution{"process": {ID: "process", Result: map[string]any{}}}},
+		"found":      {executions: map[string]workflowmodel.WorkflowExecution{"execution": {ExecutionID: "execution", ProcessID: "process", Result: map[string]any{}}}},
 	} {
 		t.Run("queue "+name, func(t *testing.T) {
 			decision := &workflowStateDecisionEdgeStub{committed: name != "found"}
@@ -480,7 +480,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 		})
 	}
 	store = makeStore(process, task, []workflowmodel.WorkflowTask{task}, []workflowmodel.WorkflowNodeInstance{{NodeID: "approval", Status: "waiting"}})
-	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ID != process.ID {
+	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ProcessID != process.ProcessID {
 		t.Fatalf("queue replay=%+v err=%v", replay, err)
 	}
 	for name, failingContinuation := range map[string]bool{"claimed": false, "resume error": true, "not claimed": false} {
@@ -513,7 +513,7 @@ func TestDecideTerminalWorkflowTaskSequentialPreparationWorkerAndConflictOutcome
 		t.Fatalf("terminal execution load=%v", err)
 	}
 	store = makeStore(process, task, []workflowmodel.WorkflowTask{task}, []workflowmodel.WorkflowNodeInstance{{NodeID: "approval", Status: "waiting"}})
-	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ID != process.ID {
+	if replay, _, err := decideTerminalWorkflowTaskWithContext(t.Context(), workflowTerminalRuntime(store, &workflowStateDecisionEdgeStub{}, nil, nil), "task", replayRequest, principal); err != nil || replay.ProcessID != process.ProcessID {
 		t.Fatalf("terminal replay=%+v err=%v", replay, err)
 	}
 }

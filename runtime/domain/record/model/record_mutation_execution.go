@@ -7,7 +7,8 @@ import (
 )
 
 type RecordMutationExecution struct {
-	ID                 string         `json:"id"`
+	ID                 int64          `json:"id"`
+	OperationID        string         `json:"operation_id"`
 	WorkspaceID        string         `json:"workspace_id"`
 	Operation          string         `json:"operation"`
 	ObjectKey          string         `json:"object_key"`
@@ -43,7 +44,7 @@ type RecordMutationClaimResult struct {
 
 type RecordMutationCompletion struct {
 	WorkspaceID    string
-	ExecutionID    string
+	OperationID    string
 	LeaseOwner     string
 	FencingToken   int64
 	Result         any

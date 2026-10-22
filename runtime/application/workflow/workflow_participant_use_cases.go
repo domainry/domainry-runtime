@@ -159,7 +159,7 @@ type OpsWorkflowProcessBatchDTO struct {
 
 func ProjectParticipantWorkflowProcess(process workflowmodel.WorkflowProcessInstance) ParticipantWorkflowProcessDTO {
 	return ParticipantWorkflowProcessDTO{
-		ID: process.ID, WorkflowKey: process.WorkflowKey, WorkflowName: process.WorkflowName,
+		ID: process.ProcessID, WorkflowKey: process.WorkflowKey, WorkflowName: process.WorkflowName,
 		ObjectKey: process.ObjectKey, RecordID: process.RecordID, InitiatorID: process.InitiatorID,
 		Status: process.Status, CurrentNodeNames: process.CurrentNodeNames, BusinessOutcome: process.BusinessOutcome,
 		CreatedAt: process.CreatedAt, UpdatedAt: process.UpdatedAt, CompletedAt: process.CompletedAt,
@@ -174,7 +174,7 @@ func ProjectParticipantWorkflowRun(result workflowmodel.WorkflowRunResult) Parti
 
 func projectParticipantWorkflowTask(task workflowmodel.WorkflowTask) ParticipantWorkflowTaskDTO {
 	return ParticipantWorkflowTaskDTO{
-		ID: task.ID, ProcessID: task.ProcessID, NodeInstanceID: task.NodeInstanceID, NodeID: task.NodeID,
+		ID: task.TaskID, ProcessID: task.ProcessID, NodeInstanceID: task.NodeInstanceID, NodeID: task.NodeID,
 		Title: task.Title, AssigneeUserID: task.AssigneeUserID, AssigneeName: task.AssigneeName,
 		AssigneeRoleKey: task.AssigneeRoleKey, Sequence: task.Sequence, Status: task.Status,
 		Decision: task.Decision, Comment: task.Comment, DueAt: task.DueAt,
@@ -211,7 +211,7 @@ func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) Parti
 			}
 		}
 		projected.Nodes = append(projected.Nodes, ParticipantWorkflowNodeDTO{
-			ID: node.ID, NodeID: node.NodeID, Name: name, NodeType: node.NodeType, ActionKey: actionKey, Iteration: node.Iteration,
+			ID: node.NodeInstanceID, NodeID: node.NodeID, Name: name, NodeType: node.NodeType, ActionKey: actionKey, Iteration: node.Iteration,
 			Status: node.Status, ErrorCode: node.ErrorCode, StartedAt: node.StartedAt, CompletedAt: node.CompletedAt,
 		})
 	}
@@ -220,7 +220,7 @@ func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) Parti
 	}
 	for _, event := range detail.Events {
 		projected.Events = append(projected.Events, ParticipantWorkflowEventDTO{
-			ID: event.ID, NodeID: event.NodeID, TaskID: event.TaskID, Event: event.Event,
+			ID: event.EventID, NodeID: event.NodeID, TaskID: event.TaskID, Event: event.Event,
 			ActorID: event.ActorID, Summary: event.Summary, CreatedAt: event.CreatedAt,
 		})
 	}
@@ -229,7 +229,7 @@ func ProjectParticipantWorkflowProcessDetail(detail WorkflowProcessDetail) Parti
 
 func ProjectOpsWorkflowExecution(execution workflowmodel.WorkflowExecution) OpsWorkflowExecutionDTO {
 	return OpsWorkflowExecutionDTO{
-		ID: execution.ID, OperationID: execution.OperationID, WorkflowKey: execution.WorkflowKey, Status: execution.Status,
+		ID: execution.ExecutionID, OperationID: execution.OperationID, WorkflowKey: execution.WorkflowKey, Status: execution.Status,
 		ProcessID: execution.ProcessID, NodeID: execution.NodeID, Attempt: execution.Attempt,
 		MaxAttempts: execution.MaxAttempts, NextRunAt: execution.NextRunAt, LastError: execution.LastError,
 		LeaseOwner: execution.LeaseOwner, LeaseExpiresAt: execution.LeaseExpiresAt,
@@ -243,7 +243,7 @@ func ProjectOpsWorkflowProcess(process workflowmodel.WorkflowProcessInstance) Op
 		retryCount = workflowpolicy.WorkflowRetryCount(process.Result["retry_count"])
 	}
 	return OpsWorkflowProcessDTO{
-		ID: process.ID, OperationID: process.OperationID, WorkflowKey: process.WorkflowKey,
+		ID: process.ProcessID, OperationID: process.OperationID, WorkflowKey: process.WorkflowKey,
 		DefinitionVersionID: process.DefinitionVersionID, DefinitionVersion: process.DefinitionVersion,
 		DefinitionHash: process.DefinitionHash, Status: process.Status, CurrentNodeIDs: process.CurrentNodeIDs,
 		FailedNodeNames: process.FailedNodeNames, ErrorCode: process.ErrorCode,
@@ -338,13 +338,13 @@ func (s *WorkflowApplicationService) OpsWorkflowProcess(ctx context.Context, pro
 	}
 	for _, node := range detail.Nodes {
 		result.Nodes = append(result.Nodes, OpsWorkflowNodeDTO{
-			ID: node.ID, NodeID: node.NodeID, NodeType: node.NodeType, Status: node.Status,
+			ID: node.NodeInstanceID, NodeID: node.NodeID, NodeType: node.NodeType, Status: node.Status,
 			ErrorCode: node.ErrorCode, StartedAt: node.StartedAt, CompletedAt: node.CompletedAt,
 		})
 	}
 	for _, event := range detail.Events {
 		result.Events = append(result.Events, OpsWorkflowEventDTO{
-			ID: event.ID, NodeID: event.NodeID, Event: event.Event, ActorID: event.ActorID,
+			ID: event.EventID, NodeID: event.NodeID, Event: event.Event, ActorID: event.ActorID,
 			Summary: event.Summary, CreatedAt: event.CreatedAt,
 		})
 	}

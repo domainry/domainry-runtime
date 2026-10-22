@@ -98,18 +98,18 @@ func TestCreateRecordIdempotentResultReportsAcquireAndReplay(t *testing.T) {
 		Repository:       &createRepositoryProbe{},
 		ObjectForAction:  queryPolicy.ObjectForAction,
 		CanWrite:         func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
-		NewRecordID:      func(string) string { return "customer-1" },
+		NewRecordID:      func(string) (string, error) { return "customer-1", nil },
 		ExecutionRuntime: runtime,
 	})
 	service := &RecordApplicationService{queryPolicy: queryPolicy, create: create, recordMutationExecution: runtime}
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})
 
 	first, replayed, err := service.CreateRecordIdempotentResult(t.Context(), object.Key, map[string]any{"name": "Acme"}, "create-key", principal)
-	if err != nil || replayed || first.ID != "customer-1" || executions.commitCalls != 1 {
+	if err != nil || replayed || first.RecordID != "customer-1" || executions.commitCalls != 1 {
 		t.Fatalf("first=%#v replayed=%v commits=%d err=%v", first, replayed, executions.commitCalls, err)
 	}
 	second, replayed, err := service.CreateRecordIdempotentResult(t.Context(), object.Key, map[string]any{"name": "Acme"}, "create-key", principal)
-	if err != nil || !replayed || second.ID != first.ID || executions.commitCalls != 1 {
+	if err != nil || !replayed || second.RecordID != first.RecordID || executions.commitCalls != 1 {
 		t.Fatalf("second=%#v replayed=%v commits=%d err=%v", second, replayed, executions.commitCalls, err)
 	}
 }

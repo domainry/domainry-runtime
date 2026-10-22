@@ -17,7 +17,7 @@ type automationDeliveryRepositoryProbe struct {
 }
 
 func (automationDeliveryRepositoryProbe) ListOutbox(context.Context, string, string, string, int) ([]publicationmodel.Message, error) {
-	return []publicationmodel.Message{{ID: "outbox-1"}}, nil
+	return []publicationmodel.Message{{MessageID: "outbox-1"}}, nil
 }
 
 func TestAutomationCompositionRepositoriesForwardToManagement(t *testing.T) {

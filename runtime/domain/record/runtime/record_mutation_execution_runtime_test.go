@@ -67,12 +67,12 @@ func (s *mutationExecutionStoreStub) CompleteRecordMutationExecution(_ context.C
 }
 
 func completionExecution(completion recordmodel.RecordMutationCompletion) recordmodel.RecordMutationExecution {
-	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}
+	return recordmodel.RecordMutationExecution{OperationID: completion.OperationID, WorkspaceID: completion.WorkspaceID}
 }
 
 func TestRecordMutationFailureCompletionIsSanitizedAndTerminalReplayPreservesHTTPError(t *testing.T) {
 	claim := recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: recordmodel.RecordMutationExecution{
-		ID: "record_mutation:failure", WorkspaceID: "workspace-primary", Operation: "update", ObjectKey: "floor_category", TargetID: "category-1",
+		OperationID: "record_mutation:failure", WorkspaceID: "workspace-primary", Operation: "update", ObjectKey: "floor_category", TargetID: "category-1",
 		LeaseOwner: "request-a", FencingToken: 4,
 	}}
 	store := &mutationExecutionStoreStub{}
@@ -82,7 +82,7 @@ func TestRecordMutationFailureCompletionIsSanitizedAndTerminalReplayPreservesHTT
 		t.Fatal(err)
 	}
 	completion := store.completion
-	if completion.ResponseStatus != 409 || completion.ErrorCode != "backend.record.version_conflict" || completion.Retryable || completion.ExecutionID != claim.Execution.ID {
+	if completion.ResponseStatus != 409 || completion.ErrorCode != "backend.record.version_conflict" || completion.Retryable || completion.OperationID != claim.Execution.OperationID {
 		t.Fatalf("failure completion=%+v", completion)
 	}
 	result, ok := completion.Result.(map[string]any)
@@ -100,7 +100,7 @@ func TestRecordMutationFailureCompletionIsSanitizedAndTerminalReplayPreservesHTT
 }
 
 func TestRecordMutationTransientFailureIsReclaimableAndUnknownCommitIsNotOverwritten(t *testing.T) {
-	claim := recordmodel.RecordMutationClaimResult{Execution: recordmodel.RecordMutationExecution{ID: "record_mutation:retry", WorkspaceID: "workspace-primary", LeaseOwner: "request-a", FencingToken: 2}}
+	claim := recordmodel.RecordMutationClaimResult{Execution: recordmodel.RecordMutationExecution{OperationID: "record_mutation:retry", WorkspaceID: "workspace-primary", LeaseOwner: "request-a", FencingToken: 2}}
 	store := &mutationExecutionStoreStub{}
 	runtime := NewRecordMutationExecutionRuntime(store)
 	if err := runtime.Fail(t.Context(), claim, apperror.New(apperror.KindUnavailable, "backend.storage.unavailable", nil, nil)); err != nil {
@@ -111,7 +111,7 @@ func TestRecordMutationTransientFailureIsReclaimableAndUnknownCommitIsNotOverwri
 	}
 	store.completion = recordmodel.RecordMutationCompletion{}
 	unknown := mutation.TransactionCommitUnknown("record", "category-1", errors.New("commit response lost"))
-	if err := runtime.Fail(t.Context(), claim, unknown); err != nil || store.completion.ExecutionID != "" {
+	if err := runtime.Fail(t.Context(), claim, unknown); err != nil || store.completion.OperationID != "" {
 		t.Fatalf("unknown commit completion=%+v err=%v", store.completion, err)
 	}
 }
@@ -150,7 +150,7 @@ func TestBeginCreateValidatesDependenciesFingerprintAndClaimFailure(t *testing.T
 }
 
 func TestBeginCreateClaimDecisionMatrixAndOwnerPrecedence(t *testing.T) {
-	replayRecord := recordmodel.Record{ID: "customer-1"}
+	replayRecord := recordmodel.Record{RecordID: "customer-1"}
 	for _, test := range []struct {
 		name       string
 		decision   idempotency.Decision
@@ -170,7 +170,7 @@ func TestBeginCreateClaimDecisionMatrixAndOwnerPrecedence(t *testing.T) {
 			if claim.Decision != test.decision || replay != test.wantReplay || errorCodeFromRecordRuntime(err) != test.wantCode {
 				t.Fatalf("result=%#v claim=%#v replay=%v err=%v", result, claim, replay, err)
 			}
-			if test.wantReplay && result.ID != replayRecord.ID {
+			if test.wantReplay && result.RecordID != replayRecord.RecordID {
 				t.Fatalf("replay result=%#v", result)
 			}
 			request := store.beginRequests[0]
@@ -188,7 +188,7 @@ func TestBeginCreateClaimDecisionMatrixAndOwnerPrecedence(t *testing.T) {
 }
 
 func TestBeginUpdateScopesReceiptToTargetAndReplaysResult(t *testing.T) {
-	replayRecord := recordmodel.Record{ID: "member-1", Data: map[string]any{"status": "blacklisted"}}
+	replayRecord := recordmodel.Record{RecordID: "member-1", Data: map[string]any{"status": "blacklisted"}}
 	for _, test := range []struct {
 		name       string
 		decision   idempotency.Decision
@@ -217,7 +217,7 @@ func TestBeginUpdateScopesReceiptToTargetAndReplaysResult(t *testing.T) {
 			if claim.Decision != test.decision || replay != test.wantReplay || errorCodeFromRecordRuntime(err) != test.wantCode {
 				t.Fatalf("result=%#v claim=%#v replay=%v err=%v", result, claim, replay, err)
 			}
-			if test.wantReplay && result.ID != replayRecord.ID {
+			if test.wantReplay && result.RecordID != replayRecord.RecordID {
 				t.Fatalf("replay result=%#v", result)
 			}
 			request := store.beginRequests[0]
@@ -371,8 +371,8 @@ func TestReplayImportLookupAndDecodeMatrix(t *testing.T) {
 }
 
 func TestCommitAndCompleteOperationValidateAndForwardCompletion(t *testing.T) {
-	claim := recordmodel.RecordMutationClaimResult{Execution: recordmodel.RecordMutationExecution{ID: "execution-1", WorkspaceID: "workspace", LeaseOwner: "owner", FencingToken: 7}}
-	commit := transactionmodel.RecordMutationCommit{Operation: "create", Record: recordmodel.Record{ID: "record-1"}}
+	claim := recordmodel.RecordMutationClaimResult{Execution: recordmodel.RecordMutationExecution{OperationID: "execution-1", WorkspaceID: "workspace", LeaseOwner: "owner", FencingToken: 7}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "create", Record: recordmodel.Record{RecordID: "record-1"}}
 	var nilRuntime *RecordMutationExecutionRuntime
 	assertRecordAppError(t, nilRuntime.Commit(t.Context(), claim, commit), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
 	assertRecordAppError(t, NewRecordMutationExecutionRuntime(nil).Commit(t.Context(), claim, commit), apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil)
@@ -393,7 +393,7 @@ func TestCommitAndCompleteOperationValidateAndForwardCompletion(t *testing.T) {
 	if err := runtime.Commit(t.Context(), claim, commit); err != nil {
 		t.Fatal(err)
 	}
-	if store.commitCompletion.ExecutionID != "execution-1" || store.commitCompletion.LeaseOwner != "owner" || store.commitCompletion.FencingToken != 7 || store.commitCompletion.Result.(recordmodel.Record).ID != "record-1" || !store.commitCompletion.ExpiresAt.After(store.commitCompletion.Now) {
+	if store.commitCompletion.OperationID != "execution-1" || store.commitCompletion.LeaseOwner != "owner" || store.commitCompletion.FencingToken != 7 || store.commitCompletion.Result.(recordmodel.Record).RecordID != "record-1" || !store.commitCompletion.ExpiresAt.After(store.commitCompletion.Now) {
 		t.Fatalf("commit completion=%+v", store.commitCompletion)
 	}
 	if err := runtime.CommitBatch(t.Context(), claim, []transactionmodel.RecordMutationCommit{commit}); err != nil {
@@ -412,7 +412,7 @@ func TestCommitAndCompleteOperationValidateAndForwardCompletion(t *testing.T) {
 	if err := runtime.CompleteOperation(t.Context(), claim, result); err != nil {
 		t.Fatal(err)
 	}
-	if store.completion.ExecutionID != "execution-1" || store.completion.Result.(map[string]any)["created"] != 1 || !store.completion.ExpiresAt.After(store.completion.Now) {
+	if store.completion.OperationID != "execution-1" || store.completion.Result.(map[string]any)["created"] != 1 || !store.completion.ExpiresAt.After(store.completion.Now) {
 		t.Fatalf("operation completion=%+v", store.completion)
 	}
 }

@@ -240,15 +240,15 @@ func TestOperationsBreakGlassDisableReadAlreadyRevokedAndAlertEdges(t *testing.T
 	}{
 		{"missing", nil, nil, nil, false, "backend.operations.break_glass_not_found", false},
 		{"read", nil, errBreakGlassProbe, nil, false, "backend.operations.break_glass_not_found", false},
-		{"workspace", &operationsmodel.OperationsBreakGlassGrant{ID: "grant", WorkspaceID: "other", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, nil, false, "backend.operations.break_glass_not_found", false},
-		{"revoked", &operationsmodel.OperationsBreakGlassGrant{ID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassRevoked, Revision: 2}, nil, nil, false, "", true},
-		{"revoke", &operationsmodel.OperationsBreakGlassGrant{ID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, errBreakGlassProbe, false, "backend.operations.break_glass_revision_conflict", false},
-		{"alert", &operationsmodel.OperationsBreakGlassGrant{ID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, nil, true, "backend.operations.break_glass_alert_failed", false},
+		{"workspace", &operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant", WorkspaceID: "other", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, nil, false, "backend.operations.break_glass_not_found", false},
+		{"revoked", &operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassRevoked, Revision: 2}, nil, nil, false, "", true},
+		{"revoke", &operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, errBreakGlassProbe, false, "backend.operations.break_glass_revision_conflict", false},
+		{"alert", &operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant", WorkspaceID: "workspace-a", State: operationsmodel.OperationsBreakGlassActive, Revision: 1}, nil, nil, true, "backend.operations.break_glass_alert_failed", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			grants := map[string]operationsmodel.OperationsBreakGlassGrant{}
 			if test.grant != nil {
-				grants[test.grant.ID] = *test.grant
+				grants[test.grant.BreakGlassGrantID] = *test.grant
 			}
 			repository := &breakGlassRepositoryProbe{grants: grants, getErr: test.getErr, revokeErr: test.revokeErr}
 			service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, func() time.Time { return now }, func() string { return test.name })

@@ -46,7 +46,7 @@ func operationsLifecycleSpecs() []lifecyclepersistence.RelationalCleanupSpec {
 					AdditionalPredicate: operationsLifecyclePredicate(definitions, scope),
 					ReferenceChecks: []lifecyclepersistence.RelationalReferenceCheck{
 						{Table: foundationartifact.BindingTableName, TenantColumn: "workspace_id", ReferenceColumn: "resource_id", FixedColumn: "owner", FixedValue: foundationartifact.OwnerOperations},
-						{Table: sharedoperation.TableName, TenantColumn: tenantColumn, ReferenceColumn: "parent_id"},
+						{Table: sharedoperation.TableName, TenantColumn: tenantColumn, ReferenceColumn: "parent_operation_id"},
 					},
 				})
 			}

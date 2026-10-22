@@ -35,7 +35,7 @@ type dispatchCallbackReceiptStub struct{}
 
 func (dispatchCallbackReceiptStub) TryBeginCallback(_ context.Context, request dispatchmodel.CallbackClaimRequest) (dispatchmodel.CallbackClaimResult, error) {
 	receipt := request.Receipt
-	receipt.ID, receipt.LeaseOwner, receipt.FencingToken = "callback-receipt-1", request.LeaseOwner, 1
+	receipt.OperationID, receipt.LeaseOwner, receipt.FencingToken = "callback-receipt-1", request.LeaseOwner, 1
 	return dispatchmodel.CallbackClaimResult{Decision: idempotency.DecisionAcquired, Receipt: receipt}, nil
 }
 

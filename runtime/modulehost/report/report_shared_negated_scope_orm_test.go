@@ -8,6 +8,7 @@ import (
 	"time"
 
 	identity "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-orm/recordschema"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	report "github.com/domainry/domainry-report-sdk/model"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -52,11 +53,8 @@ func TestSharedReportSDKNegationAndNullScopesUseActualORMProjection(t *testing.T
 			}
 			object := definition.ObjectSchema{Key: "sale", Name: "Sale", Fields: []definition.FieldSchema{{Key: "name", Type: "text"}}}
 			columns := []ormschema.ColumnDefinition{}
-			for _, key := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_user_id", "owner_org_id"} {
-				columns = append(columns, ormschema.Column(key, ormschema.TextKey(96)))
-			}
 			columns = append(columns, ormschema.Column("deleted", ormschema.Boolean()).DefaultValue(false), ormschema.Column("name", ormschema.LongText()))
-			statement, _, err := ormschema.NewTable(store.SQLRenderer, object.Key).Columns(columns...).PrimaryKey("workspace_id", "id").Build()
+			statement, _, err := recordschema.NewTable(store.SQLRenderer, object.Key).Columns(columns...).Build()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,11 +66,11 @@ func TestSharedReportSDKNegationAndNullScopesUseActualORMProjection(t *testing.T
 				id   string
 				name any
 			}{{"a", "Alpha"}, {"b", "Beta"}, {"g", "Gamma"}, {"h", "Hidden"}, {"n", nil}} {
-				if err := repository.InsertRecord(t.Context(), "workspace", object, record.Record{ID: row.id, OwnerUserID: "producer", Data: map[string]any{"name": row.name}}); err != nil {
+				if err := repository.InsertRecord(t.Context(), "workspace", object, record.Record{RecordID: row.id, OwnerUserID: "producer", Data: map[string]any{"name": row.name}}); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := repository.InsertRecord(t.Context(), "foreign-workspace", object, record.Record{ID: "foreign", OwnerUserID: "producer", Data: map[string]any{"name": "Alpha"}}); err != nil {
+			if err := repository.InsertRecord(t.Context(), "foreign-workspace", object, record.Record{RecordID: "foreign", OwnerUserID: "producer", Data: map[string]any{"name": "Alpha"}}); err != nil {
 				t.Fatal(err)
 			}
 			policy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{Objects: func() []definition.ObjectSchema { return []definition.ObjectSchema{object} }})
@@ -103,7 +101,7 @@ func TestSharedReportSDKNegationAndNullScopesUseActualORMProjection(t *testing.T
 			}
 			ids := make([]string, 0, len(original.Items))
 			for _, row := range original.Items {
-				ids = append(ids, row.ID)
+				ids = append(ids, row.RecordID)
 			}
 			if !slices.Equal(ids, tc.ids) || original.Total != len(tc.ids) {
 				t.Fatal("real SQL scope/NULL/workspace semantics", ids, original.Total, tc.ids)

@@ -29,7 +29,7 @@ func InitializeExternalInstallation(ctx context.Context, store *database.Runtime
 	if err != nil {
 		return Installation{}, err
 	}
-	id, err := randomID("installation")
+	id, err := randomID("ws")
 	if err != nil {
 		return Installation{}, err
 	}
@@ -40,7 +40,7 @@ func InitializeExternalInstallation(ctx context.Context, store *database.Runtime
 	defer tx.Rollback()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
-		Columns("id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
+		Columns("workspace_id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at").
 		Values(id, id, "Installation", "active", installationID, 1, timevalue.Millis(now), timevalue.Millis(now)).Build()
 	if err != nil {
 		return Installation{}, err

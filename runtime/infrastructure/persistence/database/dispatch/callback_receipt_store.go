@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
@@ -56,7 +57,10 @@ func (s *CallbackReceiptStore) tryBeginCallbackOnce(ctx context.Context, request
 	if err != nil {
 		return dispatchmodel.CallbackClaimResult{}, err
 	}
-	receipt.ID = callbackReceiptID(receipt)
+	receipt.OperationID, err = callbackOperationID(receipt)
+	if err != nil {
+		return dispatchmodel.CallbackClaimResult{}, err
+	}
 	receipt.Status = string(idempotency.StatusProcessing)
 	receipt.LeaseExpiresAt = now.Add(leaseTTL).Format(time.RFC3339Nano)
 	receipt.FencingToken = 1
@@ -71,7 +75,7 @@ func (s *CallbackReceiptStore) tryBeginCallbackOnce(ctx context.Context, request
 			return dispatchmodel.CallbackClaimResult{}, findErr
 		}
 		if !found {
-			return dispatchmodel.CallbackClaimResult{}, database.MutationConstraintError(insertErr, "dispatch_callback_receipt", receipt.ID, mutation.MutationConflictIdempotency)
+			return dispatchmodel.CallbackClaimResult{}, database.MutationConstraintError(insertErr, "dispatch_callback_receipt", receipt.OperationID, mutation.MutationConflictIdempotency)
 		}
 		decision := idempotency.Classify(idempotency.ReceiptState{
 			Status: idempotency.Status(current.Status), Fingerprint: current.BodySHA256, Lease: callbackReceiptLease(current),
@@ -132,7 +136,7 @@ func (s *CallbackReceiptStore) HeartbeatCallback(ctx context.Context, heartbeat 
 	leaseExpiresAt := now.Add(heartbeat.LeaseTTL).Format(time.RFC3339Nano)
 	token := heartbeat.FencingToken
 	return sharedoperation.NewSQLStore(s.store.DB(), s.store.SQLRenderer).PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: strings.TrimSpace(heartbeat.WorkspaceID), ID: strings.TrimSpace(heartbeat.ReceiptID),
+		WorkspaceID: strings.TrimSpace(heartbeat.WorkspaceID), OperationID: strings.TrimSpace(heartbeat.OperationID),
 		Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind, Status: string(idempotency.StatusProcessing),
 		LeaseOwner: strings.TrimSpace(heartbeat.LeaseOwner), FencingToken: &token, LeaseExpiresAfter: nowText,
 	}, sharedoperation.RecordChanges{LeaseExpiresAt: &leaseExpiresAt, UpdatedAt: &nowText})
@@ -152,14 +156,14 @@ func (s *CallbackReceiptStore) CompleteCallback(ctx context.Context, completion 
 	updatedAt, expiresAt := now.Format(time.RFC3339Nano), completion.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	token := completion.FencingToken
 	changed, err := sharedoperation.NewSQLStore(s.store.DB(), s.store.SQLRenderer).PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: strings.TrimSpace(completion.WorkspaceID), ID: strings.TrimSpace(completion.ReceiptID),
+		WorkspaceID: strings.TrimSpace(completion.WorkspaceID), OperationID: strings.TrimSpace(completion.OperationID),
 		Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind, Status: string(idempotency.StatusProcessing),
 		LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token,
 	}, sharedoperation.RecordChanges{
 		Status: &status, ResultJSON: &rawResult, LeaseOwner: &empty, LeaseExpiresAt: &empty,
 		UpdatedAt: &updatedAt, ExpiresAt: &expiresAt,
 	})
-	return s.requireFencedWrite(ctx, completion.WorkspaceID, completion.ReceiptID, changed, err)
+	return s.requireFencedWrite(ctx, completion.WorkspaceID, completion.OperationID, changed, err)
 }
 
 func (s *CallbackReceiptStore) FailCallbackRetryable(ctx context.Context, failure dispatchmodel.CallbackFailure) error {
@@ -170,14 +174,14 @@ func (s *CallbackReceiptStore) FailCallbackRetryable(ctx context.Context, failur
 	status, errorCode, failureClass, empty := string(idempotency.StatusFailedRetryable), "dispatch.callback_retryable", "retryable", ""
 	updatedAt, expiresAt, token := now.Format(time.RFC3339Nano), failure.ExpiresAt.UTC().Format(time.RFC3339Nano), failure.FencingToken
 	changed, err := sharedoperation.NewSQLStore(s.store.DB(), s.store.SQLRenderer).PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: strings.TrimSpace(failure.WorkspaceID), ID: strings.TrimSpace(failure.ReceiptID),
+		WorkspaceID: strings.TrimSpace(failure.WorkspaceID), OperationID: strings.TrimSpace(failure.OperationID),
 		Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind, Status: string(idempotency.StatusProcessing),
 		LeaseOwner: strings.TrimSpace(failure.LeaseOwner), FencingToken: &token,
 	}, sharedoperation.RecordChanges{
 		Status: &status, ErrorCode: &errorCode, FailureClass: &failureClass, LeaseOwner: &empty, LeaseExpiresAt: &empty,
 		UpdatedAt: &updatedAt, ExpiresAt: &expiresAt,
 	})
-	return s.requireFencedWrite(ctx, failure.WorkspaceID, failure.ReceiptID, changed, err)
+	return s.requireFencedWrite(ctx, failure.WorkspaceID, failure.OperationID, changed, err)
 }
 
 func (s *CallbackReceiptStore) requireFencedWrite(ctx context.Context, workspaceID, receiptID string, changed bool, err error) error {
@@ -236,19 +240,18 @@ func callbackReceiptLease(receipt dispatchmodel.CallbackReceipt) idempotency.Lea
 	return idempotency.Lease{Owner: receipt.LeaseOwner, Token: receipt.FencingToken, ExpiresAt: expiresAt}
 }
 
-func callbackReceiptID(receipt dispatchmodel.CallbackReceipt) string {
-	sum := sha256.Sum256([]byte(strings.Join([]string{receipt.WorkspaceID, receipt.RuntimeID, receipt.Method, receipt.Path, receipt.IdempotencyKey}, "\x00")))
-	return "dispatch_callback:" + hex.EncodeToString(sum[:16])
+func callbackOperationID(receipt dispatchmodel.CallbackReceipt) (string, error) {
+	return entityid.Derive("op", "runtime.dispatch-callback", receipt.WorkspaceID, receipt.RuntimeID, receipt.Method, receipt.Path, receipt.IdempotencyKey)
 }
 
 func callbackRecord(receipt dispatchmodel.CallbackReceipt) sharedoperation.Record {
 	metadata, _ := json.Marshal(callbackOperationMetadata{RuntimeID: receipt.RuntimeID, Method: receipt.Method, Path: receipt.Path, IdempotencyKey: receipt.IdempotencyKey, ExecutionID: receipt.ExecutionID})
 	result, _ := json.Marshal(callbackOperationResult{DownstreamID: receipt.DownstreamID, DownstreamOwner: receipt.DownstreamOwner, DownstreamStatus: receipt.DownstreamStatus})
 	return sharedoperation.Record{
-		ID: receipt.ID, WorkspaceID: receipt.WorkspaceID, Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind,
+		OperationID: receipt.OperationID, WorkspaceID: receipt.WorkspaceID, Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind,
 		ActionKey: dispatchCallbackActionKey, ResourceType: "dispatch_callback", ResourceID: receipt.ExecutionID,
-		IdempotencyKey: receipt.ID, RequestFingerprint: receipt.BodySHA256, RequestedBy: receipt.RuntimeID,
-		Reason: receipt.Method, Reference: receipt.Path, Status: receipt.Status, StatusURL: "/operations/" + receipt.ID,
+		IdempotencyKey: receipt.OperationID, RequestFingerprint: receipt.BodySHA256, RequestedBy: receipt.RuntimeID,
+		Reason: receipt.Method, Reference: receipt.Path, Status: receipt.Status, StatusURL: "/operations/" + receipt.OperationID,
 		ResultJSON: result, MetadataJSON: metadata, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: receipt.ExecutionID,
 		EvidenceJSON: json.RawMessage(`[]`), LeaseOwner: receipt.LeaseOwner, LeaseExpiresAt: receipt.LeaseExpiresAt,
 		FencingToken: receipt.FencingToken, ExpiresAt: receipt.ExpiresAt, CreatedAt: receipt.CreatedAt, UpdatedAt: receipt.UpdatedAt,
@@ -256,7 +259,8 @@ func callbackRecord(receipt dispatchmodel.CallbackReceipt) sharedoperation.Recor
 }
 
 func callbackRecordFilter(receipt dispatchmodel.CallbackReceipt) sharedoperation.RecordFilter {
-	return sharedoperation.RecordFilter{WorkspaceID: strings.TrimSpace(receipt.WorkspaceID), ID: callbackReceiptID(receipt), Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind}
+	operationID, _ := callbackOperationID(receipt)
+	return sharedoperation.RecordFilter{WorkspaceID: strings.TrimSpace(receipt.WorkspaceID), OperationID: operationID, Owner: dispatchCallbackOwner, Kind: dispatchCallbackKind}
 }
 
 type callbackOperationMetadata struct {
@@ -275,11 +279,11 @@ type callbackOperationResult struct {
 
 func callbackReceipt(record sharedoperation.Record) (dispatchmodel.CallbackReceipt, error) {
 	receipt := dispatchmodel.CallbackReceipt{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, BodySHA256: record.RequestFingerprint, Status: record.Status,
+		OperationID: record.OperationID, WorkspaceID: record.WorkspaceID, BodySHA256: record.RequestFingerprint, Status: record.Status,
 		LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != dispatchCallbackOwner || record.Kind != dispatchCallbackKind || record.ActionKey != dispatchCallbackActionKey || record.ResourceType != "dispatch_callback" || record.IdempotencyKey != receipt.ID {
+	if record.Owner != dispatchCallbackOwner || record.Kind != dispatchCallbackKind || record.ActionKey != dispatchCallbackActionKey || record.ResourceType != "dispatch_callback" || record.IdempotencyKey != receipt.OperationID {
 		return receipt, fmt.Errorf("dispatch callback operation identity is invalid")
 	}
 	var metadata callbackOperationMetadata

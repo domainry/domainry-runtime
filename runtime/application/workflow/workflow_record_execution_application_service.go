@@ -1,22 +1,21 @@
 package workflow
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
-	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
-
-	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
-
-	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
-
-	"context"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/telemetry"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 	"go.opentelemetry.io/otel/attribute"
@@ -63,7 +62,7 @@ func (s *WorkflowApplicationService) executeCommittedWorkflowIntents(ctx context
 			workflowpolicy.WorkflowMarkFailed(&claimed, workflow, err, time.Now().UTC())
 		} else {
 			claimed.Status, claimed.Message = "skipped", "workflow.message.retryContinued"
-			claimed.Result["continued_execution_id"], claimed.Result["continued_status"] = execution.ID, execution.Status
+			claimed.Result["continued_execution_id"], claimed.Result["continued_status"] = execution.ExecutionID, execution.Status
 		}
 		_ = s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, claimed)
 	}
@@ -121,7 +120,7 @@ func (s *WorkflowApplicationService) triggeredWorkflowsWithChange(ctx context.Co
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, workflowmodel.WorkflowRunSummary{WorkflowKey: workflow.Key, Name: workflow.Name, Status: execution.Status, Action: workflow.Action, ExecutionID: execution.ID, Message: execution.Message})
+		out = append(out, workflowmodel.WorkflowRunSummary{WorkflowKey: workflow.Key, Name: workflow.Name, Status: execution.Status, Action: workflow.Action, ExecutionID: execution.ExecutionID, Message: execution.Message})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].WorkflowKey < out[j].WorkflowKey })
 	return out, nil
@@ -292,13 +291,16 @@ func (s *WorkflowApplicationService) ProcessScheduledWorkflowWindowPage(ctx cont
 			for page.Scanned < limit {
 				remaining := limit - page.Scanned
 				pageSize := min(200, remaining)
-				result, listErr := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}}, scanPrincipal)
+				result, listErr := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}}, scanPrincipal)
 				if listErr != nil {
 					return workflowmodel.WorkflowScheduledPage{}, internalError("list records for scheduled workflow", listErr)
 				}
 				for _, record := range result.Items {
 					page.Scanned++
-					afterID = record.ID
+					if record.ID < 1 {
+						return workflowmodel.WorkflowScheduledPage{}, internalError("list records for scheduled workflow", fmt.Errorf("record page returned an invalid physical id"))
+					}
+					afterID = strconv.FormatInt(record.ID, 10)
 					if workflowpolicy.WorkflowConditionMatches(ctx, workflow, record.Data) {
 						payload := workflowPayloadForRecord(objectKey, record)
 						payload["scheduled_at"] = scheduledFor.UTC().Format(time.RFC3339Nano)

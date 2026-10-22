@@ -38,13 +38,13 @@ func databaseRetirementReceipt(retirement operationsmodel.DatabaseRetirement) op
 	evidence := databaseRetirementEvidenceReferences(retirement)
 	receipt := operationsmodel.OperationsReceipt{
 		Command: operationsmodel.OperationsCommand{
-			ID: retirement.ID, Owner: databaseRetirementOwner, Kind: databaseRetirementKind,
+			ID: retirement.ID, OperationID: retirement.OperationID, Owner: databaseRetirementOwner, Kind: databaseRetirementKind,
 			ActionKey:      "runtime.operations.database_retirement",
-			Scope:          operationsmodel.OperationsScope{SystemPurpose: databaseRetirementSystemPurpose, ResourceType: "database_object", ResourceID: retirement.ID},
+			Scope:          operationsmodel.OperationsScope{SystemPurpose: databaseRetirementSystemPurpose, ResourceType: "database_object", ResourceID: retirement.OperationID},
 			IdempotencyKey: identity, RequestFingerprint: identity, RequestedBy: retirement.Evidence.Owner,
 			Reason: retirement.BlockedReason, Status: operationsmodel.OperationsStatus(retirement.State), CreatedAt: retirement.UpdatedAt, UpdatedAt: retirement.UpdatedAt,
 		},
-		StatusURL: "/api/operations/database-retirements/" + retirement.ID,
+		StatusURL: "/api/operations/database-retirements/" + retirement.OperationID,
 		Result:    payload, Metadata: metadata, Evidence: evidence,
 	}
 	if retirement.State == operationsmodel.DatabaseRetirementBlocked {
@@ -63,6 +63,7 @@ func (s OperationsStore) GetDatabaseRetirement(ctx context.Context, id string) (
 	if err := database.UnmarshalTimeJSON(record.ResultJSON, &retirement); err != nil {
 		return operationsmodel.DatabaseRetirement{}, false, err
 	}
+	retirement.ID, retirement.OperationID = record.ID, record.OperationID
 	return retirement, true, nil
 }
 
@@ -97,7 +98,7 @@ func (s OperationsStore) TransitionDatabaseRetirement(ctx context.Context, retir
 	if err != nil {
 		return false, err
 	}
-	record, found, err := s.getDatabaseRetirementRecord(ctx, retirement.ID)
+	record, found, err := s.getDatabaseRetirementRecord(ctx, retirement.OperationID)
 	if err != nil || !found || record.Status != string(expected) {
 		return false, err
 	}
@@ -182,7 +183,7 @@ func (s OperationsStore) getDatabaseRetirementRecord(ctx context.Context, id str
 
 func (s OperationsStore) getDatabaseRetirementRecordWithLedger(ctx context.Context, ledger *sharedoperation.SQLStore, id string) (sharedoperation.Record, bool, error) {
 	return ledger.GetRecord(ctx, sharedoperation.RecordFilter{
-		SystemPurpose: databaseRetirementSystemPurpose, Owner: databaseRetirementOwner, Kind: databaseRetirementKind, ID: strings.TrimSpace(id),
+		SystemPurpose: databaseRetirementSystemPurpose, Owner: databaseRetirementOwner, Kind: databaseRetirementKind, OperationID: strings.TrimSpace(id),
 	})
 }
 

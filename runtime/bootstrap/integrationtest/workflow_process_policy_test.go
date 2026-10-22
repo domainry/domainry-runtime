@@ -33,7 +33,7 @@ func TestWorkflowActionContinuePolicyRecordsFailureAndContinues(t *testing.T) {
 	if err != nil || process.Status != "completed" {
 		t.Fatalf("expected continue policy to finish process, process=%#v err=%v", process, err)
 	}
-	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ID)
+	nodes, _ := workflowProcessStore(store).ListNodes(t.Context(), "workspace-primary", process.ProcessID)
 	failedActionIndex := -1
 	for index := range nodes {
 		if nodes[index].NodeID == "notify" {
@@ -59,14 +59,14 @@ func TestWorkflowManagerResolverUsesIdentityUserReportingLine(t *testing.T) {
 	}}
 	store, records, identity := workflowPolicyTestRuntimeWithIdentity(t, workflow)
 	defer store.Close()
-	mustUpsertIdentityUser(t, identity, identitysdk.User{ID: "line_manager"})
-	mustUpsertIdentityUser(t, identity, identitysdk.User{ID: "employee", ManagerUserID: "line_manager", ReportingPath: "/line_manager/employee"})
+	mustUpsertIdentityUser(t, identity, identitysdk.User{UserID: "line_manager"})
+	mustUpsertIdentityUser(t, identity, identitysdk.User{UserID: "employee", ManagerUserID: "line_manager", ReportingPath: "/line_manager/employee"})
 
 	process, err := runWorkflowProcess(t, store, records, workflow.Key, map[string]any{"employee_user": "employee"}, workflowPolicyPrincipal("employee", workflow.Key))
 	if err != nil {
 		t.Fatal(err)
 	}
-	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ID, "line_manager", "open", 10)
+	tasks, err := workflowProcessStore(store).ListTasks(t.Context(), "workspace-primary", process.ProcessID, "line_manager", "open", 10)
 	if err != nil || len(tasks) != 1 || tasks[0].AssigneeUserID != "line_manager" {
 		t.Fatalf("expected reporting-line manager approval task, tasks=%#v err=%v", tasks, err)
 	}
@@ -95,7 +95,7 @@ func workflowPolicyTestRuntimeWithIdentity(t *testing.T, workflow definitionmode
 		t.Fatal(err)
 	}
 	identity := newIntegrationTestIdentityProjection()
-	identity.upsertUser(identitysdk.User{ID: "employee_without_manager", Status: identitysdk.UserStatusActive})
+	identity.upsertUser(identitysdk.User{UserID: "employee_without_manager", Status: identitysdk.UserStatusActive})
 	return store, newWorkflowProcessTestService(t, store, workflow, identity), identity
 }
 

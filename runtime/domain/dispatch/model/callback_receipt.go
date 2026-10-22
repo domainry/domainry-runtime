@@ -11,7 +11,7 @@ const CallbackExecutionUseCase = "dispatch.callback.execute"
 // CallbackReceipt is Runtime-owned protocol coordination state. Downstream
 // business state remains owned by the target module or Integration delivery.
 type CallbackReceipt struct {
-	ID               string
+	OperationID      string
 	WorkspaceID      string
 	RuntimeID        string
 	Method           string
@@ -45,7 +45,7 @@ type CallbackClaimResult struct {
 
 type CallbackHeartbeat struct {
 	WorkspaceID  string
-	ReceiptID    string
+	OperationID  string
 	LeaseOwner   string
 	FencingToken int64
 	LeaseTTL     time.Duration
@@ -54,7 +54,7 @@ type CallbackHeartbeat struct {
 
 type CallbackCompletion struct {
 	WorkspaceID      string
-	ReceiptID        string
+	OperationID      string
 	DownstreamID     string
 	DownstreamOwner  string
 	DownstreamStatus string
@@ -66,7 +66,7 @@ type CallbackCompletion struct {
 
 type CallbackFailure struct {
 	WorkspaceID  string
-	ReceiptID    string
+	OperationID  string
 	LeaseOwner   string
 	FencingToken int64
 	Now          time.Time

@@ -26,7 +26,7 @@ func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Instal
 		return Installation{}, false, err
 	}
 	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
-		Columns("id", "created_at").
+		Columns("workspace_id", "created_at").
 		Where(query.Equal("initial_installation_identity", installationIdentity)).Build()
 	if err != nil {
 		return Installation{}, false, err
@@ -36,7 +36,7 @@ func LoadInstallation(ctx context.Context, store *database.RuntimeStore) (Instal
 	err = store.DB().QueryRowContext(ctx, statement, arguments...).Scan(&result.WorkspaceID, &initializedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		workspaceStatement, workspaceArguments, buildErr := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").
-			Columns("id").Build()
+			Columns("workspace_id").Build()
 		if buildErr != nil {
 			return Installation{}, false, buildErr
 		}

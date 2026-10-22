@@ -16,32 +16,32 @@ func TestDatabaseRetirementOperationalStatusAndListQueries(t *testing.T) {
 	now := time.Date(2026, 7, 19, 13, 14, 15, 0, time.UTC)
 	stale := now.Add(-2 * operationspolicy.MaximumRetirementEvidenceAge)
 	retirement := operationsmodel.DatabaseRetirement{
-		ID: "retirement-1", State: operationsmodel.DatabaseRetirementBlocked, BlockedReason: "access observed",
+		OperationID: "retirement-1", State: operationsmodel.DatabaseRetirementBlocked, BlockedReason: "access observed",
 		Evidence: operationsmodel.DatabaseRetirementEvidence{
 			Owner: "record", BackupVerifiedAt: &stale, RestoreDrillAt: &stale,
 			Observation: operationsmodel.DatabaseAccessObservation{WindowEnds: now.Add(time.Minute), ReadCount: 1},
 		},
 	}
-	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.ID: retirement}}
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.OperationID: retirement}}
 	service := NewDatabaseRetirementApplicationService(repository, nil, func() time.Time { return now }, nil)
 	unauthorized := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "viewer"}}
-	if _, err := service.OperationalStatus(t.Context(), retirement.ID, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
+	if _, err := service.OperationalStatus(t.Context(), retirement.OperationID, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("status authorization error = %v", err)
 	}
 	if _, err := service.List(t.Context(), "", 10, unauthorized); apperror.KindOf(err) != apperror.KindForbidden {
 		t.Fatalf("list authorization error = %v", err)
 	}
 	principal := databaseRetirementPrincipal()
-	status, err := service.OperationalStatus(t.Context(), retirement.ID, principal)
+	status, err := service.OperationalStatus(t.Context(), retirement.OperationID, principal)
 	if err != nil || status.ObservationRemainingSeconds != 60 || len(status.Alerts) != 4 {
 		t.Fatalf("status=%#v err=%v", status, err)
 	}
 	items, err := service.List(t.Context(), operationsmodel.DatabaseRetirementBlocked, 10, principal)
-	if err != nil || len(items) != 1 || items[0].ID != retirement.ID {
+	if err != nil || len(items) != 1 || items[0].OperationID != retirement.OperationID {
 		t.Fatalf("items=%#v err=%v", items, err)
 	}
 	service.now = func() time.Time { return now.Add(2 * time.Minute) }
-	status, err = service.OperationalStatus(t.Context(), retirement.ID, principal)
+	status, err = service.OperationalStatus(t.Context(), retirement.OperationID, principal)
 	if err != nil || status.ObservationRemainingSeconds != 0 {
 		t.Fatalf("expired observation status=%#v err=%v", status, err)
 	}
@@ -64,7 +64,7 @@ func TestOperationsControlBreakGlassAndDeadLetterQuerySurfaces(t *testing.T) {
 	now := time.Date(2026, 7, 19, 14, 15, 16, 0, time.UTC)
 	operations := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, func() time.Time { return now }, nil)
 	breakGlass := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{
-		"expired": {ID: "expired", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ExpiresAt: now},
+		"expired": {BreakGlassGrantID: "expired", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ExpiresAt: now},
 	}}
 	if err := operations.RegisterBreakGlass(breakGlass, &breakGlassAlertProbe{}); err != nil {
 		t.Fatal(err)

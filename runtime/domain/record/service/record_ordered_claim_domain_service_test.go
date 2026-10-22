@@ -73,7 +73,7 @@ func TestRecordOrderedClaimCoversGenericContractAndRepositoryEdges(t *testing.T)
 		t.Fatalf("empty claimed=%v err=%v", claimed, err)
 	}
 
-	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "item-1", Data: map[string]any{"status": "ready", "priority": 10}}}}
+	page := recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "item-1", Data: map[string]any{"status": "ready", "priority": 10}}}}
 	updateErr := errors.New("update failed")
 	if _, _, err := RecordClaimFirstEligible(t.Context(), &orderedClaimRepositoryStub{page: page, updateErr: updateErr}, valid); !errors.Is(err, updateErr) {
 		t.Fatalf("update err=%v", err)

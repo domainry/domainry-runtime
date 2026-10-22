@@ -14,8 +14,10 @@ func ManagedDatabaseCohortCreateStatement(renderer ormschema.Renderer) (string, 
 	if renderer == nil {
 		return "", fmt.Errorf("managed database cohort schema requires a renderer")
 	}
-	return "CREATE TABLE IF NOT EXISTS " + renderer.Table(ManagedDatabaseCohortTable) + " (" +
-		renderer.Identifier("marker_id") + " SMALLINT NOT NULL PRIMARY KEY, " +
-		renderer.Identifier("contract_version") + " VARCHAR(128) NOT NULL, " +
-		renderer.Identifier("database_identity_sha256") + " CHAR(64) NOT NULL)", nil
+	statement, _, err := ormschema.NewTableWithRequiredColumns(renderer, ManagedDatabaseCohortTable, physicalIDColumn()).IfNotExists().Columns(
+		ormschema.Column("marker_id", ormschema.SmallInt()).NotNull(),
+		ormschema.Column("contract_version", ormschema.Varchar(128)).NotNull(),
+		ormschema.Column("database_identity_sha256", ormschema.Varchar(64)).NotNull(),
+	).PrimaryKey("id").Unique("marker_id").Build()
+	return statement, err
 }

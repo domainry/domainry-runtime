@@ -24,7 +24,7 @@ func (decisionOnlyStore) CommitWorkflowDecision(context.Context, transactionmode
 
 func TestWorkflowExecuteAgentTaskFailureBranches(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: principal.WorkspaceID, Variables: map[string]any{}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: principal.WorkspaceID, Variables: map[string]any{}}
 	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "task", TaskVersion: "1"}}}
 	wantErr := errors.New("agent dispatch failure")
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}

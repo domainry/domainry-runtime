@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -75,7 +76,11 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 	value.ObjectKey, value.RecordID = strings.TrimSpace(value.ObjectKey), strings.TrimSpace(value.RecordID)
 	value.ActionKey, value.IdempotencyKey = strings.TrimSpace(value.ActionKey), strings.TrimSpace(value.IdempotencyKey)
 	value.RequestFingerprint, value.LeaseOwner = strings.TrimSpace(request.RequestFingerprint), strings.TrimSpace(request.LeaseOwner)
-	value.ID = businessActionExecutionID(value.WorkspaceID, value.ObjectKey, value.RecordID, value.ActionKey, value.IdempotencyKey)
+	operationID, err := businessActionOperationID(value.WorkspaceID, value.ObjectKey, value.RecordID, value.ActionKey, value.IdempotencyKey)
+	if err != nil {
+		return actionmodel.ActionExecutionClaimResult{}, err
+	}
+	value.OperationID = operationID
 	value.Status, value.FencingToken = string(idempotency.StatusProcessing), 1
 	value.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	value.CreatedAt, value.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
@@ -85,8 +90,8 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		return actionmodel.ActionExecutionClaimResult{}, beginErr
 	}
 	if guardErr := r.store.GuardSubjectEvidenceWrite(ctx, tx, value.WorkspaceID, sharedoperation.TableName,
-		[]string{"id", "owner", "resource_type", "resource_id", "requested_by"},
-		[]any{value.ID, actionExecutionOwner, value.ObjectKey, value.RecordID, value.ActorID}); guardErr != nil {
+		[]string{"operation_id", "owner", "resource_type", "resource_id", "requested_by"},
+		[]any{value.OperationID, actionExecutionOwner, value.ObjectKey, value.RecordID, value.ActorID}); guardErr != nil {
 		_ = tx.Rollback()
 		return actionmodel.ActionExecutionClaimResult{}, guardErr
 	}
@@ -104,7 +109,7 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		return actionmodel.ActionExecutionClaimResult{}, err
 	}
 	if !found {
-		return actionmodel.ActionExecutionClaimResult{}, database.MutationConstraintError(insertErr, "business_action_execution", value.ID, mutation.MutationConflictIdempotency)
+		return actionmodel.ActionExecutionClaimResult{}, database.MutationConstraintError(insertErr, "business_action_execution", value.OperationID, mutation.MutationConflictIdempotency)
 	}
 	decision := idempotency.Classify(idempotency.ReceiptState{Status: idempotency.Status(current.Status), Fingerprint: current.RequestFingerprint, Lease: actionExecutionLease(current)}, value.RequestFingerprint, now)
 	if request.PreventReclaim && decision == idempotency.DecisionAcquired {
@@ -122,7 +127,7 @@ func (r ActionBusinessExecutionStore) tryBeginExecutionOnce(ctx context.Context,
 		FinishedAt: &empty, ExpiresAt: &empty, UpdatedAt: &value.UpdatedAt,
 	}
 	filter := sharedoperation.RecordFilter{
-		WorkspaceID: value.WorkspaceID, ID: value.ID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		WorkspaceID: value.WorkspaceID, OperationID: value.OperationID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
 		RequestFingerprint: value.RequestFingerprint, LeaseExpiresAtOrBefore: now.Format(time.RFC3339Nano),
 		ReclaimableStatus: string(idempotency.StatusFailedRetryable), ExpiredLeaseStatus: string(idempotency.StatusProcessing),
 	}
@@ -172,13 +177,13 @@ func (r ActionBusinessExecutionStore) waitForExecutionByScope(ctx context.Contex
 	return actionmodel.ActionBusinessExecution{}, false, lastErr
 }
 
-func (r ActionBusinessExecutionStore) HeartbeatExecution(ctx context.Context, executionID, leaseOwner string, fencingToken int64, expiresAt, now time.Time) error {
+func (r ActionBusinessExecutionStore) HeartbeatExecution(ctx context.Context, operationID, leaseOwner string, fencingToken int64, expiresAt, now time.Time) error {
 	leaseExpiresAt, updatedAt, token := expiresAt.UTC().Format(time.RFC3339Nano), now.UTC().Format(time.RFC3339Nano), fencingToken
 	changed, err := sharedoperation.NewSQLStore(r.db, r.store.SQLRenderer).PatchRecord(ctx, sharedoperation.RecordFilter{
-		AllScopes: true, ID: strings.TrimSpace(executionID), Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		AllScopes: true, OperationID: strings.TrimSpace(operationID), Owner: actionExecutionOwner, Kind: actionExecutionKind,
 		LeaseOwner: strings.TrimSpace(leaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
 	}, sharedoperation.RecordChanges{LeaseExpiresAt: &leaseExpiresAt, UpdatedAt: &updatedAt})
-	return r.actionLeaseMutationResult(ctx, changed, err, executionID)
+	return r.actionLeaseMutationResult(ctx, changed, err, operationID)
 }
 
 func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, completion actionmodel.ActionExecutionCompletion) (actionmodel.ActionBusinessExecution, error) {
@@ -199,10 +204,10 @@ func (r ActionBusinessExecutionStore) CompleteExecution(ctx context.Context, com
 	}
 	filter, changes := actionExecutionCompletionPatch(completion, status, resultJSON, now)
 	changed, err := sharedoperation.NewSQLStore(r.db, r.store.SQLRenderer).PatchRecord(ctx, filter, changes)
-	if err := r.actionLeaseMutationResult(ctx, changed, err, completion.ExecutionID); err != nil {
+	if err := r.actionLeaseMutationResult(ctx, changed, err, completion.OperationID); err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
 	}
-	return r.findExecutionByID(ctx, completion.ExecutionID)
+	return r.findExecutionByID(ctx, completion.OperationID)
 }
 
 type actionExecutionTransaction struct {
@@ -251,13 +256,13 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 	recordStore := recordpersistence.NewRecordStore(t.owner.store)
 	for _, commit := range commits {
 		if err := recordStore.ApplyRecordMutationTx(ctx, t.executor, completion.Execution.WorkspaceID, commit); err != nil {
-			return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, commit.Object.Key, commit.Record.ID)
+			return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, commit.Object.Key, commit.Record.RecordID)
 		}
 	}
 	for _, evidence := range completion.AuditEvents {
 		evidence.WorkspaceID = completion.Execution.WorkspaceID
 		if err := recordStore.ApplyAuditTx(ctx, t.executor, evidence); err != nil {
-			return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "audit_event", evidence.ID)
+			return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "audit_event", evidence.AuditEventID)
 		}
 	}
 
@@ -279,10 +284,10 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 	filter, changes := actionExecutionCompletionPatch(completion, status, resultJSON, now)
 	changed, err := sharedoperation.NewSQLStore(t.owner.db, t.owner.store.SQLRenderer).PatchRecord(sharedoperation.WithExecutor(ctx, t.executor), filter, changes)
 	if err != nil {
-		return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "business_action_execution", completion.ExecutionID)
+		return actionmodel.ActionBusinessExecution{}, database.MutationTransactionError(err, "business_action_execution", completion.OperationID)
 	}
 	if !changed {
-		return actionmodel.ActionBusinessExecution{}, mutation.MutationConflict("business_action_execution", completion.ExecutionID, mutation.MutationConflictLeaseLost, nil)
+		return actionmodel.ActionBusinessExecution{}, mutation.MutationConflict("business_action_execution", completion.OperationID, mutation.MutationConflictLeaseLost, nil)
 	}
 	if err := ctx.Err(); err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
@@ -291,16 +296,16 @@ func (t *actionExecutionTransaction) Commit(ctx context.Context, commits []trans
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, sql.ErrTxDone) {
 			return actionmodel.ActionBusinessExecution{}, err
 		}
-		mapped := database.MutationTransactionError(err, "business_action_execution", completion.ExecutionID)
+		mapped := database.MutationTransactionError(err, "business_action_execution", completion.OperationID)
 		if mutation.IsTransactionTransient(mapped, "") || mutation.IsMutationConflict(mapped, "") {
 			return actionmodel.ActionBusinessExecution{}, mapped
 		}
-		return actionmodel.ActionBusinessExecution{}, mutation.TransactionCommitUnknown("business_action_execution", completion.ExecutionID, err)
+		return actionmodel.ActionBusinessExecution{}, mutation.TransactionCommitUnknown("business_action_execution", completion.OperationID, err)
 	}
 	t.done = true
 	recordStore.PublishCommittedOutboxWakeups(ctx, completion.Execution.WorkspaceID, commits)
 	recordStore.PublishCommittedNotificationWakeups(ctx, completion.Execution.WorkspaceID, commits)
-	return t.owner.findExecutionByID(ctx, completion.ExecutionID)
+	return t.owner.findExecutionByID(ctx, completion.OperationID)
 }
 
 func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
@@ -308,9 +313,12 @@ func (t *actionExecutionTransaction) commitSQL(ctx context.Context) error {
 }
 
 func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (actionmodel.ActionBusinessExecution, bool, error) {
-	id := businessActionExecutionID(workspaceID, objectKey, recordID, actionKey, idempotencyKey)
+	operationID, err := businessActionOperationID(workspaceID, objectKey, recordID, actionKey, idempotencyKey)
+	if err != nil {
+		return actionmodel.ActionBusinessExecution{}, false, err
+	}
 	record, found, err := sharedoperation.NewSQLStore(r.db, r.store.SQLRenderer).GetRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: id, Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		WorkspaceID: workspaceID, OperationID: operationID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
 	})
 	if err != nil || !found {
 		return actionmodel.ActionBusinessExecution{}, found, err
@@ -321,7 +329,7 @@ func (r ActionBusinessExecutionStore) findExecutionByScope(ctx context.Context, 
 
 func (r ActionBusinessExecutionStore) findExecutionByID(ctx context.Context, executionID string) (actionmodel.ActionBusinessExecution, error) {
 	record, found, err := sharedoperation.NewSQLStore(r.db, r.store.SQLRenderer).GetRecord(ctx, sharedoperation.RecordFilter{
-		AllScopes: true, ID: strings.TrimSpace(executionID), Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		AllScopes: true, OperationID: strings.TrimSpace(executionID), Owner: actionExecutionOwner, Kind: actionExecutionKind,
 	})
 	if err != nil {
 		return actionmodel.ActionBusinessExecution{}, err
@@ -343,12 +351,12 @@ func actionExecutionCompletionPatch(completion actionmodel.ActionExecutionComple
 	errorCode, expiresAt, finishedAt := strings.TrimSpace(completion.ErrorCode), completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
 	token := completion.FencingToken
 	return sharedoperation.RecordFilter{
-			WorkspaceID: completion.Execution.WorkspaceID, ID: completion.ExecutionID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
-			LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
-		}, sharedoperation.RecordChanges{
-			Status: &statusValue, ResultJSON: &resultJSON, MetadataJSON: &metadataJSON, ErrorCode: &errorCode,
-			FailureClass: &failureClass, ExpiresAt: &expiresAt, FinishedAt: &finishedAt, UpdatedAt: &finishedAt,
-		}
+		WorkspaceID: completion.Execution.WorkspaceID, OperationID: completion.OperationID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
+	}, sharedoperation.RecordChanges{
+		Status: &statusValue, ResultJSON: &resultJSON, MetadataJSON: &metadataJSON, ErrorCode: &errorCode,
+		FailureClass: &failureClass, ExpiresAt: &expiresAt, FinishedAt: &finishedAt, UpdatedAt: &finishedAt,
+	}
 }
 
 func actionExecutionRecord(value actionmodel.ActionBusinessExecution, resultJSON json.RawMessage) sharedoperation.Record {
@@ -359,12 +367,12 @@ func actionExecutionRecord(value actionmodel.ActionBusinessExecution, resultJSON
 		failureClass = "terminal"
 	}
 	return sharedoperation.Record{
-		ID: value.ID, WorkspaceID: value.WorkspaceID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
+		ID: value.ID, OperationID: value.OperationID, WorkspaceID: value.WorkspaceID, Owner: actionExecutionOwner, Kind: actionExecutionKind,
 		ActionKey: value.ActionKey, ResourceType: value.ObjectKey, ResourceID: value.RecordID,
-		IdempotencyKey: value.ID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
-		Status: value.Status, StatusURL: "/operations/" + value.ID, ResultJSON: resultJSON,
+		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
+		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: resultJSON,
 		MetadataJSON: json.RawMessage(actionExecutionMetadataJSON(value.ResponseStatus, value.RoleKey)), ErrorCode: value.ErrorCode,
-		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.ID, EvidenceJSON: json.RawMessage(`[]`),
+		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -400,12 +408,12 @@ func (r ActionBusinessExecutionStore) actionLeaseMutationResult(ctx context.Cont
 
 func actionBusinessExecution(record sharedoperation.Record) (actionmodel.ActionBusinessExecution, error) {
 	execution := actionmodel.ActionBusinessExecution{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, ActionKey: record.ActionKey, ObjectKey: record.ResourceType, RecordID: record.ResourceID,
+		ID: record.ID, OperationID: record.OperationID, WorkspaceID: record.WorkspaceID, ActionKey: record.ActionKey, ObjectKey: record.ResourceType, RecordID: record.ResourceID,
 		RequestFingerprint: record.RequestFingerprint, ActorID: record.RequestedBy, IdempotencyKey: record.Reference, Status: record.Status,
 		ErrorCode: record.ErrorCode, LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != actionExecutionOwner || record.Kind != actionExecutionKind || record.IdempotencyKey != execution.ID || record.Correlation != execution.ID {
+	if record.Owner != actionExecutionOwner || record.Kind != actionExecutionKind || record.IdempotencyKey != execution.OperationID || record.Correlation != execution.OperationID {
 		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("action execution operation identity is invalid")
 	}
 	var metadata actionExecutionOperationMetadata
@@ -418,13 +426,14 @@ func actionBusinessExecution(record sharedoperation.Record) (actionmodel.ActionB
 	return execution, nil
 }
 
-func businessActionExecutionID(workspaceID, objectKey, recordID, actionKey, idempotencyKey string) string {
-	return "business_action:" + integrationWorkspaceID(workspaceID) + ":" + businessActionShortHash(strings.Join([]string{strings.TrimSpace(objectKey), strings.TrimSpace(recordID), strings.TrimSpace(actionKey), strings.TrimSpace(idempotencyKey)}, ":"))
+func businessActionOperationID(workspaceID, objectKey, recordID, actionKey, idempotencyKey string) (string, error) {
+	digest := businessActionShortHash(strings.Join([]string{integrationWorkspaceID(workspaceID), strings.TrimSpace(objectKey), strings.TrimSpace(recordID), strings.TrimSpace(actionKey), strings.TrimSpace(idempotencyKey)}, "\x00"))
+	return entityid.Derive("op", "runtime.business-action", digest)
 }
 
 func businessActionShortHash(value string) string {
 	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])[:16]
+	return hex.EncodeToString(sum[:])
 }
 
 func integrationWorkspaceID(value string) string {

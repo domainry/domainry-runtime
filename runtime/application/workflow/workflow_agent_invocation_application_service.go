@@ -141,7 +141,7 @@ func (s *WorkflowApplicationService) inspectAgentWorkflowInvocation(ctx context.
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, true, err
 	}
-	if !found || execution.ID != receipt.ExecutionID || execution.ActorID != principal.UserID || execution.WorkspaceID != principal.WorkspaceID || execution.WorkflowKey != workflow.Key || execution.IdempotencyKey != key || execution.Trigger != "agent" || execution.ProcessID == "" {
+	if !found || execution.ExecutionID != receipt.ExecutionID || execution.ActorID != principal.UserID || execution.WorkspaceID != principal.WorkspaceID || execution.WorkflowKey != workflow.Key || execution.IdempotencyKey != key || execution.Trigger != "agent" || execution.ProcessID == "" {
 		return workflowmodel.WorkflowExecution{}, true, conflict(idempotency.ErrorCodeReceiptUnavailable)
 	}
 	return execution, true, nil

@@ -70,15 +70,15 @@ func (s *PublicationHandoffApplicationService) Accept(ctx context.Context, reque
 	}
 	fingerprint := sha256.Sum256(request.Payload)
 	message, err := s.repository.InsertOutbox(ctx, request.WorkspaceID, publicationmodel.Message{
-		ID: request.MessageID, WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey,
+		MessageID: request.MessageID, WorkspaceID: request.WorkspaceID, ConnectorKey: request.ConnectorKey,
 		ConnectionKey: request.ConnectionKey, Operation: request.Operation, Status: "queued", Payload: payload,
 		DedupKey: request.DeduplicationKey, RequestFingerprint: fmt.Sprintf("%x", fingerprint[:]), CreatedBy: strings.TrimSpace(createdBy),
 	})
 	if err != nil {
 		return integrationsdk.DeliveryReceipt{}, err
 	}
-	s.Wake(ctx, Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
-	return integrationsdk.DeliveryReceipt{MessageID: message.ID, Status: integrationsdk.DeliveryStatusAccepted}, nil
+	s.Wake(ctx, Locator{WorkspaceID: message.WorkspaceID, MessageID: message.MessageID})
+	return integrationsdk.DeliveryReceipt{MessageID: message.MessageID, Status: integrationsdk.DeliveryStatusAccepted}, nil
 }
 
 func NewPublicationHandoffApplicationService(deps Dependencies) *PublicationHandoffApplicationService {
@@ -145,7 +145,7 @@ func (s *PublicationHandoffApplicationService) GetBusinessPublicationHandoff(ctx
 		return publicationmodel.Handoff{}, apperror.New(apperror.KindNotFound, "backend.runtime.publication.handoff_not_found", nil, nil)
 	}
 	return publicationmodel.Handoff{
-		ID: message.ID, ConnectorKey: message.ConnectorKey, ConnectionKey: message.ConnectionKey,
+		ID: message.MessageID, ConnectorKey: message.ConnectorKey, ConnectionKey: message.ConnectionKey,
 		Operation: message.Operation, Status: message.Status, ResponseRef: message.ResponseRef,
 		Error: message.Error, AttemptCount: message.AttemptCount, CreatedAt: message.CreatedAt, UpdatedAt: message.UpdatedAt,
 	}, nil
@@ -167,7 +167,7 @@ func (s *PublicationHandoffApplicationService) SchedulePublicationRetry(ctx cont
 	if message.Status != "failed" && message.Status != "dead_letter" && message.Status != "cancelled" {
 		return message, apperror.New(apperror.KindBadRequest, "backend.runtime.publication.not_retryable", nil, nil)
 	}
-	return s.repository.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.ID, 0, strings.TrimSpace(request.Error))
+	return s.repository.ScheduleOutboxRetry(ctx, message.WorkspaceID, message.MessageID, 0, strings.TrimSpace(request.Error))
 }
 
 func (s *PublicationHandoffApplicationService) Wake(_ context.Context, locator Locator) {
@@ -216,7 +216,7 @@ func (s *PublicationHandoffApplicationService) recoverLocators(ctx context.Conte
 	workerplatform.SetQueueMetrics(queueKind, len(due), oldestPublicationLag(due, s.worker.Clock.Now()))
 	result := make([]workerplatform.DurableTaskLocator, 0, len(due))
 	for _, message := range due {
-		result = append(result, workerplatform.DurableTaskLocator{QueueKind: queueKind, WorkspaceID: message.WorkspaceID, TaskID: message.ID})
+		result = append(result, workerplatform.DurableTaskLocator{QueueKind: queueKind, WorkspaceID: message.WorkspaceID, TaskID: message.MessageID})
 	}
 	return result, nil
 }
@@ -234,7 +234,7 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 		return message, err
 	}
 	now := s.worker.Clock.Now()
-	claimed, claimedOK, err := s.workerRepo.ClaimOutbox(ctx, message.WorkspaceID, message.ID, s.worker.WorkerID.String(), now.Format(time.RFC3339))
+	claimed, claimedOK, err := s.workerRepo.ClaimOutbox(ctx, message.WorkspaceID, message.MessageID, s.worker.WorkerID.String(), now.Format(time.RFC3339))
 	if err != nil || !claimedOK {
 		if err != nil {
 			workerplatform.ObserveOutcome(queueKind, "failed")
@@ -249,13 +249,13 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	ctx, executionSpan := telemetry.StartLinkedSpan(ctx, "domainry.runtime.worker", "runtime.publication.execute", asyncLink, trace.WithSpanKind(trace.SpanKindConsumer))
 	defer executionSpan.End()
 	if requestcontext.OwnerExecutionID(ctx) == "" {
-		ctx = requestcontext.WithOwnerExecutionID(ctx, claimed.ID)
+		ctx = requestcontext.WithOwnerExecutionID(ctx, claimed.MessageID)
 	}
 	workCtx, stopHeartbeat := workerplatform.WithHeartbeat(ctx, 90*time.Second, func(heartbeatCtx context.Context) error {
 		if heartbeatErr := workerplatform.CheckFault(heartbeatCtx, s.worker.Faults, workerplatform.FaultWorkerHeartbeat); heartbeatErr != nil {
 			return heartbeatErr
 		}
-		_, heartbeatErr := s.workerRepo.HeartbeatOutbox(heartbeatCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
+		_, heartbeatErr := s.workerRepo.HeartbeatOutbox(heartbeatCtx, claimed.WorkspaceID, claimed.MessageID, claimed.LeaseOwner, claimed.FencingToken, s.worker.Clock.Now().Format(time.RFC3339))
 		return heartbeatErr
 	})
 	prepared := claimed.Payload
@@ -272,10 +272,10 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	if err == nil {
 		dedup := strings.TrimSpace(claimed.DedupKey)
 		if dedup == "" {
-			dedup = claimed.ID
+			dedup = claimed.MessageID
 		}
 		var receipt integrationsdk.DeliveryReceipt
-		receipt, err = s.delivery.Accept(workCtx, integrationsdk.DeliveryRequest{MessageID: claimed.ID, DeduplicationKey: dedup, WorkspaceID: claimed.WorkspaceID, ConnectorKey: claimed.ConnectorKey, ConnectionKey: claimed.ConnectionKey, Operation: claimed.Operation, Payload: payload})
+		receipt, err = s.delivery.Accept(workCtx, integrationsdk.DeliveryRequest{MessageID: claimed.MessageID, DeduplicationKey: dedup, WorkspaceID: claimed.WorkspaceID, ConnectorKey: claimed.ConnectorKey, ConnectionKey: claimed.ConnectionKey, Operation: claimed.Operation, Payload: payload})
 		if err == nil {
 			err = workerplatform.CheckFault(workCtx, s.worker.Faults, workerplatform.FaultProviderAfterSend)
 		}
@@ -284,7 +284,7 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 			if err == nil {
 				if err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerBeforeComplete); err == nil {
 					var completed publicationmodel.Message
-					completed, err = s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "accepted", strings.TrimSpace(receipt.InvocationID), "", s.worker.Clock.Now().Format(time.RFC3339))
+					completed, err = s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.MessageID, claimed.LeaseOwner, claimed.FencingToken, "accepted", strings.TrimSpace(receipt.InvocationID), "", s.worker.Clock.Now().Format(time.RFC3339))
 					if err == nil {
 						err = workerplatform.CheckFault(ctx, s.worker.Faults, workerplatform.FaultWorkerAfterComplete)
 					}
@@ -304,12 +304,12 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	if ctx.Err() != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		queued, updateErr := s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", s.worker.Clock.Now().Format(time.RFC3339))
+		queued, updateErr := s.workerRepo.UpdateOutboxStatus(cleanupCtx, claimed.WorkspaceID, claimed.MessageID, claimed.LeaseOwner, claimed.FencingToken, "queued", "", "", s.worker.Clock.Now().Format(time.RFC3339))
 		workerplatform.ObserveOutcome(queueKind, "cancelled")
 		return queued, updateErr
 	}
 	if claimed.AttemptCount >= maxHandoffAttempts {
-		dead, updateErr := s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
+		dead, updateErr := s.workerRepo.UpdateOutboxStatus(ctx, claimed.WorkspaceID, claimed.MessageID, claimed.LeaseOwner, claimed.FencingToken, "dead_letter", "", stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
 		if updateErr == nil {
 			workerplatform.ObserveOutcome(queueKind, "dead_letter")
 			logPublicationTransition(ctx, err, claimed, "dead_letter", false)
@@ -321,7 +321,7 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	}
 	// Delivery.Accept is idempotent by message/deduplication key, so an unknown
 	// transport outcome is safely retried without Runtime interpreting provider state.
-	retry, retryErr := s.workerRepo.ScheduleOutboxRetry(ctx, claimed.WorkspaceID, claimed.ID, claimed.LeaseOwner, claimed.FencingToken, retryDelay(claimed.AttemptCount), stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
+	retry, retryErr := s.workerRepo.ScheduleOutboxRetry(ctx, claimed.WorkspaceID, claimed.MessageID, claimed.LeaseOwner, claimed.FencingToken, retryDelay(claimed.AttemptCount), stableError(err), s.worker.Clock.Now().Format(time.RFC3339))
 	if retryErr != nil {
 		workerplatform.ObserveOutcome(queueKind, "failed")
 		return claimed, retryErr
@@ -335,7 +335,7 @@ func logPublicationTransition(ctx context.Context, cause error, message publicat
 	fields := logging.ErrorFields(cause, logging.Failure{Stage: "publication_handoff", Dependency: message.ConnectorKey, Retryable: retryable})
 	fields = append(fields,
 		zap.String("task_kind", queueKind),
-		zap.String("task_id", message.ID),
+		zap.String("task_id", message.MessageID),
 		zap.Int("attempt", message.AttemptCount),
 		zap.Int("max_attempts", maxHandoffAttempts),
 		zap.String("outcome", outcome),

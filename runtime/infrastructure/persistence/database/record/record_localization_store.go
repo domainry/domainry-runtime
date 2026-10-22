@@ -75,7 +75,7 @@ func (r RecordStore) applyRecordLocalization(ctx context.Context, workspaceID st
 	}
 	recordIDs := make([]string, 0, len(records))
 	for _, record := range records {
-		recordIDs = append(recordIDs, record.ID)
+		recordIDs = append(recordIDs, record.RecordID)
 	}
 	locales := recordmodel.RecordLocalizationLocales(locale, secondaryLocale)
 	values, err := r.ListRecordLocalizedValues(ctx, workspaceID, object, recordIDs, fields, locales)
@@ -93,13 +93,13 @@ func (r RecordStore) applyRecordLocalization(ctx context.Context, workspaceID st
 		resolution := &recordmodel.RecordLocalizationResolution{RequestedLocale: locale, FallbackLocale: secondaryLocale, FieldSources: map[string]string{}}
 		for _, field := range fields {
 			resolution.FieldSources[field] = "base"
-			if text, ok := lookup[recordLocalizedLookupKey(records[index].ID, field, locale)]; ok {
+			if text, ok := lookup[recordLocalizedLookupKey(records[index].RecordID, field, locale)]; ok {
 				records[index].Data[field] = text
 				resolution.FieldSources[field] = locale
 				continue
 			}
 			if secondaryLocale != "" && secondaryLocale != locale {
-				if text, ok := lookup[recordLocalizedLookupKey(records[index].ID, field, secondaryLocale)]; ok {
+				if text, ok := lookup[recordLocalizedLookupKey(records[index].RecordID, field, secondaryLocale)]; ok {
 					records[index].Data[field] = text
 					resolution.FieldSources[field] = secondaryLocale
 				}
@@ -184,7 +184,7 @@ func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string
 	searchValue := "%" + recordEscapeLikePattern(strings.ToLower(strings.TrimSpace(queryValue.Search))) + "%"
 	searchPredicates := make([]query.Predicate, 0, len(queryValue.SearchFields)+1)
 	for _, field := range queryValue.SearchFields {
-		searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(field)), searchValue))
+		searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(recordPhysicalField(object.Key, field))), searchValue))
 	}
 	const alias = "record_i18n_search"
 	localizedValues := recordLocalizationAny(localized)
@@ -192,7 +192,7 @@ func recordLocalizedSearchPredicate(s *database.RuntimeStore, workspaceID string
 	conditions := []query.Predicate{
 		query.EqualValue(query.QualifiedColumn(alias, "workspace_id"), workspaceID),
 		query.EqualValue(query.QualifiedColumn(alias, "object_key"), object.Key),
-		query.EqualExpressions(query.QualifiedColumn(alias, "record_id"), query.TableColumn(object.Key, "id")),
+		query.EqualExpressions(query.QualifiedColumn(alias, "record_id"), query.TableColumn(object.Key, recordBusinessIDColumn(object.Key))),
 		query.InExpression(query.QualifiedColumn(alias, "field_key"), localizedValues...),
 		query.InExpression(query.QualifiedColumn(alias, "locale"), locales...),
 		query.LikeValueEscaped(query.Lower(query.QualifiedColumn(alias, "text_value")), searchValue),
@@ -215,15 +215,16 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 	}
 	orders := make([]query.Order, 0, len(queryValue.Sort)+1)
 	for _, rule := range queryValue.Sort {
+		physicalField := recordPhysicalField(object.Key, rule.Field)
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
 		if strings.TrimSpace(queryValue.Locale) == "" || !localizedSet[rule.Field] {
 			if queryValue.StableNullsLast {
-				orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNull(rule.Field), 1).Else(0)))
+				orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNull(physicalField), 1).Else(0)))
 			}
 			if direction == "DESC" {
-				orders = append(orders, query.Descending(rule.Field))
+				orders = append(orders, query.Descending(physicalField))
 			} else {
-				orders = append(orders, query.Ascending(rule.Field))
+				orders = append(orders, query.Ascending(physicalField))
 			}
 			continue
 		}
@@ -231,7 +232,7 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 		for _, locale := range recordmodel.RecordLocalizationLocales(queryValue.Locale, queryValue.FallbackLocale) {
 			values = append(values, query.ScalarSubquery(recordLocalizedValueTable, query.Column("text_value"), query.And(
 				query.Equal("workspace_id", workspaceID), query.Equal("object_key", object.Key),
-				query.EqualExpressions(query.Column("record_id"), query.TableColumn(object.Key, "id")),
+				query.EqualExpressions(query.Column("record_id"), query.TableColumn(object.Key, recordBusinessIDColumn(object.Key))),
 				query.Equal("field_key", rule.Field), query.Equal("locale", locale),
 			)))
 		}

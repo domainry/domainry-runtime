@@ -51,16 +51,16 @@ func (p *importExecutionProbe) FindRecordMutationExecution(context.Context, reco
 	if p.lookupErr != nil {
 		return recordmodel.RecordMutationExecution{}, false, p.lookupErr
 	}
-	return p.execution, p.execution.ID != "", nil
+	return p.execution, p.execution.OperationID != "", nil
 }
 
 func (p *importExecutionProbe) TryBeginRecordMutation(_ context.Context, request recordmodel.RecordMutationClaimRequest) (recordmodel.RecordMutationClaimResult, error) {
 	if p.beginErr != nil {
 		return recordmodel.RecordMutationClaimResult{}, p.beginErr
 	}
-	if p.execution.ID == "" {
+	if p.execution.OperationID == "" {
 		p.execution = request.Execution
-		p.execution.ID, p.execution.RequestFingerprint = "import-execution", request.RequestFingerprint
+		p.execution.OperationID, p.execution.RequestFingerprint = "import-execution", request.RequestFingerprint
 		p.execution.Status, p.execution.LeaseOwner, p.execution.FencingToken = string(idempotency.StatusProcessing), request.LeaseOwner, 1
 		return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: p.execution}, nil
 	}
@@ -119,7 +119,7 @@ func TestImportIdempotentClaimStageReplayAndConflictEvidence(t *testing.T) {
 		CreateIdempotent: func(_ context.Context, _ string, data map[string]any, key string, _ principalmodel.Principal) (recordmodel.Record, bool, error) {
 			replayed := created[key]
 			created[key] = true
-			return recordmodel.Record{ID: key, Data: data}, replayed, nil
+			return recordmodel.Record{RecordID: key, Data: data}, replayed, nil
 		},
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace"}, RequestID: "request"})
@@ -238,7 +238,7 @@ func TestImportServiceAppliesValidPreviewThroughCreatePort(t *testing.T) {
 		CanWrite: func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 		CreateRecord: func(_ context.Context, _ string, data map[string]any, _ principalmodel.Principal) (recordmodel.Record, error) {
 			created = append(created, recordvalidation.RecordCloneData(data))
-			return recordmodel.Record{ID: "created"}, nil
+			return recordmodel.Record{RecordID: "created"}, nil
 		},
 		Audit: func(_ context.Context, event, _, _ string, _ principalmodel.Principal, _ string, _, _, _ map[string]any) {
 			events = append(events, event)
@@ -278,10 +278,10 @@ func TestImportServiceUsesOperationAndRowKeysForResumeReplayAndConflict(t *testi
 				return recordmodel.Record{}, false, errors.New("injected row failure")
 			}
 			if completedRows[key] {
-				return recordmodel.Record{ID: key}, true, nil
+				return recordmodel.Record{RecordID: key}, true, nil
 			}
 			completedRows[key] = true
-			return recordmodel.Record{ID: key, Data: data}, false, nil
+			return recordmodel.Record{RecordID: key, Data: data}, false, nil
 		},
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}, RequestID: "request-a"})

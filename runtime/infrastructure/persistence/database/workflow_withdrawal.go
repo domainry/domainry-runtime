@@ -17,7 +17,7 @@ import (
 // together. No task list limit can leave uncancelled children behind.
 func ApplyWorkflowWithdrawalTx(ctx context.Context, store *RuntimeStore, tx ActionExecutionExecutor, workspaceID string, commit transactionmodel.WorkflowWithdrawalCommit) error {
 	p := commit.Process
-	if strings.TrimSpace(workspaceID) == "" || p.WorkspaceID != workspaceID || p.ID == "" || p.InitiatorID != commit.ActorID || commit.ActorID == "" || commit.CommandID == "" || p.Status != "cancelled" || commit.ExpectedStatus != "waiting" || commit.ExpectedUpdatedAt == "" || p.UpdatedAt == commit.ExpectedUpdatedAt {
+	if strings.TrimSpace(workspaceID) == "" || p.WorkspaceID != workspaceID || p.ProcessID == "" || p.InitiatorID != commit.ActorID || commit.ActorID == "" || commit.CommandID == "" || p.Status != "cancelled" || commit.ExpectedStatus != "waiting" || commit.ExpectedUpdatedAt == "" || p.UpdatedAt == commit.ExpectedUpdatedAt {
 		return fmt.Errorf("invalid workflow withdrawal commit")
 	}
 	variables, err := json.Marshal(NonNilMap(p.Variables))
@@ -30,7 +30,7 @@ func ApplyWorkflowWithdrawalTx(ctx context.Context, store *RuntimeStore, tx Acti
 	}
 	statement, args, err := query.NewWorkspaceUpdateBuilder(store.SQLRenderer, "_workflow_process_instances", workspaceID).
 		Set("status", p.Status).Set("current_node_ids_json", "[]").Set("variables_json", string(variables)).Set("result_json", string(result)).Set("updated_at", timevalue.Millis(p.UpdatedAt)).Set("completed_at", timevalue.Millis(p.CompletedAt)).
-		Where(query.And(query.Equal("id", p.ID), query.Equal("workflow_key", p.WorkflowKey), query.Equal("initiator_id", commit.ActorID), query.Equal("status", commit.ExpectedStatus), query.Equal("updated_at", timevalue.Millis(commit.ExpectedUpdatedAt)))).Build()
+		Where(query.And(query.Equal("process_id", p.ProcessID), query.Equal("workflow_key", p.WorkflowKey), query.Equal("initiator_id", commit.ActorID), query.Equal("status", commit.ExpectedStatus), query.Equal("updated_at", timevalue.Millis(commit.ExpectedUpdatedAt)))).Build()
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func ApplyWorkflowWithdrawalTx(ctx context.Context, store *RuntimeStore, tx Acti
 		if item.table == "_workflow_executions" {
 			active = query.Or(active, query.And(query.Equal("status", "failed"), query.NotEqual("next_run_at", int64(0))))
 		}
-		builder.Where(query.And(query.Equal("process_id", p.ID), active))
+		builder.Where(query.And(query.Equal("process_id", p.ProcessID), active))
 		statement, args, err := builder.Build()
 		if err != nil {
 			return err
@@ -82,8 +82,8 @@ func ApplyWorkflowWithdrawalTx(ctx context.Context, store *RuntimeStore, tx Acti
 	}
 	metadata, _ := json.Marshal(map[string]any{"command_id": commit.CommandID, "business_outcome": "withdrawn"})
 	statement, args, err = query.NewWorkspaceInsertBuilder(store.SQLRenderer, "_workflow_process_events", workspaceID).
-		Columns("id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at").
-		Values(commit.CommandID, p.ID, "", "", "process_cancelled", commit.ActorID, "workflow.event.process.cancelled", string(metadata), timevalue.Millis(p.CompletedAt)).Build()
+		Columns("event_id", "process_id", "node_id", "task_id", "event", "actor_id", "summary", "metadata_json", "created_at").
+		Values(commit.CommandID, p.ProcessID, "", "", "process_cancelled", commit.ActorID, "workflow.event.process.cancelled", string(metadata), timevalue.Millis(p.CompletedAt)).Build()
 	if err != nil {
 		return err
 	}

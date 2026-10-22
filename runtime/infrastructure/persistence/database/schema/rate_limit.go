@@ -7,13 +7,13 @@ import (
 )
 
 func EnsureRateLimitSchema(ctx context.Context, store Store) error {
-	statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), "_rate_limit_buckets").
+	statement, arguments, err := ormschema.NewTableWithRequiredColumns(store.RuntimeRenderer(), "_rate_limit_buckets", physicalIDColumn()).
 		IfNotExists().Columns(
 		ormschema.Column("bucket_key", ormschema.TextKey(255)).NotNull(),
 		ormschema.Column("window_start_ns", ormschema.BigInt()).NotNull(),
 		ormschema.Column("request_count", ormschema.BigInt()).NotNull(),
 		ormschema.Column("updated_at_ns", ormschema.BigInt()).NotNull(),
-	).PrimaryKey("bucket_key").Build()
+	).PrimaryKey("id").Unique("bucket_key").Build()
 	if err != nil {
 		return fmt.Errorf("build runtime rate-limit schema: %w", err)
 	}

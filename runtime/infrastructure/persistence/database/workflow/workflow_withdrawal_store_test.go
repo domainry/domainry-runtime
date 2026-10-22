@@ -22,7 +22,7 @@ func TestWorkflowWithdrawalFailureRollsBackBusinessAndAllWorkflowRows(t *testing
 			defer store.Close()
 			repository := NewWorkflowProcessStore(store)
 			if fail {
-				if err := repository.InsertEvent(t.Context(), process.WorkspaceID, workflowmodel.WorkflowProcessEvent{ID: "withdrawal", ProcessID: process.ID, CreatedAt: workflowTestTimeV2}); err != nil {
+				if err := repository.InsertEvent(t.Context(), process.WorkspaceID, workflowmodel.WorkflowProcessEvent{EventID: "withdrawal", ProcessID: process.ProcessID, CreatedAt: workflowTestTimeV2}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -34,7 +34,7 @@ func TestWorkflowWithdrawalFailureRollsBackBusinessAndAllWorkflowRows(t *testing
 				t.Fatal(err)
 			}
 			defer tx.Rollback()
-			mutation := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "withdrawn"}}, ExpectedUpdatedAt: workflowTestTimeV1, WorkflowWithdrawals: []transactionmodel.WorkflowWithdrawalCommit{commit}}
+			mutation := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "withdrawn"}}, ExpectedUpdatedAt: workflowTestTimeV1, WorkflowWithdrawals: []transactionmodel.WorkflowWithdrawalCommit{commit}}
 			err = recordpersistence.NewRecordStore(store).ApplyRecordMutationTx(t.Context(), tx, process.WorkspaceID, mutation)
 			if fail {
 				if err == nil {
@@ -70,12 +70,12 @@ func TestWorkflowWithdrawalFailureRollsBackBusinessAndAllWorkflowRows(t *testing
 func TestWorkflowWithdrawalCancelsMoreThan500TasksWithoutTouchingHistory(t *testing.T) {
 	worker := openWorkflowWorkerEdgeStore(t)
 	repository := NewWorkflowProcessStore(worker.store)
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ID: "process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ProcessID: "process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	if err := repository.InsertProcess(t.Context(), "workspace-a", process); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 520; i++ {
-		task := workflowmodel.WorkflowTask{ID: fmt.Sprintf("task_%04d", i), ProcessID: process.ID, Status: "open", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+		task := workflowmodel.WorkflowTask{TaskID: fmt.Sprintf("task_%04d", i), ProcessID: process.ProcessID, Status: "open", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 		if i == 519 {
 			task.Status, task.Decision = "approved", "approved"
 		}
@@ -87,7 +87,7 @@ func TestWorkflowWithdrawalCancelsMoreThan500TasksWithoutTouchingHistory(t *test
 	if err := repository.CommitWorkflowWithdrawal(t.Context(), transactionmodel.WorkflowWithdrawalCommit{Process: process, ExpectedStatus: "waiting", ExpectedUpdatedAt: workflowTestTimeV1, ActorID: "user", CommandID: "withdraw-all"}); err != nil {
 		t.Fatal(err)
 	}
-	open, err := repository.ListTasks(t.Context(), "workspace-a", process.ID, "", "open", 500)
+	open, err := repository.ListTasks(t.Context(), "workspace-a", process.ProcessID, "", "open", 500)
 	if err != nil || len(open) != 0 {
 		t.Fatalf("uncancelled tasks=%d err=%v", len(open), err)
 	}
@@ -115,7 +115,7 @@ func TestWorkflowWithdrawalAndApprovalComputedFromOneRevisionHaveOneWinner(t *te
 	}, 2)
 	go func() {
 		<-start
-		won, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{WorkspaceID: process.WorkspaceID, Process: &approved, ExpectedProcessUpdatedAt: process.UpdatedAt, DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: task.AssigneeUserID, UpdateNodes: []workflowmodel.WorkflowNodeInstance{node}, RecordMutations: []transactionmodel.RecordMutationCommit{{Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV3, Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: workflowTestTimeV1}}})
+		won, err := NewWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{WorkspaceID: process.WorkspaceID, Process: &approved, ExpectedProcessUpdatedAt: process.UpdatedAt, DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: task.AssigneeUserID, UpdateNodes: []workflowmodel.WorkflowNodeInstance{node}, RecordMutations: []transactionmodel.RecordMutationCommit{{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV3, Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: workflowTestTimeV1}}})
 		results <- struct {
 			kind string
 			won  bool
@@ -126,7 +126,7 @@ func TestWorkflowWithdrawalAndApprovalComputedFromOneRevisionHaveOneWinner(t *te
 		<-start
 		tx, err := store.DB().BeginTx(t.Context(), recordMutationTxOptions())
 		if err == nil {
-			err = recordpersistence.NewRecordStore(store).ApplyRecordMutationTx(t.Context(), tx, process.WorkspaceID, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "withdrawn"}}, ExpectedUpdatedAt: workflowTestTimeV1, WorkflowWithdrawals: []transactionmodel.WorkflowWithdrawalCommit{{Process: withdrawn, ExpectedStatus: "waiting", ExpectedUpdatedAt: process.UpdatedAt, ActorID: process.InitiatorID, CommandID: "withdraw-race"}}})
+			err = recordpersistence.NewRecordStore(store).ApplyRecordMutationTx(t.Context(), tx, process.WorkspaceID, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "withdrawn"}}, ExpectedUpdatedAt: workflowTestTimeV1, WorkflowWithdrawals: []transactionmodel.WorkflowWithdrawalCommit{{Process: withdrawn, ExpectedStatus: "waiting", ExpectedUpdatedAt: process.UpdatedAt, ActorID: process.InitiatorID, CommandID: "withdraw-race"}}})
 			if err == nil {
 				err = tx.Commit()
 			} else {
@@ -158,16 +158,16 @@ func TestWorkflowWithdrawalAndApprovalComputedFromOneRevisionHaveOneWinner(t *te
 func TestWorkflowWithdrawalFencesTimerAndLateEngineReceipts(t *testing.T) {
 	worker := openWorkflowWorkerEdgeStore(t)
 	repository := NewWorkflowProcessStore(worker.store)
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ID: "timer-process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ProcessID: "timer-process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	if err := repository.InsertProcess(t.Context(), process.WorkspaceID, process); err != nil {
 		t.Fatal(err)
 	}
-	node := workflowmodel.WorkflowNodeInstance{ID: "timer-node", ProcessID: process.ID, NodeID: "timer", Status: "waiting", StartedAt: workflowTestTimeV1}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "timer-node", ProcessID: process.ProcessID, NodeID: "timer", Status: "waiting", StartedAt: workflowTestTimeV1}
 	if err := repository.InsertNode(t.Context(), process.WorkspaceID, node); err != nil {
 		t.Fatal(err)
 	}
 	execution := workflowWorkerEdgeExecution("timer-execution")
-	execution.ProcessID, execution.Status, execution.NextRunAt = process.ID, "failed", "2026-09-14T00:00:00Z"
+	execution.ProcessID, execution.Status, execution.NextRunAt = process.ProcessID, "failed", "2026-09-14T00:00:00Z"
 	if err := worker.InsertExecution(t.Context(), process.WorkspaceID, execution); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestWorkflowWithdrawalFencesTimerAndLateEngineReceipts(t *testing.T) {
 	if err := worker.UpdateExecution(t.Context(), process.WorkspaceID, execution); err == nil {
 		t.Fatal("late engine revived execution")
 	}
-	execution.ID = "late-insert"
+	execution.ExecutionID = "late-insert"
 	if err := worker.InsertExecution(t.Context(), process.WorkspaceID, execution); err == nil {
 		t.Fatal("late engine inserted live execution for cancelled process")
 	}
@@ -195,16 +195,16 @@ func TestWorkflowWithdrawalFencesTimerAndLateEngineReceipts(t *testing.T) {
 func TestWorkflowTimerClaimRollsBackWhenTimerNodeWriteFails(t *testing.T) {
 	worker := openWorkflowWorkerEdgeStore(t)
 	repository := NewWorkflowProcessStore(worker.store)
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ID: "process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ProcessID: "process", WorkflowKey: "approval", InitiatorID: "user", Status: "waiting", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	if err := repository.InsertProcess(t.Context(), process.WorkspaceID, process); err != nil {
 		t.Fatal(err)
 	}
 	process.Status, process.UpdatedAt = "running", workflowTestTimeV2
-	node := workflowmodel.WorkflowNodeInstance{ID: "missing-timer-node", ProcessID: process.ID, Status: "success"}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "missing-timer-node", ProcessID: process.ProcessID, Status: "success"}
 	if claimed, err := repository.ClaimWorkflowTimer(t.Context(), process.WorkspaceID, process, node, workflowTestTimeV1); err == nil || claimed {
 		t.Fatalf("missing timer node was committed: claimed=%v err=%v", claimed, err)
 	}
-	persisted, ok, err := repository.GetProcess(t.Context(), process.WorkspaceID, process.ID)
+	persisted, ok, err := repository.GetProcess(t.Context(), process.WorkspaceID, process.ProcessID)
 	if err != nil || !ok || persisted.Status != "waiting" || persisted.UpdatedAt != workflowTestTimeV1 {
 		t.Fatalf("failed node write stranded process: %#v err=%v", persisted, err)
 	}

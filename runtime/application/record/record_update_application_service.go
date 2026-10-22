@@ -155,7 +155,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		return recordmodel.Record{}, err
 	}
 	var auditMetadata map[string]any
-	if strings.TrimSpace(claim.Execution.ID) != "" {
+	if strings.TrimSpace(claim.Execution.OperationID) != "" {
 		auditMetadata = idempotency.AuditMetadata(claimAuditFacts(claim, "record.update", "succeeded"))
 	}
 	planned, err := s.planUpdate(ctx, objectKey, object, record, patch, localizedValues, auditMetadata, principal, authorizationPrincipal, authorizationScope)
@@ -163,7 +163,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		return recordmodel.Record{}, err
 	}
 	var receipt recordmutation.MutationReceiptCommit
-	if strings.TrimSpace(claim.Execution.ID) != "" {
+	if strings.TrimSpace(claim.Execution.OperationID) != "" {
 		receipt = func(ctx context.Context, canonical transactionmodel.RecordMutationCommit) error {
 			return s.dependencies.ExecutionRuntime.Commit(ctx, claim, canonical)
 		}
@@ -171,7 +171,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 	if err := s.dependencies.MutationKernel.CommitPlan(ctx, planned.plan, receipt); err != nil {
 		return recordmodel.Record{}, recordUpdateCommitError(err)
 	}
-	claim.Execution.ID = ""
+	claim.Execution.OperationID = ""
 	if err := ctx.Err(); err != nil {
 		return recordpolicy.RecordFilterReadable(principal, object, planned.record), err
 	}
@@ -251,11 +251,11 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		nextData["version"] = currentVersion + 1
 	}
 	recordpolicy.RecordApplyFieldDefaults(object, nextData)
-	if err := s.applyDerivedAndPipeline(ctx, object, record.ID, nextData, principal, pipelineStagePatched); err != nil {
+	if err := s.applyDerivedAndPipeline(ctx, object, record.RecordID, nextData, principal, pipelineStagePatched); err != nil {
 		return recordUpdatePlannedMutation{}, err
 	}
 	if s.dependencies.RunBefore != nil {
-		if err := s.dependencies.RunBefore(ctx, objectKey, "update", record.ID, inputPatch, beforeData, nextData, principal); err != nil {
+		if err := s.dependencies.RunBefore(ctx, objectKey, "update", record.RecordID, inputPatch, beforeData, nextData, principal); err != nil {
 			return recordUpdatePlannedMutation{}, err
 		}
 	}
@@ -263,7 +263,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		return recordUpdatePlannedMutation{}, err
 	}
 	if recordpolicy.RecordAutomationTransitionCandidate(beforeData, nextData) && s.dependencies.RunBefore != nil {
-		if err := s.dependencies.RunBefore(ctx, objectKey, "transition", record.ID, inputPatch, beforeData, nextData, principal); err != nil {
+		if err := s.dependencies.RunBefore(ctx, objectKey, "transition", record.RecordID, inputPatch, beforeData, nextData, principal); err != nil {
 			return recordUpdatePlannedMutation{}, err
 		}
 	}
@@ -275,13 +275,13 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		return recordUpdatePlannedMutation{}, err
 	}
 	if s.dependencies.ApplySelfEffects != nil {
-		changed, err := s.dependencies.ApplySelfEffects(ctx, object, beforeData, nextData, record.ID, principal)
+		changed, err := s.dependencies.ApplySelfEffects(ctx, object, beforeData, nextData, record.RecordID, principal)
 		if err != nil {
 			return recordUpdatePlannedMutation{}, err
 		}
 		if changed {
 			recordpolicy.RecordApplyFieldDefaults(object, nextData)
-			if err := s.applyDerivedAndPipeline(ctx, object, record.ID, nextData, principal, pipelineStagePatched); err != nil {
+			if err := s.applyDerivedAndPipeline(ctx, object, record.RecordID, nextData, principal, pipelineStagePatched); err != nil {
 				return recordUpdatePlannedMutation{}, err
 			}
 			if err := s.validateCandidate(ctx, objectKey, object, record, beforeData, nextData, patch, principal, authorizationPrincipal, false); err != nil {
@@ -290,12 +290,12 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		}
 	}
 	if s.dependencies.ValidateUnique != nil {
-		if err := s.dependencies.ValidateUnique(ctx, principal.WorkspaceID, objectKey, object, record.ID, nextData); err != nil {
+		if err := s.dependencies.ValidateUnique(ctx, principal.WorkspaceID, objectKey, object, record.RecordID, nextData); err != nil {
 			return recordUpdatePlannedMutation{}, err
 		}
 	}
 	if s.dependencies.ValidateDuplicate != nil {
-		if err := s.dependencies.ValidateDuplicate(ctx, principal.WorkspaceID, object, record.ID, nextData); err != nil {
+		if err := s.dependencies.ValidateDuplicate(ctx, principal.WorkspaceID, object, record.RecordID, nextData); err != nil {
 			return recordUpdatePlannedMutation{}, err
 		}
 	}
@@ -318,7 +318,7 @@ func (s *RecordUpdateApplicationService) planUpdate(ctx context.Context, objectK
 		}
 	}
 	if s.dependencies.BuildAudit != nil {
-		audit := s.dependencies.BuildAudit(ctx, "record_updated", objectKey, record.ID, principal, "Updated "+objectKey+" record", beforeData, record.Data, recordLocalizationAuditMetadata(auditMetadata, localizedValues))
+		audit := s.dependencies.BuildAudit(ctx, "record_updated", objectKey, record.RecordID, principal, "Updated "+objectKey+" record", beforeData, record.Data, recordLocalizationAuditMetadata(auditMetadata, localizedValues))
 		commit.Audit = &audit
 	}
 	if s.dependencies.UpdatedTriggers != nil && s.dependencies.PrepareWorkflow != nil {
@@ -385,7 +385,7 @@ func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, 
 	}
 	if !allowed {
 		err := recordUpdateError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
-		s.denied(ctx, objectKey, record.ID, principal, err, "owner_scope", patch)
+		s.denied(ctx, objectKey, record.RecordID, principal, err, "owner_scope", patch)
 		return err
 	}
 	if s.dependencies.ValidateRelations != nil {
@@ -394,7 +394,7 @@ func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, 
 		}
 	}
 	if includePolicies && s.dependencies.ValidatePolicies != nil {
-		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, record.ID, "update", principal); err != nil {
+		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, record.RecordID, "update", principal); err != nil {
 			return err
 		}
 	}

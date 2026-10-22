@@ -322,17 +322,17 @@ func (s *RecordExportApplicationService) relationLabels(ctx context.Context, sou
 		if pageSize > 200 {
 			pageSize = 200
 		}
-		page, err := s.dependencies.ListRecords(ctx, target, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, Filters: map[string]any{"id__in": idValues}}, principal)
+		page, err := s.dependencies.ListRecords(ctx, target, recordmodel.RecordListQuery{Page: 1, PageSize: pageSize, Filters: map[string]any{"record_id__in": idValues}}, principal)
 		if err != nil {
 			continue
 		}
 		targetObject := s.objects()[target]
 		for _, record := range page.Items {
-			label := record.ID
+			label := record.RecordID
 			if s.dependencies.RecordDisplay != nil {
 				_, label = s.dependencies.RecordDisplay(targetObject, record)
 			}
-			targetLabels[target][record.ID] = label
+			targetLabels[target][record.RecordID] = label
 		}
 	}
 	for fieldKey, target := range fieldTargets {
@@ -358,12 +358,12 @@ func (s *RecordExportApplicationService) identityLabels(ctx context.Context, ids
 		return
 	}
 	for _, user := range users {
-		if ids[user.ID] && (canRead || user.ID == principal.UserID) {
+		if ids[user.UserID] && (canRead || user.UserID == principal.UserID) {
 			label := strings.TrimSpace(user.Name)
 			if label == "" {
-				label = user.ID
+				label = user.UserID
 			}
-			labels[user.ID] = label
+			labels[user.UserID] = label
 		}
 	}
 }

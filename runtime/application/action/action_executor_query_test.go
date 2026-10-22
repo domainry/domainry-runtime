@@ -17,6 +17,14 @@ import (
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
+func TestRuntimeextRecordSeparatesBusinessIdentityFromPhysicalCursor(t *testing.T) {
+	source := recordmodel.Record{ID: 42, RecordID: "rec_random_business_id", Data: map[string]any{"name": "customer"}}
+	got := toRuntimeextRecord("customer", source)
+	if got.ID != source.RecordID || got.Cursor != "42" || got.ObjectKey != "customer" {
+		t.Fatalf("public record identity/cursor=%+v", got)
+	}
+}
+
 func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) {
 	var captured recordmodel.RecordListQuery
 	var capturedPrincipal principalmodel.Principal
@@ -32,7 +40,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 			}
 			captured = query
 			capturedPrincipal = principal
-			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "booking-1", Data: map[string]any{"status": "booked"}}}, Total: 51}, nil
+			return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "booking-1", Data: map[string]any{"status": "booked"}}}, Total: 51}, nil
 		}},
 		invocation: actionmodel.ActionInvocation{Principal: original},
 		action: definitionmodel.ActionSchema{
@@ -86,7 +94,7 @@ func TestBusinessActionQueryPreservesTypedFilterSortAndProjection(t *testing.T) 
 
 func TestBusinessActionQueryReadsCanonicalRecordCreatedEarlierInSameUnitOfWork(t *testing.T) {
 	created := recordmodel.Record{
-		ID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-07T00:00:00Z",
+		RecordID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-07T00:00:00Z",
 		Data: map[string]any{"identity_user_id": "identity-user-1", "employment_status": "active"},
 	}
 	execution := &businessActionExecution{
@@ -112,11 +120,11 @@ func TestBusinessActionQueryReadsCanonicalRecordCreatedEarlierInSameUnitOfWork(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Exists || result.Count != 1 || len(result.Records) != 1 || result.Records[0].ID != created.ID ||
+	if !result.Exists || result.Count != 1 || len(result.Records) != 1 || result.Records[0].ID != created.RecordID ||
 		result.Records[0].UpdatedAt != created.UpdatedAt || result.Records[0].Fields["identity_user_id"] != "identity-user-1" {
 		t.Fatalf("result=%+v", result)
 	}
-	if observed, ok := execution.observedRecords["employee_profile\x00employee-profile-1"]; !ok || observed.ID != created.ID {
+	if observed, ok := execution.observedRecords["employee_profile\x00employee-profile-1"]; !ok || observed.RecordID != created.RecordID {
 		t.Fatalf("observed=%#v", execution.observedRecords)
 	}
 }

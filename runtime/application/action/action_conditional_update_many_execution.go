@@ -51,7 +51,7 @@ func (e *businessActionExecution) ConditionalUpdateMany(ctx context.Context, req
 	page, err := e.dependencies.ListRecords(txCtx, request.ObjectKey, recordmodel.RecordListQuery{
 		Page: 1, PageSize: request.ExpectedCount, SkipTotal: true,
 		FilterExpression:         filterExpression,
-		Sort:                     []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}},
+		Sort:                     []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}},
 		LockIntent:               recordmodel.RecordQueryLockForUpdate,
 		OwnerOrganizationScopeID: e.targetOrganization.ID,
 	}, readPrincipal)
@@ -101,10 +101,10 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 	var commonPatch map[string]any
 	actionResource, actionOperation := definitionmodel.ActionPermissionSubject(e.action)
 	for index, before := range records {
-		if strings.TrimSpace(before.ID) == "" || seen[before.ID] {
+		if strings.TrimSpace(before.RecordID) == "" || seen[before.RecordID] {
 			return result, nil, apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_record_set_invalid", nil, nil)
 		}
-		seen[before.ID] = true
+		seen[before.RecordID] = true
 		e.observeRecord(request.ObjectKey, before)
 		planCtx := recordmutation.WithMutationInvocation(ctx, recordmutation.MutationInvocation{
 			Source: transactionmodel.MutationSourceAction, ActionKey: e.action.Key, IdempotencyKey: e.invocation.IdempotencyKey,
@@ -117,7 +117,7 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 			return result, nil, err
 		}
 		member := plan.CanonicalCommit()
-		if member.Operation != "update" || member.Object.Key != request.ObjectKey || member.Record.ID != before.ID || len(member.LocalizedValues) != 0 || len(member.Predicates) != 0 {
+		if member.Operation != "update" || member.Object.Key != request.ObjectKey || member.Record.RecordID != before.RecordID || len(member.LocalizedValues) != 0 || len(member.Predicates) != 0 {
 			return result, nil, apperror.New(apperror.KindConflict, "backend.action.conditional_update_many_plan_invalid", nil, nil)
 		}
 		patch := changedRecordFields(member.Object, before.Data, member.Record.Data)
@@ -128,7 +128,7 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 			commonPatch = patch
 			result = transactionmodel.RecordMutationCommit{
 				Operation: "conditional_update_many", Object: member.Object,
-				Record:              recordmodel.Record{ID: before.ID, OwnerOrgID: before.OwnerOrgID, UpdateBy: member.Record.UpdateBy, UpdatedAt: member.Record.UpdatedAt},
+				Record:              recordmodel.Record{RecordID: before.RecordID, OwnerOrgID: before.OwnerOrgID, UpdateBy: member.Record.UpdateBy, UpdatedAt: member.Record.UpdatedAt},
 				AuthorizationScope:  member.AuthorizationScope,
 				SetFilterExpression: filter, SetExpectedAffected: request.ExpectedCount,
 				SetOwnerOrganizationScope: e.targetOrganization.ID,
@@ -138,8 +138,8 @@ func (e *businessActionExecution) planConditionalUpdateMany(ctx context.Context,
 		} else if before.OwnerOrgID != result.Record.OwnerOrgID || !reflect.DeepEqual(member.AuthorizationScope, result.AuthorizationScope) {
 			return result, nil, apperror.New(apperror.KindForbidden, "backend.action.conditional_update_many_scope_mismatch", nil, nil)
 		}
-		ids = append(ids, before.ID)
-		result.SetRecordIDs = append(result.SetRecordIDs, before.ID)
+		ids = append(ids, before.RecordID)
+		result.SetRecordIDs = append(result.SetRecordIDs, before.RecordID)
 		if member.Audit != nil {
 			result.Audits = append(result.Audits, *member.Audit)
 		}
@@ -193,7 +193,7 @@ func validateConditionalUpdateManyExactCoverage(object definitionmodel.ObjectSch
 	for _, record := range records {
 		value := record.Data[field.Key]
 		if field.Key == "id" {
-			value = record.ID
+			value = record.RecordID
 		}
 		normalized, err := conditionalUpdateManyCoverageValue(field, value)
 		if err != nil || normalized == nil {

@@ -35,17 +35,17 @@ type identityLookupProbe struct {
 }
 
 func (p identityLookupProbe) FindUser(context.Context, identitysdk.UserLookup) (identitysdk.User, bool, error) {
-	return identitysdk.User{ID: "user-1"}, p.found, p.err
+	return identitysdk.User{UserID: "user-1"}, p.found, p.err
 }
 
 func (p identityLookupProbe) FindOrganizationUnit(context.Context, identitysdk.OrganizationUnitLookup) (identitysdk.OrganizationUnit, bool, error) {
-	return identitysdk.OrganizationUnit{ID: "organization-unit-1"}, p.organizationUnitFound, p.organizationUnitErr
+	return identitysdk.OrganizationUnit{OrganizationUnitID: "organization-unit-1"}, p.organizationUnitFound, p.organizationUnitErr
 }
 
 func TestRelationValidatorValidatesRecordExistenceAndScope(t *testing.T) {
 	customer := definitionmodel.ObjectSchema{Key: "customer"}
 	order := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Type: "relation", Config: map[string]any{"target": "customer"}}}}
-	repository := &relationRepositoryProbe{record: recordmodel.Record{ID: "customer-1"}, found: true}
+	repository := &relationRepositoryProbe{record: recordmodel.Record{RecordID: "customer-1"}, found: true}
 	allowed := true
 	validator := NewRecordRelationValidator(RecordRelationValidationDependencies{
 		Repository: repository,
@@ -73,7 +73,7 @@ func TestRelationValidatorPrefersPersistedScopeEvaluatorAndPropagatesErrors(t *t
 	order := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{
 		Key: "customer_id", Type: "relation", Config: map[string]any{"target": "customer"},
 	}}}
-	repository := &relationRepositoryProbe{record: recordmodel.Record{ID: "customer-1"}, found: true}
+	repository := &relationRepositoryProbe{record: recordmodel.Record{RecordID: "customer-1"}, found: true}
 	type scopeContextKey struct{}
 	ctx := context.WithValue(t.Context(), scopeContextKey{}, "transaction")
 	allowed := true
@@ -99,8 +99,8 @@ func TestRelationValidatorPrefersPersistedScopeEvaluatorAndPropagatesErrors(t *t
 			if callCtx.Value(scopeContextKey{}) != "transaction" {
 				t.Fatal("persisted scope evaluator did not receive the validation context")
 			}
-			if object.Key != "customer" || record.ID != "customer-1" {
-				t.Fatalf("persisted scope input object=%s record=%s", object.Key, record.ID)
+			if object.Key != "customer" || record.RecordID != "customer-1" {
+				t.Fatalf("persisted scope input object=%s record=%s", object.Key, record.RecordID)
 			}
 			return allowed, scopeErr
 		},
@@ -187,7 +187,7 @@ func TestRelationValidatorWrapsRepositoryAndIdentityErrors(t *testing.T) {
 }
 
 func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
-	records := map[string]map[string]recordmodel.Record{"customer": {"customer-1": {ID: "customer-1", WorkspaceID: "workspace-a", Deleted: true}}}
+	records := map[string]map[string]recordmodel.Record{"customer": {"customer-1": {RecordID: "customer-1", WorkspaceID: "workspace-a", Deleted: true}}}
 	if got := RecordWithPlannedRelations(nil, records); got != nil {
 		t.Fatalf("nil context became %#v", got)
 	}
@@ -209,7 +209,7 @@ func TestPlannedRelationContextNilAndEmptyEdges(t *testing.T) {
 	}
 	plannedContext := RecordWithPlannedRelations(ctx, records)
 	planned := RecordPlannedRelations(plannedContext)
-	if planned["customer"]["customer-1"].ID != "customer-1" || planned["customer"]["customer-1"].WorkspaceID != "workspace-a" || !planned["customer"]["customer-1"].Deleted {
+	if planned["customer"]["customer-1"].RecordID != "customer-1" || planned["customer"]["customer-1"].WorkspaceID != "workspace-a" || !planned["customer"]["customer-1"].Deleted {
 		t.Fatalf("planned relations=%#v", planned)
 	}
 }
@@ -240,7 +240,7 @@ func TestRelationValidatorAcceptsOnlyAlreadyPlannedAccessibleBatchRelations(t *t
 		},
 		CanAccessRecord: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return allowed },
 	})
-	planned := map[string]map[string]recordmodel.Record{"customer": {"customer-planned": {ID: "customer-planned", Data: map[string]any{"status": "active"}}}}
+	planned := map[string]map[string]recordmodel.Record{"customer": {"customer-planned": {RecordID: "customer-planned", Data: map[string]any{"status": "active"}}}}
 	ctx := RecordWithPlannedRelations(t.Context(), planned)
 	planned["customer"]["customer-planned"].Data["status"] = "mutated-after-context"
 	if err := validator.Validate(ctx, order, map[string]any{"customer_id": "customer-planned"}, principalmodel.Principal{}); err != nil {
@@ -256,7 +256,7 @@ func TestRelationValidatorAcceptsOnlyAlreadyPlannedAccessibleBatchRelations(t *t
 
 func TestPlannedRelationContextHandlesNilAndEmptyInputs(t *testing.T) {
 	if ctx := RecordWithPlannedRelations(nil, map[string]map[string]recordmodel.Record{
-		"customer": {"customer-1": {ID: "customer-1"}},
+		"customer": {"customer-1": {RecordID: "customer-1"}},
 	}); ctx != nil {
 		t.Fatalf("nil context changed to %#v", ctx)
 	}
@@ -264,7 +264,7 @@ func TestPlannedRelationContextHandlesNilAndEmptyInputs(t *testing.T) {
 	if got := RecordWithPlannedRelations(ctx, nil); got != ctx {
 		t.Fatal("empty planned relation set changed context")
 	}
-	if record, found := recordPlannedRelation(nil, "customer", "customer-1"); found || record.ID != "" {
+	if record, found := recordPlannedRelation(nil, "customer", "customer-1"); found || record.RecordID != "" {
 		t.Fatalf("nil lookup record=%#v found=%v", record, found)
 	}
 }
@@ -294,14 +294,14 @@ func TestRelationValidatorPlannedScopeErrorAndDefaultAccess(t *testing.T) {
 		},
 	})
 	ctx := RecordWithPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{
-		"customer": {"customer-1": {ID: "customer-1"}},
+		"customer": {"customer-1": {RecordID: "customer-1"}},
 	})
 	if err := validator.Validate(ctx, order, map[string]any{"customer_id": "customer-1"}, principalmodel.Principal{}); !errors.Is(err, scopeErr) {
 		t.Fatalf("planned scope error=%v", err)
 	}
 
 	validator = NewRecordRelationValidator(RecordRelationValidationDependencies{
-		Repository: &relationRepositoryProbe{record: recordmodel.Record{ID: "customer-1"}, found: true},
+		Repository: &relationRepositoryProbe{record: recordmodel.Record{RecordID: "customer-1"}, found: true},
 		Object: func(context.Context, string) (definitionmodel.ObjectSchema, bool) {
 			return customer, true
 		},

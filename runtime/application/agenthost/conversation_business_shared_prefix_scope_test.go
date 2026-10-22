@@ -125,7 +125,7 @@ func TestSharedBusinessPrefixAndNonnullScopesAuthorizeOriginalORMPages(t *testin
 			for id, name := range map[string]string{"own-1": "Alpha", "own-2": "Beta"} {
 				mutateBusinessEvidenceRow(t, reads, producer, reads.object, id, func(r *recordmodel.Record) { r.Data["name"] = tc.literal + name })
 			}
-			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{ID: "null-name", OwnerUserID: producer.UserID, Data: map[string]any{"name": nil, "amount": int64(1)}}); err != nil {
+			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{RecordID: "null-name", OwnerUserID: producer.UserID, Data: map[string]any{"name": nil, "amount": int64(1)}}); err != nil {
 				t.Fatal(err)
 			}
 			original := identity.Predicate{Fact: "name", Operator: identity.OperatorPrefix, Value: tc.literal}

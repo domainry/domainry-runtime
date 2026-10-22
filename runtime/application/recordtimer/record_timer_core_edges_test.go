@@ -60,7 +60,7 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 	if _, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", RecordTimerSchedule{ScheduleMode: "relative_field", SourceField: "missing"}, recordmodel.Record{}, nil, now); err == nil {
 		t.Fatal("source resolution error accepted")
 	}
-	if built, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", request, recordmodel.Record{}, nil, now); err != nil || built.Record.ID == "" {
+	if built, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", request, recordmodel.Record{}, nil, now); err != nil || built.Record.RecordID == "" {
 		t.Fatalf("built=%#v err=%v", built, err)
 	}
 	calendar, err := NewRecordTimerBusinessCalendarCatalog([]businesscalendarmodel.BusinessCalendarSchema{{
@@ -87,9 +87,9 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 		return errors.New("commit")
 	}
 	repository.get = func(_ context.Context, _ string, _ definitionmodel.ObjectSchema, id string) (recordmodel.Record, bool, error) {
-		return recordmodel.Record{ID: id}, true, nil
+		return recordmodel.Record{RecordID: id}, true, nil
 	}
-	if existing, err := service.Schedule(t.Context(), "workspace", request, recordmodel.Record{}, nil, now, recordTimerRuntimeScope()); err != nil || existing.ID == "" {
+	if existing, err := service.Schedule(t.Context(), "workspace", request, recordmodel.Record{}, nil, now, recordTimerRuntimeScope()); err != nil || existing.RecordID == "" {
 		t.Fatalf("idempotent existing=%#v err=%v", existing, err)
 	}
 	repository.get = func(context.Context, string, definitionmodel.ObjectSchema, string) (recordmodel.Record, bool, error) {
@@ -105,7 +105,7 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 		t.Fatal("commit/get error lost")
 	}
 	repository.commit = nil
-	if scheduled, err := service.Schedule(t.Context(), "workspace", request, recordmodel.Record{}, nil, now, recordTimerRuntimeScope()); err != nil || scheduled.ID == "" {
+	if scheduled, err := service.Schedule(t.Context(), "workspace", request, recordmodel.Record{}, nil, now, recordTimerRuntimeScope()); err != nil || scheduled.RecordID == "" {
 		t.Fatalf("scheduled=%#v err=%v", scheduled, err)
 	}
 }
@@ -113,7 +113,7 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 func TestRecordTimerTerminalAndSupersedeEdges(t *testing.T) {
 	now := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
 	service := recordTimerTestService(&recordTimerRepositoryFake{}, now, true)
-	timer := recordmodel.Record{ID: "timer", Data: map[string]any{"status": "scheduled", "fencing_token": 2, "nested": "value"}}
+	timer := recordmodel.Record{RecordID: "timer", Data: map[string]any{"status": "scheduled", "fencing_token": 2, "nested": "value"}}
 	if _, err := service.BuildRecordTimerTerminalMutation(t.Context(), timer, "invalid", now); err == nil {
 		t.Fatal("invalid terminal status accepted")
 	}
@@ -138,14 +138,14 @@ func TestRecordTimerTerminalAndSupersedeEdges(t *testing.T) {
 		t.Fatal("invalid replacement accepted")
 	}
 	mutations, err := service.BuildRecordTimerSupersedeMutations(t.Context(), "workspace", timer, recordTimerValidSchedule(now), now)
-	if err != nil || len(mutations) != 2 || mutations[0].Record.Data["status"] != "superseded" || mutations[1].Record.Data["supersedes_timer_id"] != timer.ID {
+	if err != nil || len(mutations) != 2 || mutations[0].Record.Data["status"] != "superseded" || mutations[1].Record.Data["supersedes_timer_id"] != timer.RecordID {
 		t.Fatalf("mutations=%#v err=%v", mutations, err)
 	}
 }
 
 func TestCancelRecordTimersEdges(t *testing.T) {
 	now := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
-	timer := recordmodel.Record{ID: "timer", Data: map[string]any{"status": "scheduled", "fencing_token": 1}}
+	timer := recordmodel.Record{RecordID: "timer", Data: map[string]any{"status": "scheduled", "fencing_token": 1}}
 	if _, err := recordTimerTestService(&recordTimerRepositoryFake{}, now, true).CancelRecordTimers(t.Context(), "workspace", "object", "record", "", now, principalmodel.SystemScope{}); err == nil {
 		t.Fatal("cancel without system scope accepted")
 	}
@@ -262,14 +262,21 @@ func TestRecordTimerNormalizationValidationAndHelpersEdges(t *testing.T) {
 	if delay := recordtimerpolicy.RetryDelay(retryRecord); delay != 15*time.Second {
 		t.Fatalf("clamped delay=%v", delay)
 	}
-	original := recordmodel.Record{ID: "record", Data: map[string]any{"status": "scheduled"}}
+	original := recordmodel.Record{RecordID: "record", Data: map[string]any{"status": "scheduled"}}
 	cloned := cloneRecordTimer(original)
 	cloned.Data["status"] = "changed"
 	if original.Data["status"] != "scheduled" {
 		t.Fatal("clone mutated original")
 	}
-	firstID := recordTimerID(" workspace ", valid)
-	if firstID == "" || firstID != recordTimerID("workspace", valid) || valid.String() == "" {
+	firstID, err := recordTimerID(" workspace ", valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondID, err := recordTimerID("workspace", valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstID == "" || firstID != secondID || valid.String() == "" {
 		t.Fatalf("id=%q string=%q", firstID, valid.String())
 	}
 }

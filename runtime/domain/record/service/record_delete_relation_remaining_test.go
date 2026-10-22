@@ -24,7 +24,7 @@ func TestDeleteRelationApplyRemainingErrorsAndOptionalCallbacks(t *testing.T) {
 	if err := serviceFor(&deleteRelationRepositoryProbe{err: errors.New("store")}).Apply(t.Context(), "workspace", "customer", "customer-1", RecordDeleteRelationCallbacks{}); err == nil {
 		t.Fatal("reference scan error was ignored")
 	}
-	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{"order": {{Items: []recordmodel.Record{{ID: "order-1"}}}}}}
+	repository := &deleteRelationRepositoryProbe{pages: map[string][]recordmodel.RecordPageResult{"order": {{Items: []recordmodel.Record{{RecordID: "order-1"}}}}}}
 	if err := serviceFor(repository).Apply(t.Context(), "workspace", "customer", "customer-1", RecordDeleteRelationCallbacks{}); err != nil {
 		t.Fatalf("nil callbacks failed: %v", err)
 	}

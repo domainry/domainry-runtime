@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -17,11 +18,11 @@ func TestProjectRecordCursorContinuesStableDescendingSort(t *testing.T) {
 		Filters: map[string]any{"provider": "google"}, Sorts: []runtimeengine.Sort{{Field: "last_message_at", Direction: "desc"}},
 	}
 	sorts := projectRecordCursorSorts(query.Sorts)
-	wantSorts := []recordmodel.RecordSortRule{{Field: "last_message_at", Direction: "desc"}, {Field: "id", Direction: "asc"}}
+	wantSorts := []recordmodel.RecordSortRule{{Field: "last_message_at", Direction: "desc"}, {Field: recordmodel.IDField, Direction: "asc"}}
 	if !reflect.DeepEqual(sorts, wantSorts) || !projectRecordCursorRequired(sorts) {
 		t.Fatalf("sorts=%#v", sorts)
 	}
-	last := recordmodel.Record{ID: "thread-050", QuerySortValues: map[string]any{"last_message_at": "2026-09-29T08:00:00Z"}}
+	last := recordmodel.Record{ID: 50, RecordID: "thread-050", QuerySortValues: map[string]any{"last_message_at": "2026-09-29T08:00:00Z"}}
 	raw, err := encodeProjectRecordCursor("runtime-a", "email_thread", query, principal, sorts, 99, 2, last)
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +45,7 @@ func TestProjectRecordCursorContinuesStableDescendingSort(t *testing.T) {
 		}},
 		{Operator: "and", Children: []recordmodel.RecordFilterExpression{
 			{Operator: "eq", Field: "last_message_at", Value: "2026-09-29T08:00:00Z"},
-			{Operator: "gt", Field: "id", Value: "thread-050"},
+			{Operator: "gt", Field: recordmodel.IDField, Value: json.Number("50")},
 		}},
 	}}
 	if !reflect.DeepEqual(filter, want) {
@@ -58,7 +59,7 @@ func TestProjectRecordCursorBindsPrincipalAndQuery(t *testing.T) {
 	query := runtimeengine.Query{PageSize: 25, Sorts: []runtimeengine.Sort{{Field: "updated_at", Direction: "desc"}}}
 	sorts := projectRecordCursorSorts(query.Sorts)
 	raw, err := encodeProjectRecordCursor("runtime-a", "email_draft", query, principal, sorts, 40, 2, recordmodel.Record{
-		ID: "draft-25", QuerySortValues: map[string]any{"updated_at": "2026-09-29T08:00:00Z"},
+		ID: 25, RecordID: "draft-25", QuerySortValues: map[string]any{"updated_at": "2026-09-29T08:00:00Z"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +82,7 @@ func TestProjectRecordCursorPreservesNullsLastBoundary(t *testing.T) {
 	query := runtimeengine.Query{PageSize: 2, Sorts: []runtimeengine.Sort{{Field: "due_at", Direction: "asc"}}}
 	sorts := projectRecordCursorSorts(query.Sorts)
 	raw, err := encodeProjectRecordCursor("runtime-a", "task", query, principal, sorts, 4, 2, recordmodel.Record{
-		ID: "task-2", QuerySortValues: map[string]any{"due_at": nil},
+		ID: 2, RecordID: "task-2", QuerySortValues: map[string]any{"due_at": nil},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +97,7 @@ func TestProjectRecordCursorPreservesNullsLastBoundary(t *testing.T) {
 	}
 	want := &recordmodel.RecordFilterExpression{Operator: "and", Children: []recordmodel.RecordFilterExpression{
 		{Operator: "is_null", Field: "due_at"},
-		{Operator: "gt", Field: "id", Value: "task-2"},
+		{Operator: "gt", Field: recordmodel.IDField, Value: json.Number("2")},
 	}}
 	if !reflect.DeepEqual(filter, want) {
 		t.Fatalf("filter=%#v want=%#v", filter, want)
@@ -105,7 +106,7 @@ func TestProjectRecordCursorPreservesNullsLastBoundary(t *testing.T) {
 
 func TestProjectRecordCursorKeepsIDAscendingFastPath(t *testing.T) {
 	sorts := projectRecordCursorSorts(nil)
-	if projectRecordCursorRequired(sorts) || !reflect.DeepEqual(sorts, []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}) {
+	if projectRecordCursorRequired(sorts) || !reflect.DeepEqual(sorts, []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}) {
 		t.Fatalf("sorts=%#v", sorts)
 	}
 }

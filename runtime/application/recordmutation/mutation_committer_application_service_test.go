@@ -47,7 +47,7 @@ func TestMutationKernelPlansAndCommitsThroughCanonicalBoundaries(t *testing.T) {
 	store := &mutationPlanStoreProbe{}
 	kernel := NewMutationKernelApplicationService(store, func(context.Context, principalmodel.Principal) (string, error) { return "revision-1", nil })
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user"}}
-	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1"}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1"}}
 	plan, err := kernel.Plan(t.Context(), principal, commit, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -85,13 +85,13 @@ func TestMutationCommitterUsesSingleAndBatchStoreBoundaries(t *testing.T) {
 	if err := service.CommitMutationPlan(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-	if store.single != 1 || store.workspace != "workspace-a" || store.commits[0].Record.ID != "order-1" {
+	if store.single != 1 || store.workspace != "workspace-a" || store.commits[0].Record.RecordID != "order-1" {
 		t.Fatalf("single probe=%+v", store)
 	}
 	if err := service.CommitMutationBatch(context.Background(), []transactionmodel.MutationPlan{first, second}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if store.batch != 1 || len(store.commits) != 2 || store.commits[1].Record.ID != "order-2" {
+	if store.batch != 1 || len(store.commits) != 2 || store.commits[1].Record.RecordID != "order-2" {
 		t.Fatalf("batch probe=%+v", store)
 	}
 }
@@ -101,7 +101,7 @@ func TestMutationCommitterReceiptOwnsAtomicBatchCommit(t *testing.T) {
 	plans := []transactionmodel.MutationPlan{mutationCommitterTestPlan(t, "workspace-a", "order-1")}
 	called := false
 	err := service.CommitMutationBatch(context.Background(), plans, func(_ context.Context, commits []transactionmodel.RecordMutationCommit) error {
-		called = len(commits) == 1 && commits[0].Record.ID == "order-1"
+		called = len(commits) == 1 && commits[0].Record.RecordID == "order-1"
 		return nil
 	})
 	if err != nil || !called {
@@ -114,7 +114,7 @@ func TestMutationCommitterReceiptOwnsAtomicSingleCommit(t *testing.T) {
 	plan := mutationCommitterTestPlan(t, "workspace-a", "order-1")
 	called := false
 	err := service.CommitMutationPlanWithReceipt(t.Context(), plan, func(_ context.Context, commit transactionmodel.RecordMutationCommit) error {
-		called = commit.Record.ID == "order-1"
+		called = commit.Record.RecordID == "order-1"
 		return nil
 	})
 	if err != nil || !called {
@@ -237,7 +237,7 @@ func mutationCommitterTestPlan(t *testing.T, workspace, recordID string) transac
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: recordID}}, nil)
+	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: recordID}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

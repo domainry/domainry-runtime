@@ -50,7 +50,7 @@ type recordsHTTPMutationExecutionStore struct {
 
 func (recordsHTTPMutationExecutionStore) TryBeginRecordMutation(_ context.Context, request recordmodel.RecordMutationClaimRequest) (recordmodel.RecordMutationClaimResult, error) {
 	execution := request.Execution
-	execution.ID = "record-mutation"
+	execution.OperationID = "record-mutation"
 	execution.LeaseOwner = request.LeaseOwner
 	execution.FencingToken = 1
 	return recordmodel.RecordMutationClaimResult{Decision: idempotency.DecisionAcquired, Execution: execution}, nil
@@ -61,7 +61,7 @@ func (s recordsHTTPMutationExecutionStore) CommitRecordMutationExecution(_ conte
 		*s.commit = commit
 	}
 	return recordmodel.RecordMutationExecution{
-		ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID, Result: commit.Record,
+		OperationID: completion.OperationID, WorkspaceID: completion.WorkspaceID, Result: commit.Record,
 	}, nil
 }
 
@@ -69,17 +69,17 @@ func (s recordsHTTPMutationExecutionStore) CommitRecordMutationBatchExecution(_ 
 	if s.commit != nil && len(commits) > 0 {
 		*s.commit = commits[len(commits)-1]
 	}
-	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}, nil
+	return recordmodel.RecordMutationExecution{OperationID: completion.OperationID, WorkspaceID: completion.WorkspaceID}, nil
 }
 
 func (recordsHTTPMutationExecutionStore) CompleteRecordMutationExecution(_ context.Context, completion recordmodel.RecordMutationCompletion) (recordmodel.RecordMutationExecution, error) {
-	return recordmodel.RecordMutationExecution{ID: completion.ExecutionID, WorkspaceID: completion.WorkspaceID}, nil
+	return recordmodel.RecordMutationExecution{OperationID: completion.OperationID, WorkspaceID: completion.WorkspaceID}, nil
 }
 
 func (r *recordsHTTPRepository) ListRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery) (recordmodel.RecordPageResult, error) {
 	r.listCalls++
 	r.lastQuery = query
-	if _, candidateLookup := query.Filters["id__in"]; candidateLookup && r.found && len(r.page.Items) == 0 {
+	if _, candidateLookup := query.Filters["record_id__in"]; candidateLookup && r.found && len(r.page.Items) == 0 {
 		if query.AuthorizationMode == recordmodel.RecordQueryAuthorizationDeny ||
 			(query.AuthorizationMode == recordmodel.RecordQueryAuthorizationPredicate && !recordsHTTPRecordMatchesScope(r.record, query.ScopeExpression)) {
 			return recordmodel.RecordPageResult{Page: 1, PageSize: 1}, r.err
@@ -114,7 +114,7 @@ func recordsHTTPRecordMatchesScope(record recordmodel.Record, expression *record
 		}
 		switch expression.FieldKey {
 		case "id":
-			return record.ID == expression.Values[0]
+			return record.RecordID == expression.Values[0]
 		case "owner_user_id":
 			return record.OwnerUserID == expression.Values[0]
 		case "owner_org_id":
@@ -272,8 +272,8 @@ func TestCreateRecordHTTPAcceptsLocalizedBusinessValues(t *testing.T) {
 
 func TestRecordsQueryReferenceAndImportPreviewHandlers(t *testing.T) {
 	repository := &recordsHTTPRepository{
-		page:   recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"name": "Ada"}}}, Page: 1, PageSize: 20, Total: 1},
-		record: recordmodel.Record{ID: "one", Data: map[string]any{"name": "Ada"}},
+		page:   recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "one", Data: map[string]any{"name": "Ada"}}}, Page: 1, PageSize: 20, Total: 1},
+		record: recordmodel.Record{RecordID: "one", Data: map[string]any{"name": "Ada"}},
 		found:  true,
 	}
 	application := recordsHTTPApplication(repository)
@@ -394,7 +394,7 @@ func TestRecordsInputGuardsRejectMissingKeysAndInvalidBodies(t *testing.T) {
 	*serviceErr = nil
 	repository := &recordsHTTPRepository{
 		found:  true,
-		record: recordmodel.Record{ID: "one", UpdatedAt: "version-1", Data: map[string]any{"name": "Before"}},
+		record: recordmodel.Record{RecordID: "one", UpdatedAt: "version-1", Data: map[string]any{"name": "Before"}},
 	}
 	handler.queries = recordsHTTPApplication(repository)
 	w = httptest.NewRecorder()
@@ -458,7 +458,7 @@ func TestBusinessProfileLifecycleHandlersRejectInvalidBodiesAndForwardApplicatio
 func TestBusinessProfileLifecycleHandlersReturnUpdatedRecord(t *testing.T) {
 	repository := &recordsHTTPRepository{
 		record: recordmodel.Record{
-			ID: "one", UpdatedAt: "version-1",
+			RecordID: "one", UpdatedAt: "version-1",
 			Data: map[string]any{"name": "Ada", "status": "active"},
 		},
 		found: true,

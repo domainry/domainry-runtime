@@ -60,7 +60,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test")
-	started, err := service.Start(t.Context(), receipt.Command.ID, receipt.Command.Scope, scope)
+	started, err := service.Start(t.Context(), receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestOperationsCoreFinalConditionEdges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transition(t.Context(), other.Command.ID, operationsmodel.OperationsStatusCreated, operationsmodel.OperationsStatusFailed, other.Command.Scope); err != nil {
+	if _, err := service.transition(t.Context(), other.Command.OperationID, operationsmodel.OperationsStatusCreated, operationsmodel.OperationsStatusFailed, other.Command.Scope); err != nil {
 		t.Fatalf("non-start transition error = %v", err)
 	}
 }
@@ -158,45 +158,45 @@ func TestOperationsBreakGlassFinalAvailabilityReplayAndListEdges(t *testing.T) {
 	}
 
 	now := time.Date(2026, 7, 20, 4, 5, 6, 0, time.UTC)
-	grant := operationsmodel.OperationsBreakGlassGrant{ID: "grant", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, Revision: 1, IncidentRef: "INC-1", AlertTarget: "pager", AuditEventID: "audit"}
-	repository := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{grant.ID: grant}}
+	grant := operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: "grant", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, Revision: 1, IncidentRef: "INC-1", AlertTarget: "pager", AuditEventID: "audit"}
+	repository := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{grant.BreakGlassGrantID: grant}}
 	ledger := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	service = NewOperationsApplicationService(ledger, nil, func() time.Time { return now }, func() string { return "disable-replay" })
 	if err := service.RegisterBreakGlass(repository, &breakGlassAlertProbe{}); err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.DisableBreakGlass(t.Context(), grant.ID, validDisable, "disable", admin)
+	first, err := service.DisableBreakGlass(t.Context(), grant.BreakGlassGrantID, validDisable, "disable", admin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayed, err := service.DisableBreakGlass(t.Context(), grant.ID, validDisable, "disable", admin)
+	replayed, err := service.DisableBreakGlass(t.Context(), grant.BreakGlassGrantID, validDisable, "disable", admin)
 	if err != nil || replayed.Grant.State != operationsmodel.OperationsBreakGlassRevoked {
 		t.Fatalf("disable replay=%#v err=%v", replayed, err)
 	}
 	replaceOperationsReceipt(ledger, func(receipt *operationsmodel.OperationsReceipt) { receipt.Result = []byte("{") })
-	if _, err := service.DisableBreakGlass(t.Context(), grant.ID, validDisable, "disable", admin); apperror.CodeOf(err) != "backend.operations.break_glass_receipt_invalid" {
+	if _, err := service.DisableBreakGlass(t.Context(), grant.BreakGlassGrantID, validDisable, "disable", admin); apperror.CodeOf(err) != "backend.operations.break_glass_receipt_invalid" {
 		t.Fatalf("malformed disable replay error = %v", err)
 	}
 	replaceOperationsReceipt(ledger, func(receipt *operationsmodel.OperationsReceipt) {
 		receipt.Command.Status = operationsmodel.OperationsStatusCreated
 	})
-	if result, err := service.DisableBreakGlass(t.Context(), grant.ID, validDisable, "disable", admin); err != nil || result.Grant.State != operationsmodel.OperationsBreakGlassRevoked {
+	if result, err := service.DisableBreakGlass(t.Context(), grant.BreakGlassGrantID, validDisable, "disable", admin); err != nil || result.Grant.State != operationsmodel.OperationsBreakGlassRevoked {
 		t.Fatalf("non-succeeded disable replay error = %v", err)
 	}
 	startBase := &operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}
 	startLedger := &operationsUpdateFailureProbe{operationsRepositoryProbe: startBase, failAt: 1}
 	startService := NewOperationsApplicationService(startLedger, nil, func() time.Time { return now }, func() string { return "disable-start" })
-	if err := startService.RegisterBreakGlass(&breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{grant.ID: grant}}, &breakGlassAlertProbe{}); err != nil {
+	if err := startService.RegisterBreakGlass(&breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{grant.BreakGlassGrantID: grant}}, &breakGlassAlertProbe{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := startService.DisableBreakGlass(t.Context(), grant.ID, validDisable, "disable-start", admin); apperror.CodeOf(err) != "backend.operations.transition_failed" {
+	if _, err := startService.DisableBreakGlass(t.Context(), grant.BreakGlassGrantID, validDisable, "disable-start", admin); apperror.CodeOf(err) != "backend.operations.transition_failed" {
 		t.Fatalf("disable start error = %v", err)
 	}
 
 	future := now.Add(time.Minute)
 	listRepository := &breakGlassRepositoryProbe{grants: map[string]operationsmodel.OperationsBreakGlassGrant{
-		"revoked": {ID: "revoked", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassRevoked},
-		"future":  {ID: "future", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ExpiresAt: future},
+		"revoked": {BreakGlassGrantID: "revoked", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassRevoked},
+		"future":  {BreakGlassGrantID: "future", WorkspaceID: admin.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ExpiresAt: future},
 	}}
 	listService := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, func() time.Time { return now }, func() string { return "break-list" })
 	if err := listService.RegisterBreakGlass(listRepository, &breakGlassAlertProbe{}); err != nil {

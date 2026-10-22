@@ -51,7 +51,7 @@ func TestInstructionDispatcherBusinessActionFailureAndRecordSelection(t *testing
 		t.Fatalf("render error=%v", err)
 	}
 	render := renderContext(map[string]any{})
-	record := &recordmodel.Record{ID: "order-1"}
+	record := &recordmodel.Record{RecordID: "order-1"}
 	if _, err := dispatcher.Execute(t.Context(), automationmodel.AutomationRuleSchema{ObjectKey: "order", Trigger: automationmodel.AutomationTriggerSchema{Phase: "after"}}, instruction, render, record, principalmodel.Principal{}); !errors.Is(err, want) {
 		t.Fatalf("invoke error=%v", err)
 	}
@@ -92,7 +92,7 @@ func TestInstructionDispatcherLeavesActionInputEmptyWhenNotConfigured(t *testing
 			Key: "invoke", Type: "invoke_business_action", Config: map[string]any{"action_key": "order.run"},
 		},
 		renderContext(map[string]any{"source": "record-payload"}),
-		&recordmodel.Record{ID: "order-1"},
+		&recordmodel.Record{RecordID: "order-1"},
 		principalmodel.Principal{},
 	)
 	if err != nil {

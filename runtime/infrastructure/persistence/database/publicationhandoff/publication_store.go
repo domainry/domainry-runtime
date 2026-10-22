@@ -2,9 +2,7 @@ package publicationhandoff
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	publicationmodel "github.com/domainry/domainry-runtime/runtime/domain/publication/model"
@@ -12,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
@@ -36,7 +35,7 @@ func (s PublicationStore) GetOutbox(ctx context.Context, workspaceID, id string)
 	if err != nil {
 		return publicationmodel.Message{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(query.Equal("id", strings.TrimSpace(id)))).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(publicationPredicate(query.Equal("message_id", strings.TrimSpace(id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, false, err
 	}
@@ -61,7 +60,7 @@ func (s PublicationStore) ListOutbox(ctx context.Context, workspaceID, connector
 	if status = strings.TrimSpace(status); status != "" {
 		predicates = append(predicates, query.Equal("status", status))
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(query.And(predicates...)).OrderBy(query.Descending("created_at")).Limit(limit).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).Columns(publicationColumns...).Where(query.And(predicates...)).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build Runtime publication query: %w", err)
 	}
@@ -107,8 +106,11 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	if value.RequestFingerprint == "" {
 		value.RequestFingerprint = fingerprint
 	}
-	if strings.TrimSpace(value.ID) == "" {
-		value.ID = publicationIdentity(workspaceID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.DedupKey)
+	if strings.TrimSpace(value.MessageID) == "" {
+		value.MessageID, err = entityid.New("pubmsg")
+		if err != nil {
+			return publicationmodel.Message{}, fmt.Errorf("generate Runtime publication identity: %w", err)
+		}
 	}
 	if strings.TrimSpace(value.Status) == "" {
 		value.Status = "queued"
@@ -123,8 +125,8 @@ func (s PublicationStore) InsertOutbox(ctx context.Context, workspaceID string, 
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("encode Runtime publication payload: %w", err)
 	}
-	columns := []string{"id", "publication_type", "intent_json", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "last_error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
-	values := []any{value.ID, "integration.connector", "{}", value.OperationID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, "", value.AttemptCount, timevalue.Millis(value.NextAttemptAt), timevalue.Millis(value.LastAttemptAt), value.LeaseOwner, timevalue.Millis(value.LeaseExpiresAt), value.FencingToken, value.CreatedBy, timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
+	columns := []string{"message_id", "publication_type", "intent_json", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "last_error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at"}
+	values := []any{value.MessageID, "integration.connector", "{}", value.OperationID, value.ConnectorKey, value.ConnectionKey, value.Operation, value.Status, string(payload), value.EventID, value.RequestRef, value.DedupKey, value.RequestFingerprint, value.ResponseRef, value.Error, "", value.AttemptCount, timevalue.Millis(value.NextAttemptAt), timevalue.Millis(value.LastAttemptAt), value.LeaseOwner, timevalue.Millis(value.LeaseExpiresAt), value.FencingToken, value.CreatedBy, timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, s.db, workspaceID, "_publication_outbox", columns, values); err != nil {
 		return publicationmodel.Message{}, err
 	}
@@ -168,7 +170,7 @@ func (s PublicationStore) UpdateOutboxStatus(ctx context.Context, workspaceID, i
 	}
 	queryValue, args, err := builder.
 		Set("status", strings.TrimSpace(status)).Set("response_ref", strings.TrimSpace(responseRef)).Set("error", strings.TrimSpace(errorText)).Set("next_attempt_at", int64(0)).Set("updated_at", timevalue.Millis(now)).
-		Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
+		Where(publicationPredicate(query.And(query.Equal("message_id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication status update: %w", err)
 	}
@@ -213,7 +215,7 @@ func (s PublicationStore) ScheduleOutboxRetry(ctx context.Context, workspaceID, 
 	if errorText = strings.TrimSpace(errorText); errorText != "" {
 		builder.Set("error", errorText)
 	}
-	queryValue, args, err := builder.Where(publicationPredicate(query.And(query.Equal("id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
+	queryValue, args, err := builder.Where(publicationPredicate(query.And(query.Equal("message_id", id), s.store.SubjectEvidenceWriteAllowed(workspaceID, "_publication_outbox", id)))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, fmt.Errorf("build Runtime publication retry: %w", err)
 	}
@@ -241,7 +243,7 @@ var _ publicationrepository.Repository = PublicationStore{}
 var _ publicationrepository.Reader = PublicationStore{}
 
 var publicationColumns = []string{
-	"id", "workspace_id", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
+	"id", "message_id", "workspace_id", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at",
 }
 
 type publicationScanner interface{ Scan(...any) error }
@@ -251,7 +253,7 @@ func scanPublication(row publicationScanner) (publicationmodel.Message, error) {
 	var payloadJSON string
 	var connectionKey, eventID, requestRef, responseRef, errorText sql.NullString
 	var nextAttemptAt, lastAttemptAt, leaseExpiresAt, createdAt, updatedAt int64
-	if err := row.Scan(&message.ID, &message.WorkspaceID, &message.OperationID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &nextAttemptAt, &lastAttemptAt, &message.LeaseOwner, &leaseExpiresAt, &message.FencingToken, &message.CreatedBy, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&message.ID, &message.MessageID, &message.WorkspaceID, &message.OperationID, &message.ConnectorKey, &connectionKey, &message.Operation, &message.Status, &payloadJSON, &eventID, &requestRef, &message.DedupKey, &message.RequestFingerprint, &responseRef, &errorText, &message.AttemptCount, &nextAttemptAt, &lastAttemptAt, &message.LeaseOwner, &leaseExpiresAt, &message.FencingToken, &message.CreatedBy, &createdAt, &updatedAt); err != nil {
 		return publicationmodel.Message{}, err
 	}
 	message.NextAttemptAt, message.LastAttemptAt, message.LeaseExpiresAt = timevalue.String(nextAttemptAt), timevalue.String(lastAttemptAt), timevalue.String(leaseExpiresAt)
@@ -277,15 +279,10 @@ func publicationPredicate(predicate query.Predicate) query.Predicate {
 	return query.And(query.Equal("publication_type", "integration.connector"), predicate)
 }
 
-func publicationIdentity(workspaceID, connectorKey, connectionKey, operation, dedupKey string) string {
-	digest := sha256.Sum256([]byte(strings.Join([]string{workspaceID, connectorKey, connectionKey, operation, dedupKey}, "\x00")))
-	return "publication_handoff:" + hex.EncodeToString(digest[:])[:24]
-}
-
 func WorkspaceID(value string) string { return strings.TrimSpace(value) }
 
-func OutboxDedupID(workspaceID, connectorKey, connectionKey, operation, dedupKey string) string {
-	return publicationIdentity(strings.TrimSpace(workspaceID), strings.TrimSpace(connectorKey), strings.TrimSpace(connectionKey), strings.TrimSpace(operation), strings.TrimSpace(dedupKey))
+func NewOutboxID() (string, error) {
+	return entityid.New("pubmsg")
 }
 
 func (s PublicationStore) findByDedup(ctx context.Context, value publicationmodel.Message) (publicationmodel.Message, bool, error) {

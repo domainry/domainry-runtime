@@ -24,6 +24,9 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	if err != nil {
 		return recordmodel.RecordPageResult{}, err
 	}
+	if strings.TrimSpace(queryValue.RootObjectKey) == "" {
+		queryValue.RootObjectKey = object.Key
+	}
 	queryValue.FilterExpression, err = recordvalidation.RecordNormalizeFilterExpression(object, queryValue.FilterExpression)
 	if err != nil {
 		return recordmodel.RecordPageResult{}, fmt.Errorf("normalize record filter: %w", err)
@@ -104,7 +107,11 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 				},
 			}
 		}
-		predicate = query.And(predicate, query.GreaterThan("id", afterID))
+		physicalID, parseErr := strconv.ParseInt(afterID, 10, 64)
+		if parseErr != nil || physicalID < 1 {
+			return recordmodel.RecordPageResult{}, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.record.pagination_cursor_invalid"}
+		}
+		predicate = query.And(predicate, query.GreaterThan("id", physicalID))
 	}
 	if queryValue.Page > 1 && strings.TrimSpace(queryValue.AfterID) == "" {
 		return recordmodel.RecordPageResult{}, &apperror.AppError{
@@ -131,7 +138,7 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 		fetchLimit++
 	}
 	selectBuilder := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).
-		Projections(recordListProjections(queryValue.SelectFields)...).
+		Projections(recordListProjections(object.Key, queryValue.SelectFields)...).
 		Where(predicate).
 		OrderBy(recordLocalizedOrders(workspaceID, object, queryValue)...).
 		Limit(fetchLimit)
@@ -173,7 +180,7 @@ func (r RecordStore) ListRecords(ctx context.Context, workspaceID string, object
 	// keeps it independent of anything that pass may drop.
 	nextAfterID := ""
 	if hasNext && len(records) > 0 && recordQueryUsesAscendingIDOrder(queryValue.Sort) {
-		nextAfterID = records[len(records)-1].ID
+		nextAfterID = strconv.FormatInt(records[len(records)-1].ID, 10)
 	}
 	records, err = r.applyRecordLocalization(
 		ctx,
@@ -199,5 +206,5 @@ func recordQueryUsesAscendingIDOrder(sortRules []recordmodel.RecordSortRule) boo
 	if len(sortRules) == 0 {
 		return true
 	}
-	return len(sortRules) == 1 && strings.TrimSpace(sortRules[0].Field) == "id" && !strings.EqualFold(strings.TrimSpace(sortRules[0].Direction), "desc")
+	return len(sortRules) == 1 && strings.TrimSpace(sortRules[0].Field) == recordmodel.IDField && !strings.EqualFold(strings.TrimSpace(sortRules[0].Direction), "desc")
 }

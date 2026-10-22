@@ -25,9 +25,9 @@ func ActiveIdentityWorkspaces(ctx context.Context, store *database.RuntimeStore,
 	}
 	predicate := query.And(query.Equal("status", "active"), query.Or(query.IsNull("initial_installation_identity"), query.Equal("initial_installation_identity", installationID)))
 	if reference != "" {
-		predicate = query.And(predicate, query.Or(query.Equal("id", reference), query.Equal("canonical_code", reference)))
+		predicate = query.And(predicate, query.Or(query.Equal("workspace_id", reference), query.Equal("canonical_code", reference)))
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").Columns("id").Where(predicate).OrderBy(query.Ascending("id")).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").Columns("workspace_id").Where(predicate).OrderBy(query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}

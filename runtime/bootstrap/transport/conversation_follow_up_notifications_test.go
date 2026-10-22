@@ -25,11 +25,11 @@ func (r *followUpPrincipalResolver) Resolve(ctx context.Context, request identit
 
 func TestAgentFollowUpNotificationPublisherRevalidatesAndNarrowsIntent(t *testing.T) {
 	application := identitysdk.ApplicationScope{WorkspaceID: "workspace", ApplicationKey: "product"}
-	resolver := &followUpPrincipalResolver{resolution: identitysdk.PrincipalResolution{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user", User: identitysdk.User{ID: "user", Locale: "zh-CN"}}}}
+	resolver := &followUpPrincipalResolver{resolution: identitysdk.PrincipalResolution{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user", User: identitysdk.User{UserID: "user", Locale: "zh-CN"}}}}
 	var intent notificationmodel.NotificationIntent
 	publisher := agentFollowUpNotificationPublisher{runtimeID: "runtime", application: application, principals: resolver, publish: func(_ context.Context, value notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, bool, error) {
 		intent = value
-		return notificationmodel.NotificationEvent{ID: value.ID}, true, nil
+		return notificationmodel.NotificationEvent{EventID: value.SourceEventID}, true, nil
 	}}
 	now := time.Date(2026, 9, 12, 9, 0, 0, 0, time.UTC)
 	event := agentsdk.ConversationFollowUpEvent{ID: "followup-event", Kind: agentsdk.ConversationFollowUpEventNeedsAction, Authority: agentsdk.ConversationAuthority{Known: true, RuntimeID: "runtime", WorkspaceID: "workspace", UserID: "user"}, PlanID: "plan", TaskID: "task", RunID: "run", Goal: "检查发布", Question: "是否批准？", Occurrence: 2, OccurredAt: now}

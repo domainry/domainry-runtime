@@ -3,30 +3,25 @@ package record
 import (
 	"testing"
 
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 )
 
 func TestRecordStorePersistsORMSystemMetadata(t *testing.T) {
 	store := openRuntimeStore(t)
-	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_record (
-		workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
-		deleted BOOLEAN NOT NULL DEFAULT FALSE, ext_info TEXT NOT NULL DEFAULT '{}',
-		create_by TEXT, update_by TEXT, name TEXT, UNIQUE (workspace_id, id)
-	)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "system_metadata_record", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "system_metadata_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	want := recordmodel.Record{
-		WorkspaceID: "ignored-caller-scope", ID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T00:00:00Z",
+		WorkspaceID: "ignored-caller-scope", RecordID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T00:00:00Z",
 		ExtInfo: map[string]any{"source": "import"}, CreateBy: "user-1", UpdateBy: "user-1",
 		Data: map[string]any{"name": "Acme"},
 	}
 	if err := repository.InsertRecord(t.Context(), "workspace-a", object, want); err != nil {
 		t.Fatal(err)
 	}
-	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, want.ID)
+	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, want.RecordID)
 	if err != nil || !found {
 		t.Fatalf("get record: found=%v err=%v", found, err)
 	}
@@ -40,13 +35,7 @@ func TestRecordStorePersistsORMSystemMetadata(t *testing.T) {
 
 func TestRecordStoreDoesNotWriteSystemColumnsFromBusinessData(t *testing.T) {
 	store := openRuntimeStore(t)
-	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_ownership (
-		workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
-		deleted BOOLEAN NOT NULL DEFAULT FALSE, ext_info TEXT NOT NULL DEFAULT '{}',
-		create_by TEXT, update_by TEXT, name TEXT, UNIQUE (workspace_id, id)
-	)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "system_metadata_ownership", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "system_metadata_ownership", Fields: []definitionmodel.FieldSchema{
 		{Key: "workspace_id", Type: "text"}, {Key: "id", Type: "text"},
@@ -56,7 +45,7 @@ func TestRecordStoreDoesNotWriteSystemColumnsFromBusinessData(t *testing.T) {
 		{Key: "name", Type: "text"},
 	}}
 	want := recordmodel.Record{
-		ID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T01:00:00Z",
+		RecordID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T01:00:00Z",
 		ExtInfo: map[string]any{"owner": "record"}, CreateBy: "creator", UpdateBy: "updater",
 		Data: map[string]any{
 			"workspace_id": "attacker-workspace", "id": "attacker-id",
@@ -68,27 +57,21 @@ func TestRecordStoreDoesNotWriteSystemColumnsFromBusinessData(t *testing.T) {
 	if err := repository.InsertRecord(t.Context(), "workspace-a", object, want); err != nil {
 		t.Fatal(err)
 	}
-	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, want.ID)
+	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, want.RecordID)
 	if err != nil || !found {
 		t.Fatalf("get record: found=%v err=%v", found, err)
 	}
-	if got.ID != want.ID || got.WorkspaceID != "workspace-a" || got.CreatedAt != want.CreatedAt || got.UpdatedAt != want.UpdatedAt || got.Deleted || got.CreateBy != "creator" || got.UpdateBy != "updater" || got.ExtInfo["owner"] != "record" || got.Data["name"] != "kept" {
+	if got.RecordID != want.RecordID || got.WorkspaceID != "workspace-a" || got.CreatedAt != want.CreatedAt || got.UpdatedAt != want.UpdatedAt || got.Deleted || got.CreateBy != "creator" || got.UpdateBy != "updater" || got.ExtInfo["owner"] != "record" || got.Data["name"] != "kept" {
 		t.Fatalf("business data overrode ORM system columns: %#v", got)
 	}
 }
 
 func TestRecordStoreUpdatesORMSystemMetadata(t *testing.T) {
 	store := openRuntimeStore(t)
-	if _, err := store.DB().Exec(`CREATE TABLE system_metadata_update (
-		workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
-		deleted BOOLEAN NOT NULL DEFAULT FALSE, ext_info TEXT NOT NULL DEFAULT '{}',
-		create_by TEXT, update_by TEXT, name TEXT, UNIQUE (workspace_id, id)
-	)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "system_metadata_update", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "system_metadata_update", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	seed := recordmodel.Record{ID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T00:00:00Z", CreateBy: "creator", UpdateBy: "creator", Data: map[string]any{"name": "before"}}
+	seed := recordmodel.Record{RecordID: "record-1", CreatedAt: "2026-09-23T00:00:00Z", UpdatedAt: "2026-09-23T00:00:00Z", CreateBy: "creator", UpdateBy: "creator", Data: map[string]any{"name": "before"}}
 	if err := repository.InsertRecord(t.Context(), "workspace-a", object, seed); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +83,7 @@ func TestRecordStoreUpdatesORMSystemMetadata(t *testing.T) {
 	if err := repository.UpdateRecord(t.Context(), "workspace-a", object, seed); err != nil {
 		t.Fatal(err)
 	}
-	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, seed.ID)
+	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, seed.RecordID)
 	if err != nil || !found {
 		t.Fatalf("get updated record: found=%v err=%v", found, err)
 	}

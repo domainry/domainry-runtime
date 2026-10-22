@@ -2,12 +2,11 @@ package action
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	lifecyclemodel "github.com/domainry/domainry-lifecycle-sdk/model"
@@ -48,7 +47,7 @@ func (e *businessActionExecution) lockAccountErasureRecord(ctx context.Context, 
 	if err != nil {
 		return recordmodel.Record{}, err
 	}
-	if strings.TrimSpace(record.ID) != id || record.OwnerOrgID != e.targetOrganization.ID || record.UpdatedAt == "" {
+	if strings.TrimSpace(record.RecordID) != id || record.OwnerOrgID != e.targetOrganization.ID || record.UpdatedAt == "" {
 		return recordmodel.Record{}, apperror.New(apperror.KindForbidden, "backend.account_erasure.record_scope_denied", nil, nil)
 	}
 	return record, nil
@@ -105,8 +104,10 @@ func (e *businessActionExecution) StageAccountErasure(ctx context.Context, reque
 	if bound.OrganizationID != e.targetOrganization.ID || bound.Version != request.ExpectedIdentityVersion || bound.ProfileBinding.Version != request.ExpectedBindingVersion || !bound.Active {
 		return runtimeext.AccountErasureReceipt{}, apperror.New(apperror.KindConflict, "backend.account_erasure.identity_version_conflict", nil, nil)
 	}
-	digest := sha256.Sum256([]byte(e.workspace.ID + "\x00" + e.identity.ExecutionID))
-	requestID := "account-erasure-" + hex.EncodeToString(digest[:16])
+	requestID, err := entityid.Derive("subreq", "runtime.action.account-erasure", e.workspace.ID, e.identity.ExecutionID)
+	if err != nil {
+		return runtimeext.AccountErasureReceipt{}, apperror.New(apperror.KindInternal, "backend.account_erasure.request_identity_invalid", err, nil)
+	}
 	trusted := lifecyclecontract.AccountErasureApproval{WorkspaceID: e.workspace.ID, RequestID: requestID, SubjectID: subjectID,
 		RequestedBy: subjectID, ApprovedBy: e.invocation.Principal.UserID, OwnerOrgID: e.targetOrganization.ID,
 		ActionKey: e.action.Key, ApprovalID: request.ApprovalID, BindingKey: grant.ProfileBinding.BindingKey, ObjectKey: grant.ProfileBinding.ObjectKey, ProfileID: request.ProfileID}
@@ -119,13 +120,13 @@ func (e *businessActionExecution) StageAccountErasure(ctx context.Context, reque
 	}
 	result, err := delivery.DeliverIdentity(txCtx, identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
 		AccessToken: e.requestIdentity.AccessToken, IdempotencyKey: requestID + ":disable", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserDisable,
-			User: identitysdk.User{ID: subjectID, OrgID: e.targetOrganization.ID}, ExpectedVersion: request.ExpectedIdentityVersion},
+			User: identitysdk.User{UserID: subjectID, OrgID: e.targetOrganization.ID}, ExpectedVersion: request.ExpectedIdentityVersion},
 		ProfileBinding: &identitysdk.HandlerProfileBindingMutation{BindingKey: grant.ProfileBinding.BindingKey, ObjectKey: grant.ProfileBinding.ObjectKey,
 			ProfileID: request.ProfileID, ExpectedVersion: request.ExpectedBindingVersion, ApprovalID: request.ApprovalID, Reason: "approved account erasure"}})
 	if err != nil {
 		return runtimeext.AccountErasureReceipt{}, normalizeIdentityCapabilityError(err, "backend.account_erasure.disable_failed")
 	}
-	if result.User.ID != subjectID || result.User.OrgID != e.targetOrganization.ID || result.User.Status != "disabled" || queued.ID != requestID || queued.WorkspaceID != e.workspace.ID {
+	if result.User.UserID != subjectID || result.User.OrgID != e.targetOrganization.ID || result.User.Status != "disabled" || queued.RequestID != requestID || queued.WorkspaceID != e.workspace.ID {
 		return runtimeext.AccountErasureReceipt{}, apperror.New(apperror.KindInternal, "backend.account_erasure.source_receipt_mismatch", nil, nil)
 	}
 	e.accountErasureOK = true
@@ -158,13 +159,13 @@ func (e *businessActionExecution) GetAccountErasure(ctx context.Context, request
 	if err != nil {
 		return runtimeext.AccountErasureReceipt{}, normalizeIdentityCapabilityError(err, "backend.account_erasure.receipt_denied")
 	}
-	if queued.ID != request.RequestID || queued.WorkspaceID != e.workspace.ID {
+	if queued.RequestID != request.RequestID || queued.WorkspaceID != e.workspace.ID {
 		return runtimeext.AccountErasureReceipt{}, apperror.New(apperror.KindInternal, "backend.account_erasure.source_receipt_mismatch", nil, nil)
 	}
 	return accountErasureReceipt(queued), nil
 }
 
 func accountErasureReceipt(request lifecyclemodel.SubjectRequest) runtimeext.AccountErasureReceipt {
-	return runtimeext.AccountErasureReceipt{RequestID: request.ID, Status: string(request.Status), Completed: request.Status == lifecyclemodel.SubjectRequestSucceeded,
+	return runtimeext.AccountErasureReceipt{RequestID: request.RequestID, Status: string(request.Status), Completed: request.Status == lifecyclemodel.SubjectRequestSucceeded,
 		BackupPending: request.BackupPending, ExecutionAttempt: request.ExecutionAttempt, UpdatedAt: request.UpdatedAt.UTC().Format(time.RFC3339Nano)}
 }

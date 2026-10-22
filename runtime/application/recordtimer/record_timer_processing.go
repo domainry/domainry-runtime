@@ -34,12 +34,16 @@ func (s *RecordTimerApplicationService) FinishRecordTimer(ctx context.Context, w
 	record.Data["status"], record.Data["fired_at"] = "fired", now.UTC().Format(time.RFC3339Nano)
 	record.Data["lease_owner"], record.Data["lease_expires_at"] = "", ""
 	record.UpdatedAt = now.UTC().Format(time.RFC3339Nano)
+	eventCommit, err := buildRecordTimerEventCommit(eventObject, record, "succeeded", lease.Owner, "", "", "", now)
+	if err != nil {
+		return err
+	}
 	commits := []transactionmodel.RecordMutationCommit{
 		{Operation: "update", Object: object, Record: record, Conditions: map[string]any{"status": "leased", "lease_owner": lease.Owner, "fencing_token": lease.Token}},
-		buildRecordTimerEventCommit(eventObject, record, "succeeded", lease.Owner, "", "", "", now),
+		eventCommit,
 	}
 	if err := s.repository.CommitRecordMutationBatch(ctx, workspaceID, commits); err != nil {
-		return recordTimerLeaseCommitError(record.ID, err)
+		return recordTimerLeaseCommitError(record.RecordID, err)
 	}
 	return nil
 }
@@ -75,12 +79,16 @@ func (s *RecordTimerApplicationService) FailRecordTimer(ctx context.Context, wor
 	if record.Data["status"] == "failed" {
 		eventType = "failed"
 	}
+	eventCommit, err := buildRecordTimerEventCommit(eventObject, record, eventType, lease.Owner, apperror.CodeOf(executionErr), executionErr.Error(), strings.TrimSpace(fmt.Sprint(record.Data["due_at"])), now)
+	if err != nil {
+		return err
+	}
 	commits := []transactionmodel.RecordMutationCommit{
 		{Operation: "update", Object: object, Record: record, Conditions: map[string]any{"status": "leased", "lease_owner": lease.Owner, "fencing_token": lease.Token}},
-		buildRecordTimerEventCommit(eventObject, record, eventType, lease.Owner, apperror.CodeOf(executionErr), executionErr.Error(), strings.TrimSpace(fmt.Sprint(record.Data["due_at"])), now),
+		eventCommit,
 	}
 	if err := s.repository.CommitRecordMutationBatch(ctx, workspaceID, commits); err != nil {
-		return recordTimerLeaseCommitError(record.ID, err)
+		return recordTimerLeaseCommitError(record.RecordID, err)
 	}
 	return nil
 }
@@ -115,8 +123,12 @@ func (s *RecordTimerApplicationService) FinishRecordTimers(ctx context.Context, 
 		record := cloneRecordTimer(lease.Record)
 		record.Data["status"], record.Data["fired_at"] = "fired", now.UTC().Format(time.RFC3339Nano)
 		record.Data["lease_owner"], record.Data["lease_expires_at"], record.UpdatedAt = "", "", now.UTC().Format(time.RFC3339Nano)
+		eventCommit, buildErr := buildRecordTimerEventCommit(eventObject, record, "succeeded", lease.Owner, "", "", "", now)
+		if buildErr != nil {
+			return buildErr
+		}
 		commits = append(commits, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: record, Conditions: map[string]any{"status": "leased", "lease_owner": lease.Owner, "fencing_token": lease.Token}})
-		commits = append(commits, buildRecordTimerEventCommit(eventObject, record, "succeeded", lease.Owner, "", "", "", now))
+		commits = append(commits, eventCommit)
 	}
 	return s.repository.CommitRecordMutationBatch(ctx, workspaceID, commits)
 }
@@ -152,7 +164,7 @@ func (s *RecordTimerApplicationService) processDueRecordTimers(ctx context.Conte
 				continue
 			}
 		}
-		execution := RecordTimerExecution{TimerID: lease.Record.ID, WorkspaceID: workspaceID, ObjectKey: recordTimerString(lease.Record, "object_key"), RecordID: recordTimerString(lease.Record, "record_id"), TargetType: recordTimerString(lease.Record, "target_type"), TargetKey: recordTimerString(lease.Record, "target_key"), Payload: payload, IdempotencyKey: lease.Record.ID}
+		execution := RecordTimerExecution{TimerID: lease.Record.RecordID, WorkspaceID: workspaceID, ObjectKey: recordTimerString(lease.Record, "object_key"), RecordID: recordTimerString(lease.Record, "record_id"), TargetType: recordTimerString(lease.Record, "target_type"), TargetKey: recordTimerString(lease.Record, "target_key"), Payload: payload, IdempotencyKey: lease.Record.RecordID}
 		if err := s.runtime.ExecuteRecordTimer(ctx, execution, principal); err != nil {
 			if failErr := s.FailRecordTimer(ctx, workspaceID, lease, err, now, scope); failErr != nil {
 				return processed, attempted, failErr

@@ -69,7 +69,7 @@ func TestBusinessActionExecutionStoreAtomicClaimReplayConflictAndFencing(t *test
 	if err != nil || conflict.Decision != idempotency.DecisionFingerprintConflict {
 		t.Fatalf("conflicting claim=%#v err=%v", conflict, err)
 	}
-	completion := actionmodel.ActionExecutionCompletion{Execution: first.Execution, ExecutionID: first.Execution.ID, LeaseOwner: "runtime-a", FencingToken: 99, Result: map[string]any{"status": "active"}, ResponseStatus: 200, ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: first.Execution, OperationID: first.Execution.OperationID, LeaseOwner: "runtime-a", FencingToken: 99, Result: map[string]any{"status": "active"}, ResponseStatus: 200, ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second)}
 	if _, err := repository.CompleteExecution(t.Context(), completion); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale completion error=%v", err)
 	}
@@ -117,7 +117,7 @@ func TestBusinessActionExecutionStoreReplaysTerminalFailureAndReclaimsRetryableF
 	}
 	terminal, err := repository.CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{
 		Execution:   terminalClaim.Execution,
-		ExecutionID: terminalClaim.Execution.ID, LeaseOwner: terminalClaim.Execution.LeaseOwner,
+		OperationID: terminalClaim.Execution.OperationID, LeaseOwner: terminalClaim.Execution.LeaseOwner,
 		FencingToken: terminalClaim.Execution.FencingToken, Result: map[string]any{"kind": "conflict"},
 		ErrorCode: "gym.class_waitlist_full", ExpiresAt: now.Add(24 * time.Hour), Now: now,
 	})
@@ -137,7 +137,7 @@ func TestBusinessActionExecutionStoreReplaysTerminalFailureAndReclaimsRetryableF
 	}
 	retryable, err := repository.CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{
 		Execution:   retryableClaim.Execution,
-		ExecutionID: retryableClaim.Execution.ID, LeaseOwner: retryableClaim.Execution.LeaseOwner,
+		OperationID: retryableClaim.Execution.OperationID, LeaseOwner: retryableClaim.Execution.LeaseOwner,
 		FencingToken: retryableClaim.Execution.FencingToken, Result: map[string]any{"kind": "unavailable"},
 		ErrorCode: "backend.action.timeout", Retryable: true, ExpiresAt: now.Add(24 * time.Hour), Now: now,
 	})
@@ -175,14 +175,14 @@ func TestBusinessActionExecutionStoreRecordScopeAndExpiredReclaim(t *testing.T) 
 	}
 	first := claim("c-1", "runtime-a", now)
 	otherRecord := claim("c-2", "runtime-b", now)
-	if first.Decision != idempotency.DecisionAcquired || otherRecord.Decision != idempotency.DecisionAcquired || first.Execution.ID == otherRecord.Execution.ID {
+	if first.Decision != idempotency.DecisionAcquired || otherRecord.Decision != idempotency.DecisionAcquired || first.Execution.OperationID == otherRecord.Execution.OperationID {
 		t.Fatalf("record scope collided: first=%#v other=%#v", first, otherRecord)
 	}
 	reclaimed := claim("c-1", "runtime-c", now.Add(2*time.Minute))
 	if reclaimed.Decision != idempotency.DecisionAcquired || reclaimed.Execution.FencingToken != 2 || reclaimed.Execution.LeaseOwner != "runtime-c" {
 		t.Fatalf("reclaimed=%#v", reclaimed)
 	}
-	if err := repository.HeartbeatExecution(t.Context(), first.Execution.ID, "runtime-a", first.Execution.FencingToken, now.Add(3*time.Minute), now.Add(2*time.Minute)); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+	if err := repository.HeartbeatExecution(t.Context(), first.Execution.OperationID, "runtime-a", first.Execution.FencingToken, now.Add(3*time.Minute), now.Add(2*time.Minute)); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale heartbeat error=%v", err)
 	}
 	metrics := store.IdempotencyMetrics(t.Context()).Snapshot()
@@ -238,7 +238,7 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_record (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_atomic_record_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -250,33 +250,46 @@ func TestBusinessActionExecutionStoreCommitsFactsAndReceiptInOneTransaction(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
+	mutationAuditID := actionAuditTestID("audit-1")
+	actionAuditID := actionAuditTestID("action-audit-1")
 	object := definitionmodel.ObjectSchema{Key: "action_atomic_record", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
-		Record:          recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:           &auditmodel.AuditEvent{ID: "audit-1", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", RoleKey: "admin", Summary: "created", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []publicationmodel.Message{{ID: "durable_intent:execution-1:0", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "atomic-commit", DedupKey: "atomic-commit", RequestFingerprint: strings.Repeat("a", 64), Payload: map[string]any{"record_id": "record-1"}}},
-		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "on_create", Trigger: "record_created:action_atomic_record", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", IdempotencyKey: "atomic-commit", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		Record:          recordmodel.Record{RecordID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
+		Audit:           &auditmodel.AuditEvent{AuditEventID: mutationAuditID, Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", RoleKey: "admin", Summary: "created", CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox:          []publicationmodel.Message{{MessageID: "durable_intent:execution-1:0", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "atomic-commit", DedupKey: "atomic-commit", RequestFingerprint: strings.Repeat("a", 64), Payload: map[string]any{"record_id": "record-1"}}},
+		WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1", WorkflowKey: "on_create", Trigger: "record_created:action_atomic_record", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", IdempotencyKey: "atomic-commit", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
 		Execution:   claim.Execution,
-		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"record_id": "record-1"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-1", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", Summary: "action completed", CreatedAt: now.Format(time.RFC3339Nano)}},
+		AuditEvents: []auditmodel.AuditEvent{{AuditEventID: actionAuditID, Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-1", ActorID: "admin", Summary: "action completed", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(24 * time.Hour), Now: now,
 	})
 	if err != nil || completed.Status != string(idempotency.StatusSucceeded) {
 		t.Fatalf("completed=%#v err=%v", completed, err)
 	}
-	for tableAndID, expected := range map[[2]string]int{{"action_atomic_record", "record-1"}: 1, {"_audit_events", "audit-1"}: 1, {"_audit_events", "action-audit-1"}: 1, {"_publication_outbox", "durable_intent:execution-1:0"}: 1, {"_workflow_executions", "workflow-1"}: 1} {
+	for tableAndID, expected := range map[[2]string]int{{"action_atomic_record", "record-1"}: 1, {"_audit_events", mutationAuditID}: 1, {"_audit_events", actionAuditID}: 1, {"_publication_outbox", "durable_intent:execution-1:0"}: 1, {"_workflow_executions", "workflow-1"}: 1} {
 		table, id := tableAndID[0], tableAndID[1]
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE id = "+store.Placeholder(1), id).Scan(&count); err != nil || count != expected {
+		idColumn := "id"
+		switch table {
+		case "action_atomic_record":
+			idColumn = "action_atomic_record_id"
+		case "_publication_outbox":
+			idColumn = "message_id"
+		case "_audit_events":
+			idColumn = "audit_event_id"
+		case "_workflow_executions":
+			idColumn = "execution_id"
+		}
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(idColumn)+" = "+store.Placeholder(1), id).Scan(&count); err != nil || count != expected {
 			t.Fatalf("table=%s count=%d err=%v", table, count, err)
 		}
 	}
 	var connectorKey, connectionKey, operationKey, contractSHA256 string
-	if err := store.DB().QueryRow("SELECT connector_key, connection_key, operation, request_fingerprint FROM "+store.Identifier("_publication_outbox")+" WHERE id = "+store.Placeholder(1), "durable_intent:execution-1:0").Scan(&connectorKey, &connectionKey, &operationKey, &contractSHA256); err != nil {
+	if err := store.DB().QueryRow("SELECT connector_key, connection_key, operation, request_fingerprint FROM "+store.Identifier("_publication_outbox")+" WHERE message_id = "+store.Placeholder(1), "durable_intent:execution-1:0").Scan(&connectorKey, &connectionKey, &operationKey, &contractSHA256); err != nil {
 		t.Fatal(err)
 	}
 	if connectorKey != "webhook" || connectionKey != "primary" || operationKey != "notify" || contractSHA256 != strings.Repeat("a", 64) {
@@ -298,25 +311,27 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE p8_group_class (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		workspace_id TEXT NOT NULL,
-		id TEXT NOT NULL,
+		p8_group_class_id TEXT NOT NULL UNIQUE,
 		created_at BIGINT NOT NULL,
 		updated_at BIGINT NOT NULL,
 		remaining_capacity INTEGER NOT NULL,
 		remaining_waitlist_capacity INTEGER NOT NULL,
-		UNIQUE (workspace_id, id)
+		UNIQUE (workspace_id, p8_group_class_id)
 	)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE p8_class_booking (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		workspace_id TEXT NOT NULL,
-		id TEXT NOT NULL,
+		p8_class_booking_id TEXT NOT NULL UNIQUE,
 		created_at BIGINT NOT NULL,
 		updated_at BIGINT NOT NULL,
 		class_id TEXT NOT NULL,
 		member_id TEXT NOT NULL,
 		status TEXT NOT NULL,
-		UNIQUE (workspace_id, id)
+		UNIQUE (workspace_id, p8_class_booking_id)
 	)`); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +348,7 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	}}
 	records := recordpersistence.NewRecordStore(store)
 	if err := records.InsertRecord(t.Context(), "workspace-a", groupClass, recordmodel.Record{
-		ID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
+		RecordID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
 		Data: map[string]any{"remaining_capacity": int64(1), "remaining_waitlist_capacity": int64(1)},
 	}); err != nil {
 		t.Fatal(err)
@@ -350,56 +365,56 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	classAuditID := "book-class-class-audit-1"
-	bookingAuditID := "book-class-booking-audit-1"
-	actionAuditID := "book-class-action-audit-1"
-	outboxID := "durable_intent:" + claim.Execution.ID + ":0"
-	notificationID := "notification:" + claim.Execution.ID
+	classAuditID := actionAuditTestID("book-class-class-audit-1")
+	bookingAuditID := actionAuditTestID("book-class-booking-audit-1")
+	actionAuditID := actionAuditTestID("book-class-action-audit-1")
+	outboxID := "durable_intent:" + claim.Execution.OperationID + ":0"
+	notificationID := actionNotificationTestID(claim.Execution.OperationID)
 	notificationWakeups := store.WorkerWakeups().Subscribe("notification_inbox", 1)
 	commits := []transactionmodel.RecordMutationCommit{
 		{
 			Operation: "update", Object: groupClass,
 			Record: recordmodel.Record{
-				ID: "class-1", CreatedAt: stamp, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano),
+				RecordID: "class-1", CreatedAt: stamp, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano),
 				Data: map[string]any{"remaining_capacity": int64(0), "remaining_waitlist_capacity": int64(1)},
 			},
 			Predicates: []transactionmodel.MutationPredicate{{
 				Field: "remaining_capacity", Operator: "gte", Value: int64(1), ErrorCode: "gym.class_capacity_full",
 			}},
 			Audit: &auditmodel.AuditEvent{
-				ID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
+				AuditEventID: classAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_updated",
 				ObjectKey: groupClass.Key, RecordID: "class-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 		},
 		{
 			Operation: "create", Object: classBooking,
 			Record: recordmodel.Record{
-				ID: "booking-1", CreatedAt: stamp, UpdatedAt: stamp,
+				RecordID: "booking-1", CreatedAt: stamp, UpdatedAt: stamp,
 				Data: map[string]any{"class_id": "class-1", "member_id": "member-1", "status": "booked"},
 			},
 			Audit: &auditmodel.AuditEvent{
-				ID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
+				AuditEventID: bookingAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created",
 				ObjectKey: classBooking.Key, RecordID: "booking-1", ActorID: "member-1", CreatedAt: stamp,
 			},
 			Outbox: []publicationmodel.Message{{
-				ID: outboxID, WorkspaceID: "workspace-a",
+				MessageID: outboxID, WorkspaceID: "workspace-a",
 				ConnectorKey: "member_center", ConnectionKey: "primary", Operation: "send_notice",
-				RequestRef: claim.Execution.ID, DedupKey: claim.Execution.ID + ":intent:0",
+				RequestRef: claim.Execution.OperationID, DedupKey: claim.Execution.OperationID + ":intent:0",
 				RequestFingerprint: strings.Repeat("c", 64),
 				Payload:            map[string]any{"member_id": "member-1", "sequence": int64(1)},
 			}},
 			NotificationEvents: []notificationmodel.NotificationEvent{{
-				ID: notificationID, WorkspaceID: "workspace-a", Source: "action", SourceEventID: claim.Execution.ID,
+				EventID: notificationID, WorkspaceID: "workspace-a", Source: "action", SourceEventID: claim.Execution.OperationID,
 				EventType: "gym.class_booked", Status: "queued", CreatedAt: stamp, UpdatedAt: stamp,
 			}},
 		},
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, commits, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID,
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"booking_id": "booking-1", "status": "booked"}, ResponseStatus: 200,
 		AuditEvents: []auditmodel.AuditEvent{{
-			ID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
+			AuditEventID: actionAuditID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked",
 			ObjectKey: groupClass.Key, ActorID: "member-1", CreatedAt: stamp,
 		}},
 		ExpiresAt: now.Add(24 * time.Hour), Now: now.Add(time.Second),
@@ -428,19 +443,19 @@ func TestBookClassPersistsClassBookingAuditsOutboxAndReceiptInOneTransaction(t *
 	}
 	for _, auditID := range []string{classAuditID, bookingAuditID, actionAuditID} {
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE id = "+store.Placeholder(1), auditID).Scan(&count); err != nil || count != 1 {
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE audit_event_id = "+store.Placeholder(1), auditID).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("audit=%s count=%d err=%v", auditID, count, err)
 		}
 	}
 	var connectorKey, connectionKey, operationKey, requestRef string
 	if err := store.DB().QueryRow(
-		"SELECT connector_key, connection_key, operation, request_ref FROM "+store.Identifier("_publication_outbox")+" WHERE id = "+store.Placeholder(1),
+		"SELECT connector_key, connection_key, operation, request_ref FROM "+store.Identifier("_publication_outbox")+" WHERE message_id = "+store.Placeholder(1),
 		outboxID,
 	).Scan(&connectorKey, &connectionKey, &operationKey, &requestRef); err != nil {
 		t.Fatal(err)
 	}
 	if connectorKey != "member_center" || connectionKey != "primary" ||
-		operationKey != "send_notice" || requestRef != claim.Execution.ID {
+		operationKey != "send_notice" || requestRef != claim.Execution.OperationID {
 		t.Fatalf("outbox=%q/%q/%q request_ref=%q", connectorKey, connectionKey, operationKey, requestRef)
 	}
 	receipt, found, err := repository.findExecutionByScope(
@@ -458,13 +473,13 @@ func TestBusinessActionExecutionTransactionOwnsLockingReadAndFinalCommit(t *test
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_lazy_uow_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_lazy_uow_record (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_lazy_uow_record_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	object := definitionmodel.ObjectSchema{Key: "action_lazy_uow_record", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	records := recordpersistence.NewRecordStore(store)
-	if err := records.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "pending"}}); err != nil {
+	if err := records.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{RecordID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "pending"}}); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -480,7 +495,7 @@ func TestBusinessActionExecutionTransactionOwnsLockingReadAndFinalCommit(t *test
 		t.Fatal(err)
 	}
 	page, err := records.ListRecords(transaction.Context(t.Context()), "workspace-a", object, recordmodel.RecordListQuery{
-		Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{"record-1"}}, LockIntent: recordmodel.RecordQueryLockForUpdate,
+		Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"record_id__in": []any{"record-1"}}, LockIntent: recordmodel.RecordQueryLockForUpdate,
 	})
 	if err != nil || len(page.Items) != 1 || page.Items[0].Data["status"] != "pending" {
 		_ = transaction.RollBack(t.Context())
@@ -492,7 +507,7 @@ func TestBusinessActionExecutionTransactionOwnsLockingReadAndFinalCommit(t *test
 	completed, err := transaction.Commit(t.Context(), []transactionmodel.RecordMutationCommit{{
 		Operation: "update", Object: object, Record: updated, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: page.Items[0].UpdatedAt},
 	}}, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"status": "approved"}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now.Add(time.Second),
 	})
 	if err != nil || completed.Status != string(idempotency.StatusSucceeded) {
@@ -565,12 +580,12 @@ func TestBusinessActionExecutionStoreCommitsFailureReceiptAndDenialAuditAtomical
 		t.Fatal(err)
 	}
 	audit := auditmodel.AuditEvent{
-		ID: "scope-denial-audit", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "data_scope_access_denied",
+		AuditEventID: actionAuditTestID("scope-denial-audit"), WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "data_scope_access_denied",
 		ObjectKey: "booking", RecordID: "booking-south", ActorID: "operator-a", RoleKey: "operator",
 		Summary: "Data scope access denied", CreatedAt: now.Format(time.RFC3339Nano),
 	}
 	completed, err := commitBusinessActionExecution(t.Context(), repository, nil, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID,
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"status": "failed"}, ResponseStatus: 404,
 		ErrorCode: "backend.record.not_found", AuditEvents: []auditmodel.AuditEvent{audit},
@@ -582,8 +597,8 @@ func TestBusinessActionExecutionStoreCommitsFailureReceiptAndDenialAuditAtomical
 	}
 	var count int
 	if err := store.DB().QueryRow(
-		"SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE id = "+store.Placeholder(1),
-		audit.ID,
+		"SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE audit_event_id = "+store.Placeholder(1),
+		audit.AuditEventID,
 	).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("audit count=%d err=%v", count, err)
 	}
@@ -604,7 +619,7 @@ func TestBusinessActionExecutionStoreRollsBackFactsWhenAtomicCommitFails(t *test
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_atomic_rollback (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_atomic_rollback_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -615,14 +630,14 @@ func TestBusinessActionExecutionStoreRollsBackFactsWhenAtomicCommitFails(t *test
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_atomic_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	commits := []transactionmodel.RecordMutationCommit{
-		{Operation: "create", Object: object, Record: recordmodel.Record{ID: "must-rollback", CreatedAt: "created", UpdatedAt: "created", Data: map[string]any{"status": "created"}}},
-		{Operation: "unsupported", Object: object, Record: recordmodel.Record{ID: "invalid"}},
+		{Operation: "create", Object: object, Record: recordmodel.Record{RecordID: "must-rollback", CreatedAt: "created", UpdatedAt: "created", Data: map[string]any{"status": "created"}}},
+		{Operation: "unsupported", Object: object, Record: recordmodel.Record{RecordID: "invalid"}},
 	}
-	if _, err := commitBusinessActionExecution(t.Context(), repository, commits, actionmodel.ActionExecutionCompletion{Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"status": "should-not-commit"}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now}); err == nil {
+	if _, err := commitBusinessActionExecution(t.Context(), repository, commits, actionmodel.ActionExecutionCompletion{Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"status": "should-not-commit"}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now}); err == nil {
 		t.Fatal("expected atomic commit failure")
 	}
 	var recordCount int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM action_atomic_rollback WHERE id = ?`, "must-rollback").Scan(&recordCount); err != nil || recordCount != 0 {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM action_atomic_rollback WHERE action_atomic_rollback_id = ?`, "must-rollback").Scan(&recordCount); err != nil || recordCount != 0 {
 		t.Fatalf("record count=%d err=%v", recordCount, err)
 	}
 	current, found, err := repository.findExecutionByScope(t.Context(), "workspace-a", "action_atomic_rollback", "", "create", "rollback")
@@ -637,10 +652,10 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_capacity (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, reserved REAL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_capacity (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_capacity_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, reserved REAL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`INSERT INTO action_capacity (workspace_id, id, created_at, updated_at, reserved, status) VALUES (?, ?, ?, ?, ?, ?)`, "workspace-a", "class-1", int64(1), int64(1), 19, "open"); err != nil {
+	if _, err := store.DB().Exec(`INSERT INTO action_capacity (workspace_id, action_capacity_id, created_at, updated_at, reserved, status) VALUES (?, ?, ?, ?, ?, ?)`, "workspace-a", "class-1", int64(1), int64(1), 19, "open"); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -651,13 +666,13 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_capacity", Fields: []definitionmodel.FieldSchema{{Key: "reserved", Type: "number"}, {Key: "status", Type: "text"}}}
 	commit := transactionmodel.RecordMutationCommit{
-		Operation: "update", Object: object, Record: recordmodel.Record{ID: "class-1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"reserved": 20.0, "status": "open"}},
+		Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "class-1", CreatedAt: "v1", UpdatedAt: "v2", Data: map[string]any{"reserved": 20.0, "status": "open"}},
 		Predicates:      []transactionmodel.MutationPredicate{{Field: "reserved", Operator: "lt", Value: 20.0, ErrorCode: "capacity_full"}, {Field: "status", Operator: "eq", Value: "open", ErrorCode: "capacity_closed"}},
-		Audit:           &auditmodel.AuditEvent{ID: "capacity-audit-success", Family: auditmodel.EventFamilyBusinessEntity, Event: "capacity_reserved", ObjectKey: object.Key, RecordID: "class-1", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []publicationmodel.Message{{ID: "capacity-outbox-success", WorkspaceID: "workspace-a", ConnectorKey: "test", Operation: "notify", DedupKey: "reserve-20", Payload: map[string]any{"record_id": "class-1"}}},
-		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "capacity-workflow-success", WorkflowKey: "capacity_reserved", Trigger: "record_updated:action_capacity", Status: "pending", ActionType: "workflow_graph", ObjectKey: object.Key, RecordID: "class-1", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		Audit:           &auditmodel.AuditEvent{AuditEventID: actionAuditTestID("capacity-audit-success"), Family: auditmodel.EventFamilyBusinessEntity, Event: "capacity_reserved", ObjectKey: object.Key, RecordID: "class-1", CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox:          []publicationmodel.Message{{MessageID: "capacity-outbox-success", WorkspaceID: "workspace-a", ConnectorKey: "test", Operation: "notify", DedupKey: "reserve-20", Payload: map[string]any{"record_id": "class-1"}}},
+		WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "capacity-workflow-success", WorkflowKey: "capacity_reserved", Trigger: "record_updated:action_capacity", Status: "pending", ActionType: "workflow_graph", ObjectKey: object.Key, RecordID: "class-1", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
-	completed, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"reserved": 20}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now})
+	completed, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"reserved": 20}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now})
 	if err != nil || completed.Status != string(idempotency.StatusSucceeded) {
 		t.Fatalf("conditional completion=%#v err=%v", completed, err)
 	}
@@ -668,21 +683,23 @@ func TestBusinessActionConditionalMutationCommitsPredicateFactsAndReceiptInOneUo
 	}
 	commit.Record.UpdatedAt = "v3"
 	commit.Record.Data["reserved"] = 21.0
-	commit.Audit.ID = "capacity-audit-conflict"
-	commit.Outbox[0].ID, commit.Outbox[0].DedupKey = "capacity-outbox-conflict", "reserve-21"
-	commit.WorkflowIntents[0].ID = "capacity-workflow-conflict"
-	_, err = commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: conflictClaim.Execution, ExecutionID: conflictClaim.Execution.ID, LeaseOwner: conflictClaim.Execution.LeaseOwner, FencingToken: conflictClaim.Execution.FencingToken, Result: map[string]any{"reserved": 21}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now.Add(time.Second)})
+	conflictAuditID := actionAuditTestID("capacity-audit-conflict")
+	commit.Audit.AuditEventID = conflictAuditID
+	commit.Outbox[0].MessageID, commit.Outbox[0].DedupKey = "capacity-outbox-conflict", "reserve-21"
+	commit.WorkflowIntents[0].ExecutionID = "capacity-workflow-conflict"
+	_, err = commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{Execution: conflictClaim.Execution, OperationID: conflictClaim.Execution.OperationID, LeaseOwner: conflictClaim.Execution.LeaseOwner, FencingToken: conflictClaim.Execution.FencingToken, Result: map[string]any{"reserved": 21}, ResponseStatus: 200, ExpiresAt: now.Add(time.Hour), Now: now.Add(time.Second)})
 	var businessConflict *mutation.PolicyConflictError
 	if !errors.As(err, &businessConflict) || businessConflict.Code != "capacity_full" {
 		t.Fatalf("conditional conflict=%#v err=%v", businessConflict, err)
 	}
 	var reserved float64
-	if err := store.DB().QueryRow(`SELECT reserved FROM action_capacity WHERE workspace_id = ? AND id = ?`, "workspace-a", "class-1").Scan(&reserved); err != nil || reserved != 20 {
+	if err := store.DB().QueryRow(`SELECT reserved FROM action_capacity WHERE workspace_id = ? AND action_capacity_id = ?`, "workspace-a", "class-1").Scan(&reserved); err != nil || reserved != 20 {
 		t.Fatalf("reserved=%v err=%v", reserved, err)
 	}
-	for tableAndID := range map[[2]string]bool{{"_audit_events", "capacity-audit-conflict"}: true, {"_publication_outbox", "capacity-outbox-conflict"}: true, {"_workflow_executions", "capacity-workflow-conflict"}: true} {
+	for tableAndID := range map[[2]string]bool{{"_audit_events", conflictAuditID}: true, {"_publication_outbox", "capacity-outbox-conflict"}: true, {"_workflow_executions", "capacity-workflow-conflict"}: true} {
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE id = ?", tableAndID[1]).Scan(&count); err != nil || count != 0 {
+		idColumn := map[string]string{"_audit_events": "audit_event_id", "_publication_outbox": "message_id", "_workflow_executions": "execution_id"}[tableAndID[0]]
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE "+store.Identifier(idColumn)+" = ?", tableAndID[1]).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("predicate conflict leaked %s/%s count=%d err=%v", tableAndID[0], tableAndID[1], count, err)
 		}
 	}
@@ -698,7 +715,7 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_completion_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_completion_rollback (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_completion_rollback_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -716,23 +733,24 @@ func TestBusinessActionExecutionStoreRollsBackAuditIntentOutboxAndReceiptOnCompl
 	object := definitionmodel.ObjectSchema{Key: "action_completion_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
-		Record:          recordmodel.Record{ID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:           &auditmodel.AuditEvent{ID: "audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []publicationmodel.Message{{ID: "outbox-rollback", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "completion-rollback", DedupKey: "completion-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-rollback"}}},
-		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-rollback", WorkflowKey: "on_create", Trigger: "record_created:action_completion_rollback", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-rollback", IdempotencyKey: "completion-rollback", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		Record:          recordmodel.Record{RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
+		Audit:           &auditmodel.AuditEvent{AuditEventID: actionAuditTestID("audit-rollback"), Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox:          []publicationmodel.Message{{MessageID: "outbox-rollback", WorkspaceID: "workspace-a", ConnectorKey: "webhook", ConnectionKey: "primary", Operation: "notify", RequestRef: "completion-rollback", DedupKey: "completion-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-rollback"}}},
+		WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-rollback", WorkflowKey: "on_create", Trigger: "record_created:action_completion_rollback", Status: "pending", ActionType: "record", ObjectKey: object.Key, RecordID: "record-rollback", IdempotencyKey: "completion-rollback", MaxAttempts: 3, CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
 		Execution:   claim.Execution,
-		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"record_id": "record-rollback"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: "action-audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
+		OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: map[string]any{"record_id": "record-rollback"}, ResponseStatus: 200,
+		AuditEvents: []auditmodel.AuditEvent{{AuditEventID: actionAuditTestID("action-audit-rollback"), Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(time.Hour), Now: now,
 	}); err == nil {
 		t.Fatal("expected injected receipt completion failure")
 	}
-	for tableAndID := range map[[2]string]bool{{"action_completion_rollback", "record-rollback"}: true, {"_audit_events", "audit-rollback"}: true, {"_audit_events", "action-audit-rollback"}: true, {"_publication_outbox", "outbox-rollback"}: true, {"_workflow_executions", "workflow-rollback"}: true} {
+	for tableAndID := range map[[2]string]bool{{"action_completion_rollback", "record-rollback"}: true, {"_audit_events", actionAuditTestID("audit-rollback")}: true, {"_audit_events", actionAuditTestID("action-audit-rollback")}: true, {"_publication_outbox", "outbox-rollback"}: true, {"_workflow_executions", "workflow-rollback"}: true} {
 		table, id := tableAndID[0], tableAndID[1]
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE id = "+store.Placeholder(1), id).Scan(&count); err != nil || count != 0 {
+		idColumn := map[string]string{"action_completion_rollback": "action_completion_rollback_id", "_audit_events": "audit_event_id", "_publication_outbox": "message_id", "_workflow_executions": "execution_id"}[table]
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(idColumn)+" = "+store.Placeholder(1), id).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("half commit table=%s count=%d err=%v", table, count, err)
 		}
 	}
@@ -748,7 +766,7 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE action_audit_rollback (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE action_audit_rollback (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, action_audit_rollback_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewActionBusinessExecutionStore(store)
@@ -760,33 +778,34 @@ func TestBusinessActionExecutionStoreRollsBackMutationAndDurableIntentWhenAction
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateAudit := auditmodel.AuditEvent{ID: "action-audit-duplicate", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
+	duplicateAudit := auditmodel.AuditEvent{AuditEventID: actionAuditTestID("action-audit-duplicate"), WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "existing_event", CreatedAt: now.Format(time.RFC3339Nano)}
 	if err := auditpersistence.NewAuditStoreFromRuntimeStore(store).InsertAuditEvent(t.Context(), "workspace-a", duplicateAudit); err != nil {
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "action_audit_rollback", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object,
-		Record: recordmodel.Record{ID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
-		Audit:  &auditmodel.AuditEvent{ID: "mutation-audit-rollback", Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox: []publicationmodel.Message{{ID: "durable-intent-rollback", WorkspaceID: "workspace-a", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", RequestRef: "audit-rollback", DedupKey: "audit-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-audit-rollback"}}},
+		Record: recordmodel.Record{RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "created"}},
+		Audit:  &auditmodel.AuditEvent{AuditEventID: actionAuditTestID("mutation-audit-rollback"), Family: auditmodel.EventFamilyBusinessEntity, Event: "record_created", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox: []publicationmodel.Message{{MessageID: "durable-intent-rollback", WorkspaceID: "workspace-a", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", RequestRef: "audit-rollback", DedupKey: "audit-rollback", RequestFingerprint: "fingerprint", Payload: map[string]any{"record_id": "record-audit-rollback"}}},
 	}
 	if _, err := commitBusinessActionExecution(t.Context(), repository, []transactionmodel.RecordMutationCommit{commit}, actionmodel.ActionExecutionCompletion{
-		Execution: claim.Execution, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		Execution: claim.Execution, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"record_id": "record-audit-rollback"}, ResponseStatus: 200,
-		AuditEvents: []auditmodel.AuditEvent{{ID: duplicateAudit.ID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
+		AuditEvents: []auditmodel.AuditEvent{{AuditEventID: duplicateAudit.AuditEventID, WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "business_action_executed", ObjectKey: object.Key, RecordID: "record-audit-rollback", CreatedAt: now.Format(time.RFC3339Nano)}},
 		ExpiresAt:   now.Add(time.Hour), Now: now,
 	}); err == nil {
 		t.Fatal("expected duplicate Action audit to fail the transaction")
 	}
-	for tableAndID := range map[[2]string]bool{{"action_audit_rollback", "record-audit-rollback"}: true, {"_audit_events", "mutation-audit-rollback"}: true, {"_publication_outbox", "durable-intent-rollback"}: true} {
+	for tableAndID := range map[[2]string]bool{{"action_audit_rollback", "record-audit-rollback"}: true, {"_audit_events", actionAuditTestID("mutation-audit-rollback")}: true, {"_publication_outbox", "durable-intent-rollback"}: true} {
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE id = "+store.Placeholder(1), tableAndID[1]).Scan(&count); err != nil || count != 0 {
+		idColumn := map[string]string{"action_audit_rollback": "action_audit_rollback_id", "_audit_events": "audit_event_id", "_publication_outbox": "message_id"}[tableAndID[0]]
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier(tableAndID[0])+" WHERE "+store.Identifier(idColumn)+" = "+store.Placeholder(1), tableAndID[1]).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("Action audit failure leaked %s/%s count=%d err=%v", tableAndID[0], tableAndID[1], count, err)
 		}
 	}
 	var duplicateCount int
-	if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE id = "+store.Placeholder(1), duplicateAudit.ID).Scan(&duplicateCount); err != nil || duplicateCount != 1 {
+	if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE audit_event_id = "+store.Placeholder(1), duplicateAudit.AuditEventID).Scan(&duplicateCount); err != nil || duplicateCount != 1 {
 		t.Fatalf("pre-existing duplicate audit count=%d err=%v", duplicateCount, err)
 	}
 	receipt, found, err := repository.findExecutionByScope(t.Context(), "workspace-a", object.Key, "", "create", "audit-rollback")

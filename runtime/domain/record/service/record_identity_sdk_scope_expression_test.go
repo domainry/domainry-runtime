@@ -201,12 +201,12 @@ func TestSDKDataScopeCompilerFailsClosed(t *testing.T) {
 }
 
 func TestSDKScopeExpressionDirectMatcherSupportsPortableOperators(t *testing.T) {
-	record := recordmodel.Record{ID: "case-1", Data: map[string]any{"status": "active", "note": "present"}}
+	record := recordmodel.Record{RecordID: "case-1", Data: map[string]any{"status": "active", "note": "present"}}
 	tests := []struct {
 		expression recordmodel.RecordScopeExpression
 		want       bool
 	}{
-		{recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "id", Values: []string{"case-1"}}, true},
+		{recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "record_id", Values: []string{"case-1"}}, true},
 		{recordmodel.RecordScopeExpression{Operator: "starts_with", FieldKey: "status", Values: []string{"act"}}, true},
 		{recordmodel.RecordScopeExpression{Operator: "exists", FieldKey: "note"}, true},
 		{recordmodel.RecordScopeExpression{Operator: "not_exists", FieldKey: "missing"}, true},

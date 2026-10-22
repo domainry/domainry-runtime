@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
@@ -192,26 +193,30 @@ func (s *RecordSubjectLifecycleApplicationService) subjectRecords(ctx context.Co
 		visited[key] = true
 		afterID := ""
 		for {
-			page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: afterID, Filters: map[string]any{fieldKey: subjectValue}, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}})
+			page, err := s.repository.ListRecords(ctx, workspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: recordSubjectPageSize, SkipTotal: true, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, AfterID: afterID, Filters: map[string]any{fieldKey: subjectValue}, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}})
 			if err != nil {
 				return err
 			}
 			for _, record := range page.Items {
-				if _, known := byObject[object.Key][record.ID]; !known {
+				if _, known := byObject[object.Key][record.RecordID]; !known {
 					total++
 					if total > 10000 {
 						return fmt.Errorf("subject record limit exceeded")
 					}
-					byObject[object.Key][record.ID] = record
+					byObject[object.Key][record.RecordID] = record
 				}
 			}
 			if !page.HasNext {
 				break
 			}
-			if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID <= afterID {
+			if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID < 1 {
 				return fmt.Errorf("subject record cursor did not advance")
 			}
-			afterID = page.Items[len(page.Items)-1].ID
+			nextAfterID := strconv.FormatInt(page.Items[len(page.Items)-1].ID, 10)
+			if nextAfterID == afterID {
+				return fmt.Errorf("subject record cursor did not advance")
+			}
+			afterID = nextAfterID
 		}
 		return nil
 	}
@@ -294,7 +299,7 @@ func (s *RecordSubjectLifecycleApplicationService) exportRecordFiles(ctx context
 		}
 		for _, record := range records {
 			for _, value := range recordSubjectFileValues(field, record.Data[field.Key]) {
-				evidence, err := s.files.ExportSubjectFile(ctx, lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.ID, FieldKey: field.Key, Reference: value})
+				evidence, err := s.files.ExportSubjectFile(ctx, lifecyclecontract.SubjectFileReference{WorkspaceID: workspaceID, ObjectKey: object.Key, RecordID: record.RecordID, FieldKey: field.Key, Reference: value})
 				if err != nil {
 					return nil, err
 				}

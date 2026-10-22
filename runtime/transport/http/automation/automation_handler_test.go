@@ -125,7 +125,7 @@ func automationTestRule(key string) automationmodel.AutomationRuleSchema {
 
 func newAutomationHandlerFixture() *automationHandlerFixture {
 	registry := &automationRuleRegistryStub{rules: map[string]automationmodel.AutomationRuleSchema{"welcome": automationTestRule("welcome")}}
-	executions := &automationExecutionRepositoryStub{items: []automationmodel.AutomationRuleExecution{{ID: "execution-1", RuleKey: "welcome", Status: "succeeded"}}}
+	executions := &automationExecutionRepositoryStub{items: []automationmodel.AutomationRuleExecution{{RunID: "execution-1", RuleKey: "welcome", Status: "succeeded"}}}
 	metadata := &automationMetadataStub{}
 	definitions := &automationDefinitionStoreStub{definitions: map[string]automationmodel.AutomationRuleDefinition{}}
 	principal := accessfixture.AttachPointer(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Key: "automation-manager", Permissions: append([]string(nil), automationHTTPPermissions...)})

@@ -10,7 +10,7 @@ import (
 
 func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 	store := fuzzQueryStore{}
-	candidate := recordmodel.Record{ID: "record-1", Data: map[string]any{"status": "active"}}
+	candidate := recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "active"}}
 	direct := func(field string, values ...string) recordmodel.RecordScopeExpression {
 		return recordmodel.RecordScopeExpression{Operator: "in", FieldKey: field, Values: values}
 	}
@@ -19,11 +19,11 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 
 	for _, expression := range []recordmodel.RecordScopeExpression{
 		{Operator: "and"},
-		{Operator: "and", Children: []recordmodel.RecordScopeExpression{direct("id", "record-1")}},
+		{Operator: "and", Children: []recordmodel.RecordScopeExpression{direct("record_id", "record-1")}},
 		{Operator: "or"},
-		{Operator: "or", Children: []recordmodel.RecordScopeExpression{direct("id", "record-1")}},
+		{Operator: "or", Children: []recordmodel.RecordScopeExpression{direct("record_id", "record-1")}},
 		{Operator: "not"},
-		{Operator: "not", Children: []recordmodel.RecordScopeExpression{direct("id", "record-1"), direct("id", "record-2")}},
+		{Operator: "not", Children: []recordmodel.RecordScopeExpression{direct("record_id", "record-1"), direct("record_id", "record-2")}},
 	} {
 		if _, err := CandidateScopeMatches(store, "workspace-a", candidate, expression, lookup); err == nil {
 			t.Fatalf("expected invalid boolean shape for %#v", expression)
@@ -34,7 +34,7 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 		Operator: "and",
 		Children: []recordmodel.RecordScopeExpression{
 			unsupported,
-			direct("id", "record-1"),
+			direct("record_id", "record-1"),
 		},
 	}
 	if _, err := CandidateScopeMatches(store, "workspace-a", candidate, andError, lookup); err == nil {
@@ -45,7 +45,7 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 		Operator: "or",
 		Children: []recordmodel.RecordScopeExpression{
 			unsupported,
-			direct("id", "record-1"),
+			direct("record_id", "record-1"),
 		},
 	}
 	if _, err := CandidateScopeMatches(store, "workspace-a", candidate, orError, lookup); err == nil {
@@ -54,8 +54,8 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 	orMatch := recordmodel.RecordScopeExpression{
 		Operator: "or",
 		Children: []recordmodel.RecordScopeExpression{
-			direct("id", "missing"),
-			direct("id", "record-1"),
+			direct("record_id", "missing"),
+			direct("record_id", "record-1"),
 		},
 	}
 	if matched, err := CandidateScopeMatches(store, "workspace-a", candidate, orMatch, lookup); err != nil || !matched {
@@ -64,8 +64,8 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 	orMiss := recordmodel.RecordScopeExpression{
 		Operator: "or",
 		Children: []recordmodel.RecordScopeExpression{
-			direct("id", "missing-1"),
-			direct("id", "missing-2"),
+			direct("record_id", "missing-1"),
+			direct("record_id", "missing-2"),
 		},
 	}
 	if matched, err := CandidateScopeMatches(store, "workspace-a", candidate, orMiss, lookup); err != nil || matched {
@@ -74,13 +74,13 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 	notMatch := recordmodel.RecordScopeExpression{
 		Operator: "not",
 		Children: []recordmodel.RecordScopeExpression{
-			direct("id", "record-1"),
+			direct("record_id", "record-1"),
 		},
 	}
 	if matched, err := CandidateScopeMatches(store, "workspace-a", candidate, notMatch, lookup); err != nil || matched {
 		t.Fatalf("not match=%v err=%v", matched, err)
 	}
-	if matched, err := CandidateScopeMatches(store, "workspace-a", candidate, direct("id", "record-1"), lookup); err != nil || !matched {
+	if matched, err := CandidateScopeMatches(store, "workspace-a", candidate, direct("record_id", "record-1"), lookup); err != nil || !matched {
 		t.Fatalf("direct id match=%v err=%v", matched, err)
 	}
 	if _, err := CandidateScopeMatches(store, "workspace-a", candidate, unsupported, lookup); err == nil {
@@ -90,7 +90,7 @@ func TestCandidateScopeMatchesRemainingBooleanBranches(t *testing.T) {
 
 func TestCandidateRelationScopeMatchesRemainingFailureBranches(t *testing.T) {
 	store := fuzzQueryStore{}
-	candidate := recordmodel.Record{ID: "record-1", Data: map[string]any{}}
+	candidate := recordmodel.Record{RecordID: "record-1", Data: map[string]any{}}
 	leaf := func(path []recordmodel.RecordScopePathSegment) recordmodel.RecordScopeExpression {
 		return recordmodel.RecordScopeExpression{
 			Operator: "eq",

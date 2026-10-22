@@ -96,7 +96,7 @@ func ActionRenderValueWithInput(value any, record recordmodel.Record, input map[
 	case text == "$document.ai_answer":
 		return ActionDocumentAIAnswer(record, input)
 	case text == "$record.id":
-		return record.ID
+		return record.RecordID
 	case text == "$record.created_at":
 		return record.CreatedAt
 	case text == "$record.updated_at":
@@ -105,7 +105,7 @@ func ActionRenderValueWithInput(value any, record recordmodel.Record, input map[
 		if groupID := actionpolicy.ActionNormalizedValue(record.Data["version_group_id"]); groupID != "" {
 			return groupID
 		}
-		return record.ID
+		return record.RecordID
 	case text == "$record.version_plus_one":
 		current, ok := integerValue(record.Data["version"])
 		if !ok {
@@ -142,7 +142,7 @@ func ActionRenderRelatedValue(value any, record, source recordmodel.Record, prin
 	}
 	switch {
 	case text == "$source.id":
-		return source.ID
+		return source.RecordID
 	case text == "$source.created_at":
 		return source.CreatedAt
 	case text == "$source.updated_at":

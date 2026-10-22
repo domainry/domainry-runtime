@@ -63,7 +63,7 @@ func TestFailRecordTimerReleasesLeaseRetriesAndFencesStaleWorker(t *testing.T) {
 		return nil
 	}}
 	service := NewRecordTimerApplicationService(schema, nil, repository)
-	lease := RecordTimerLease{Owner: "worker-a", Token: 7, Record: recordmodel.Record{ID: "timer-1", Data: map[string]any{
+	lease := RecordTimerLease{Owner: "worker-a", Token: 7, Record: recordmodel.Record{RecordID: "timer-1", Data: map[string]any{
 		"status": "leased", "lease_owner": "worker-a", "lease_expires_at": now.Add(time.Minute).Format(time.RFC3339Nano), "fencing_token": 7,
 		"attempt": 2, "max_attempts": 3, "retry_delay_seconds": 5, "retry_max_delay_seconds": 30,
 	}}}

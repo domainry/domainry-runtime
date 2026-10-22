@@ -23,9 +23,9 @@ func workflowProcessFailureStore(t *testing.T, state *workflowSQLState) Workflow
 }
 
 func TestWorkflowProcessStoreSQLFailures(t *testing.T) {
-	process := workflowmodel.WorkflowProcessInstance{ID: "process"}
-	node := workflowmodel.WorkflowNodeInstance{ID: "node"}
-	task := workflowmodel.WorkflowTask{ID: "task"}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process"}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "node"}
+	task := workflowmodel.WorkflowTask{TaskID: "task"}
 	queryError := workflowSQLState{querySteps: []workflowSQLQueryStep{{err: errWorkflowSQL}}}
 	rowError := workflowSQLState{querySteps: []workflowSQLQueryStep{{columns: []string{"bad"}, rows: [][]driver.Value{{"bad"}}}}}
 	terminalError := workflowSQLState{querySteps: []workflowSQLQueryStep{{nextErr: errWorkflowSQL}}}
@@ -49,49 +49,49 @@ func TestWorkflowProcessStoreSQLFailures(t *testing.T) {
 			return err
 		}},
 		{"list node query", queryError, func(store WorkflowProcessStore) error {
-			_, err := store.ListNodes(t.Context(), "workspace", process.ID)
+			_, err := store.ListNodes(t.Context(), "workspace", process.ProcessID)
 			return err
 		}},
 		{"list node scan", rowError, func(store WorkflowProcessStore) error {
-			_, err := store.ListNodes(t.Context(), "workspace", process.ID)
+			_, err := store.ListNodes(t.Context(), "workspace", process.ProcessID)
 			return err
 		}},
 		{"list node rows", terminalError, func(store WorkflowProcessStore) error {
-			_, err := store.ListNodes(t.Context(), "workspace", process.ID)
+			_, err := store.ListNodes(t.Context(), "workspace", process.ProcessID)
 			return err
 		}},
 		{"update node rows", workflowSQLState{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}}, func(store WorkflowProcessStore) error { return store.UpdateNode(t.Context(), "workspace", node) }},
 		{"list task query", queryError, func(store WorkflowProcessStore) error {
-			_, err := store.ListTasks(t.Context(), "workspace", process.ID, "", "", 10)
+			_, err := store.ListTasks(t.Context(), "workspace", process.ProcessID, "", "", 10)
 			return err
 		}},
 		{"list task scan", rowError, func(store WorkflowProcessStore) error {
-			_, err := store.ListTasks(t.Context(), "workspace", process.ID, "", "", 10)
+			_, err := store.ListTasks(t.Context(), "workspace", process.ProcessID, "", "", 10)
 			return err
 		}},
 		{"list task rows", terminalError, func(store WorkflowProcessStore) error {
-			_, err := store.ListTasks(t.Context(), "workspace", process.ID, "", "", 10)
+			_, err := store.ListTasks(t.Context(), "workspace", process.ProcessID, "", "", 10)
 			return err
 		}},
 		{"update task rows", workflowSQLState{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}}, func(store WorkflowProcessStore) error { return store.UpdateTask(t.Context(), "workspace", task) }},
 		{"decide exec", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowProcessStore) error {
-			_, _, err := store.DecideTask(t.Context(), "workspace", task.ID, "user", "approve", "", "now")
+			_, _, err := store.DecideTask(t.Context(), "workspace", task.TaskID, "user", "approve", "", "now")
 			return err
 		}},
 		{"decide rows", workflowSQLState{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}}, func(store WorkflowProcessStore) error {
-			_, _, err := store.DecideTask(t.Context(), "workspace", task.ID, "user", "approve", "", "now")
+			_, _, err := store.DecideTask(t.Context(), "workspace", task.TaskID, "user", "approve", "", "now")
 			return err
 		}},
 		{"list event query", queryError, func(store WorkflowProcessStore) error {
-			_, err := store.ListEvents(t.Context(), "workspace", process.ID, 10)
+			_, err := store.ListEvents(t.Context(), "workspace", process.ProcessID, 10)
 			return err
 		}},
 		{"list event scan", rowError, func(store WorkflowProcessStore) error {
-			_, err := store.ListEvents(t.Context(), "workspace", process.ID, 10)
+			_, err := store.ListEvents(t.Context(), "workspace", process.ProcessID, 10)
 			return err
 		}},
 		{"list event rows", terminalError, func(store WorkflowProcessStore) error {
-			_, err := store.ListEvents(t.Context(), "workspace", process.ID, 10)
+			_, err := store.ListEvents(t.Context(), "workspace", process.ProcessID, 10)
 			return err
 		}},
 	}
@@ -114,8 +114,8 @@ func TestWorkflowProcessStatusFilterFinalConditions(t *testing.T) {
 }
 
 func TestWorkflowWorkerStoreSQLFailures(t *testing.T) {
-	execution := workflowmodel.WorkflowExecution{ID: "execution"}
-	task := workflowmodel.WorkflowTask{ID: "task"}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution"}
+	task := workflowmodel.WorkflowTask{TaskID: "task"}
 	queryError := workflowSQLState{querySteps: []workflowSQLQueryStep{{err: errWorkflowSQL}}}
 	rowError := workflowSQLState{querySteps: []workflowSQLQueryStep{{columns: []string{"bad"}, rows: [][]driver.Value{{"bad"}}}}}
 	terminalError := workflowSQLState{querySteps: []workflowSQLQueryStep{{nextErr: errWorkflowSQL}}}
@@ -196,23 +196,23 @@ func TestWorkflowDecisionStoreTransactionFailures(t *testing.T) {
 			return err
 		}},
 		{"decision commit", workflowSQLState{commitErr: errWorkflowSQL, execSteps: []workflowSQLExecStep{{rows: 1}}}, func(store WorkflowDecisionStore) error {
-			_, err := store.CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{WorkspaceID: "workspace", DecidedTask: workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "user"}})
+			_, err := store.CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{WorkspaceID: "workspace", DecidedTask: workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "user"}})
 			return err
 		}},
 		{"state begin", workflowSQLState{beginErr: errWorkflowSQL}, func(store WorkflowDecisionStore) error {
 			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace"})
 		}},
 		{"state update exec", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateNodes: []workflowmodel.WorkflowNodeInstance{{ID: "node"}}})
+			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateNodes: []workflowmodel.WorkflowNodeInstance{{NodeInstanceID: "node"}}})
 		}},
 		{"state update rows", workflowSQLState{execSteps: []workflowSQLExecStep{{rowsErr: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateNodes: []workflowmodel.WorkflowNodeInstance{{ID: "node"}}})
+			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", UpdateNodes: []workflowmodel.WorkflowNodeInstance{{NodeInstanceID: "node"}}})
 		}},
 		{"state insert node", workflowSQLState{execSteps: []workflowSQLExecStep{{err: errWorkflowSQL}}}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertNodes: []workflowmodel.WorkflowNodeInstance{{ID: "node"}}})
+			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertNodes: []workflowmodel.WorkflowNodeInstance{{NodeInstanceID: "node"}}})
 		}},
 		{"state insert execution encoding", workflowSQLState{}, func(store WorkflowDecisionStore) error {
-			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertExecutions: []workflowmodel.WorkflowExecution{{ID: "execution", Action: map[string]any{"bad": make(chan int)}}}})
+			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace", InsertExecutions: []workflowmodel.WorkflowExecution{{ExecutionID: "execution", Action: map[string]any{"bad": make(chan int)}}}})
 		}},
 		{"state commit", workflowSQLState{commitErr: errWorkflowSQL}, func(store WorkflowDecisionStore) error {
 			return store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{WorkspaceID: "workspace"})
@@ -245,10 +245,10 @@ func TestWorkflowStateCommitSuccessfulOptionalWrites(t *testing.T) {
 	})
 	store := newAgentWorkflowDecisionStore(base)
 	store.db = db
-	execution := workflowmodel.WorkflowExecution{ID: "execution"}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution"}
 	if err := store.CommitWorkflowState(t.Context(), transactionmodel.WorkflowStateCommit{
 		WorkspaceID:       "workspace",
-		Events:            []workflowmodel.WorkflowProcessEvent{{ID: "event"}},
+		Events:            []workflowmodel.WorkflowProcessEvent{{EventID: "event"}},
 		WorkflowExecution: &execution,
 	}); err != nil {
 		t.Fatal(err)

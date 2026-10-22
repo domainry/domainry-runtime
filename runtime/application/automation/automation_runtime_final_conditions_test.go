@@ -114,7 +114,7 @@ func TestAutomationOutboxCoversTerminalCommitMatrix(t *testing.T) {
 	registry := &automationFacadeRegistry{rules: map[string]automationmodel.AutomationRuleSchema{"after": rule}}
 	message := func() publicationmodel.Message {
 		return publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
-			RuleKey: "after", Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{ID: "order-1"}, ActorUserID: "operator", ActorRoleKey: "admin",
+			RuleKey: "after", Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{RecordID: "order-1"}, ActorUserID: "operator", ActorRoleKey: "admin",
 		})}
 	}
 

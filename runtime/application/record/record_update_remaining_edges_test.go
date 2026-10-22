@@ -20,7 +20,7 @@ func TestRecordUpdatePersistedScopeFailureAtReadAndWriteStages(t *testing.T) {
 	failure := errors.New("scope failed")
 	for stage := 1; stage <= 2; stage++ {
 		t.Run(map[int]string{1: "read", 2: "write"}[stage], func(t *testing.T) {
-			repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
+			repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
 			dependencies := recordUpdateEdgeDependencies(repository)
 			calls := 0
 			dependencies.CanAccessScope = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record, bool) (bool, error) {
@@ -39,7 +39,7 @@ func TestRecordUpdatePersistedScopeFailureAtReadAndWriteStages(t *testing.T) {
 
 func TestPlanRecordUpdateReturnsPersistedScopeFailure(t *testing.T) {
 	failure := errors.New("scope failed")
-	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before"}}}
+	repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Before"}}}
 	dependencies := recordUpdateEdgeDependencies(repository)
 	dependencies.CanAccessScope = func(context.Context, principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record, bool) (bool, error) {
 		return false, failure
@@ -52,13 +52,13 @@ func TestPlanRecordUpdateReturnsPersistedScopeFailure(t *testing.T) {
 func TestRecordUpdateTriggerDeduplication(t *testing.T) {
 	principal := recordUpdateFinalPrincipal()
 	newService := func() (*RecordUpdateApplicationService, *updateEdgeRepository, *int) {
-		repository := &updateEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
+		repository := &updateEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Before", "status": "open", "age": float64(20), "version": float64(1)}}}
 		dependencies := recordUpdateEdgeDependencies(repository)
 		workflowCalls := 0
 		dependencies.UpdatedTriggers = func(string, map[string]any, map[string]any) []string { return []string{"", "sync", " sync "} }
 		dependencies.PrepareWorkflow = func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
 			workflowCalls++
-			return []workflowmodel.WorkflowExecution{{ID: "workflow"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow"}}, nil
 		}
 		return NewRecordUpdateApplicationService(dependencies), repository, &workflowCalls
 	}

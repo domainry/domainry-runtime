@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -22,9 +23,10 @@ func RecordNormalizeFilterExpression(object definitionmodel.ObjectSchema, expres
 	for _, field := range object.Fields {
 		fields[strings.TrimSpace(field.Key)] = field
 	}
-	for _, key := range []string{"id", "created_at", "updated_at"} {
+	for _, key := range []string{"record_id", "created_at", "updated_at"} {
 		fields[key] = definitionmodel.FieldSchema{Key: key, Type: "text"}
 	}
+	fields[recordmodel.IDField] = definitionmodel.FieldSchema{Key: recordmodel.IDField, Type: "integer"}
 	nodes := 0
 	normalized, err := normalizeRecordFilterNode(*expression, fields, "$", 0, &nodes)
 	if err != nil {
@@ -154,7 +156,15 @@ func recordFilterField(fields map[string]definitionmodel.FieldSchema, raw, path 
 }
 
 func normalizeRecordFilterValue(field definitionmodel.FieldSchema, value any) (any, error) {
-	if field.Key == "id" || field.Key == "created_at" || field.Key == "updated_at" {
+	if field.Key == "id" {
+		text := strings.TrimSpace(fmt.Sprint(value))
+		parsed, err := strconv.ParseInt(text, 10, 64)
+		if err != nil || parsed < 1 {
+			return nil, fmt.Errorf("value is not a positive integer")
+		}
+		return parsed, nil
+	}
+	if field.Key == "record_id" || field.Key == "created_at" || field.Key == "updated_at" {
 		text := strings.TrimSpace(fmt.Sprint(value))
 		if text == "" {
 			return nil, fmt.Errorf("value is empty")

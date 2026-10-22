@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-orm/query"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -22,15 +23,8 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	if err := store.EnsureApplicationSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE product (
-		workspace_id TEXT NOT NULL,
-		id TEXT NOT NULL,
-		created_at BIGINT NOT NULL,
-		updated_at BIGINT NOT NULL,
-		sku TEXT NOT NULL,
-		name TEXT NOT NULL,
-		PRIMARY KEY (workspace_id, id)
-	)`); err != nil {
+	createTestRecordTable(t, store, "product", ormschema.Column("sku", ormschema.Text()).NotNull(), ormschema.Column("name", ormschema.Text()).NotNull())
+	if _, err := store.DB().Exec(`CREATE UNIQUE INDEX product_workspace_sku_unique ON product(workspace_id, sku)`); err != nil {
 		t.Fatal(err)
 	}
 	localized := map[string]any{"localized": true}
@@ -44,18 +38,18 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		record := recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"sku": sku, "name": base}}
+		record := recordmodel.Record{RecordID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"sku": sku, "name": base}}
 		if err := repository.CommitRecordMutation(t.Context(), workspace, transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record, LocalizedValues: values}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	create("workspace-a", "p1", "P-1", "Default phone", recordmodel.RecordTranslations{"en-US": {"name": "IPhone"}, "zh-CN": {"name": "苹果手机"}})
 	create("workspace-a", "p2", "P-2", "Default tablet", recordmodel.RecordTranslations{"en-US": {"name": "Tablet"}, "zh-CN": {"name": "平板电脑"}})
-	create("workspace-b", "p1", "P-1", "Private phone", recordmodel.RecordTranslations{"zh-CN": {"name": "其他租户商品"}})
+	create("workspace-b", "p1-b", "P-1", "Private phone", recordmodel.RecordTranslations{"zh-CN": {"name": "其他租户商品"}})
 
 	queryValue := recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Search: "苹果", SearchFields: []string{"name"}, Locale: "zh-CN", FallbackLocale: "en-US"}
 	page, err := repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
-	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "p1" || page.Items[0].Data["name"] != "苹果手机" {
+	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != "p1" || page.Items[0].Data["name"] != "苹果手机" {
 		t.Fatalf("localized search page=%+v err=%v", page, err)
 	}
 	if page.Items[0].Localization == nil || page.Items[0].Localization.FieldSources["name"] != "zh-CN" {
@@ -64,7 +58,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 
 	queryValue.Search = "iPhone"
 	page, err = repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
-	if err != nil || page.Total != 1 || page.Items[0].ID != "p1" {
+	if err != nil || page.Total != 1 || page.Items[0].RecordID != "p1" {
 		t.Fatalf("fallback search page=%+v err=%v", page, err)
 	}
 
@@ -72,7 +66,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 	queryValue.Locale = "en-US"
 	queryValue.Sort = []recordmodel.RecordSortRule{{Field: "name", Direction: "desc"}}
 	page, err = repository.ListRecords(t.Context(), "workspace-a", object, queryValue)
-	if err != nil || len(page.Items) != 2 || page.Items[0].ID != "p2" || page.Items[1].ID != "p1" {
+	if err != nil || len(page.Items) != 2 || page.Items[0].RecordID != "p2" || page.Items[1].RecordID != "p1" {
 		t.Fatalf("localized sort page=%+v err=%v", page, err)
 	}
 	if page.Items[0].Data["sku"] != "P-2" {
@@ -84,7 +78,7 @@ func TestRecordLocalizationCreateSearchSortFallbackAndDelete(t *testing.T) {
 		t.Fatalf("fallback record=%+v found=%v err=%v", fallback, found, err)
 	}
 
-	private, found, err := repository.GetRecordLocalized(t.Context(), "workspace-b", object, "p1", "zh-CN", "en-US")
+	private, found, err := repository.GetRecordLocalized(t.Context(), "workspace-b", object, "p1-b", "zh-CN", "en-US")
 	if err != nil || !found || private.Data["name"] != "其他租户商品" {
 		t.Fatalf("workspace isolation record=%+v found=%v err=%v", private, found, err)
 	}

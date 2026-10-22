@@ -56,7 +56,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCano
 		t.Fatalf("grant=%#v", grant)
 	}
 	var authorizationAudits int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE workspace_id = ? AND id = ? AND event = ?`,
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE workspace_id = ? AND audit_event_id = ? AND event = ?`,
 		"workspace-installation", grant.AuthorizationAuditID, "identity.workspace_identity_usage.authorize").Scan(&authorizationAudits); err != nil || authorizationAudits != 1 {
 		t.Fatalf("authorization audits=%d err=%v", authorizationAudits, err)
 	}
@@ -127,7 +127,7 @@ func seedWorkspaceIdentityUsageAuthorityWorkspace(t *testing.T, store *bootstrap
 	}
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
 		Columns(
-			"id", "canonical_code", "name", "status", "initial_installation_identity",
+			"workspace_id", "canonical_code", "name", "status", "initial_installation_identity",
 			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores",
 			"contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes",
 			"commercial_revision", "revision", "created_at", "updated_at",

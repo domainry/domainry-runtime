@@ -59,7 +59,7 @@ func TestDatabaseRetirementTransitionIdentityOrderAndEvidenceFailures(t *testing
 	next := current
 	next.State, next.UpdatedAt = operationsmodel.DatabaseRetirementReplacementReady, now
 	for _, mutate := range []func(*operationsmodel.DatabaseRetirement){
-		func(value *operationsmodel.DatabaseRetirement) { value.ID = "" },
+		func(value *operationsmodel.DatabaseRetirement) { value.OperationID = "" },
 		func(value *operationsmodel.DatabaseRetirement) { value.Object.Engine = "" },
 		func(value *operationsmodel.DatabaseRetirement) { value.Object.Database = "" },
 		func(value *operationsmodel.DatabaseRetirement) { value.Object.Kind = "" },
@@ -74,7 +74,7 @@ func TestDatabaseRetirementTransitionIdentityOrderAndEvidenceFailures(t *testing
 		}
 	}
 	for _, mutate := range []func(*operationsmodel.DatabaseRetirement){
-		func(value *operationsmodel.DatabaseRetirement) { value.ID = "other" },
+		func(value *operationsmodel.DatabaseRetirement) { value.OperationID = "other" },
 		func(value *operationsmodel.DatabaseRetirement) { value.Object.Name = "other" },
 		func(value *operationsmodel.DatabaseRetirement) { value.UpdatedAt = now.Add(time.Second) },
 	} {
@@ -345,12 +345,12 @@ func TestDatabaseDropEvidenceCompleteMatrix(t *testing.T) {
 
 func TestDatabaseDropPlanIdentityAndStatementMatrix(t *testing.T) {
 	base := operationsmodel.DatabaseDropPlan{
-		RetirementID: "retirement", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Kind: "table", Name: "old"},
+		OperationID: "retirement", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Kind: "table", Name: "old"},
 		Statements: []string{"DROP TABLE old"}, EstimatedLock: time.Second, LockTimeout: 2 * time.Second,
 		EstimatedReclaimBytes: 0, Rollback: "restore", ApprovalID: "approval",
 	}
 	for _, mutate := range []func(*operationsmodel.DatabaseDropPlan){
-		func(value *operationsmodel.DatabaseDropPlan) { value.RetirementID = "" },
+		func(value *operationsmodel.DatabaseDropPlan) { value.OperationID = "" },
 		func(value *operationsmodel.DatabaseDropPlan) { value.Object.Engine = "" },
 		func(value *operationsmodel.DatabaseDropPlan) { value.Object.Kind = "" },
 		func(value *operationsmodel.DatabaseDropPlan) { value.Object.Name = "" },

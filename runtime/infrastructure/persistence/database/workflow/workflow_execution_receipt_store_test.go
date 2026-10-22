@@ -42,7 +42,7 @@ func TestWorkflowExecutionReceiptStoreIsAtomicReplayableAndFenced(t *testing.T) 
 	if err != nil || conflict.Decision != idempotency.DecisionFingerprintConflict {
 		t.Fatalf("conflict=%#v err=%v", conflict, err)
 	}
-	wrong := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: first.Receipt.WorkspaceID, ReceiptID: first.Receipt.ID, ExecutionID: "execution-a", LeaseOwner: "runtime-a", FencingToken: 99, Now: now, ExpiresAt: now.Add(time.Hour)}
+	wrong := workflowmodel.WorkflowExecutionReceiptCompletion{WorkspaceID: first.Receipt.WorkspaceID, OperationID: first.Receipt.OperationID, ExecutionID: "execution-a", LeaseOwner: "runtime-a", FencingToken: 99, Now: now, ExpiresAt: now.Add(time.Hour)}
 	if err := repository.CompleteExecutionReceipt(t.Context(), wrong); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("wrong completion=%v", err)
 	}
@@ -72,7 +72,7 @@ func TestWorkflowExecutionReceiptStoreReclaimsAndIsolatesWorkspace(t *testing.T)
 		return result
 	}
 	first, isolated := claim("workspace-a", "runtime-a", now), claim("workspace-b", "runtime-b", now)
-	if first.Decision != idempotency.DecisionAcquired || isolated.Decision != idempotency.DecisionAcquired || first.Receipt.ID == isolated.Receipt.ID {
+	if first.Decision != idempotency.DecisionAcquired || isolated.Decision != idempotency.DecisionAcquired || first.Receipt.OperationID == isolated.Receipt.OperationID {
 		t.Fatalf("workspace scope collided: first=%#v isolated=%#v", first, isolated)
 	}
 	reclaimed := claim("workspace-a", "runtime-c", now.Add(2*time.Minute))

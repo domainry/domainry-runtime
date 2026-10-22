@@ -25,7 +25,7 @@ type integrationHealthAlertPublisherStub struct {
 
 func (s *integrationHealthAlertPublisherStub) PublishIntent(_ context.Context, intent notificationcontract.NotificationIntent) (notificationcontract.NotificationEvent, bool, error) {
 	s.intents = append(s.intents, intent)
-	return notificationcontract.NotificationEvent{ID: intent.ID}, true, nil
+	return notificationcontract.NotificationEvent{EventID: intent.SourceEventID}, true, nil
 }
 
 func TestPublishIntegrationHealthAlertTransitionsPublishesOnlyStateChanges(t *testing.T) {
@@ -46,7 +46,7 @@ func TestPublishIntegrationHealthAlertTransitionsPublishesOnlyStateChanges(t *te
 		t.Fatalf("firing intent invalid: %v", err)
 	}
 
-	reader.groups["admin-1\x00"+firing.GroupKey] = notificationcontract.NotificationAlertGroup{State: notificationcontract.NotificationAlertAcknowledged, LastEventID: firing.ID}
+	reader.groups["admin-1\x00"+firing.GroupKey] = notificationcontract.NotificationAlertGroup{State: notificationcontract.NotificationAlertAcknowledged, LastEventID: firing.SourceEventID}
 	publisher.intents = nil
 	if published, err = publishIntegrationHealthAlertTransitions(t.Context(), "workspace-1", []string{"admin-1"}, []deploymentapplication.IntegrationHealthCondition{condition}, reader, publisher); err != nil || published != 0 {
 		t.Fatalf("acknowledged alert republished: published=%d err=%v", published, err)
@@ -57,7 +57,7 @@ func TestPublishIntegrationHealthAlertTransitionsPublishesOnlyStateChanges(t *te
 		t.Fatalf("recovery published=%d err=%v", published, err)
 	}
 	recovered := publisher.intents[0]
-	if recovered.EventType != "integration.health.recovered" || recovered.AlertState != notificationcontract.NotificationAlertResolved || recovered.ID == firing.ID {
+	if recovered.EventType != "integration.health.recovered" || recovered.AlertState != notificationcontract.NotificationAlertResolved || recovered.SourceEventID == firing.SourceEventID {
 		t.Fatalf("recovery intent=%+v", recovered)
 	}
 }
@@ -66,7 +66,7 @@ func TestIntegrationHealthTransitionIntentIsStableForRetry(t *testing.T) {
 	condition := deploymentapplication.IntegrationHealthCondition{Key: "ready_due", MetricName: "ready due tasks", Unit: "tasks", Current: 11, Limit: 10, Firing: true, ObservedAt: "2026-09-29T02:10:00Z"}
 	first := integrationHealthTransitionIntent("workspace-1", "admin-1", condition, integrationHealthAlertGroupPrefix+condition.Key, "none")
 	second := integrationHealthTransitionIntent("workspace-1", "admin-1", condition, integrationHealthAlertGroupPrefix+condition.Key, "none")
-	if first.ID != second.ID || first.SourceEventID != second.SourceEventID || first.DedupeKey != second.DedupeKey {
+	if first.SourceEventID != second.SourceEventID || first.DedupeKey != second.DedupeKey {
 		t.Fatalf("retry identity changed: first=%+v second=%+v", first, second)
 	}
 }
@@ -96,8 +96,8 @@ func (s integrationHealthIdentityProjectionStub) ListUserRoleAssignments(context
 func TestInstallationAdministratorRecipientsUseOnlyActiveRoleAssignmentsAndUsers(t *testing.T) {
 	expired := "2026-09-29T02:00:00Z"
 	projection := integrationHealthIdentityProjectionStub{
-		roles: []identitysdk.Role{{ID: "role-admin", Key: "tenant_admin", Status: "active"}, {ID: "role-workspace", Key: "workspace_admin", Status: "active"}},
-		users: []identitysdk.User{{ID: "admin-b", Status: "active"}, {ID: "admin-a", Status: "active"}, {ID: "disabled", Status: "disabled"}, {ID: "ordinary", Status: "active"}, {ID: "expired", Status: "active"}},
+		roles: []identitysdk.Role{{RoleID: "role-admin", Key: "tenant_admin", Status: "active"}, {RoleID: "role-workspace", Key: "workspace_admin", Status: "active"}},
+		users: []identitysdk.User{{UserID: "admin-b", Status: "active"}, {UserID: "admin-a", Status: "active"}, {UserID: "disabled", Status: "disabled"}, {UserID: "ordinary", Status: "active"}, {UserID: "expired", Status: "active"}},
 		assignments: []identitysdk.UserRoleAssignment{
 			{UserID: "admin-b", RoleID: "role-admin", Status: "active"}, {UserID: "admin-a", RoleID: "role-admin", Status: "active"},
 			{UserID: "disabled", RoleID: "role-admin", Status: "active"}, {UserID: "ordinary", RoleID: "role-workspace", Status: "active"},

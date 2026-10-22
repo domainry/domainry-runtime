@@ -18,7 +18,7 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	}
 	repository := NewWorkflowProcessStore(store)
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process-edge", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-2",
+		ProcessID: "process-edge", WorkflowKey: "expense", WorkflowName: "Expense", DefinitionVersionID: "version-2",
 		DefinitionVersion: 2, DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "expense"},
 		ObjectKey: "expense_claim", RecordID: "claim-1", InitiatorID: "requester", InitiatorRoleKey: "employee",
 		Status: "waiting", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z",
@@ -26,15 +26,15 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	if err := repository.InsertProcess(t.Context(), " workspace-a ", process); err != nil {
 		t.Fatal(err)
 	}
-	node := workflowmodel.WorkflowNodeInstance{ID: "node-edge", ProcessID: process.ID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{}, Output: map[string]any{}, StartedAt: "2026-01-02T00:00:00Z"}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "node-edge", ProcessID: process.ProcessID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{}, Output: map[string]any{}, StartedAt: "2026-01-02T00:00:00Z"}
 	if err := repository.InsertNode(t.Context(), "workspace-a", node); err != nil {
 		t.Fatal(err)
 	}
-	task := workflowmodel.WorkflowTask{ID: "task-edge", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", AssigneeName: "Manager", AssigneeRoleKey: "manager", AssigneeResolverKey: "role", AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "role", ResolverKey: "role", RoleKey: "manager"}}}, ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{}, CandidateSource: "role", NodeDefinitionVersion: 2, Sequence: 1, Status: "open", DueAt: "2026-01-03T00:00:00Z", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
+	task := workflowmodel.WorkflowTask{TaskID: "task-edge", ProcessID: process.ProcessID, NodeInstanceID: node.NodeInstanceID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", AssigneeName: "Manager", AssigneeRoleKey: "manager", AssigneeResolverKey: "role", AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "role", ResolverKey: "role", RoleKey: "manager"}}}, ResolverSnapshot: []definitionmodel.WorkflowAssigneeResolver{}, CandidateSource: "role", NodeDefinitionVersion: 2, Sequence: 1, Status: "open", DueAt: "2026-01-03T00:00:00Z", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
 	if err := repository.InsertTask(t.Context(), "workspace-a", task); err != nil {
 		t.Fatal(err)
 	}
-	event := workflowmodel.WorkflowProcessEvent{ID: "event-edge", ProcessID: process.ID, Event: "created", ActorID: "system", Metadata: map[string]any{}, CreatedAt: "2026-01-02T00:00:00Z"}
+	event := workflowmodel.WorkflowProcessEvent{EventID: "event-edge", ProcessID: process.ProcessID, Event: "created", ActorID: "system", Metadata: map[string]any{}, CreatedAt: "2026-01-02T00:00:00Z"}
 	if err := repository.InsertEvent(t.Context(), "workspace-a", event); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	}
 	for _, item := range []struct{ id, status string }{{"process-failed", "failed"}, {"process-configuration", "configuration_error"}} {
 		candidate := process
-		candidate.ID, candidate.Status = item.id, item.status
+		candidate.ProcessID, candidate.Status = item.id, item.status
 		candidate.CreatedAt, candidate.UpdatedAt = "2026-01-03T00:00:00Z", "2026-01-03T00:00:00Z"
 		if err := repository.InsertProcess(t.Context(), "workspace-a", candidate); err != nil {
 			t.Fatal(err)
@@ -66,17 +66,17 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	if values, err := repository.ListProcesses(t.Context(), "workspace-a", workflowmodel.WorkflowProcessFilter{Statuses: []string{" failed ", "configuration_error"}, Limit: 10}); err != nil || len(values) != 2 {
 		t.Fatalf("multi-status processes=%#v error=%v", values, err)
 	}
-	if values, err := repository.ListProcesses(t.Context(), "workspace-a", workflowmodel.WorkflowProcessFilter{ProcessID: " process-configuration ", Limit: 10}); err != nil || len(values) != 1 || values[0].ID != "process-configuration" {
+	if values, err := repository.ListProcesses(t.Context(), "workspace-a", workflowmodel.WorkflowProcessFilter{ProcessID: " process-configuration ", Limit: 10}); err != nil || len(values) != 1 || values[0].ProcessID != "process-configuration" {
 		t.Fatalf("resource process=%#v error=%v", values, err)
 	}
 	if values, err := repository.ListTasks(t.Context(), "workspace-a", " ", " ", " ", 0); err != nil || len(values) != 1 || values[0].AssigneeResolverKey != "role" || len(values[0].AssigneeEvidence.Matches) != 1 || values[0].AssigneeEvidence.Matches[0].RoleKey != "manager" {
 		t.Fatalf("tasks=%#v error=%v", values, err)
 	}
-	if values, err := repository.ListEvents(t.Context(), "workspace-a", process.ID, 1001); err != nil || len(values) != 1 {
+	if values, err := repository.ListEvents(t.Context(), "workspace-a", process.ProcessID, 1001); err != nil || len(values) != 1 {
 		t.Fatalf("events=%#v error=%v", values, err)
 	}
 	secondTask := task
-	secondTask.ID, secondTask.Sequence = "task-edge-2", 2
+	secondTask.TaskID, secondTask.Sequence = "task-edge-2", 2
 	if err := repository.InsertTask(t.Context(), "workspace-a", secondTask); err != nil {
 		t.Fatal(err)
 	}
@@ -87,15 +87,15 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	if err := repository.UpdateTasks(t.Context(), "workspace-a", []workflowmodel.WorkflowTask{updatedFirst, updatedSecond}); err != nil {
 		t.Fatal(err)
 	}
-	if loaded, found, err := repository.GetTask(t.Context(), "workspace-a", secondTask.ID); err != nil || !found || loaded.Status != "cancelled" {
+	if loaded, found, err := repository.GetTask(t.Context(), "workspace-a", secondTask.TaskID); err != nil || !found || loaded.Status != "cancelled" {
 		t.Fatalf("batch-updated task=%#v found=%v err=%v", loaded, found, err)
 	}
 
-	decided, found, err := repository.DecideTask(t.Context(), "workspace-a", task.ID, "manager", "approved", "looks good", "2026-01-02T01:00:00Z")
+	decided, found, err := repository.DecideTask(t.Context(), "workspace-a", task.TaskID, "manager", "approved", "looks good", "2026-01-02T01:00:00Z")
 	if err != nil || !found || decided.Status != "approved" || decided.Decision != "approved" || decided.CompletedBy != "manager" {
 		t.Fatalf("decided=%#v found=%v error=%v", decided, found, err)
 	}
-	if _, found, err := repository.DecideTask(t.Context(), "workspace-a", task.ID, "manager", "rejected", "late", "2026-01-02T02:00:00Z"); err != nil || found {
+	if _, found, err := repository.DecideTask(t.Context(), "workspace-a", task.TaskID, "manager", "rejected", "late", "2026-01-02T02:00:00Z"); err != nil || found {
 		t.Fatalf("second decision found=%v error=%v", found, err)
 	}
 	if _, found, err := repository.DecideTask(t.Context(), "workspace-a", "missing", "manager", "approved", "", "2026-01-02T02:00:00Z"); err != nil || found {
@@ -103,17 +103,17 @@ func TestWorkflowProcessStoreDecisionFiltersAndMissingRows(t *testing.T) {
 	}
 
 	missingProcess := process
-	missingProcess.ID = "missing-process"
+	missingProcess.ProcessID = "missing-process"
 	if err := repository.UpdateProcess(t.Context(), "workspace-a", missingProcess); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing process update = %v", err)
 	}
 	missingNode := node
-	missingNode.ID = "missing-node"
+	missingNode.NodeInstanceID = "missing-node"
 	if err := repository.UpdateNode(t.Context(), "workspace-a", missingNode); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing node update = %v", err)
 	}
 	missingTask := task
-	missingTask.ID = "missing-task"
+	missingTask.TaskID = "missing-task"
 	if err := repository.UpdateTask(t.Context(), "workspace-a", missingTask); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing task update = %v", err)
 	}
@@ -132,10 +132,10 @@ func TestWorkflowProcessStoreRejectsBlankWorkspaceAndPropagatesCancellation(t *t
 		t.Fatal(err)
 	}
 	repository := NewWorkflowProcessStore(store)
-	process := workflowmodel.WorkflowProcessInstance{ID: "process"}
-	node := workflowmodel.WorkflowNodeInstance{ID: "node"}
-	task := workflowmodel.WorkflowTask{ID: "task"}
-	event := workflowmodel.WorkflowProcessEvent{ID: "event"}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process"}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "node"}
+	task := workflowmodel.WorkflowTask{TaskID: "task"}
+	event := workflowmodel.WorkflowProcessEvent{EventID: "event"}
 	checks := []struct {
 		name string
 		call func() error
@@ -198,7 +198,7 @@ func TestWorkflowProcessStoreRejectsBlankWorkspaceAndPropagatesCancellation(t *t
 func TestWorkflowExecutionJSONAndConditionHelpers(t *testing.T) {
 	valid := workflowmodel.WorkflowExecution{Action: map[string]any{"kind": "record"}, Payload: map[string]any{"id": 1}, Result: map[string]any{"ok": true}}
 	columns, values, err := workflowExecutionInsertValues(valid)
-	if err != nil || len(columns) != len(values) || len(columns) != len(workflowExecutionColumns()) {
+	if err != nil || len(columns) != len(values) || len(columns) != len(workflowExecutionInsertColumns()) {
 		t.Fatalf("columns=%d values=%d error=%v", len(columns), len(values), err)
 	}
 	if values, err := workflowExecutionMutableValues(valid); err != nil || len(values) != len(workflowExecutionMutableColumns()) {

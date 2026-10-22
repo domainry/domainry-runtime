@@ -104,7 +104,7 @@ func renderWorkflowValueWithSource(ctx context.Context, value any, payload map[s
 	case workflowSimpleTemplateRefKey(text, "$record.") != "":
 		return payload[strings.TrimPrefix(text, "$record.")]
 	case text == "$source.id":
-		return source.ID
+		return source.RecordID
 	case workflowSimpleTemplateRefKey(text, "$source.") != "":
 		return source.Data[strings.TrimPrefix(text, "$source.")]
 	case text == "$principal.user_id":
@@ -178,8 +178,8 @@ func renderWorkflowTemplateWithSource(ctx context.Context, text string, payload 
 	}
 	out = strings.ReplaceAll(out, "$workflow.id", fmt.Sprint(payload["record_id"]))
 	out = strings.ReplaceAll(out, "$record.id", fmt.Sprint(payload["record_id"]))
-	if source.ID != "" {
-		out = strings.ReplaceAll(out, "$source.id", source.ID)
+	if source.RecordID != "" {
+		out = strings.ReplaceAll(out, "$source.id", source.RecordID)
 		for key, value := range source.Data {
 			out = strings.ReplaceAll(out, "$source."+key, fmt.Sprint(value))
 		}
@@ -202,8 +202,8 @@ func WorkflowPayloadForRecord(objectKey string, record recordmodel.Record) map[s
 func workflowPayloadForRecordChange(objectKey string, record recordmodel.Record, before map[string]any, trigger string) map[string]any {
 	payload := workflowpolicy.WorkflowCloneMap(record.Data)
 	payload["object_key"] = objectKey
-	payload["id"] = record.ID
-	payload["record_id"] = record.ID
+	payload["id"] = record.RecordID
+	payload["record_id"] = record.RecordID
 	payload["created_at"] = record.CreatedAt
 	payload["updated_at"] = record.UpdatedAt
 	payload["after"] = workflowpolicy.WorkflowCloneMap(record.Data)
@@ -242,7 +242,7 @@ func (s *WorkflowApplicationService) workflowRetryPayload(ctx context.Context, w
 			refreshed[key] = value
 		}
 	}
-	refreshed["retry_source_execution_id"] = previous.ID
+	refreshed["retry_source_execution_id"] = previous.ExecutionID
 	refreshed["retry_source_status"] = previous.Status
 	if previous.LastError != "" {
 		refreshed["retry_source_last_error"] = previous.LastError
@@ -270,7 +270,7 @@ func workflowExecutionAuditMetadata(execution workflowmodel.WorkflowExecution, p
 		"trigger":             execution.Trigger,
 		"trigger_object_key":  valueOrDefault(workflowpolicy.WorkflowPayloadString(execution.Payload, "object_key"), execution.ObjectKey),
 		"trigger_record_id":   valueOrDefault(workflowpolicy.WorkflowPayloadString(execution.Payload, "record_id"), execution.RecordID),
-		"execution_id":        execution.ID,
+		"execution_id":        execution.ExecutionID,
 		"attempt":             execution.Attempt,
 		"max_attempts":        execution.MaxAttempts,
 		"run_as":              execution.RunAs,

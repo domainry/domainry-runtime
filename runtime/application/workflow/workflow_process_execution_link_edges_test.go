@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -11,22 +12,22 @@ import (
 )
 
 func TestFailedWorkflowProcessExecutionProjectsLatestFailedNode(t *testing.T) {
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", DefinitionHash: "hash", CreatedAt: "created"}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", DefinitionHash: "hash", CreatedAt: "created"}
 	store := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{
 		"process": {
-			{ID: "ignored", NodeID: "ignored", Status: "completed"},
-			{ID: "configuration", NodeID: "configuration", Status: "configuration_error"},
-			{ID: "failed", NodeID: "failed", ErrorCode: "provider.timeout"},
+			{NodeInstanceID: "ignored", NodeID: "ignored", Status: "completed"},
+			{NodeInstanceID: "configuration", NodeID: "configuration", Status: "configuration_error"},
+			{NodeInstanceID: "failed", NodeID: "failed", ErrorCode: "provider.timeout"},
 		},
 	}}
 	service := &WorkflowApplicationService{processRepo: store}
 	execution := service.failedWorkflowProcessExecution(t.Context(), definitionmodel.WorkflowSchema{Key: "flow", Name: "Flow", RunAs: "service"}, process, map[string]any{"value": true}, principalmodel.Principal{Principal: identitysdk.Principal{UserID: "actor"}}, "manual", 2, "key", errors.New("failed"))
-	if execution.ID != "process" || execution.Status != "failed" || execution.NodeID != "failed" || execution.Result["node_instance_id"] != "failed" {
+	if entityid.Validate("wfexec", execution.ExecutionID) != nil || execution.ProcessID != "process" || execution.Status != "failed" || execution.NodeID != "failed" || execution.Result["node_instance_id"] != "failed" {
 		t.Fatalf("execution=%+v", execution)
 	}
 	store.nodes["process"] = []workflowmodel.WorkflowNodeInstance{
-		{ID: "configuration", NodeID: "configuration", Status: "configuration_error"},
-		{ID: "ignored", NodeID: "ignored", Status: "completed"},
+		{NodeInstanceID: "configuration", NodeID: "configuration", Status: "configuration_error"},
+		{NodeInstanceID: "ignored", NodeID: "ignored", Status: "completed"},
 	}
 	execution = service.failedWorkflowProcessExecution(t.Context(), definitionmodel.WorkflowSchema{Key: "flow"}, process, nil, principalmodel.Principal{}, "manual", 0, "", errors.New("failed"))
 	if execution.NodeID != "configuration" {
@@ -43,7 +44,7 @@ func TestSyncWorkflowExecutionWithProcessOutcomeMatrix(t *testing.T) {
 	if err := (&WorkflowApplicationService{}).syncWorkflowExecutionWithProcess(t.Context(), workflowmodel.WorkflowProcessInstance{}, nil); err != nil {
 		t.Fatal(err)
 	}
-	baseExecution := workflowmodel.WorkflowExecution{ID: "process", Result: map[string]any{"existing": true}, NodeID: "old", LastError: "old", NextRunAt: "later"}
+	baseExecution := workflowmodel.WorkflowExecution{ExecutionID: "execution", ProcessID: "process", Result: map[string]any{"existing": true}, NodeID: "old", LastError: "old", NextRunAt: "later"}
 	for name, testCase := range map[string]struct {
 		process     workflowmodel.WorkflowProcessInstance
 		decisionErr error
@@ -51,14 +52,14 @@ func TestSyncWorkflowExecutionWithProcessOutcomeMatrix(t *testing.T) {
 		found       bool
 		updateErr   error
 	}{
-		"missing":        {process: workflowmodel.WorkflowProcessInstance{ID: "process"}},
-		"get error":      {process: workflowmodel.WorkflowProcessInstance{ID: "process"}, getErr: errors.New("get")},
-		"running node":   {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "running", CurrentNodeIDs: []string{"node"}, UpdatedAt: "updated"}, found: true},
-		"decision error": {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "waiting", UpdatedAt: "updated"}, found: true, decisionErr: errors.New("decision")},
-		"completed":      {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "completed", UpdatedAt: "updated"}, found: true},
-		"rejected":       {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "rejected", UpdatedAt: "updated"}, found: true},
-		"cancelled":      {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "cancelled", UpdatedAt: "updated"}, found: true},
-		"update error":   {process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", Status: "running", UpdatedAt: "updated"}, found: true, updateErr: errors.New("update")},
+		"missing":        {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process"}},
+		"get error":      {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process"}, getErr: errors.New("get")},
+		"running node":   {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "running", CurrentNodeIDs: []string{"node"}, UpdatedAt: "updated"}, found: true},
+		"decision error": {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "waiting", UpdatedAt: "updated"}, found: true, decisionErr: errors.New("decision")},
+		"completed":      {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "completed", UpdatedAt: "updated"}, found: true},
+		"rejected":       {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "rejected", UpdatedAt: "updated"}, found: true},
+		"cancelled":      {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "cancelled", UpdatedAt: "updated"}, found: true},
+		"update error":   {process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", Status: "running", UpdatedAt: "updated"}, found: true, updateErr: errors.New("update")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			executions := map[string]workflowmodel.WorkflowExecution{}

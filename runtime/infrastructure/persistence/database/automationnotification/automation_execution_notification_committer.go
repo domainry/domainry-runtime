@@ -108,7 +108,7 @@ func (s AutomationExecutionNotificationCommitter) executionCommitted(ctx context
 	var count int
 	queryValue, args, err := query.NewWorkspaceSelectBuilder(s.store.SQLRenderer, "_automation_runs", execution.WorkspaceID).
 		Projections(query.Project(query.CountAll())).
-		Where(query.And(query.Equal("run_kind", "rule"), query.Equal("id", execution.ID))).Build()
+		Where(query.And(query.Equal("run_kind", "rule"), query.Equal("run_id", execution.RunID))).Build()
 	if err != nil {
 		return false, fmt.Errorf("build automation execution replay inspection: %w", err)
 	}

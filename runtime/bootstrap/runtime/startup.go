@@ -521,7 +521,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
-		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.ID})
+		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.MessageID})
 	}
 	if sdkDeliveryGateway != nil {
 		sdkDeliveryGateway.BindWakeup(notificationWakeup)

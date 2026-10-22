@@ -21,7 +21,7 @@ func TestActionPatchUsesOnlyDeclaredInput(t *testing.T) {
 		{Key: "stage", Type: "select", Config: map[string]any{"options": []string{"new", "qualified", "won"}}},
 		{Key: "name", Type: "text"},
 	}}
-	record := recordmodel.Record{ID: "record-1", Data: map[string]any{"stage": "new", "name": "Current"}}
+	record := recordmodel.Record{RecordID: "record-1", Data: map[string]any{"stage": "new", "name": "Current"}}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}
 
 	patch := ActionPatch(definitionmodel.ActionSchema{}, object, record, map[string]any{
@@ -41,7 +41,7 @@ func TestActionPatchUsesOnlyDeclaredInput(t *testing.T) {
 func TestActionValueRenderingAndDocumentAnswers(t *testing.T) {
 	now := time.Now().UTC()
 	record := recordmodel.Record{
-		ID: "record-1", CreatedAt: now.Add(-time.Hour).Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339),
+		RecordID: "record-1", CreatedAt: now.Add(-time.Hour).Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339),
 		Data: map[string]any{"name": "Record", "version_group_id": " group-1 ", "version": json.Number("4"), "title": "Policy", "file_name": "policy.pdf", "status": "draft"},
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{UserID: "user-1"}}, accessfixture.Bundle{Key: "reviewer"})
@@ -78,12 +78,12 @@ func TestActionValueRenderingAndDocumentAnswers(t *testing.T) {
 	}
 	record.Data["version_group_id"] = ""
 	record.Data["version"] = "invalid"
-	if ActionRenderValueWithInput("$record.version_group_id_or_id", record, input, principal) != record.ID || ActionRenderValueWithInput("$record.version_plus_one", record, input, principal) != 2 {
+	if ActionRenderValueWithInput("$record.version_group_id_or_id", record, input, principal) != record.RecordID || ActionRenderValueWithInput("$record.version_plus_one", record, input, principal) != 2 {
 		t.Fatal("record fallback rendering failed")
 	}
 
-	source := recordmodel.Record{ID: "source-1", CreatedAt: now.Add(-2 * time.Hour).Format(time.RFC3339), UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339), Data: map[string]any{"name": "Source"}}
-	for value, want := range map[string]any{"$source.id": source.ID, "$source.created_at": source.CreatedAt, "$source.updated_at": source.UpdatedAt, "$source.name": "Source", "$record.id": record.ID} {
+	source := recordmodel.Record{RecordID: "source-1", CreatedAt: now.Add(-2 * time.Hour).Format(time.RFC3339), UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339), Data: map[string]any{"name": "Source"}}
+	for value, want := range map[string]any{"$source.id": source.RecordID, "$source.created_at": source.CreatedAt, "$source.updated_at": source.UpdatedAt, "$source.name": "Source", "$record.id": record.RecordID} {
 		if got := ActionRenderRelatedValue(value, record, source, principal); got != want {
 			t.Fatalf("related(%s)=%v want %v", value, got, want)
 		}
@@ -92,7 +92,7 @@ func TestActionValueRenderingAndDocumentAnswers(t *testing.T) {
 		t.Fatal("non-string related value changed")
 	}
 	rendered := ActionRenderRecordData(map[string]any{" id ": "$record.id", " ": "ignored"}, record, principal)
-	if rendered["id"] != record.ID || len(rendered) != 1 {
+	if rendered["id"] != record.RecordID || len(rendered) != 1 {
 		t.Fatalf("rendered record data=%v", rendered)
 	}
 	renderedWithInput := ActionRenderRecordDataWithInput(map[string]any{" name ": "$input.name", " ": "ignored"}, record, input, principal)
@@ -100,7 +100,7 @@ func TestActionValueRenderingAndDocumentAnswers(t *testing.T) {
 		t.Fatalf("rendered record data with input=%v", renderedWithInput)
 	}
 	renderedRelated := ActionRenderRelatedRecordData(map[string]any{" source ": "$source.id", " ": "ignored"}, record, source, principal)
-	if renderedRelated["source"] != source.ID || len(renderedRelated) != 1 {
+	if renderedRelated["source"] != source.RecordID || len(renderedRelated) != 1 {
 		t.Fatalf("rendered related record data=%v", renderedRelated)
 	}
 	if summary := ActionRenderValueWithInput("$document.ai_summary", record, input, principal); !strings.Contains(summary.(string), "title Policy") {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
@@ -42,22 +43,21 @@ func WorkflowPrepareTriggerIntents(ctx context.Context, workflows map[string]def
 			payload["initiating_role_key"] = principal.RoleKey
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		executionID, err := entityid.New("wfexec")
+		if err != nil {
+			return nil, nil, fmt.Errorf("generate workflow trigger execution ID: %w", err)
+		}
 		intent := workflowmodel.WorkflowExecution{
-			ID: workflowTriggerIntentID(ctx), WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
+			ExecutionID: executionID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
 			Status: "pending", ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: payload,
-			Result: map[string]any{"transactional_intent": true}, ObjectKey: objectKey, RecordID: record.ID,
+			Result: map[string]any{"transactional_intent": true}, ObjectKey: objectKey, RecordID: record.RecordID,
 			ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(workflow), IdempotencyKey: workflowpolicy.WorkflowIdempotencyKey(workflow, payload),
 			Attempt: 0, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(workflow), Message: "workflow.message.queued", CreatedAt: now, UpdatedAt: now,
 		}
 		intents = append(intents, intent)
-		summaries = append(summaries, workflowmodel.WorkflowRunSummary{WorkflowKey: workflow.Key, Name: workflow.Name, Status: intent.Status, Action: workflow.Action, ExecutionID: intent.ID, Message: intent.Message})
+		summaries = append(summaries, workflowmodel.WorkflowRunSummary{WorkflowKey: workflow.Key, Name: workflow.Name, Status: intent.Status, Action: workflow.Action, ExecutionID: intent.ExecutionID, Message: intent.Message})
 	}
 	sort.Slice(intents, func(i, j int) bool { return intents[i].WorkflowKey < intents[j].WorkflowKey })
 	sort.Slice(summaries, func(i, j int) bool { return summaries[i].WorkflowKey < summaries[j].WorkflowKey })
 	return intents, summaries, nil
-}
-
-func workflowTriggerIntentID(ctx context.Context) string {
-	_ = ctx
-	return fmt.Sprintf("intent_%d", time.Now().UnixNano())
 }

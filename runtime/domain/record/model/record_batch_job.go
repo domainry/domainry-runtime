@@ -1,7 +1,8 @@
 package recordmodel
 
 type RecordBatchJob struct {
-	ID               string `json:"id"`
+	ID               int64  `json:"id"`
+	JobID            string `json:"job_id"`
 	WorkspaceID      string `json:"workspace_id"`
 	Kind             string `json:"kind"`
 	ObjectKey        string `json:"object_key"`

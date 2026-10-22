@@ -13,6 +13,7 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	recordschema "github.com/domainry/domainry-orm/recordschema"
 	ormschema "github.com/domainry/domainry-orm/schema"
 	appschemaapplication "github.com/domainry/domainry-runtime/runtime/application/appschema"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
@@ -111,10 +112,6 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 	}
 	for _, object := range objects {
 		columns := []ormschema.ColumnDefinition{}
-		for _, key := range []string{"workspace_id", "id", "created_at", "updated_at", "owner_user_id", "owner_org_id"} {
-			columns = append(columns, ormschema.Column(key, ormschema.TextKey(96)))
-		}
-		columns = append(columns, ormschema.Column("deleted", ormschema.Boolean()).DefaultValue(false))
 		for _, field := range object.Fields {
 			typeOf := ormschema.LongText()
 			if field.Type == "integer" {
@@ -122,7 +119,7 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 			}
 			columns = append(columns, ormschema.Column(field.Key, typeOf))
 		}
-		statement, _, err := ormschema.NewTable(store.SQLRenderer, object.Key).Columns(columns...).PrimaryKey("workspace_id", "id").Build()
+		statement, _, err := recordschema.NewTable(store.SQLRenderer, object.Key).Columns(columns...).Build()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +131,7 @@ func newConversationBusinessFixture(t *testing.T, extraObjects ...definitionmode
 	for _, row := range []struct{ id, name, owner, workspace string }{
 		{"own-1", "Alpha", a.UserID, a.WorkspaceID}, {"own-2", "Beta", a.UserID, a.WorkspaceID}, {"other-owner", "Hidden", "colleague", a.WorkspaceID}, {"other-workspace", "Hidden workspace", a.UserID, "other-workspace"},
 	} {
-		err := repository.InsertRecord(t.Context(), row.workspace, object, recordmodel.Record{ID: row.id, OwnerUserID: row.owner, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: map[string]any{"name": row.name, "amount": int64(9007199254740993), "account": "PRIVATE-ACCOUNT-6789", "secret": "PRIVATE-SECRET"}})
+		err := repository.InsertRecord(t.Context(), row.workspace, object, recordmodel.Record{RecordID: row.id, OwnerUserID: row.owner, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: map[string]any{"name": row.name, "amount": int64(9007199254740993), "account": "PRIVATE-ACCOUNT-6789", "secret": "PRIVATE-SECRET"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -284,7 +281,7 @@ func TestConversationBusinessCursorTraversesNullsTiesAndSelectedFields(t *testin
 		id   string
 		name any
 	}{{"own-3", "Alpha"}, {"own-4", nil}, {"own-5", nil}, {"own-6", ""}} {
-		if err := reads.repository.InsertRecord(t.Context(), a.WorkspaceID, reads.object, recordmodel.Record{ID: item.id, OwnerUserID: a.UserID, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: map[string]any{"name": item.name, "amount": int64(9007199254740993)}}); err != nil {
+		if err := reads.repository.InsertRecord(t.Context(), a.WorkspaceID, reads.object, recordmodel.Record{RecordID: item.id, OwnerUserID: a.UserID, CreatedAt: "2026-09-10T01:00:00Z", UpdatedAt: "2026-09-10T01:00:00Z", Data: map[string]any{"name": item.name, "amount": int64(9007199254740993)}}); err != nil {
 			t.Fatal(err)
 		}
 	}

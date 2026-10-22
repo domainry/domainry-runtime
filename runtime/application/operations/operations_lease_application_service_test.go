@@ -54,7 +54,7 @@ func TestOperationsLeaseForceReleaseProducesFencedReceiptAndReplay(t *testing.T)
 		t.Fatalf("result=%#v request=%#v", result, repository.request)
 	}
 	replayed, err := service.ForceRelease(t.Context(), command, "lease-key", principal)
-	if err != nil || replayed.Receipt.Command.ID != result.Receipt.Command.ID || replayed.Release.NextFencingToken != 8 {
+	if err != nil || replayed.Receipt.Command.OperationID != result.Receipt.Command.OperationID || replayed.Release.NextFencingToken != 8 {
 		t.Fatalf("replay=%#v err=%v", replayed, err)
 	}
 }

@@ -84,7 +84,7 @@ func workflowRecordWorkerService(now time.Time, worker *workflowRuntimeWorkerEdg
 }
 
 func workflowDueExecution(now time.Time, workflowKey string) workflowmodel.WorkflowExecution {
-	return workflowmodel.WorkflowExecution{ID: "execution", WorkspaceID: "workspace", WorkflowKey: workflowKey, Status: "failed", Attempt: 1, MaxAttempts: 10, NextRunAt: now.Add(-time.Minute).Format(time.RFC3339Nano), UpdatedAt: "updated", Result: map[string]any{}}
+	return workflowmodel.WorkflowExecution{ExecutionID: "execution", WorkspaceID: "workspace", WorkflowKey: workflowKey, Status: "failed", Attempt: 1, MaxAttempts: 10, NextRunAt: now.Add(-time.Minute).Format(time.RFC3339Nano), UpdatedAt: "updated", Result: map[string]any{}}
 }
 
 func workflowWorkerSchema(key string) definitionmodel.WorkflowSchema {
@@ -95,12 +95,12 @@ func TestProcessWorkflowContinuationTargetsExactCommittedExecution(t *testing.T)
 	now := time.Now().UTC()
 	execution := workflowDueExecution(now, "missing-definition")
 	worker := &workflowRuntimeWorkerEdgeStub{
-		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ID: execution}},
+		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ExecutionID: execution}},
 		listErr:                     errors.New("exact continuation must not scan the workspace"),
 		whereResults:                []bool{true, true},
 	}
 	service := workflowRecordWorkerService(now, worker)
-	locator := WorkflowContinuationLocator{WorkspaceID: execution.WorkspaceID, ExecutionID: execution.ID}
+	locator := WorkflowContinuationLocator{WorkspaceID: execution.WorkspaceID, ExecutionID: execution.ExecutionID}
 	WakeWorkflowContinuation(service, locator)
 	if got := <-WorkflowContinuationWakeups(service); got != locator {
 		t.Fatalf("wakeup=%#v", got)
@@ -129,7 +129,7 @@ func TestProcessDueWorkflowExecutionsAuthorizationLimitsNilRepositoryListSkipAnd
 		t.Fatalf("list error=%v", err)
 	}
 	worker.listErr = nil
-	worker.list = []workflowmodel.WorkflowExecution{{ID: "completed", Status: "completed"}}
+	worker.list = []workflowmodel.WorkflowExecution{{ExecutionID: "completed", Status: "completed"}}
 	if result, err := service.ProcessDueWorkflowExecutions(t.Context(), 600, principal); err != nil || result.Processed != 0 {
 		t.Fatalf("skipped result=%+v err=%v", result, err)
 	}
@@ -264,7 +264,7 @@ func TestProcessDueWorkflowExecutionsScheduledEarlyReturnPendingAttemptAndLoopLi
 	service.schemaMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"order": {Key: "order"}}
 	}
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "record", Data: map[string]any{}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "record", Data: map[string]any{}}}}}}
 	result, err := service.ProcessDueWorkflowExecutions(t.Context(), 1, principal)
 	if err != nil || result.Processed != 1 {
 		t.Fatalf("scheduled result=%+v err=%v", result, err)
@@ -287,7 +287,7 @@ func TestProcessDueWorkflowExecutionsScheduledEarlyReturnPendingAttemptAndLoopLi
 		t.Fatalf("continuation context workspace=%q want %q", continuationWorker.contextWorkspace, principal.WorkspaceID)
 	}
 	second := pending
-	second.ID = "second"
+	second.ExecutionID = "second"
 	worker = &workflowRuntimeWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, list: []workflowmodel.WorkflowExecution{pending, second}, whereResults: []bool{true, true}}
 	result, err = workflowRecordWorkerService(now, worker, workflow).ProcessDueWorkflowExecutions(t.Context(), 1, principal)
 	if err != nil || result.Processed != 1 {
@@ -303,7 +303,7 @@ func TestProcessDueWorkflowExecutionsScheduledEarlyReturnPendingAttemptAndLoopLi
 
 func TestWorkflowExecutionHeartbeatRefreshSuccessRepositoryFailureAndLeaseLoss(t *testing.T) {
 	now := time.Now().UTC()
-	execution := workflowmodel.WorkflowExecution{ID: "execution", WorkspaceID: "workspace", Status: "running", LeaseOwner: "owner", FencingToken: 2}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", WorkspaceID: "workspace", Status: "running", LeaseOwner: "owner", FencingToken: 2}
 	for name, testCase := range map[string]struct {
 		result  bool
 		err     error
@@ -351,7 +351,7 @@ func TestProcessDueWorkflowExecutionsContinuationWaitingNodeCommitFailureAndHear
 	resume.Result = map[string]any{"resume_process_id": "process", "resume_node_ids": []string{"approval"}}
 	approvalContract := definitionmodel.WorkflowApprovalNodeContract{Mode: "any", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"approver"}}}}
 	continuation := workflowmodel.WorkflowProcessInstance{
-		ID: "process", WorkspaceID: "workspace", Status: "running",
+		ProcessID: "process", WorkspaceID: "workspace", Status: "running",
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{
 			Key: "flow",
 			Graph: &definitionmodel.WorkflowGraphSchema{

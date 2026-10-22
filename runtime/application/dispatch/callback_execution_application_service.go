@@ -110,7 +110,7 @@ func (s *CallbackExecutionApplicationService) Execute(ctx context.Context, reque
 
 	workCtx, stopHeartbeat := workerplatform.WithHeartbeat(ctx, s.leaseTTL/3, func(heartbeatCtx context.Context) error {
 		alive, heartbeatErr := s.receipts.HeartbeatCallback(heartbeatCtx, dispatchmodel.CallbackHeartbeat{
-			WorkspaceID: claim.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID, LeaseOwner: claim.Receipt.LeaseOwner,
+			WorkspaceID: claim.Receipt.WorkspaceID, OperationID: claim.Receipt.OperationID, LeaseOwner: claim.Receipt.LeaseOwner,
 			FencingToken: claim.Receipt.FencingToken, LeaseTTL: s.leaseTTL, Now: s.now().UTC(),
 		})
 		if heartbeatErr != nil {
@@ -131,7 +131,7 @@ func (s *CallbackExecutionApplicationService) Execute(ctx context.Context, reque
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		failureErr := s.receipts.FailCallbackRetryable(cleanupCtx, dispatchmodel.CallbackFailure{
-			WorkspaceID: claim.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID, LeaseOwner: claim.Receipt.LeaseOwner,
+			WorkspaceID: claim.Receipt.WorkspaceID, OperationID: claim.Receipt.OperationID, LeaseOwner: claim.Receipt.LeaseOwner,
 			FencingToken: claim.Receipt.FencingToken, Now: failureAt, ExpiresAt: failureAt.Add(callbackReceiptTTL),
 		})
 		if heartbeatErr != nil {
@@ -146,7 +146,7 @@ func (s *CallbackExecutionApplicationService) Execute(ctx context.Context, reque
 	completionCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	if err := s.receipts.CompleteCallback(completionCtx, dispatchmodel.CallbackCompletion{
-		WorkspaceID: claim.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID,
+		WorkspaceID: claim.Receipt.WorkspaceID, OperationID: claim.Receipt.OperationID,
 		DownstreamID: receipt.ID, DownstreamOwner: receipt.Owner, DownstreamStatus: receipt.Status,
 		LeaseOwner: claim.Receipt.LeaseOwner, FencingToken: claim.Receipt.FencingToken,
 		Now: completedAt, ExpiresAt: completedAt.Add(callbackReceiptTTL),

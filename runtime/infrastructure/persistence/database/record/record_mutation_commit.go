@@ -39,17 +39,17 @@ func (r RecordStore) CommitRecordMutationBatch(ctx context.Context, workspaceID 
 	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
 	if err != nil {
 		first := commits[0]
-		return fmt.Errorf("begin record mutation: %w", database.MutationTransactionError(err, first.Object.Key, first.Record.ID))
+		return fmt.Errorf("begin record mutation: %w", database.MutationTransactionError(err, first.Object.Key, first.Record.RecordID))
 	}
 	defer tx.Rollback()
 	for _, commit := range commits {
 		if err := r.applyRecordMutationTx(ctx, tx, workspaceID, commit); err != nil {
-			return database.MutationTransactionError(err, commit.Object.Key, commit.Record.ID)
+			return database.MutationTransactionError(err, commit.Object.Key, commit.Record.RecordID)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		first := commits[0]
-		return fmt.Errorf("commit record mutation batch: %w", database.MutationTransactionError(err, first.Object.Key, first.Record.ID))
+		return fmt.Errorf("commit record mutation batch: %w", database.MutationTransactionError(err, first.Object.Key, first.Record.RecordID))
 	}
 	if !transactioncontract.ActiveTransaction(ctx) {
 		r.PublishCommittedOutboxWakeups(ctx, workspaceID, commits)
@@ -73,7 +73,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	if commit.AuthorizationScope != nil && (operation == "update" || operation == "restore" || operation == "delete") {
 		recordID := strings.TrimSpace(commit.RecordID)
 		if recordID == "" {
-			recordID = strings.TrimSpace(commit.Record.ID)
+			recordID = strings.TrimSpace(commit.Record.RecordID)
 		}
 		allowed, inspectErr := recordMutationScopeAllowedTx(ctx, tx, s, workspaceID, commit.Object, recordID, commit.AuthorizationScope)
 		if inspectErr != nil {
@@ -93,14 +93,14 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	}
 	switch operation {
 	case "create":
-		columns := []string{"id", "created_at", "updated_at"}
-		values := []any{commit.Record.ID, recordTimestampDBValue(s.RuntimeEngine, commit.Record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, commit.Record.UpdatedAt)}
+		columns := []string{recordBusinessIDColumn(commit.Object.Key), "created_at", "updated_at"}
+		values := []any{commit.Record.RecordID, recordTimestampDBValue(s.RuntimeEngine, commit.Record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, commit.Record.UpdatedAt)}
 		columns, values, metadataErr := appendRecordInsertMetadata(columns, values, commit.Record)
 		if metadataErr != nil {
 			return metadataErr
 		}
 		for _, field := range commit.Object.Fields {
-			if recordFieldIsSystemOwned(field.Key) {
+			if recordFieldIsSystemOwned(commit.Object.Key, field.Key) {
 				continue
 			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
@@ -108,7 +108,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 				values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		builder, buildErr := s.SubjectEvidenceInsertBuilder(workspaceID, commit.Object.Key, columns, values, s.SubjectResourceWriteAllowed(workspaceID, commit.Object.Key, commit.Record.ID), s.SubjectActorWriteAllowed(workspaceID, guardActor))
+		builder, buildErr := s.SubjectEvidenceInsertBuilder(workspaceID, commit.Object.Key, columns, values, s.SubjectResourceWriteAllowed(workspaceID, commit.Object.Key, commit.Record.RecordID), s.SubjectActorWriteAllowed(workspaceID, guardActor))
 		if buildErr != nil {
 			return buildErr
 		}
@@ -118,7 +118,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		result, err := tx.ExecContext(ctx, queryValue, args...)
 		if err != nil {
-			return fmt.Errorf("insert record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
+			return fmt.Errorf("insert record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.RecordID, mutation.MutationConflictUnique))
 		}
 		if affected, err := result.RowsAffected(); err != nil {
 			return err
@@ -131,14 +131,14 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			return metadataErr
 		}
 		for _, field := range commit.Object.Fields {
-			if recordFieldIsSystemOwned(field.Key) {
+			if recordFieldIsSystemOwned(commit.Object.Key, field.Key) {
 				continue
 			}
 			if value, ok := commit.Record.Data[field.Key]; ok {
 				builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 			}
 		}
-		predicates := []query.Predicate{query.Equal("id", commit.Record.ID), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, commit.Record.ID, guardActor)}
+		predicates := []query.Predicate{query.Equal(recordBusinessIDColumn(commit.Object.Key), commit.Record.RecordID), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, commit.Record.RecordID, guardActor)}
 		if commit.AuthorizationScope != nil {
 			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
 				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
@@ -174,7 +174,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		}
 		result, err := tx.ExecContext(ctx, queryValue, args...)
 		if err != nil {
-			return fmt.Errorf("update record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
+			return fmt.Errorf("update record mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.RecordID, mutation.MutationConflictUnique))
 		}
 		affected, err := result.RowsAffected()
 		if err != nil {
@@ -183,13 +183,13 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		if affected == 0 {
 			if expected := strings.TrimSpace(commit.OptimisticUpdatedAt()); expected != "" {
 				var current any
-				lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(query.Equal("id", commit.Record.ID)).Limit(1).Build()
+				lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, commit.Object.Key, workspaceID).Columns("updated_at").Where(query.Equal(recordBusinessIDColumn(commit.Object.Key), commit.Record.RecordID)).Limit(1).Build()
 				if buildErr != nil {
 					return buildErr
 				}
 				err := tx.QueryRowContext(ctx, lookup, lookupArgs...).Scan(&current)
 				if errors.Is(err, sql.ErrNoRows) || (err == nil && strings.TrimSpace(recordTimestampValue(current)) != expected) {
-					return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
+					return mutation.MutationConflict(commit.Object.Key, commit.Record.RecordID, mutation.MutationConflictOptimistic, nil)
 				}
 				if err != nil {
 					return fmt.Errorf("inspect record mutation optimistic conflict: %w", err)
@@ -197,9 +197,9 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 			}
 			if len(commit.Predicates) > 0 {
 				predicate := commit.Predicates[0]
-				return mutation.PolicyConflict(predicate.ErrorCode, commit.Object.Key, commit.Record.ID, predicate.Field)
+				return mutation.PolicyConflict(predicate.ErrorCode, commit.Object.Key, commit.Record.RecordID, predicate.Field)
 			}
-			return mutation.MutationConflict(commit.Object.Key, commit.Record.ID, mutation.MutationConflictOptimistic, nil)
+			return mutation.MutationConflict(commit.Object.Key, commit.Record.RecordID, mutation.MutationConflictOptimistic, nil)
 		}
 	case "conditional_update_many":
 		if err := r.applyConditionalUpdateManyTx(ctx, tx, workspaceID, commit); err != nil {
@@ -208,9 +208,9 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 	case "delete":
 		id := strings.TrimSpace(commit.RecordID)
 		if id == "" {
-			id = commit.Record.ID
+			id = commit.Record.RecordID
 		}
-		predicates := []query.Predicate{query.Equal("id", id), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, id, guardActor)}
+		predicates := []query.Predicate{query.Equal(recordBusinessIDColumn(commit.Object.Key), id), s.SubjectRecordWriteAllowed(workspaceID, commit.Object.Key, id, guardActor)}
 		if commit.AuthorizationScope != nil {
 			authorizationPredicate, err := querypersistence.BuildTenantPredicate(s, workspaceID, recordmodel.RecordListQuery{
 				AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: commit.Object.Key, ScopeExpression: commit.AuthorizationScope,
@@ -247,7 +247,7 @@ func (r RecordStore) applyRecordMutationTx(ctx context.Context, tx TransactionEx
 		return fmt.Errorf("unsupported record mutation operation %q", commit.Operation)
 	}
 	if operation != "delete" {
-		if err := r.applyRecordLocalizedMutationsTx(ctx, tx, workspaceID, commit.Object, commit.Record.ID, commit.Record.UpdatedAt, commit.LocalizedValues); err != nil {
+		if err := r.applyRecordLocalizedMutationsTx(ctx, tx, workspaceID, commit.Object, commit.Record.RecordID, commit.Record.UpdatedAt, commit.LocalizedValues); err != nil {
 			return err
 		}
 	}
@@ -329,7 +329,7 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 	if err != nil {
 		return fmt.Errorf("compile conditional update-many scope: %w", err)
 	}
-	predicate = query.And(predicate, query.In("id", ids...))
+	predicate = query.And(predicate, query.In(recordBusinessIDColumn(commit.Object.Key), ids...))
 	builder := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, commit.Object.Key, workspaceID).
 		Set("updated_at", recordTimestampDBValue(r.store.RuntimeEngine, commit.Record.UpdatedAt))
 	if userID := strings.TrimSpace(commit.Record.UpdateBy); userID != "" {
@@ -345,7 +345,7 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 		return err
 	}
 	for key := range commit.Record.Data {
-		if _, ok := fieldCatalog[key]; !ok || recordFieldIsSystemOwned(key) {
+		if _, ok := fieldCatalog[key]; !ok || recordFieldIsSystemOwned(commit.Object.Key, key) {
 			return fmt.Errorf("conditional update-many field %q is invalid", key)
 		}
 		fields = append(fields, key)
@@ -361,14 +361,14 @@ func (r RecordStore) applyConditionalUpdateManyTx(ctx context.Context, tx Transa
 	}
 	result, err := tx.ExecContext(ctx, statement, args...)
 	if err != nil {
-		return fmt.Errorf("conditional update-many mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.ID, mutation.MutationConflictUnique))
+		return fmt.Errorf("conditional update-many mutation: %w", database.MutationConstraintError(err, commit.Object.Key, commit.Record.RecordID, mutation.MutationConflictUnique))
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("inspect conditional update-many mutation: %w", err)
 	}
 	if affected != int64(commit.SetExpectedAffected) {
-		return mutation.PolicyConflict("backend.action.conditional_update_many_affected_mismatch", commit.Object.Key, commit.Record.ID, "affected_count")
+		return mutation.PolicyConflict("backend.action.conditional_update_many_affected_mismatch", commit.Object.Key, commit.Record.RecordID, "affected_count")
 	}
 	return nil
 }

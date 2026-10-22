@@ -42,7 +42,7 @@ func TestRecordActionTransactionContextAndLockSQLMatrix(t *testing.T) {
 
 func TestRecordCandidateScopeLogicalAndPlannedRelationMatrix(t *testing.T) {
 	store := RecordStore{}
-	candidate := recordmodel.Record{ID: "order-1", Data: map[string]any{"status": "open"}}
+	candidate := recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "open"}}
 	equals := func(value string) recordmodel.RecordScopeExpression {
 		return recordmodel.RecordScopeExpression{Operator: "eq", FieldKey: "status", Values: []string{value}}
 	}
@@ -82,11 +82,11 @@ func TestRecordCandidateScopeLogicalAndPlannedRelationMatrix(t *testing.T) {
 	}
 
 	planned := map[string]map[string]recordmodel.Record{"line": {
-		"line-1": {ID: "line-1", Data: map[string]any{"order_id": "order-1"}},
-		"line-2": {ID: "line-2", Data: map[string]any{"order_id": "other"}},
+		"line-1": {RecordID: "line-1", Data: map[string]any{"order_id": "order-1"}},
+		"line-2": {RecordID: "line-2", Data: map[string]any{"order_id": "other"}},
 	}}
 	reverse := recordmodel.RecordScopePathSegment{Direction: "reverse", RelationFieldKey: "order_id", TargetObjectKey: "line"}
-	if got := plannedRelationCandidates(candidate, reverse, planned); len(got) != 1 || got[0].ID != "line-1" {
+	if got := plannedRelationCandidates(candidate, reverse, planned); len(got) != 1 || got[0].RecordID != "line-1" {
 		t.Fatalf("reverse candidates=%#v", got)
 	}
 	forward := recordmodel.RecordScopePathSegment{Direction: "forward", RelationFieldKey: "line_id", TargetObjectKey: "line"}
@@ -137,9 +137,9 @@ func TestRecordMutationNotificationPersistenceFailureIsReturned(t *testing.T) {
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create",
 		Object:    definitionmodel.ObjectSchema{Key: "order"},
-		Record:    recordmodel.Record{ID: "order-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{}},
+		Record:    recordmodel.Record{RecordID: "order-1", CreatedAt: now, UpdatedAt: now, Data: map[string]any{}},
 		NotificationEvents: []notificationmodel.NotificationEvent{{
-			ID: "notification-1", Source: "record", SourceEventID: "order-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"user"}, ActionState: "none", OccurredAt: now, Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Created", Body: "Created"}, Status: "queued", CreatedAt: now, UpdatedAt: now,
+			EventID: "notification-1", Source: "record", SourceEventID: "order-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"user"}, ActionState: "none", OccurredAt: now, Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Created", Body: "Created"}, Status: "queued", CreatedAt: now, UpdatedAt: now,
 		}},
 	}
 	if err := store.ApplyRecordMutationTx(t.Context(), store.database(), "workspace", commit); err == nil {

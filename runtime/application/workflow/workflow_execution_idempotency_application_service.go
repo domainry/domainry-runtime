@@ -72,11 +72,11 @@ func workflowExecutionFingerprint(workflow definitionmodel.WorkflowSchema, paylo
 }
 
 func (s *WorkflowApplicationService) completeWorkflowExecutionReceipt(ctx context.Context, claim workflowmodel.WorkflowExecutionClaimResult, execution workflowmodel.WorkflowExecution, principal principalmodel.Principal) error {
-	if claim.Decision != idempotency.DecisionAcquired || strings.TrimSpace(claim.Receipt.ID) == "" {
+	if claim.Decision != idempotency.DecisionAcquired || strings.TrimSpace(claim.Receipt.OperationID) == "" {
 		return nil
 	}
 	if err := s.workerRepo.CompleteExecutionReceipt(ctx, workflowmodel.WorkflowExecutionReceiptCompletion{
-		WorkspaceID: claim.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID, ExecutionID: execution.ID, LeaseOwner: claim.Receipt.LeaseOwner,
+		WorkspaceID: claim.Receipt.WorkspaceID, OperationID: claim.Receipt.OperationID, ExecutionID: execution.ExecutionID, LeaseOwner: claim.Receipt.LeaseOwner,
 		FencingToken: claim.Receipt.FencingToken, Now: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(90 * 24 * time.Hour),
 	}); err != nil {
 		return err
@@ -86,7 +86,7 @@ func (s *WorkflowApplicationService) completeWorkflowExecutionReceipt(ctx contex
 }
 
 func (s *WorkflowApplicationService) auditWorkflowIdempotency(ctx context.Context, workflowKey string, principal principalmodel.Principal, claim workflowmodel.WorkflowExecutionClaimResult, status string) {
-	if strings.TrimSpace(claim.Receipt.ID) == "" {
+	if strings.TrimSpace(claim.Receipt.OperationID) == "" {
 		return
 	}
 	facts := idempotency.AuditFacts{
@@ -128,8 +128,8 @@ func workflowDecisionReplay(ctx context.Context, workspaceID string, processes i
 	if err != nil || !found {
 		return workflowmodel.WorkflowProcessInstance{}, false
 	}
-	key := workflowCommandKey("task.decision", task.ID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(strings.ToLower(strings.TrimSpace(req.Decision)), req))
-	return process, workflowProcessHasCommand(process, "task.decision:"+task.ID, key)
+	key := workflowCommandKey("task.decision", task.TaskID, req.IdempotencyKey, workflowTaskDecisionCommandPayload(strings.ToLower(strings.TrimSpace(req.Decision)), req))
+	return process, workflowProcessHasCommand(process, "task.decision:"+task.TaskID, key)
 }
 
 func workflowRecordCommand(process *workflowmodel.WorkflowProcessInstance, scope, key string) {

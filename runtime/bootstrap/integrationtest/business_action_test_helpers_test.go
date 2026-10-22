@@ -46,7 +46,7 @@ func newIntegrationTestIdentityProjection() *integrationTestIdentityProjection {
 }
 
 func (d *integrationTestIdentityProjection) upsertUser(user identitysdk.User) {
-	d.users[user.ID] = user
+	d.users[user.UserID] = user
 }
 
 func (d *integrationTestIdentityProjection) FindUser(_ context.Context, lookup identitysdk.UserLookup) (identitysdk.User, bool, error) {
@@ -64,7 +64,7 @@ func (d *integrationTestIdentityProjection) ListUsers(context.Context, identitys
 	for _, user := range d.users {
 		values = append(values, user)
 	}
-	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
+	sort.Slice(values, func(i, j int) bool { return values[i].UserID < values[j].UserID })
 	return values, nil
 }
 

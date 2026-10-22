@@ -78,7 +78,8 @@ func (s *RuntimeStore) AppendPreparedAuditWithin(ctx context.Context, tx auditco
 	if s == nil || s.auditBinding == nil || s.auditBinding.PreparedAppender() == nil {
 		return fmt.Errorf("Audit Binding is unavailable")
 	}
-	return s.auditBinding.PreparedAppender().AppendPreparedWithin(ctx, tx, event)
+	_, err := s.auditBinding.PreparedAppender().AppendPreparedWithin(ctx, tx, event)
+	return err
 }
 
 func (s *RuntimeStore) Audit() auditsdk.Binding {

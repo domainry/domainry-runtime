@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
+	recordschema "github.com/domainry/domainry-orm/recordschema"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 
@@ -119,7 +120,7 @@ func buildScopedPredicate(s Store, scope query.Predicate, queryValue recordmodel
 		searchPredicates := make([]query.Predicate, 0, len(queryValue.SearchFields))
 		searchValue := "%" + escapeLikePattern(strings.ToLower(strings.TrimSpace(queryValue.Search))) + "%"
 		for _, field := range queryValue.SearchFields {
-			searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(field)), searchValue))
+			searchPredicates = append(searchPredicates, query.LikeValueEscaped(query.Lower(query.Column(physicalRecordField(queryValue.RootObjectKey, field))), searchValue))
 		}
 		appendPredicate(query.Or(searchPredicates...))
 	}
@@ -142,10 +143,11 @@ func buildScopedPredicate(s Store, scope query.Predicate, queryValue recordmodel
 				if len(values) == 0 {
 					appendPredicate(query.AlwaysFalse())
 				} else {
-					appendPredicate(query.In(baseKey, values...))
+					appendPredicate(query.In(physicalRecordField(queryValue.RootObjectKey, baseKey), values...))
 				}
 				continue
 			}
+			baseKey = physicalRecordField(queryValue.RootObjectKey, baseKey)
 			predicate := query.Equal(baseKey, dbValue(value))
 			if operator == "gte" {
 				predicate = query.GreaterThanOrEqual(baseKey, dbValue(value))
@@ -154,11 +156,11 @@ func buildScopedPredicate(s Store, scope query.Predicate, queryValue recordmodel
 			}
 			appendPredicate(predicate)
 		} else {
-			appendPredicate(query.Equal(key, dbValue(value)))
+			appendPredicate(query.Equal(physicalRecordField(queryValue.RootObjectKey, key), dbValue(value)))
 		}
 	}
 	if queryValue.FilterExpression != nil {
-		predicate, err := recordFilterPredicate(*queryValue.FilterExpression, 0)
+		predicate, err := recordFilterPredicate(queryValue.RootObjectKey, *queryValue.FilterExpression, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +182,7 @@ func BuildTenantWhere(s Store, workspace string, queryValue recordmodel.RecordLi
 }
 
 func buildRecordFilterExpression(s Store, expression recordmodel.RecordFilterExpression, args *[]any, depth int) (string, error) {
-	predicate, err := recordFilterPredicate(expression, depth)
+	predicate, err := recordFilterPredicate("", expression, depth)
 	if err != nil {
 		return "", err
 	}
@@ -192,7 +194,7 @@ func buildRecordFilterExpression(s Store, expression recordmodel.RecordFilterExp
 	return prepared, nil
 }
 
-func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth int) (query.Predicate, error) {
+func recordFilterPredicate(objectKey string, expression recordmodel.RecordFilterExpression, depth int) (query.Predicate, error) {
 	if depth > 16 {
 		return nil, fmt.Errorf("record filter exceeds maximum depth")
 	}
@@ -203,7 +205,7 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 		}
 		predicates := make([]query.Predicate, 0, len(expression.Children))
 		for _, child := range expression.Children {
-			predicate, err := recordFilterPredicate(child, depth+1)
+			predicate, err := recordFilterPredicate(objectKey, child, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -217,33 +219,34 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 		if len(expression.Children) != 1 {
 			return nil, fmt.Errorf("record filter not requires exactly one child")
 		}
-		predicate, err := recordFilterPredicate(expression.Children[0], depth+1)
+		predicate, err := recordFilterPredicate(objectKey, expression.Children[0], depth+1)
 		if err != nil {
 			return nil, err
 		}
 		return query.Not(predicate), nil
 	case "eq", "ne", "gt", "gte", "lt", "lte":
 		value := dbValue(expression.Value)
+		field := physicalRecordField(objectKey, expression.Field)
 		switch expression.Operator {
 		case "eq":
-			return query.Equal(expression.Field, value), nil
+			return query.Equal(field, value), nil
 		case "ne":
-			return query.NotEqual(expression.Field, value), nil
+			return query.NotEqual(field, value), nil
 		case "gt":
-			return query.GreaterThan(expression.Field, value), nil
+			return query.GreaterThan(field, value), nil
 		case "gte":
-			return query.GreaterThanOrEqual(expression.Field, value), nil
+			return query.GreaterThanOrEqual(field, value), nil
 		case "lt":
-			return query.LessThan(expression.Field, value), nil
+			return query.LessThan(field, value), nil
 		default:
-			return query.LessThanOrEqual(expression.Field, value), nil
+			return query.LessThanOrEqual(field, value), nil
 		}
 	case "contains":
 		value, ok := expression.Value.(string)
 		if !ok {
 			return nil, fmt.Errorf("record filter contains requires a string value")
 		}
-		return LiteralContainsPredicate(query.Column(expression.Field), value), nil
+		return LiteralContainsPredicate(query.Column(physicalRecordField(objectKey, expression.Field)), value), nil
 	case "in", "not_in":
 		values := make([]any, 0, len(expression.Values))
 		for _, value := range expression.Values {
@@ -253,13 +256,13 @@ func recordFilterPredicate(expression recordmodel.RecordFilterExpression, depth 
 			return nil, fmt.Errorf("record filter %s requires values", expression.Operator)
 		}
 		if expression.Operator == "not_in" {
-			return query.NotIn(expression.Field, values...), nil
+			return query.NotIn(physicalRecordField(objectKey, expression.Field), values...), nil
 		}
-		return query.In(expression.Field, values...), nil
+		return query.In(physicalRecordField(objectKey, expression.Field), values...), nil
 	case "is_null":
-		return query.IsNull(expression.Field), nil
+		return query.IsNull(physicalRecordField(objectKey, expression.Field)), nil
 	case "is_not_null":
-		return query.IsNotNull(expression.Field), nil
+		return query.IsNotNull(physicalRecordField(objectKey, expression.Field)), nil
 	default:
 		return nil, fmt.Errorf("unsupported record filter operator %q", expression.Operator)
 	}
@@ -315,7 +318,7 @@ func scopeExpressionPredicate(s Store, rootObjectKey string, expression recordmo
 			}
 			return scopeRelationExistsPredicate(s, rootObjectKey, expression)
 		}
-		return scopeComparisonPredicate(query.TableColumn(rootObjectKey, expression.FieldKey), expression.Operator, expression.Values), nil
+		return scopeComparisonPredicate(query.TableColumn(rootObjectKey, physicalRecordField(rootObjectKey, expression.FieldKey)), expression.Operator, expression.Values), nil
 	default:
 		return nil, fmt.Errorf("unsupported compiled scope operator %q", expression.Operator)
 	}
@@ -410,19 +413,20 @@ func inClause(s Store, field string, values []string, args *[]any) string {
 
 func BuildOrder(s Store, queryValue recordmodel.RecordListQuery) string {
 	orders := make([]query.Order, 0, len(queryValue.Sort)+1)
-	hasStableID := false
+	hasID := false
 	for _, rule := range queryValue.Sort {
+		field := physicalRecordField(queryValue.RootObjectKey, rule.Field)
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
 		if direction == "DESC" {
-			orders = append(orders, query.Descending(rule.Field))
+			orders = append(orders, query.Descending(field))
 		} else {
-			orders = append(orders, query.Ascending(rule.Field))
+			orders = append(orders, query.Ascending(field))
 		}
-		hasStableID = hasStableID || strings.TrimSpace(rule.Field) == "id"
+		hasID = hasID || strings.TrimSpace(rule.Field) == recordmodel.IDField || strings.TrimSpace(queryValue.RootObjectKey) == "" && field == "id"
 	}
 	if len(orders) == 0 {
 		orders = append(orders, query.Ascending("id"))
-	} else if !hasStableID {
+	} else if !hasID {
 		orders = append(orders, query.Ascending("id"))
 	}
 	prepared, err := query.PrepareOrderBy(storeRenderer{s}, orders...)
@@ -430,6 +434,13 @@ func BuildOrder(s Store, queryValue recordmodel.RecordListQuery) string {
 		return ""
 	}
 	return " " + prepared
+}
+
+func physicalRecordField(objectKey, field string) string {
+	if strings.TrimSpace(field) == "record_id" && strings.TrimSpace(objectKey) != "" {
+		return recordschema.EntityIDColumn(objectKey)
+	}
+	return field
 }
 
 func splitFilterKey(key string) (string, string, bool) {

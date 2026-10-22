@@ -1,8 +1,9 @@
 package workflowmodel
 
 type WorkflowExecution struct {
+	ID             int64          `json:"id"`
 	WorkspaceID    string         `json:"workspace_id"`
-	ID             string         `json:"id"`
+	ExecutionID    string         `json:"execution_id"`
 	OperationID    string         `json:"operation_id,omitempty"`
 	WorkflowKey    string         `json:"workflow_key"`
 	Name           string         `json:"name"`

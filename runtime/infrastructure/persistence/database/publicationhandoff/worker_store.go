@@ -87,7 +87,7 @@ func (s WorkerStore) ClaimOutbox(ctx context.Context, workspaceID, messageID, ow
 	queryValue, args, err := query.NewWorkspaceUpdateBuilder(s.store.SQLRenderer, "_publication_outbox", workspaceID).
 		Set("status", "sending").Set("next_attempt_at", int64(0)).Set("last_attempt_at", timevalue.Millis(now)).Set("lease_owner", owner).Set("lease_expires_at", timevalue.Millis(publicationLeaseExpiry(now))).
 		SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
-		Where(query.And(query.Equal("id", messageID), publicationDuePredicate(now))).Build()
+		Where(query.And(query.Equal("message_id", messageID), publicationDuePredicate(now))).Build()
 	if err != nil {
 		return publicationmodel.Message{}, false, err
 	}
@@ -231,7 +231,7 @@ func publicationDuePredicate(now string) query.Predicate {
 }
 
 func publicationLeasePredicate(messageID, owner string, token int64) query.Predicate {
-	return query.And(query.Equal("id", strings.TrimSpace(messageID)), query.Equal("status", "sending"), query.Equal("lease_owner", strings.TrimSpace(owner)), query.Equal("fencing_token", token))
+	return query.And(query.Equal("message_id", strings.TrimSpace(messageID)), query.Equal("status", "sending"), query.Equal("lease_owner", strings.TrimSpace(owner)), query.Equal("fencing_token", token))
 }
 
 func publicationLeaseExpiry(now string) string {

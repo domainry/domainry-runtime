@@ -22,7 +22,7 @@ func restoreFinalObject(fields ...definitionmodel.FieldSchema) definitionmodel.O
 }
 
 func restoreFinalRepository(data map[string]any) *restoreEdgeRepository {
-	return &restoreEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: data}}
+	return &restoreEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: data}}
 }
 
 func restoreFinalService(object definitionmodel.ObjectSchema, repository *restoreEdgeRepository) *RecordRestoreApplicationService {

@@ -17,27 +17,27 @@ func TestRecordApplicationDisplaySelection(t *testing.T) {
 	}{
 		{
 			name:    "conventional field",
-			record:  recordmodel.Record{ID: "record-2", Data: map[string]any{"legal_name": " ", "name": "Fallback"}},
+			record:  recordmodel.Record{RecordID: "record-2", Data: map[string]any{"legal_name": " ", "name": "Fallback"}},
 			wantKey: "name", wantDisplay: "Fallback",
 		},
 		{
 			name:    "missing display data falls back to id",
-			record:  recordmodel.Record{ID: "record-3", Data: map[string]any{"name": nil}},
+			record:  recordmodel.Record{RecordID: "record-3", Data: map[string]any{"name": nil}},
 			wantKey: "id", wantDisplay: "record-3",
 		},
 		{
 			name:    "blank configured title key",
-			record:  recordmodel.Record{ID: "record-4", Data: map[string]any{"name": " "}},
+			record:  recordmodel.Record{RecordID: "record-4", Data: map[string]any{"name": " "}},
 			wantKey: "id", wantDisplay: "record-4",
 		},
 		{
 			name:    "nil configured title key",
-			record:  recordmodel.Record{ID: "record-5"},
+			record:  recordmodel.Record{RecordID: "record-5"},
 			wantKey: "id", wantDisplay: "record-5",
 		},
 		{
 			name:    "missing configured title value",
-			record:  recordmodel.Record{ID: "record-6"},
+			record:  recordmodel.Record{RecordID: "record-6"},
 			wantKey: "id", wantDisplay: "record-6",
 		},
 	}

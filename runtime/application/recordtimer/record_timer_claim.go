@@ -30,7 +30,7 @@ func (s *RecordTimerApplicationService) ClaimDueRecordTimers(ctx context.Context
 	query := recordmodel.RecordListQuery{
 		Page: 1, PageSize: limit, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted,
 		Filters: map[string]any{"status": "scheduled", "due_at__lte": now.UTC().Format(time.RFC3339Nano)},
-		Sort:    []recordmodel.RecordSortRule{{Field: "priority", Direction: "desc"}, {Field: "sequence", Direction: "asc"}, {Field: "created_at", Direction: "asc"}, {Field: "id", Direction: "asc"}},
+		Sort:    []recordmodel.RecordSortRule{{Field: "priority", Direction: "desc"}, {Field: "sequence", Direction: "asc"}, {Field: "created_at", Direction: "asc"}, {Field: recordmodel.IDField, Direction: "asc"}},
 	}
 	page, err := s.repository.ListRecords(ctx, workspaceID, object, query)
 	if err != nil {
@@ -54,8 +54,12 @@ func (s *RecordTimerApplicationService) ClaimDueRecordTimers(ctx context.Context
 		if !eligible {
 			continue
 		}
+		eventCommit, buildErr := buildRecordTimerEventCommit(eventObject, updated, "claimed", owner, "", "", "", now)
+		if buildErr != nil {
+			return nil, buildErr
+		}
 		claimCommits = append(claimCommits, transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: updated, Conditions: conditions})
-		claimCommits = append(claimCommits, buildRecordTimerEventCommit(eventObject, updated, "claimed", owner, "", "", "", now))
+		claimCommits = append(claimCommits, eventCommit)
 		leases = append(leases, lease)
 	}
 	if len(claimCommits) == 0 {
@@ -70,9 +74,13 @@ func (s *RecordTimerApplicationService) ClaimDueRecordTimers(ctx context.Context
 		if !eligible {
 			continue
 		}
+		eventCommit, buildErr := buildRecordTimerEventCommit(eventObject, updated, "claimed", owner, "", "", "", now)
+		if buildErr != nil {
+			return nil, buildErr
+		}
 		commits := []transactionmodel.RecordMutationCommit{
 			{Operation: "update", Object: object, Record: updated, Conditions: conditions},
-			buildRecordTimerEventCommit(eventObject, updated, "claimed", owner, "", "", "", now),
+			eventCommit,
 		}
 		if commitErr := s.repository.CommitRecordMutationBatch(ctx, workspaceID, commits); commitErr == nil {
 			leases = append(leases, lease)

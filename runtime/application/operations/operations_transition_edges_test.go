@@ -21,7 +21,7 @@ func newStartedOperationsReceipt(t *testing.T) (*OperationsApplicationService, *
 		t.Fatal(err)
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "operation transition test")
-	receipt, err = service.Start(t.Context(), receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = service.Start(t.Context(), receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestOperationsTransitionUpdateConflictAndSuccess(t *testing.T) {
 	}
 	updateFailure := errors.New("transition update failed")
 	repository.updateErr = updateFailure
-	if _, err := service.Start(t.Context(), created.Command.ID, created.Command.Scope, scope); apperror.CodeOf(err) != "backend.operations.transition_failed" || !errors.Is(err, updateFailure) {
+	if _, err := service.Start(t.Context(), created.Command.OperationID, created.Command.Scope, scope); apperror.CodeOf(err) != "backend.operations.transition_failed" || !errors.Is(err, updateFailure) {
 		t.Fatalf("update error = %v", err)
 	}
 	repository.updateErr = nil
@@ -88,13 +88,13 @@ func TestOperationsTransitionUpdateConflictAndSuccess(t *testing.T) {
 		conflict.Command.Status = operationsmodel.OperationsStatusStarted
 		repository.receipts[key] = conflict
 	}
-	if _, err := service.Start(t.Context(), created.Command.ID, created.Command.Scope, scope); apperror.CodeOf(err) != "backend.operations.transition_conflict" {
+	if _, err := service.Start(t.Context(), created.Command.OperationID, created.Command.Scope, scope); apperror.CodeOf(err) != "backend.operations.transition_conflict" {
 		t.Fatalf("transition conflict = %v", err)
 	}
 	for key := range repository.receipts {
 		repository.receipts[key] = created
 	}
-	started, err := service.Start(t.Context(), created.Command.ID, created.Command.Scope, scope)
+	started, err := service.Start(t.Context(), created.Command.OperationID, created.Command.Scope, scope)
 	if err != nil || started.Command.Status != operationsmodel.OperationsStatusStarted || started.Command.StartedAt == nil {
 		t.Fatalf("started=%#v err=%v", started, err)
 	}
@@ -132,7 +132,7 @@ func TestOperationsFinishDefaultsValidationPersistenceAndConflict(t *testing.T) 
 	receipt.Command.Status = operationsmodel.OperationsStatusSucceeded
 	finished, err := service.Finish(t.Context(), receipt, scope)
 	expiresAt, parseErr := time.Parse(time.RFC3339Nano, finished.ExpiresAt)
-	if err != nil || parseErr != nil || finished.Command.FinishedAt == nil || expiresAt.Sub(*finished.Command.FinishedAt) != 365*24*time.Hour || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || finished.Correlation != receipt.Command.ID || len(finished.Evidence) != 1 {
+	if err != nil || parseErr != nil || finished.Command.FinishedAt == nil || expiresAt.Sub(*finished.Command.FinishedAt) != 365*24*time.Hour || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || finished.Correlation != receipt.Command.OperationID || len(finished.Evidence) != 1 {
 		t.Fatalf("finished=%#v err=%v", finished, err)
 	}
 }
@@ -158,7 +158,7 @@ func TestOperationsFinishAppliesRegisteredTechnicalAndFailedAuditRetention(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			receipt, err = service.Start(t.Context(), receipt.Command.ID, receipt.Command.Scope, scope)
+			receipt, err = service.Start(t.Context(), receipt.Command.OperationID, receipt.Command.Scope, scope)
 			if err != nil {
 				t.Fatal(err)
 			}

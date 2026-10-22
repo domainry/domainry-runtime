@@ -24,11 +24,12 @@ type OperationsScope struct {
 // OperationsCommand contains the identity, authorization intent and audit
 // evidence shared by every Runtime operation owner.
 type OperationsCommand struct {
-	ID                 string           `json:"id"`
+	ID                 int64            `json:"id"`
+	OperationID        string           `json:"operation_id"`
 	Owner              string           `json:"owner"`
 	Kind               string           `json:"kind"`
 	ActionKey          string           `json:"action_key"`
-	ParentID           string           `json:"parent_operation_id,omitempty"`
+	ParentOperationID  string           `json:"parent_operation_id,omitempty"`
 	Scope              OperationsScope  `json:"scope"`
 	IdempotencyKey     string           `json:"idempotency_key"`
 	RequestFingerprint string           `json:"request_fingerprint"`

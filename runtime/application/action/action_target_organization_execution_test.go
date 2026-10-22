@@ -44,11 +44,11 @@ func TestSoleAuthorizedStoreResolutionFailsClosed(t *testing.T) {
 		page             identitysdk.StoreOrganizationPage
 		wantID, wantCode string
 	}{
-		{name: "one active", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{ID: "store-only", Status: "active"}}}, wantID: "store-only"},
+		{name: "one active", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-only", Status: "active"}}}, wantID: "store-only"},
 		{name: "none", wantCode: "backend.action.target_organization_ambiguous"},
-		{name: "two", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{ID: "store-a", Status: "active"}, {ID: "store-b", Status: "active"}}}, wantCode: "backend.action.target_organization_ambiguous"},
-		{name: "continuation", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{ID: "store-a", Status: "active"}}, NextCursor: "more"}, wantCode: "backend.action.target_organization_ambiguous"},
-		{name: "disabled", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{ID: "store-a", Status: "disabled"}}}, wantCode: "backend.action.target_organization_ambiguous"},
+		{name: "two", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-a", Status: "active"}, {OrganizationUnitID: "store-b", Status: "active"}}}, wantCode: "backend.action.target_organization_ambiguous"},
+		{name: "continuation", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-a", Status: "active"}}, NextCursor: "more"}, wantCode: "backend.action.target_organization_ambiguous"},
+		{name: "disabled", page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "store-a", Status: "disabled"}}}, wantCode: "backend.action.target_organization_ambiguous"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -91,9 +91,9 @@ func (lock workspaceCommercialConfigurationLockerFunc) LockWorkspaceCommercialCo
 }
 
 func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarget(t *testing.T) {
-	delivery := &targetOrganizationDeliveryStub{page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{ID: "first-store", ParentOrganizationID: "company-hq", Status: "active"}}}}
+	delivery := &targetOrganizationDeliveryStub{page: identitysdk.StoreOrganizationPage{Items: []identitysdk.StoreOrganization{{OrganizationUnitID: "first-store", ParentOrganizationID: "company-hq", Status: "active"}}}}
 	unitOfWork := newActionTestUnitOfWork()
-	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution-store-1", LeaseOwner: "test", FencingToken: 1}}
+	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution-store-1", LeaseOwner: "test", FencingToken: 1}}
 	bundle := &identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "hq-operator", AccessBundle: bundle}}
 	execution := &businessActionExecution{
@@ -110,8 +110,11 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 		unitOfWork: unitOfWork, targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore},
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 	}
-	wantID := stableStoreOrganizationID("workspace-a", "execution-store-1")
-	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 7}}
+	wantID, err := stableStoreOrganizationID("workspace-a", "execution-store-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{OrganizationUnitID: wantID, Version: 7}}
 	request := runtimeext.StoreOrganizationProvisionRequest{Code: "TOKYO", Name: "Tokyo", SortOrder: 2}
 	result, err := execution.ProvisionStoreOrganization(t.Context(), request)
 	if err != nil {
@@ -136,7 +139,7 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 		if !ok || invocation.TargetOrganizationID != wantID {
 			t.Fatalf("mutation target authority=%#v", invocation)
 		}
-		record := recordmodel.Record{ID: "store-profile-1", OwnerOrgID: wantID, Data: fields}
+		record := recordmodel.Record{RecordID: "store-profile-1", OwnerOrgID: wantID, Data: fields}
 		mutationContext, contextErr := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "store.create", CorrelationID: "correlation", ApplicationSchemaRevision: "schema"})
 		if contextErr != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, contextErr
@@ -158,7 +161,7 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 	execution.unitOfWork.rollBack(t.Context())
 
 	delivery.requests = nil
-	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 7}, Replayed: true}
+	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{OrganizationUnitID: wantID, Version: 7}, Replayed: true}
 	recovered := *execution
 	recovered.unitOfWork = newActionTestUnitOfWork()
 	recovered.targetResolved = false
@@ -174,7 +177,7 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 
 func TestStoreOrganizationRenameRequiresExactGrantAndUsesFixedRecordOwner(t *testing.T) {
 	delivery := &targetOrganizationDeliveryStub{}
-	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: "store-north", Name: "North Flagship", Status: "active", Version: 4}}
+	delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{OrganizationUnitID: "store-north", Name: "North Flagship", Status: "active", Version: 4}}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{BindStoreOrganizationDelivery: func(context.Context) (identitysdk.StoreOrganizationDelivery, error) { return delivery, nil }},
 		identity:     runtimeext.ExecutionIdentity{ExecutionID: "execution-rename-1"}, workspace: runtimeext.Workspace{ID: "workspace-a"},
@@ -215,16 +218,19 @@ func TestProvisionStoreOrganizationEnforcesWorkspaceQuotaAndCompanyScope(t *test
 		wantCode  string
 		wantWrite bool
 	}{
-		{name: "limit reached", maxStores: 1, items: []identitysdk.StoreOrganization{{ID: "first-store", ParentOrganizationID: "company-hq", Status: "active"}}, wantCode: "backend.action.store_quota_exceeded"},
-		{name: "disabled store excluded", maxStores: 1, items: []identitysdk.StoreOrganization{{ID: "old-store", ParentOrganizationID: "company-hq", Status: "disabled"}}, wantWrite: true},
-		{name: "foreign company fails closed", maxStores: 2, items: []identitysdk.StoreOrganization{{ID: "foreign-store", ParentOrganizationID: "other-company", Status: "active"}}, wantCode: "backend.action.store_company_scope_conflict"},
+		{name: "limit reached", maxStores: 1, items: []identitysdk.StoreOrganization{{OrganizationUnitID: "first-store", ParentOrganizationID: "company-hq", Status: "active"}}, wantCode: "backend.action.store_quota_exceeded"},
+		{name: "disabled store excluded", maxStores: 1, items: []identitysdk.StoreOrganization{{OrganizationUnitID: "old-store", ParentOrganizationID: "company-hq", Status: "disabled"}}, wantWrite: true},
+		{name: "foreign company fails closed", maxStores: 2, items: []identitysdk.StoreOrganization{{OrganizationUnitID: "foreign-store", ParentOrganizationID: "other-company", Status: "active"}}, wantCode: "backend.action.store_company_scope_conflict"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			delivery := &targetOrganizationDeliveryStub{page: identitysdk.StoreOrganizationPage{Items: test.items}}
 			executionID := "execution-" + strings.ReplaceAll(test.name, " ", "-")
-			wantID := stableStoreOrganizationID("workspace-a", executionID)
-			delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{ID: wantID, Version: 1}}
+			wantID, err := stableStoreOrganizationID("workspace-a", executionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			delivery.result = identitysdk.StoreOrganizationDeliveryResult{Organization: identitysdk.StoreOrganization{OrganizationUnitID: wantID, Version: 1}}
 			execution := &businessActionExecution{
 				dependencies: BusinessHandlerExecutionDependencies{
 					BindStoreOrganizationDelivery: func(context.Context) (identitysdk.StoreOrganizationDelivery, error) { return delivery, nil },
@@ -238,7 +244,7 @@ func TestProvisionStoreOrganizationEnforcesWorkspaceQuotaAndCompanyScope(t *test
 				identity: runtimeext.ExecutionIdentity{ExecutionID: executionID}, principal: runtimeext.Principal{OrgID: "company-hq"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(),
 				targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}, requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 			}
-			_, err := execution.ProvisionStoreOrganization(t.Context(), runtimeext.StoreOrganizationProvisionRequest{Code: "next", Name: "Next", SortOrder: 2})
+			_, err = execution.ProvisionStoreOrganization(t.Context(), runtimeext.StoreOrganizationProvisionRequest{Code: "next", Name: "Next", SortOrder: 2})
 			if test.wantCode != "" {
 				if apperror.CodeOf(err) != test.wantCode || len(delivery.requests) != 0 {
 					t.Fatalf("error=%v writes=%d", err, len(delivery.requests))
@@ -260,7 +266,7 @@ func TestTargetOrganizationRejectsMixedMutationPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{ID: "order-1", OwnerOrgID: "store-south"}}, nil)
+	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "order"}, Record: recordmodel.Record{RecordID: "order-1", OwnerOrgID: "store-south"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

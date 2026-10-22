@@ -128,7 +128,7 @@ func (s *RecordDeleteApplicationService) DeleteExpectedIdempotent(ctx context.Co
 	if err := s.dependencies.MutationKernel.CommitBatch(ctx, group.plans, receipt); err != nil {
 		return false, recordDeleteInternalError("commit idempotent delete mutation batch", err)
 	}
-	claim.Execution.ID = ""
+	claim.Execution.OperationID = ""
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -327,7 +327,7 @@ func (s *RecordDeleteApplicationService) planHardDelete(ctx context.Context, obj
 				return nil
 			},
 			Cascade: func(ctx context.Context, reference recordservice.RecordDeleteReference) error {
-				return s.planDelete(ctx, reference.Object.Key, reference.Record.ID, "", principal, visited, true, group)
+				return s.planDelete(ctx, reference.Object.Key, reference.Record.RecordID, "", principal, visited, true, group)
 			},
 		}); err != nil {
 			return err

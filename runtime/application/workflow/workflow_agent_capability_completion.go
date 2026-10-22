@@ -54,7 +54,7 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 	}
 	var instance *workflowmodel.WorkflowNodeInstance
 	for index := range nodes {
-		if nodes[index].ID != completion.NodeInstanceID {
+		if nodes[index].NodeInstanceID != completion.NodeInstanceID {
 			continue
 		}
 		if nodes[index].Status != "waiting" {
@@ -87,19 +87,19 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 	process.UpdatedAt = now.Format(time.RFC3339Nano)
 	next := s.processEngine.nextNodeIDs(process.DefinitionSnapshot.Graph, instance.NodeID, outcome)
 	resume := workflowmodel.WorkflowExecution{
-		WorkspaceID: completion.WorkspaceID, ID: "agent_task_resume_" + completion.TaskRunID, WorkflowKey: process.WorkflowKey, Name: process.WorkflowName,
+		WorkspaceID: completion.WorkspaceID, ExecutionID: workflowProcessID(ctx, "execution"), WorkflowKey: process.WorkflowKey, Name: process.WorkflowName,
 		Trigger: "agent_task_terminal", Status: "pending", ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(process.DefinitionSnapshot.Action),
 		Payload: workflowpolicy.WorkflowCloneMap(process.Variables), Result: map[string]any{
-			"resume_process_id": process.ID, "resume_node_ids": next, "resume_explicit": true,
+			"resume_process_id": process.ProcessID, "resume_node_ids": next, "resume_explicit": true,
 			"agent_task_run_id": completion.TaskRunID, "agent_task_outcome": outcome,
 			"execution_user_id": completion.Identity.Execution.UserID, "execution_role_key": completion.Identity.Execution.RoleKey,
 		},
-		ProcessID: process.ID, NodeID: instance.NodeID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: completion.Identity.Execution.UserID,
+		ProcessID: process.ProcessID, NodeID: instance.NodeID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: completion.Identity.Execution.UserID,
 		IdempotencyKey: "agent-task-resume:" + completion.TaskRunID, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(process.DefinitionSnapshot), Message: "workflow.message.agentTaskCompleted",
 		CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339),
 	}
 	event := workflowmodel.WorkflowProcessEvent{
-		WorkspaceID: completion.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: instance.NodeID,
+		WorkspaceID: completion.WorkspaceID, EventID: workflowProcessID(ctx, "event"), ProcessID: process.ProcessID, NodeID: instance.NodeID,
 		Event: "agent_task_" + outcome, ActorID: valueOrDefault(completion.Identity.Execution.UserID, "system"), Summary: "workflow.event.agentTask." + outcome,
 		Metadata: map[string]any{
 			"task_run_id": completion.TaskRunID, "task_key": completion.TaskKey, "task_version": completion.TaskVersion,

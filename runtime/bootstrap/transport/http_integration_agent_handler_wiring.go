@@ -493,7 +493,7 @@ func (h runtimeAgentAnalysisHost) ListAnalysisRecords(ctx context.Context, objec
 	}
 	result := agentmodulehost.AnalysisRecordPage{Total: page.Total, HasNext: page.HasNext, Items: make([]agentmodulehost.AnalysisRecord, 0, len(page.Items))}
 	for _, item := range page.Items {
-		result.Items = append(result.Items, agentmodulehost.AnalysisRecord{ID: item.ID, Data: item.Data})
+		result.Items = append(result.Items, agentmodulehost.AnalysisRecord{ID: item.RecordID, Data: item.Data})
 	}
 	return result, nil
 }
@@ -560,7 +560,7 @@ func (h runtimeAgentInteractiveHost) ResolveTaskAttachmentSource(ctx context.Con
 	}
 	fileID, ok := record.Data[fieldKey].(string)
 	fileID = strings.TrimSpace(fileID)
-	if !ok || record.Deleted || record.ID != recordID || record.WorkspaceID != principal.WorkspaceID || fileID == "" {
+	if !ok || record.Deleted || record.RecordID != recordID || record.WorkspaceID != principal.WorkspaceID || fileID == "" {
 		return agentsdk.TaskAttachment{}, runtimeAgentSDKError(apperror.New(apperror.KindForbidden, "agent.task.attachment_source_denied", nil, nil))
 	}
 	filename := strings.TrimSpace(source.Filename)

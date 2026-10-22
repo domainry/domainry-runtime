@@ -19,7 +19,7 @@ func (r RecordStore) GetRecord(ctx context.Context, workspaceID string, object d
 		return recordmodel.Record{}, false, err
 	}
 	s := r.store
-	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(query.Project(query.Star())).Where(query.Equal("id", recordID)).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, object.Key, workspaceID).Projections(query.Project(query.Star())).Where(query.Equal(recordBusinessIDColumn(object.Key), recordID)).Limit(1).Build()
 	if buildErr != nil {
 		return recordmodel.Record{}, false, buildErr
 	}
@@ -44,14 +44,14 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	s := r.store
-	columns := []string{"id", "created_at", "updated_at"}
-	values := []any{record.ID, recordTimestampDBValue(s.RuntimeEngine, record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, record.UpdatedAt)}
+	columns := []string{recordBusinessIDColumn(object.Key), "created_at", "updated_at"}
+	values := []any{record.RecordID, recordTimestampDBValue(s.RuntimeEngine, record.CreatedAt), recordTimestampDBValue(s.RuntimeEngine, record.UpdatedAt)}
 	columns, values, err = appendRecordInsertMetadata(columns, values, record)
 	if err != nil {
 		return err
 	}
 	for _, field := range object.Fields {
-		if recordFieldIsSystemOwned(field.Key) {
+		if recordFieldIsSystemOwned(object.Key, field.Key) {
 			continue
 		}
 		if value, ok := record.Data[field.Key]; ok {
@@ -59,7 +59,7 @@ func (r RecordStore) InsertRecord(ctx context.Context, workspaceID string, objec
 			values = append(values, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	builder, buildErr := s.SubjectEvidenceInsertBuilder(workspaceID, object.Key, columns, values, s.SubjectResourceWriteAllowed(workspaceID, object.Key, record.ID))
+	builder, buildErr := s.SubjectEvidenceInsertBuilder(workspaceID, object.Key, columns, values, s.SubjectResourceWriteAllowed(workspaceID, object.Key, record.RecordID))
 	if buildErr != nil {
 		return buildErr
 	}
@@ -90,14 +90,14 @@ func (r RecordStore) UpdateRecord(ctx context.Context, workspaceID string, objec
 		return err
 	}
 	for _, field := range object.Fields {
-		if recordFieldIsSystemOwned(field.Key) {
+		if recordFieldIsSystemOwned(object.Key, field.Key) {
 			continue
 		}
 		if value, ok := record.Data[field.Key]; ok {
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	queryValue, args, buildErr := builder.Where(query.And(query.Equal("id", record.ID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.ID, record.UpdateBy))).Build()
+	queryValue, args, buildErr := builder.Where(query.And(query.Equal(recordBusinessIDColumn(object.Key), record.RecordID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.RecordID, record.UpdateBy))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -124,21 +124,21 @@ func (r RecordStore) UpdateRecordWhere(ctx context.Context, workspaceID string, 
 		return false, err
 	}
 	for _, field := range object.Fields {
-		if recordFieldIsSystemOwned(field.Key) {
+		if recordFieldIsSystemOwned(object.Key, field.Key) {
 			continue
 		}
 		if value, ok := record.Data[field.Key]; ok {
 			builder.Set(field.Key, dbFieldValue(s.RuntimeEngine, field, value))
 		}
 	}
-	predicates := []query.Predicate{query.Equal("id", record.ID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.ID, record.UpdateBy)}
+	predicates := []query.Predicate{query.Equal(recordBusinessIDColumn(object.Key), record.RecordID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, record.RecordID, record.UpdateBy)}
 	keys := make([]string, 0, len(conditions))
 	for key := range conditions {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		predicates = append(predicates, query.Equal(key, recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key])))
+		predicates = append(predicates, query.Equal(recordPhysicalField(object.Key, key), recordConditionDBValue(s.RuntimeEngine, object, key, conditions[key])))
 	}
 	queryValue, args, buildErr := builder.Where(query.And(predicates...)).Build()
 	if buildErr != nil {
@@ -166,7 +166,7 @@ func (r RecordStore) DeleteRecord(ctx context.Context, workspaceID string, objec
 		return fmt.Errorf("begin record delete: %w", err)
 	}
 	defer tx.Rollback()
-	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(query.And(query.Equal("id", recordID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, recordID, ""))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceDeleteBuilder(s.SQLRenderer, object.Key, workspaceID).Where(query.And(query.Equal(recordBusinessIDColumn(object.Key), recordID), s.SubjectRecordWriteAllowed(workspaceID, object.Key, recordID, ""))).Build()
 	if buildErr != nil {
 		return buildErr
 	}
@@ -200,9 +200,9 @@ func (r RecordStore) UniqueExists(ctx context.Context, workspaceID, objectKey, f
 	s := r.store
 	predicate := query.Predicate(query.Equal(fieldKey, dbValue(value)))
 	if strings.TrimSpace(currentID) != "" {
-		predicate = query.And(predicate, query.NotEqual("id", currentID))
+		predicate = query.And(predicate, query.NotEqual(recordBusinessIDColumn(objectKey), currentID))
 	}
-	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, objectKey, workspaceID).Columns("id").Where(predicate).Limit(1).Build()
+	queryValue, args, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, objectKey, workspaceID).Columns(recordBusinessIDColumn(objectKey)).Where(predicate).Limit(1).Build()
 	if buildErr != nil {
 		return false, buildErr
 	}

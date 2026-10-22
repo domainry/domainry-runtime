@@ -44,7 +44,7 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 
 	detail, err := json.Marshal(ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{
 		Process: workflowmodel.WorkflowProcessInstance{
-			ID: "process", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "waiting",
+			ProcessID: "process", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "waiting",
 			DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{
 				ID: "approve", Name: "Manager approval", Contract: &definitionmodel.WorkflowNodeContract{
 					Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "refund.execute"},
@@ -52,15 +52,15 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 			}}}},
 		},
 		Nodes: []workflowmodel.WorkflowNodeInstance{{
-			ID: "node", NodeID: "approve", NodeType: "approval", Status: "waiting",
+			NodeInstanceID: "node", NodeID: "approve", NodeType: "approval", Status: "waiting",
 			Input: map[string]any{"secret": "must-not-project"}, Output: map[string]any{"secret": "must-not-project"},
 		}},
 		Tasks: []workflowmodel.WorkflowTask{{
-			ID: "task", ProcessID: "process", NodeInstanceID: "node", NodeID: "approve", Title: "Approve",
+			TaskID: "task", ProcessID: "process", NodeInstanceID: "node", NodeID: "approve", Title: "Approve",
 			AssigneeRoleKey: "manager", Sequence: 1, Status: "open",
 		}},
 		Events: []workflowmodel.WorkflowProcessEvent{{
-			ID: "event", Event: "task_created", Summary: "Task created",
+			EventID: "event", Event: "task_created", Summary: "Task created",
 			Metadata: map[string]any{"secret": "must-not-project"},
 		}},
 	}))
@@ -80,12 +80,12 @@ func TestWorkflowSurfaceDTOsDoNotCrossLeakBusinessAndOperationsFields(t *testing
 
 	projectedDetail, err := json.Marshal(ProjectParticipantWorkflowProcessDetail(WorkflowProcessDetail{
 		Process: workflowmodel.WorkflowProcessInstance{
-			ID: "projected", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "running",
+			ProcessID: "projected", WorkflowKey: "approval", WorkflowName: "Approval", InitiatorID: "user", Status: "running",
 			DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{
 				ID: "execute", Type: "action", Name: "Execute refund", Config: map[string]any{"action_key": "refund.execute"},
 			}}}},
 		},
-		Nodes: []workflowmodel.WorkflowNodeInstance{{ID: "node", NodeID: "execute", NodeType: "action", Status: "running"}},
+		Nodes: []workflowmodel.WorkflowNodeInstance{{NodeInstanceID: "node", NodeID: "execute", NodeType: "action", Status: "running"}},
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestOpsWorkflowProcessSurfaceRequiresWorkspaceAndProjectsTechnicalDetail(t 
 	}
 
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process", WorkspaceID: "workspace", WorkflowKey: "approval", InitiatorID: "initiator",
+		ProcessID: "process", WorkspaceID: "workspace", WorkflowKey: "approval", InitiatorID: "initiator",
 		Status: "failed", ObjectKey: "request", RecordID: "request-1", CreatedAt: "2026-07-26T00:00:00Z", UpdatedAt: "2026-07-26T00:01:00Z",
 		Variables: map[string]any{"secret_business_value": "must-not-project"},
 		Result:    map[string]any{"retry_count": 2, "payload": "must-not-project"},
@@ -111,10 +111,10 @@ func TestOpsWorkflowProcessSurfaceRequiresWorkspaceAndProjectsTechnicalDetail(t 
 		workflowExecutionProcessStub: workflowExecutionProcessStub{
 			processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process},
 			nodes: map[string][]workflowmodel.WorkflowNodeInstance{
-				"process": {{ID: "node-1", NodeID: "approve", NodeType: "action", Status: "failed", ErrorCode: "action.failed", StartedAt: "2026-07-26T00:00:30Z"}},
+				"process": {{NodeInstanceID: "node-1", NodeID: "approve", NodeType: "action", Status: "failed", ErrorCode: "action.failed", StartedAt: "2026-07-26T00:00:30Z"}},
 			},
 		},
-		events: []workflowmodel.WorkflowProcessEvent{{ID: "event-1", Event: "node_failed", ActorID: "worker", Summary: "failed", CreatedAt: "2026-07-26T00:01:00Z"}},
+		events: []workflowmodel.WorkflowProcessEvent{{EventID: "event-1", Event: "node_failed", ActorID: "worker", Summary: "failed", CreatedAt: "2026-07-26T00:01:00Z"}},
 	}
 	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "operator", WorkspaceID: "workspace"}}
 	detail, err := workflowProcessQueryService(store, nil).OpsWorkflowProcess(t.Context(), " process ", reader)
@@ -134,7 +134,7 @@ func TestOpsWorkflowProcessSurfaceRequiresWorkspaceAndProjectsTechnicalDetail(t 
 
 func TestBusinessTeamWorkflowTasksAuthorizationDefaultsLimitsAndRepositoryFailure(t *testing.T) {
 	store := &workflowProcessStoreEdgeStub{tasks: []workflowmodel.WorkflowTask{{
-		ID: "task-1", ProcessID: "process-1", Title: "Approve", AssigneeUserID: "user-1", Status: "open",
+		TaskID: "task-1", ProcessID: "process-1", Title: "Approve", AssigneeUserID: "user-1", Status: "open",
 	}}}
 	service := workflowProcessQueryService(store, nil)
 	if _, err := service.BusinessTeamWorkflowTasks(t.Context(), principalmodel.Principal{}, "", 0); apperror.CodeOf(err) != "backend.workspace_scope_required" {
@@ -178,16 +178,16 @@ func TestRetryOpsWorkflowProcessSuccessProjection(t *testing.T) {
 
 func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *testing.T) {
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process-1", WorkspaceID: "workspace", WorkflowKey: "approval", WorkflowName: "Approval",
+		ProcessID: "process-1", WorkspaceID: "workspace", WorkflowKey: "approval", WorkflowName: "Approval",
 		InitiatorID: "user", Status: "waiting", Result: map[string]any{"retry_count": 2},
 	}
 	task := workflowmodel.WorkflowTask{
-		ID: "task-1", ProcessID: process.ID, Title: "Approve", AssigneeUserID: "user", Status: "open",
+		TaskID: "task-1", ProcessID: process.ProcessID, Title: "Approve", AssigneeUserID: "user", Status: "open",
 	}
 	store := &workflowProcessStoreEdgeStub{
 		workflowExecutionProcessStub: workflowExecutionProcessStub{
-			processes: map[string]workflowmodel.WorkflowProcessInstance{process.ID: process},
-			nodes:     map[string][]workflowmodel.WorkflowNodeInstance{process.ID: {}},
+			processes: map[string]workflowmodel.WorkflowProcessInstance{process.ProcessID: process},
+			nodes:     map[string][]workflowmodel.WorkflowNodeInstance{process.ProcessID: {}},
 		},
 		listProcesses: []workflowmodel.WorkflowProcessInstance{process},
 		tasks:         []workflowmodel.WorkflowTask{task},
@@ -196,7 +196,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	reader := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user", WorkspaceID: "workspace"}}
 
 	tasks, err := service.ParticipantWorkflowTasks(t.Context(), reader, "open", 10)
-	if err != nil || len(tasks) != 1 || tasks[0].ID != task.ID {
+	if err != nil || len(tasks) != 1 || tasks[0].ID != task.TaskID {
 		t.Fatalf("business tasks=%+v err=%v", tasks, err)
 	}
 	store.listTasksErr = errors.New("tasks unavailable")
@@ -206,7 +206,7 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	store.listTasksErr = nil
 
 	processes, err := service.ParticipantWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{})
-	if err != nil || len(processes) != 1 || processes[0].ID != process.ID {
+	if err != nil || len(processes) != 1 || processes[0].ID != process.ProcessID {
 		t.Fatalf("business processes=%+v err=%v", processes, err)
 	}
 	opsProcesses, err := service.OpsWorkflowProcesses(t.Context(), reader, workflowmodel.WorkflowProcessFilter{})
@@ -222,14 +222,14 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	}
 	store.listProcessesErr = nil
 	store.getProcessErr = errors.New("process unavailable")
-	if _, err := service.OpsWorkflowProcess(t.Context(), process.ID, reader); apperror.KindOf(err) != apperror.KindInternal {
+	if _, err := service.OpsWorkflowProcess(t.Context(), process.ProcessID, reader); apperror.KindOf(err) != apperror.KindInternal {
 		t.Fatalf("ops detail error=%v", err)
 	}
 
 	worker := &workflowListWorkerEdgeStub{
 		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}},
 		list: []workflowmodel.WorkflowExecution{{
-			ID: "execution-1", WorkflowKey: "approval", Status: "queued", ProcessID: process.ID, Attempt: 1, MaxAttempts: 3,
+			ExecutionID: "execution-1", WorkflowKey: "approval", Status: "queued", ProcessID: process.ProcessID, Attempt: 1, MaxAttempts: 3,
 		}},
 	}
 	executionService := NewWorkflowApplicationService(WorkflowDependencies{
@@ -246,8 +246,8 @@ func TestWorkflowSurfaceProjectionWrappersCoverSuccessAndServiceFailures(t *test
 	}
 
 	_ = ProjectParticipantWorkflowProcess(process)
-	_ = ProjectParticipantWorkflowRun(workflowmodel.WorkflowRunResult{WorkflowKey: "approval", Execution: workflowmodel.WorkflowExecution{ProcessID: process.ID}})
-	_ = ProjectOpsWorkflowExecution(workflowmodel.WorkflowExecution{ID: "execution-1"})
+	_ = ProjectParticipantWorkflowRun(workflowmodel.WorkflowRunResult{WorkflowKey: "approval", Execution: workflowmodel.WorkflowExecution{ProcessID: process.ProcessID}})
+	_ = ProjectOpsWorkflowExecution(workflowmodel.WorkflowExecution{ExecutionID: "execution-1"})
 	_ = ProjectOpsWorkflowProcess(process)
 }
 

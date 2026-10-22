@@ -10,8 +10,11 @@ import (
 )
 
 func TestWorkspaceIdentityCreationUsesActionTransactionAndOneTimeCredential(t *testing.T) {
-	userID := stableIdentityUserID("workspace-a", "execution-identity-1")
-	delivery := &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{User: identitysdk.User{ID: userID}, InitialCredential: &identitysdk.HandlerInitialCredential{InitialPassword: "synthetic-secret", MustChangePassword: true, NoStore: true}}}
+	userID, err := stableIdentityUserID("workspace-a", "execution-identity-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery := &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{User: identitysdk.User{UserID: userID}, InitialCredential: &identitysdk.HandlerInitialCredential{InitialPassword: "synthetic-secret", MustChangePassword: true, NoStore: true}}}
 	execution := identityDeliveryTestExecution(t, delivery)
 	execution.targetGrant = nil
 	execution.targetOrganization = runtimeext.TargetOrganization{}
@@ -22,11 +25,11 @@ func TestWorkspaceIdentityCreationUsesActionTransactionAndOneTimeCredential(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.HandlerDeliveryContractVersionV1, AccessToken: "trusted-token", IdempotencyKey: "execution-identity-1:identity_handler_delivery", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserCreate, User: identitysdk.User{ID: userID, Name: "Workspace technician", Email: "synthetic@example.invalid"}, LoginMode: identitysdk.HandlerLoginPassword}, RoleKeys: []string{"technician"}}
+	expected := identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.HandlerDeliveryContractVersionV1, AccessToken: "trusted-token", IdempotencyKey: "execution-identity-1:identity_handler_delivery", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserCreate, User: identitysdk.User{UserID: userID, Name: "Workspace technician", Email: "synthetic@example.invalid"}, LoginMode: identitysdk.HandlerLoginPassword}, RoleKeys: []string{"technician"}}
 	if !reflect.DeepEqual(delivery.request, expected) {
 		t.Fatalf("unexpected bound request: %#v", delivery.request)
 	}
-	if result.User.ID != userID || result.User.OrgID != "" || !result.InitialCredentialPending || execution.initialCredential == nil || delivery.calls != 1 {
+	if result.User.UserID != userID || result.User.OrgID != "" || !result.InitialCredentialPending || execution.initialCredential == nil || delivery.calls != 1 {
 		t.Fatalf("result=%#v calls=%d", result, delivery.calls)
 	}
 	if _, err := execution.DeliverIdentity(t.Context(), request); apperror.CodeOf(err) != "identity.handler_delivery_already_used" || delivery.calls != 1 {

@@ -45,16 +45,16 @@ func (*integrationMetricsOperationsProbe) ReplayEvent(context.Context, string, s
 func TestNotificationDeliveryMetricsReadIntegrationOwnerInvocations(t *testing.T) {
 	probe := &integrationMetricsOperationsProbe{invocations: []integrationsdk.Invocation{
 		{
-			ID: "invocation-sent", Status: "succeeded",
+			InvocationID: "invocation-sent", Status: "succeeded",
 			Metadata: map[string]any{"payload": map[string]any{
 				"template_key": "invoice.ready", "notification_channel": "email",
 			}},
 		},
 		{
-			ID: "invocation-failed", Status: "failed", Error: "provider unavailable",
+			InvocationID: "invocation-failed", Status: "failed", Error: "provider unavailable",
 			Metadata: map[string]any{"payload": json.RawMessage(`{"template_key":"invoice.ready","notification_channel":"email","notification_fallback_root_id":"root-1"}`)},
 		},
-		{ID: "unrelated", Status: "succeeded", Metadata: map[string]any{"payload": map[string]any{"resource": "contact"}}},
+		{InvocationID: "unrelated", Status: "succeeded", Metadata: map[string]any{"payload": map[string]any{"resource": "contact"}}},
 	}}
 	metrics, err := (notificationSDKDeliveryMetrics{operations: probe}).Metrics(t.Context(), "workspace-a", "2026-08-01T00:00:00Z")
 	if err != nil {

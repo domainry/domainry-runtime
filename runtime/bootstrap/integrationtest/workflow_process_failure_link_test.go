@@ -56,11 +56,11 @@ func TestWorkflowGraphFailureAndDeadLetterLinkToProcessAndNode(t *testing.T) {
 	if err != nil || !ok || process.Status != "configuration_error" {
 		t.Fatalf("expected failed process evidence: process=%#v ok=%v err=%v", process, ok, err)
 	}
-	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", execution.ID)
-	if err != nil || !ok || persisted.ProcessID != process.ID || persisted.NodeID != "broken_action" {
+	persisted, ok, err := workflowWorkerStore(store).GetExecution(t.Context(), "workspace-primary", execution.ExecutionID)
+	if err != nil || !ok || persisted.ProcessID != process.ProcessID || persisted.NodeID != "broken_action" {
 		t.Fatalf("expected persisted failure links: execution=%#v ok=%v err=%v", persisted, ok, err)
 	}
-	events, err := workflowProcessStore(store).ListEvents(t.Context(), "workspace-primary", process.ID, 100)
+	events, err := workflowProcessStore(store).ListEvents(t.Context(), "workspace-primary", process.ProcessID, 100)
 	if err != nil {
 		t.Fatalf("list process events: %v", err)
 	}

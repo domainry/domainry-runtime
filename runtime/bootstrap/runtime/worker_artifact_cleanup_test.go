@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sharedartifact "github.com/domainry/domainry-foundation/artifact"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -31,12 +32,16 @@ func TestRuntimeArtifactCleanupDeletesOnlyElapsedBlobBackedContent(t *testing.T)
 	now := time.Date(2026, 9, 23, 15, 0, 0, 0, time.UTC)
 	register := func(id, owner, kind string, expiresAt time.Time) sharedartifact.Artifact {
 		t.Helper()
-		info, putErr := content.PutImmutable(t.Context(), "workspace-a", id, []byte("content:"+id))
+		artifactID, deriveErr := entityid.Derive("art", "runtime-artifact-cleanup-test", id)
+		if deriveErr != nil {
+			t.Fatal(deriveErr)
+		}
+		info, putErr := content.PutImmutable(t.Context(), "workspace-a", artifactID, []byte("content:"+id))
 		if putErr != nil {
 			t.Fatal(putErr)
 		}
 		value := sharedartifact.Artifact{
-			ID: id, WorkspaceID: "workspace-a", Owner: owner, Kind: kind, IdempotencyKey: id,
+			ArtifactID: artifactID, WorkspaceID: "workspace-a", Owner: owner, Kind: kind, IdempotencyKey: id,
 			CreatedBy: "system", Filename: id + ".bin", MediaType: "application/octet-stream",
 			ContentSHA256: info.SHA256, SizeBytes: info.Size, StorageReference: info.Reference,
 			Status: sharedartifact.StatusAvailable, ExpiresAt: expiresAt, ScanStatus: sharedartifact.ScanNotRequired,
@@ -52,7 +57,7 @@ func TestRuntimeArtifactCleanupDeletesOnlyElapsedBlobBackedContent(t *testing.T)
 	expiredReport := register("report-expired", sharedartifact.OwnerReport, "export", now.Add(-time.Minute))
 	expiredSubjectExport := register("subject-export-expired", sharedartifact.OwnerLifecycle, "subject_export", now.Add(-time.Minute))
 	rejectedArchive := register("archive-rejected", sharedartifact.OwnerLifecycle, "archive", time.Time{})
-	if changed, transitionErr := artifacts.Transition(t.Context(), rejectedArchive.WorkspaceID, rejectedArchive.ID, sharedartifact.StatusAvailable, sharedartifact.StatusRejected, rejectedArchive.ScanStatus, now); transitionErr != nil || !changed {
+	if changed, transitionErr := artifacts.Transition(t.Context(), rejectedArchive.WorkspaceID, rejectedArchive.ArtifactID, sharedartifact.StatusAvailable, sharedartifact.StatusRejected, rejectedArchive.ScanStatus, now); transitionErr != nil || !changed {
 		t.Fatalf("reject archive changed=%v err=%v", changed, transitionErr)
 	}
 	futureAudit := register("audit-future", sharedartifact.OwnerAudit, "export", now.Add(time.Hour))
@@ -66,15 +71,15 @@ func TestRuntimeArtifactCleanupDeletesOnlyElapsedBlobBackedContent(t *testing.T)
 		t.Fatalf("cleanup result=%#v err=%v", result, err)
 	}
 	for _, deleted := range []sharedartifact.Artifact{expiredAudit, expiredOperation, expiredReport, expiredSubjectExport, rejectedArchive} {
-		persisted, found, loadErr := artifacts.ByID(t.Context(), deleted.WorkspaceID, deleted.ID)
+		persisted, found, loadErr := artifacts.ByID(t.Context(), deleted.WorkspaceID, deleted.ArtifactID)
 		if loadErr != nil || !found || persisted.Status != sharedartifact.StatusDeleted {
-			t.Fatalf("deleted artifact %s persisted=%#v found=%v err=%v", deleted.ID, persisted, found, loadErr)
+			t.Fatalf("deleted artifact %s persisted=%#v found=%v err=%v", deleted.ArtifactID, persisted, found, loadErr)
 		}
 		if _, statErr := blobs.Stat(t.Context(), deleted.WorkspaceID, deleted.StorageReference); !errors.Is(statErr, runtimefile.ErrBlobNotFound) {
-			t.Fatalf("deleted artifact %s content err=%v", deleted.ID, statErr)
+			t.Fatalf("deleted artifact %s content err=%v", deleted.ArtifactID, statErr)
 		}
 	}
-	persistedFuture, found, err := artifacts.ByID(t.Context(), futureAudit.WorkspaceID, futureAudit.ID)
+	persistedFuture, found, err := artifacts.ByID(t.Context(), futureAudit.WorkspaceID, futureAudit.ArtifactID)
 	if err != nil || !found || persistedFuture.Status != sharedartifact.StatusAvailable {
 		t.Fatalf("future artifact persisted=%#v found=%v err=%v", persistedFuture, found, err)
 	}

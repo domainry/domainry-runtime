@@ -10,7 +10,7 @@ import (
 
 func workflowTaskNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
-		ID: id, WorkspaceID: "workspace-a", Source: "workflow", SourceEventID: sourceID, EventType: "workflow.task.assigned", Category: "approval", Severity: "info",
+		EventID: id, WorkspaceID: "workspace-a", Source: "workflow", SourceEventID: sourceID, EventType: "workflow.task.assigned", Category: "approval", Severity: "info",
 		RecipientUserIDs: []string{"manager"}, SubjectType: "workflow_task", SubjectID: "task-1", ActionState: "open", OccurredAt: "2026-07-28T00:00:00Z",
 		Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Approval required", Body: "Please review", TemplateKey: "workflow.task.assigned.in_app", TemplateVersion: 1, TemplateLocale: "en-US", TemplateContentHash: "hash", Actions: []notificationmodel.NotificationInboxActionRef{{Key: "workflow.task.open", Kind: "route", Label: "Review task", ResourceType: "workflow_task", ResourceID: "task-1"}}},
 		Status:   "queued", CreatedAt: "2026-07-28T00:00:00Z", UpdatedAt: "2026-07-28T00:00:00Z",
@@ -18,7 +18,7 @@ func workflowTaskNotificationEvent(id, sourceID string) notificationmodel.Notifi
 }
 
 func workflowTaskNotificationTask(id, status string) workflowmodel.WorkflowTask {
-	return workflowmodel.WorkflowTask{ID: id, ProcessID: "process-1", NodeInstanceID: "node-1", NodeID: "approve", Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: status, CreatedAt: "2026-07-28T00:00:00Z", UpdatedAt: "2026-07-28T00:00:00Z"}
+	return workflowmodel.WorkflowTask{TaskID: id, ProcessID: "process-1", NodeInstanceID: "node-1", NodeID: "approve", Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: status, CreatedAt: "2026-07-28T00:00:00Z", UpdatedAt: "2026-07-28T00:00:00Z"}
 }
 
 func TestWorkflowTaskAndNotificationCommitOrRollbackTogether(t *testing.T) {
@@ -59,11 +59,11 @@ func TestWorkflowTaskAndNotificationCommitOrRollbackTogether(t *testing.T) {
 	}
 	pending.Status, pending.UpdatedAt = "open", "2026-07-28T01:00:00Z"
 	opening := workflowTaskNotificationEvent("notification-opening", "task-pending:assigned")
-	opening.SubjectID, opening.Snapshot.Actions[0].ResourceID = pending.ID, pending.ID
+	opening.SubjectID, opening.Snapshot.Actions[0].ResourceID = pending.TaskID, pending.TaskID
 	if err := committer.CommitWorkflowTaskOpeningNotification(t.Context(), "workspace-a", pending, opening); err != nil {
 		t.Fatal(err)
 	}
-	if task, found, err := processes.GetTask(t.Context(), "workspace-a", pending.ID); err != nil || !found || task.Status != "open" {
+	if task, found, err := processes.GetTask(t.Context(), "workspace-a", pending.TaskID); err != nil || !found || task.Status != "open" {
 		t.Fatalf("opened task=%+v found=%v err=%v", task, found, err)
 	}
 
@@ -85,20 +85,20 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 		t.Fatal(err)
 	}
 	task.AssigneeUserID, task.UpdatedAt = "director", "2026-07-28T02:00:00Z"
-	processEvent := workflowmodel.WorkflowProcessEvent{ID: "event-escalated", ProcessID: task.ProcessID, NodeID: task.NodeID, TaskID: task.ID, Event: "task_escalated", ActorID: "system", Summary: "workflow.task.escalated", Metadata: map[string]any{"previous_assignee_user_id": "manager", "assignee_user_id": "director"}, CreatedAt: task.UpdatedAt}
+	processEvent := workflowmodel.WorkflowProcessEvent{EventID: "event-escalated", ProcessID: task.ProcessID, NodeID: task.NodeID, TaskID: task.TaskID, Event: "task_escalated", ActorID: "system", Summary: "workflow.task.escalated", Metadata: map[string]any{"previous_assignee_user_id": "manager", "assignee_user_id": "director"}, CreatedAt: task.UpdatedAt}
 	oldEvent := workflowTaskNotificationEvent("notification-escalation-old", "task-escalation:reassigned-from:manager")
-	oldEvent.RecipientUserIDs, oldEvent.SubjectID = []string{"manager"}, task.ID
+	oldEvent.RecipientUserIDs, oldEvent.SubjectID = []string{"manager"}, task.TaskID
 	newEvent := workflowTaskNotificationEvent("notification-escalation-new", "task-escalation:assigned-to:director")
-	newEvent.RecipientUserIDs, newEvent.SubjectID = []string{"director"}, task.ID
+	newEvent.RecipientUserIDs, newEvent.SubjectID = []string{"director"}, task.TaskID
 	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", task, processEvent, []notificationmodel.NotificationEvent{oldEvent, newEvent}); err != nil {
 		t.Fatal(err)
 	}
-	updated, found, err := processes.GetTask(t.Context(), "workspace-a", task.ID)
+	updated, found, err := processes.GetTask(t.Context(), "workspace-a", task.TaskID)
 	if err != nil || !found || updated.AssigneeUserID != "director" {
 		t.Fatalf("updated=%+v found=%v err=%v", updated, found, err)
 	}
 	var processEvents, notifications int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND task_id = ?", "workspace-a", task.ID).Scan(&processEvents); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND task_id = ?", "workspace-a", task.TaskID).Scan(&processEvents); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _notification_events WHERE workspace_id = ?", "workspace-a").Scan(&notifications); err != nil || processEvents != 1 || notifications != 2 {
@@ -111,14 +111,14 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 	}
 	rollbackTask.AssigneeUserID = "director"
 	duplicate := workflowTaskNotificationEvent("notification-escalation-duplicate", oldEvent.SourceEventID)
-	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", rollbackTask, workflowmodel.WorkflowProcessEvent{ID: "event-rollback", ProcessID: rollbackTask.ProcessID, TaskID: rollbackTask.ID, Event: "task_escalated", ActorID: "system", Summary: "workflow.task.escalated", CreatedAt: rollbackTask.UpdatedAt}, []notificationmodel.NotificationEvent{duplicate}); err == nil {
+	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", rollbackTask, workflowmodel.WorkflowProcessEvent{EventID: "event-rollback", ProcessID: rollbackTask.ProcessID, TaskID: rollbackTask.TaskID, Event: "task_escalated", ActorID: "system", Summary: "workflow.task.escalated", CreatedAt: rollbackTask.UpdatedAt}, []notificationmodel.NotificationEvent{duplicate}); err == nil {
 		t.Fatal("expected duplicate notification source failure")
 	}
-	rolledBack, found, err := processes.GetTask(t.Context(), "workspace-a", rollbackTask.ID)
+	rolledBack, found, err := processes.GetTask(t.Context(), "workspace-a", rollbackTask.TaskID)
 	if err != nil || !found || rolledBack.AssigneeUserID != "manager" {
 		t.Fatalf("rolled back task=%+v found=%v err=%v", rolledBack, found, err)
 	}
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND id = ?", "workspace-a", "event-rollback").Scan(&processEvents); err != nil || processEvents != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM _workflow_process_events WHERE workspace_id = ? AND event_id = ?", "workspace-a", "event-rollback").Scan(&processEvents); err != nil || processEvents != 0 {
 		t.Fatalf("rolled back process events=%d err=%v", processEvents, err)
 	}
 }
@@ -126,7 +126,7 @@ func TestWorkflowTaskEscalationTaskEventAndBothNotificationsAreAtomic(t *testing
 func TestWorkflowTaskNotificationValidationBeginAndStageFailures(t *testing.T) {
 	task := workflowTaskNotificationTask("task", "open")
 	event := workflowTaskNotificationEvent("notification", "task:assigned")
-	processEvent := workflowmodel.WorkflowProcessEvent{ID: "process-event", ProcessID: task.ProcessID, TaskID: task.ID, Event: "task_reminder", CreatedAt: task.CreatedAt}
+	processEvent := workflowmodel.WorkflowProcessEvent{EventID: "process-event", ProcessID: task.ProcessID, TaskID: task.TaskID, Event: "task_reminder", CreatedAt: task.CreatedAt}
 
 	store := openStoreForGeneratedListTest(t)
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
@@ -166,20 +166,20 @@ func TestWorkflowTaskNotificationValidationBeginAndStageFailures(t *testing.T) {
 		t.Fatal("duplicate reminder process event accepted")
 	}
 	secondProcessEvent := processEvent
-	secondProcessEvent.ID = "second-process-event"
+	secondProcessEvent.EventID = "second-process-event"
 	if err := committer.CommitWorkflowTaskReminderNotification(t.Context(), "workspace-a", secondProcessEvent, workflowTaskNotificationEvent("duplicate-source", event.SourceEventID)); err == nil {
 		t.Fatal("duplicate reminder notification accepted")
 	}
 	missing := task
-	missing.ID = "missing"
+	missing.TaskID = "missing"
 	if err := committer.CommitWorkflowTaskOpeningNotification(t.Context(), "workspace-a", missing, workflowTaskNotificationEvent("missing-task", "missing-task:assigned")); err == nil {
 		t.Fatal("missing opening task accepted")
 	}
-	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", missing, workflowmodel.WorkflowProcessEvent{ID: "missing-escalation"}, nil); err == nil {
+	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", missing, workflowmodel.WorkflowProcessEvent{EventID: "missing-escalation"}, nil); err == nil {
 		t.Fatal("missing escalation task accepted")
 	}
 	duplicateEscalationEvent := processEvent
-	duplicateEscalationEvent.ID = "process-event"
+	duplicateEscalationEvent.EventID = "process-event"
 	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", task, duplicateEscalationEvent, nil); err == nil {
 		t.Fatal("duplicate escalation process event accepted")
 	}
@@ -240,7 +240,7 @@ func TestWorkflowTaskNotificationDeferredCommitFailures(t *testing.T) {
 	if _, err := store.DB().ExecContext(t.Context(), `CREATE TRIGGER fail_event_commit AFTER INSERT ON _workflow_process_events BEGIN INSERT INTO gate_child VALUES (NEW.id, 'missing'); END`); err != nil {
 		t.Fatal(err)
 	}
-	processEvent := workflowmodel.WorkflowProcessEvent{ID: "commit-reminder-event", ProcessID: task.ProcessID, TaskID: task.ID, Event: "task_reminder", CreatedAt: task.CreatedAt}
+	processEvent := workflowmodel.WorkflowProcessEvent{EventID: "commit-reminder-event", ProcessID: task.ProcessID, TaskID: task.TaskID, Event: "task_reminder", CreatedAt: task.CreatedAt}
 	if err := committer.CommitWorkflowTaskReminderNotification(t.Context(), "workspace-a", processEvent, workflowTaskNotificationEvent("commit-reminder", "commit-reminder")); err == nil {
 		t.Fatal("deferred reminder commit failure ignored")
 	}
@@ -248,7 +248,7 @@ func TestWorkflowTaskNotificationDeferredCommitFailures(t *testing.T) {
 	if err := processes.InsertTask(t.Context(), "workspace-a", task); err != nil {
 		t.Fatal(err)
 	}
-	processEvent.ID = "commit-escalation-event"
+	processEvent.EventID = "commit-escalation-event"
 	if err := committer.CommitWorkflowTaskEscalationNotification(t.Context(), "workspace-a", task, processEvent, nil); err == nil {
 		t.Fatal("deferred escalation commit failure ignored")
 	}

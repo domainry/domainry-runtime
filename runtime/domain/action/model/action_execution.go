@@ -8,7 +8,8 @@ import (
 )
 
 type ActionBusinessExecution struct {
-	ID                 string         `json:"id"`
+	ID                 int64          `json:"id"`
+	OperationID        string         `json:"operation_id"`
 	WorkspaceID        string         `json:"workspace_id,omitempty"`
 	ObjectKey          string         `json:"object_key"`
 	RecordID           string         `json:"record_id,omitempty"`
@@ -45,7 +46,7 @@ type ActionExecutionClaimResult struct {
 
 type ActionExecutionCompletion struct {
 	Execution      ActionBusinessExecution
-	ExecutionID    string
+	OperationID    string
 	LeaseOwner     string
 	FencingToken   int64
 	Result         map[string]any

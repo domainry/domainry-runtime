@@ -30,17 +30,17 @@ func TestOperationsTransactionFaultWindowsRollbackBeforeCommitAndRecoverAfterCom
 			injector := workertestkit.NewScriptedFaultInjector(testCase.effect)
 			store := NewOperationsStoreWithFaults(runtimeStore, injector)
 			now := time.Now().UTC()
-			receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-fault", Owner: "lifecycle", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "retention_policy", ResourceID: "policy"}, IdempotencyKey: "fault-key", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "fault test", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-fault"}
+			receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{OperationID: "operation-fault", Owner: "lifecycle", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "retention_policy", ResourceID: "policy"}, IdempotencyKey: "fault-key", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "fault test", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-fault"}
 			if _, _, err := store.RegisterOperationsCommand(t.Context(), receipt); err == nil {
 				t.Fatal("fault did not surface")
 			}
-			persisted, found, err := store.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: "workspace-a"}, receipt.Command.ID)
+			persisted, found, err := store.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: "workspace-a"}, receipt.Command.OperationID)
 			if err != nil || found != testCase.committed {
 				t.Fatalf("persisted=%#v found=%v committed=%v err=%v", persisted, found, testCase.committed, err)
 			}
 			if testCase.committed {
 				replay, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
-				if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replay.Command.ID != receipt.Command.ID {
+				if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replay.Command.OperationID != receipt.Command.OperationID {
 					t.Fatalf("replay=%#v decision=%s err=%v", replay, decision, err)
 				}
 			}
@@ -59,7 +59,7 @@ func TestOperationsSlowQueryFaultIsBoundedAndStillCommits(t *testing.T) {
 	}
 	store := NewOperationsStoreWithFaults(runtimeStore, workertestkit.NewScriptedFaultInjector(workertestkit.DBSlowQuery(5*time.Millisecond)))
 	now := time.Now().UTC()
-	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-slow", Owner: "lifecycle", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "retention_policy"}, IdempotencyKey: "slow", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "slow query", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-slow"}
+	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{OperationID: "operation-slow", Owner: "lifecycle", Kind: "retention.cleanup", ActionKey: "runtime.operations.run_lifecycle_cleanup_job", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "retention_policy"}, IdempotencyKey: "slow", RequestFingerprint: "fingerprint", RequestedBy: "operator", Reason: "slow query", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-slow"}
 	started := time.Now()
 	_, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
 	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || time.Since(started) < 5*time.Millisecond {

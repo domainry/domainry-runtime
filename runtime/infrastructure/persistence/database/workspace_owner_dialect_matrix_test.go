@@ -76,9 +76,12 @@ func assertPhysicalWorkspacePair(t *testing.T, store *database.RuntimeStore, tab
 	ordered = workspaceMatrixPhysicalOrder(t.Context(), store, table)
 	insert := func(workspace string) error {
 		quoted, placeholders, args := make([]string, 0, len(ordered)), make([]string, 0, len(ordered)), make([]any, 0, len(ordered))
-		for index, column := range ordered {
+		for _, column := range ordered {
+			if column == "id" && strings.Contains(columns[column], "INT") {
+				continue
+			}
 			quoted = append(quoted, store.Identifier(column))
-			placeholders = append(placeholders, store.Placeholder(index+1))
+			placeholders = append(placeholders, store.Placeholder(len(args)+1))
 			args = append(args, workspaceMatrixValue(column, columns[column], workspace, identity))
 		}
 		_, err := store.DB().ExecContext(t.Context(), "INSERT INTO "+store.TableIdentifier(table)+" ("+strings.Join(quoted, ", ")+") VALUES ("+strings.Join(placeholders, ", ")+")", args...)
@@ -169,5 +172,5 @@ func workspaceMatrixValue(column, databaseType, workspace, identity string) any 
 	if column == "status" {
 		return "queued"
 	}
-	return identity + "_" + column
+	return workspace + "_" + column
 }

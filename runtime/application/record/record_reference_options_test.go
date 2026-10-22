@@ -27,7 +27,7 @@ func (r *referenceOptionRepository) ListRecords(_ context.Context, workspaceID s
 		return recordmodel.RecordPageResult{}, nil
 	}
 	return recordmodel.RecordPageResult{
-		Items:    []recordmodel.Record{{ID: "customer-1", Data: map[string]any{"name": "Acme"}}},
+		Items:    []recordmodel.Record{{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}},
 		Page:     query.Page,
 		PageSize: query.PageSize,
 		Total:    2,
@@ -95,7 +95,7 @@ func TestReferenceOptionsReturnsStableAuthorizedIDNameProjection(t *testing.T) {
 	if !reflect.DeepEqual(repository.query.SearchFields, []string{"name"}) || !reflect.DeepEqual(repository.query.SelectFields, []string{"name"}) {
 		t.Fatalf("fields query=%#v", repository.query)
 	}
-	if len(repository.query.Sort) != 2 || repository.query.Sort[0].Field != "name" || repository.query.Sort[1].Field != "id" {
+	if len(repository.query.Sort) != 2 || repository.query.Sort[0].Field != "name" || repository.query.Sort[1].Field != recordmodel.IDField {
 		t.Fatalf("sort query=%#v", repository.query.Sort)
 	}
 }

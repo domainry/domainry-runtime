@@ -179,11 +179,11 @@ func TestRecordMutationPredicateAndQueryProjectionBoundaries(t *testing.T) {
 		t.Fatalf("nil currency expression=%#v", nilValue)
 	}
 
-	defaultSQL, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections(nil)...).Build()
+	defaultSQL, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections("records", nil)...).Build()
 	if err != nil || !strings.HasPrefix(defaultSQL, "SELECT * FROM") {
 		t.Fatalf("default projection SQL=%q err=%v", defaultSQL, err)
 	}
-	projection, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections([]string{"id", "status", "status", "updated_at"})...).Build()
+	projection, _, err := query.NewSelectBuilder(store.store.SQLRenderer, "records").Projections(recordListProjections("records", []string{"id", "status", "status", "updated_at"})...).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func callRelatedAggregateValidation(t *testing.T, state *recordSQLState, object 
 	}
 	defer tx.Rollback()
 	return store.validateRelatedAggregateInvariantsTx(t.Context(), tx, "workspace", transactionmodel.RecordMutationCommit{
-		Operation: "create", Object: object, Record: recordmodel.Record{ID: "candidate", Data: data},
+		Operation: "create", Object: object, Record: recordmodel.Record{RecordID: "candidate", Data: data},
 	}, "create")
 }
 
@@ -424,7 +424,7 @@ func callTemporalValidation(t *testing.T, state *recordSQLState, object definiti
 	}
 	defer tx.Rollback()
 	return store.validateTemporalExclusionTx(t.Context(), tx, "workspace", transactionmodel.RecordMutationCommit{
-		Operation: "create", Object: object, Record: recordmodel.Record{ID: "candidate", Data: data},
+		Operation: "create", Object: object, Record: recordmodel.Record{RecordID: "candidate", Data: data},
 	}, "create")
 }
 

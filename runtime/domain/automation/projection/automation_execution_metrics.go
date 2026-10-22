@@ -69,7 +69,7 @@ func BuildAutomationExecutionMetrics(items []automationmodel.AutomationRuleExecu
 	}
 	var connectorDuration int64
 	for _, invocation := range invocations {
-		if !invocationIDs[strings.TrimSpace(invocation.ID)] {
+		if !invocationIDs[strings.TrimSpace(invocation.InvocationID)] {
 			continue
 		}
 		metrics.ConnectorCalls++

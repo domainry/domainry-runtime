@@ -82,16 +82,16 @@ func TestReportExportPrepareReceiptReplayConflictIsolationAndRestart(t *testing.
 	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_report_export_prepare_receipts'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
 		t.Fatalf("legacy report receipt tables=%d err=%v", legacyTables, err)
 	}
-	payload := `{"workspace_id":"workspace-a","requester_user_id":"requester-a","report_key":"revenue","object_key":"customer","audit_id":"audit-a","prepare_receipt_id":"` + claim.Receipt.ID + `"}`
+	payload := `{"workspace_id":"workspace-a","requester_user_id":"requester-a","report_key":"revenue","object_key":"customer","audit_id":"audit-a","prepare_operation_id":"` + claim.Receipt.OperationID + `"}`
 	receipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: claim.Receipt.ID, PayloadJSON: payload, BusinessJobKey: "business-a",
+		WorkspaceID: "workspace-a", OperationID: claim.Receipt.OperationID, PayloadJSON: payload, BusinessJobKey: "business-a",
 		LeaseOwner: claim.Receipt.LeaseOwner, FencingToken: claim.Receipt.FencingToken, Now: now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: "workspace-a", ReceiptID: receipt.ID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: receipt.OperationID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
 		FencingToken: receipt.FencingToken, Now: now, ExpiresAt: now.Add(24 * time.Hour),
 	}); err != nil {
 		t.Fatal(err)
@@ -112,11 +112,11 @@ func TestReportExportPrepareReceiptReplayConflictIsolationAndRestart(t *testing.
 		t.Fatalf("audit operation conflict=%+v err=%v", conflict, conflictErr)
 	}
 	otherWorkspace := reportExportPrepareClaimFixture("workspace-b", "requester-a", "audit-a", "caller-a", "fingerprint-a", now)
-	if isolated, isolatedErr := receipts.TryBeginReportExportPrepare(t.Context(), otherWorkspace); isolatedErr != nil || isolated.Decision != idempotency.DecisionAcquired || isolated.Receipt.ID == claim.Receipt.ID {
+	if isolated, isolatedErr := receipts.TryBeginReportExportPrepare(t.Context(), otherWorkspace); isolatedErr != nil || isolated.Decision != idempotency.DecisionAcquired || isolated.Receipt.OperationID == claim.Receipt.OperationID {
 		t.Fatalf("workspace isolation=%+v err=%v", isolated, isolatedErr)
 	}
 	otherRequester := reportExportPrepareClaimFixture("workspace-a", "requester-b", "audit-b", "caller-a", "fingerprint-a", now)
-	if isolated, isolatedErr := receipts.TryBeginReportExportPrepare(t.Context(), otherRequester); isolatedErr != nil || isolated.Decision != idempotency.DecisionAcquired || isolated.Receipt.ID == claim.Receipt.ID {
+	if isolated, isolatedErr := receipts.TryBeginReportExportPrepare(t.Context(), otherRequester); isolatedErr != nil || isolated.Decision != idempotency.DecisionAcquired || isolated.Receipt.OperationID == claim.Receipt.OperationID {
 		t.Fatalf("requester isolation=%+v err=%v", isolated, isolatedErr)
 	}
 
@@ -125,7 +125,7 @@ func TestReportExportPrepareReceiptReplayConflictIsolationAndRestart(t *testing.
 	}
 	restarted := openReportExportReceiptRuntimeStore(t, path)
 	defer restarted.Close()
-	stored, found, err := NewReportExportPrepareReceiptStore(restarted).GetReportExportPrepareReceipt(t.Context(), "workspace-a", claim.Receipt.ID)
+	stored, found, err := NewReportExportPrepareReceiptStore(restarted).GetReportExportPrepareReceipt(t.Context(), "workspace-a", claim.Receipt.OperationID)
 	if err != nil || !found || stored.JobID != "job-a" || stored.PayloadJSON != payload || stored.Status != string(idempotency.StatusSucceeded) {
 		t.Fatalf("restarted receipt=%+v found=%v err=%v", stored, found, err)
 	}
@@ -140,16 +140,16 @@ func TestReportExportCompletionRacesSubmitCompletionAndRejectsRebinding(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := `{"receipt":"` + claim.Receipt.ID + `"}`
+	payload := `{"receipt":"` + claim.Receipt.OperationID + `"}`
 	receipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: claim.Receipt.ID, PayloadJSON: payload, BusinessJobKey: "business-a",
+		WorkspaceID: "workspace-a", OperationID: claim.Receipt.OperationID, PayloadJSON: payload, BusinessJobKey: "business-a",
 		LeaseOwner: claim.Receipt.LeaseOwner, FencingToken: claim.Receipt.FencingToken, Now: now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	binding := reportmodel.ReportExportCompletionBinding{
-		ReceiptID: receipt.ID, WorkspaceID: "workspace-a", RequesterUserID: "requester-a", ReportKey: "revenue", ObjectKey: "customer", AuditID: "audit-a",
+		OperationID: receipt.OperationID, WorkspaceID: "workspace-a", RequesterUserID: "requester-a", ReportKey: "revenue", ObjectKey: "customer", AuditID: "audit-a",
 		JobID: "job-a", ArtifactID: "artifact-a", PayloadJSON: payload, CompletionFingerprint: "completion-a", Now: now, ExpiresAt: now.Add(24 * time.Hour),
 	}
 
@@ -162,7 +162,7 @@ func TestReportExportCompletionRacesSubmitCompletionAndRejectsRebinding(t *testi
 		defer wg.Done()
 		<-start
 		completeErr = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-			WorkspaceID: "workspace-a", ReceiptID: receipt.ID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
+			WorkspaceID: "workspace-a", OperationID: receipt.OperationID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
 			FencingToken: receipt.FencingToken, Now: now, ExpiresAt: now.Add(24 * time.Hour),
 		})
 	}()
@@ -176,7 +176,7 @@ func TestReportExportCompletionRacesSubmitCompletionAndRejectsRebinding(t *testi
 	if completeErr != nil || bindErr != nil || (bound.Decision != reportmodel.ReportExportCompletionBound && bound.Decision != reportmodel.ReportExportCompletionReplay) {
 		t.Fatalf("complete_err=%v bind=%+v bind_err=%v", completeErr, bound, bindErr)
 	}
-	stored, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", receipt.ID)
+	stored, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", receipt.OperationID)
 	if err != nil || !found || stored.Status != string(idempotency.StatusSucceeded) || stored.JobID != "job-a" || stored.CompletionArtifactID != "artifact-a" {
 		t.Fatalf("stored=%+v found=%v err=%v", stored, found, err)
 	}
@@ -209,7 +209,7 @@ func TestReportExportPrepareExpiredLeaseReclaimsFrozenPayloadWithFencing(t *test
 	}
 	payload := `{"receipt":"frozen"}`
 	if _, err = receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: first.Receipt.ID, PayloadJSON: payload, BusinessJobKey: "business-a",
+		WorkspaceID: "workspace-a", OperationID: first.Receipt.OperationID, PayloadJSON: payload, BusinessJobKey: "business-a",
 		LeaseOwner: first.Receipt.LeaseOwner, FencingToken: first.Receipt.FencingToken, Now: now,
 	}); err != nil {
 		t.Fatal(err)
@@ -226,13 +226,13 @@ func TestReportExportPrepareExpiredLeaseReclaimsFrozenPayloadWithFencing(t *test
 		t.Fatalf("reclaimed=%+v err=%v", reclaimed, err)
 	}
 	if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: "workspace-a", ReceiptID: first.Receipt.ID, JobID: "stale-job", LeaseOwner: first.Receipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: first.Receipt.OperationID, JobID: "stale-job", LeaseOwner: first.Receipt.LeaseOwner,
 		FencingToken: first.Receipt.FencingToken, Now: expired.Now, ExpiresAt: expired.Now.Add(time.Hour),
 	}); err == nil {
 		t.Fatal("stale lease completed the reclaimed receipt")
 	}
 	if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: "workspace-a", ReceiptID: reclaimed.Receipt.ID, JobID: "job-a", LeaseOwner: reclaimed.Receipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: reclaimed.Receipt.OperationID, JobID: "job-a", LeaseOwner: reclaimed.Receipt.LeaseOwner,
 		FencingToken: reclaimed.Receipt.FencingToken, Now: expired.Now, ExpiresAt: expired.Now.Add(time.Hour),
 	}); err != nil {
 		t.Fatal(err)
@@ -256,12 +256,12 @@ func TestExpiredEmptyReportExportPrepareOrphanCanBeAdoptedButFrozenWinnerCannot(
 	}
 	owner.Now = now.Add(2 * time.Minute)
 	adopted, err := receipts.TryBeginReportExportPrepare(t.Context(), owner)
-	if err != nil || adopted.Decision != idempotency.DecisionAcquired || adopted.Receipt.ID == orphan.Receipt.ID || adopted.Receipt.RequesterUserID != "requester-a" || adopted.Receipt.FencingToken != orphan.Receipt.FencingToken+1 {
+	if err != nil || adopted.Decision != idempotency.DecisionAcquired || adopted.Receipt.OperationID != orphan.Receipt.OperationID || adopted.Receipt.RequesterUserID != "requester-a" || adopted.Receipt.FencingToken != orphan.Receipt.FencingToken+1 {
 		t.Fatalf("adopted=%+v err=%v", adopted, err)
 	}
 	payload := `{"receipt":"owned-and-frozen"}`
 	frozen, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: adopted.Receipt.ID, PayloadJSON: payload, BusinessJobKey: "business-owner",
+		WorkspaceID: "workspace-a", OperationID: adopted.Receipt.OperationID, PayloadJSON: payload, BusinessJobKey: "business-owner",
 		LeaseOwner: adopted.Receipt.LeaseOwner, FencingToken: adopted.Receipt.FencingToken, Now: owner.Now,
 	})
 	if err != nil {
@@ -269,11 +269,11 @@ func TestExpiredEmptyReportExportPrepareOrphanCanBeAdoptedButFrozenWinnerCannot(
 	}
 
 	challenger := reportExportPrepareClaimFixture("workspace-a", "requester-b", "audit-a", "challenger-key", "challenger-fingerprint", owner.Now.Add(2*time.Minute))
-	if blocked, blockedErr := receipts.TryBeginReportExportPrepare(t.Context(), challenger); blockedErr != nil || !blocked.AuditOperationConflict || blocked.Receipt.ID != frozen.ID {
+	if blocked, blockedErr := receipts.TryBeginReportExportPrepare(t.Context(), challenger); blockedErr != nil || !blocked.AuditOperationConflict || blocked.Receipt.OperationID != frozen.OperationID {
 		t.Fatalf("frozen winner was adopted: claim=%+v err=%v", blocked, blockedErr)
 	}
 	if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: "workspace-a", ReceiptID: frozen.ID, JobID: "job-owner", LeaseOwner: frozen.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: frozen.OperationID, JobID: "job-owner", LeaseOwner: frozen.LeaseOwner,
 		FencingToken: frozen.FencingToken, Now: owner.Now, ExpiresAt: owner.Now.Add(time.Hour),
 	}); err != nil {
 		t.Fatal(err)
@@ -292,7 +292,7 @@ func TestReportExportPrepareFailuresAreRetainedAndTerminalFailureReplays(t *test
 		t.Fatal(err)
 	}
 	terminalReceipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: terminal.Receipt.ID, PayloadJSON: `{"terminal":true}`, BusinessJobKey: "business-terminal",
+		WorkspaceID: "workspace-a", OperationID: terminal.Receipt.OperationID, PayloadJSON: `{"terminal":true}`, BusinessJobKey: "business-terminal",
 		LeaseOwner: terminal.Receipt.LeaseOwner, FencingToken: terminal.Receipt.FencingToken, Now: now,
 	})
 	if err != nil {
@@ -300,7 +300,7 @@ func TestReportExportPrepareFailuresAreRetainedAndTerminalFailureReplays(t *test
 	}
 	terminalExpiry := now.Add(90 * 24 * time.Hour)
 	if err = receipts.FailReportExportPrepareTerminal(t.Context(), reportmodel.ReportExportPrepareFailure{
-		WorkspaceID: "workspace-a", ReceiptID: terminalReceipt.ID, LeaseOwner: terminalReceipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: terminalReceipt.OperationID, LeaseOwner: terminalReceipt.LeaseOwner,
 		FencingToken: terminalReceipt.FencingToken, ErrorCode: idempotency.ErrorCodeKeyReused, Now: now, ExpiresAt: terminalExpiry,
 	}); err != nil {
 		t.Fatal(err)
@@ -317,7 +317,7 @@ func TestReportExportPrepareFailuresAreRetainedAndTerminalFailureReplays(t *test
 		t.Fatal(err)
 	}
 	retryReceipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: retry.Receipt.ID, PayloadJSON: `{"retry":true}`, BusinessJobKey: "business-retry",
+		WorkspaceID: "workspace-a", OperationID: retry.Receipt.OperationID, PayloadJSON: `{"retry":true}`, BusinessJobKey: "business-retry",
 		LeaseOwner: retry.Receipt.LeaseOwner, FencingToken: retry.Receipt.FencingToken, Now: now,
 	})
 	if err != nil {
@@ -325,7 +325,7 @@ func TestReportExportPrepareFailuresAreRetainedAndTerminalFailureReplays(t *test
 	}
 	retryExpiry := now.Add(24 * time.Hour)
 	if err = receipts.FailReportExportPrepareRetryable(t.Context(), reportmodel.ReportExportPrepareFailure{
-		WorkspaceID: "workspace-a", ReceiptID: retryReceipt.ID, LeaseOwner: retryReceipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: retryReceipt.OperationID, LeaseOwner: retryReceipt.LeaseOwner,
 		FencingToken: retryReceipt.FencingToken, ErrorCode: "backend.report.export_submit_uncertain", Now: now, ExpiresAt: retryExpiry,
 	}); err != nil {
 		t.Fatal(err)
@@ -358,9 +358,9 @@ func TestReportExportPrepareReceiptExactLookupBeyondFirstHundred(t *testing.T) {
 		if err != nil || claim.Decision != idempotency.DecisionAcquired {
 			t.Fatalf("claim %d=%+v err=%v", index, claim, err)
 		}
-		payload := fmt.Sprintf(`{"receipt_id":%q}`, claim.Receipt.ID)
+		payload := fmt.Sprintf(`{"operation_id":%q}`, claim.Receipt.OperationID)
 		stored, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-			WorkspaceID: request.Receipt.WorkspaceID, ReceiptID: claim.Receipt.ID, PayloadJSON: payload,
+			WorkspaceID: request.Receipt.WorkspaceID, OperationID: claim.Receipt.OperationID, PayloadJSON: payload,
 			BusinessJobKey: fmt.Sprintf("business-%03d", index), LeaseOwner: claim.Receipt.LeaseOwner,
 			FencingToken: claim.Receipt.FencingToken, Now: request.Now,
 		})
@@ -368,7 +368,7 @@ func TestReportExportPrepareReceiptExactLookupBeyondFirstHundred(t *testing.T) {
 			t.Fatalf("save payload %d: %v", index, err)
 		}
 		if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-			WorkspaceID: request.Receipt.WorkspaceID, ReceiptID: stored.ID, JobID: fmt.Sprintf("job-%03d", index),
+			WorkspaceID: request.Receipt.WorkspaceID, OperationID: stored.OperationID, JobID: fmt.Sprintf("job-%03d", index),
 			LeaseOwner: stored.LeaseOwner, FencingToken: stored.FencingToken, Now: request.Now, ExpiresAt: request.Now.Add(time.Hour),
 		}); err != nil {
 			t.Fatalf("complete %d: %v", index, err)
@@ -376,12 +376,12 @@ func TestReportExportPrepareReceiptExactLookupBeyondFirstHundred(t *testing.T) {
 		lastRequest, lastReceipt = request, stored
 	}
 
-	found, ok, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", lastReceipt.ID)
+	found, ok, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", lastReceipt.OperationID)
 	if err != nil || !ok || found.JobID != "job-127" {
 		t.Fatalf("exact lookup=%+v found=%v err=%v", found, ok, err)
 	}
 	replayed, err := receipts.TryBeginReportExportPrepare(t.Context(), lastRequest)
-	if err != nil || replayed.Decision != idempotency.DecisionReplay || replayed.Receipt.ID != lastReceipt.ID || replayed.Receipt.JobID != "job-127" {
+	if err != nil || replayed.Decision != idempotency.DecisionReplay || replayed.Receipt.OperationID != lastReceipt.OperationID || replayed.Receipt.JobID != "job-127" {
 		t.Fatalf("exact replay=%+v err=%v", replayed, err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -94,25 +95,27 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
 	if _, err := store.DB().Exec(`CREATE TABLE concurrent_group_class (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		workspace_id TEXT NOT NULL,
-		id TEXT NOT NULL,
+		concurrent_group_class_id TEXT NOT NULL UNIQUE,
 		created_at BIGINT NOT NULL,
 		updated_at BIGINT NOT NULL,
 		remaining_capacity INTEGER NOT NULL,
 		remaining_waitlist_capacity INTEGER NOT NULL,
-		UNIQUE (workspace_id, id)
+		UNIQUE (workspace_id, concurrent_group_class_id)
 	)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.DB().Exec(`CREATE TABLE concurrent_class_booking (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		workspace_id TEXT NOT NULL,
-		id TEXT NOT NULL,
+		concurrent_class_booking_id TEXT NOT NULL UNIQUE,
 		created_at BIGINT NOT NULL,
 		updated_at BIGINT NOT NULL,
 		class_id TEXT NOT NULL,
 		member_id TEXT NOT NULL,
 		status TEXT NOT NULL,
-		UNIQUE (workspace_id, id)
+		UNIQUE (workspace_id, concurrent_class_booking_id)
 	)`); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +131,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 	records := recordpersistence.NewRecordStore(store)
 	stamp := "2026-07-23T12:00:00Z"
 	if err := records.InsertRecord(t.Context(), "workspace-a", groupClass, recordmodel.Record{
-		ID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
+		RecordID: "class-1", CreatedAt: stamp, UpdatedAt: stamp,
 		Data: map[string]any{"remaining_capacity": int64(10), "remaining_waitlist_capacity": int64(20)},
 	}); err != nil {
 		t.Fatal(err)
@@ -196,7 +199,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 					return recordmodel.Record{}, fmt.Errorf("unexpected class lock %s/%s", objectKey, recordID)
 				}
 				page, err := records.ListRecords(ctx, principal.WorkspaceID, groupClass, recordmodel.RecordListQuery{
-					Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"id__in": []any{recordID}},
+					Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted, Filters: map[string]any{"record_id__in": []any{recordID}},
 					LockIntent: recordmodel.RecordQueryLockForUpdate,
 				})
 				if err != nil {
@@ -230,8 +233,9 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 				record.UpdatedAt = time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC).
 					Add(time.Duration(revision.Add(1)) * time.Nanosecond).
 					Format(time.RFC3339Nano)
+				auditEventID, _ := entityid.Derive("audevt", "runtime.action.book-class.class", principal.UserID)
 				audit := auditmodel.AuditEvent{
-					ID: "class-audit-" + principal.UserID, WorkspaceID: principal.WorkspaceID,
+					AuditEventID: auditEventID, WorkspaceID: principal.WorkspaceID,
 					Family: auditmodel.EventFamilyBusinessRecord,
 					Event:  "record_updated", ObjectKey: groupClass.Key, RecordID: recordID,
 					ActorID: principal.UserID, CreatedAt: stamp,
@@ -244,12 +248,13 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, fmt.Errorf("unexpected booking object %s", objectKey)
 				}
 				record := recordmodel.Record{
-					ID: "booking-" + principal.UserID, CreatedAt: stamp, UpdatedAt: stamp, Data: fields,
+					RecordID: "booking-" + principal.UserID, CreatedAt: stamp, UpdatedAt: stamp, Data: fields,
 				}
+				auditEventID, _ := entityid.Derive("audevt", "runtime.action.book-class.booking", principal.UserID)
 				audit := auditmodel.AuditEvent{
-					ID: "booking-audit-" + principal.UserID, WorkspaceID: principal.WorkspaceID,
+					AuditEventID: auditEventID, WorkspaceID: principal.WorkspaceID,
 					Family: auditmodel.EventFamilyBusinessRecord,
-					Event:  "record_created", ObjectKey: classBooking.Key, RecordID: record.ID,
+					Event:  "record_created", ObjectKey: classBooking.Key, RecordID: record.RecordID,
 					ActorID: principal.UserID, CreatedAt: stamp,
 				}
 				plan, err := newPlan(principal, "create", classBooking, record, nil, audit)
@@ -265,8 +270,9 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		}),
 		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(actionStore)),
 		Audit: ActionAudit{BuildSuccess: func(_ context.Context, _ definitionmodel.ActionSchema, _ actionmodel.ActionInvocation, result actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
+			auditEventID, _ := entityid.Derive("audevt", "runtime.action.book-class.action", result.InvocationID)
 			return auditmodel.AuditEvent{
-				ID: "action-audit-" + result.InvocationID, WorkspaceID: "workspace-a",
+				AuditEventID: auditEventID, WorkspaceID: "workspace-a",
 				Family: auditmodel.EventFamilyBusinessEntity,
 				Event:  "gym.class_booked", ObjectKey: groupClass.Key, ActorID: result.InvocationID, CreatedAt: stamp,
 			}
@@ -354,7 +360,7 @@ func TestBookClassHundredConcurrentRequestsDoNotOversellAndIdempotentRetryDoesNo
 		case "waitlisted":
 			storedWaitlisted++
 		default:
-			t.Fatalf("booking %s status=%v", record.ID, record.Data["status"])
+			t.Fatalf("booking %s status=%v", record.RecordID, record.Data["status"])
 		}
 	}
 	if storedBooked != booked || storedWaitlisted != waitlisted {

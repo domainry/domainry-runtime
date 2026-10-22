@@ -77,7 +77,7 @@ func (s *RecordContextualFieldPolicyDomainService) ApplyRead(ctx context.Context
 	if err != nil {
 		return recordmodel.Record{}, nil, err
 	}
-	return records[0], denials[record.ID], nil
+	return records[0], denials[record.RecordID], nil
 }
 
 // ApplyReadPage resolves each unique SDK predicate once for the page. Query
@@ -96,7 +96,7 @@ func (s *RecordContextualFieldPolicyDomainService) ApplyReadPage(ctx context.Con
 		}
 		results = append(results, filtered)
 		if len(denials) > 0 {
-			denialsByRecord[record.ID] = denials
+			denialsByRecord[record.RecordID] = denials
 		}
 	}
 	return results, denialsByRecord, nil
@@ -141,7 +141,7 @@ func (s *RecordContextualFieldPolicyDomainService) decideResolved(ctx context.Co
 	decision, err := identityevaluator.EvaluateField(*principal.AccessBundle, identityevaluator.FieldRequest{
 		Resource: identitysdk.ResourceType(object.Key), Field: fieldKey, Action: identitysdk.Action(action),
 	}, func(predicate identitysdk.Predicate) (bool, error) {
-		return predicateMatches[sdkPredicateKey(predicate)][record.ID], nil
+		return predicateMatches[sdkPredicateKey(predicate)][record.RecordID], nil
 	})
 	if err != nil {
 		return RecordFieldPolicyDecision{}, fieldPolicyExpressionError(err)
@@ -185,7 +185,7 @@ func (s *RecordContextualFieldPolicyDomainService) resolvePagePredicateMatches(c
 	}
 	ids := make([]any, 0, len(records))
 	for _, record := range records {
-		ids = append(ids, record.ID)
+		ids = append(ids, record.RecordID)
 	}
 	objects := s.objectMap()
 	evaluation := recordpolicy.RecordSDKEvaluationContext(principal)
@@ -198,7 +198,7 @@ func (s *RecordContextualFieldPolicyDomainService) resolvePagePredicateMatches(c
 			matches := make(map[string]bool, len(records))
 			for _, record := range records {
 				if directSDKScopeExpressionMatches(expression, record) {
-					matches[record.ID] = true
+					matches[record.RecordID] = true
 				}
 			}
 			resolved[key] = matches
@@ -209,14 +209,14 @@ func (s *RecordContextualFieldPolicyDomainService) resolvePagePredicateMatches(c
 		}
 		page, err := s.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{
 			Page: 1, PageSize: len(records), AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key,
-			ScopeExpression: &expression, Filters: map[string]any{"id__in": ids},
+			ScopeExpression: &expression, Filters: map[string]any{"record_id__in": ids},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("evaluate contextual field policy page: %w", err)
 		}
 		matches := make(map[string]bool, len(page.Items))
 		for _, matched := range page.Items {
-			matches[matched.ID] = true
+			matches[matched.RecordID] = true
 		}
 		resolved[key] = matches
 	}
@@ -236,7 +236,7 @@ func (s *RecordContextualFieldPolicyDomainService) matchesSDKPredicate(ctx conte
 	}
 	page, err := s.dependencies.Repository.ListRecords(ctx, principal.WorkspaceID, object, recordmodel.RecordListQuery{
 		Page: 1, PageSize: 1, AuthorizationMode: recordmodel.RecordQueryAuthorizationPredicate, RootObjectKey: object.Key,
-		ScopeExpression: &expression, Filters: map[string]any{"id__in": []any{record.ID}},
+		ScopeExpression: &expression, Filters: map[string]any{"record_id__in": []any{record.RecordID}},
 	})
 	if err != nil {
 		return false, fmt.Errorf("evaluate contextual field policy: %w", err)

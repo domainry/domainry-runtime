@@ -16,7 +16,7 @@ func optimisticActionFixture(field string) (definitionmodel.ActionSchema, action
 	invocation := actionmodel.ActionInvocation{RecordID: "case-1", Input: map[string]any{"expected_updated_at": "client-v1", "expected_version": 7}}
 	commits := []transactionmodel.RecordMutationCommit{{
 		Operation: "update", Object: definitionmodel.ObjectSchema{Key: "case"},
-		Record:     recordmodel.Record{ID: "case-1"},
+		Record:     recordmodel.Record{RecordID: "case-1"},
 		Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: "planner-current"},
 	}}
 	return action, invocation, commits
@@ -57,12 +57,12 @@ func TestActionOptimisticConcurrencyFailsClosed(t *testing.T) {
 		t.Fatalf("missing-token error=%v", err)
 	}
 	invocation.Input["expected_updated_at"] = "client-v1"
-	commits[0].Record.ID = "different"
+	commits[0].Record.RecordID = "different"
 	if _, err := enforceActionOptimisticConcurrency(action, invocation, commits); apperror.CodeOf(err) != "backend.action.optimistic_target_mutation_required" {
 		t.Fatalf("missing-target error=%v", err)
 	}
 	commits = append(commits, commits[0])
-	commits[0].Record.ID, commits[1].Record.ID = "case-1", "case-1"
+	commits[0].Record.RecordID, commits[1].Record.RecordID = "case-1", "case-1"
 	if _, err := enforceActionOptimisticConcurrency(action, invocation, commits); apperror.CodeOf(err) != "backend.action.optimistic_target_mutation_ambiguous" {
 		t.Fatalf("ambiguous-target error=%v", err)
 	}

@@ -56,7 +56,7 @@ func workflowProcessMutationService(store *workflowProcessStoreEdgeStub, worker 
 
 func workflowMutationProcess(status string) workflowmodel.WorkflowProcessInstance {
 	return workflowmodel.WorkflowProcessInstance{
-		ID: "process", WorkspaceID: "workspace", InitiatorID: "user", Status: status, ErrorCode: "failure", Result: map[string]any{},
+		ProcessID: "process", WorkspaceID: "workspace", InitiatorID: "user", Status: status, ErrorCode: "failure", Result: map[string]any{},
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "failed", Type: "condition", Contract: &definitionmodel.WorkflowNodeContract{Condition: &definitionmodel.WorkflowConditionContract{Type: "always"}}}}}},
 	}
 }
@@ -72,7 +72,7 @@ func (s *workflowAtomicWithdrawalStub) CommitWorkflowWithdrawal(_ context.Contex
 		return s.err
 	}
 	s.commits = append(s.commits, commit)
-	s.processes[commit.Process.ID] = commit.Process
+	s.processes[commit.Process.ProcessID] = commit.Process
 	return nil
 }
 
@@ -163,7 +163,7 @@ func TestRetryWorkflowProcessContractsReplayFailedNodePersistenceAndExecutionOut
 	}
 	store, worker = base()
 	replay := store.processes["process"]
-	key := workflowCommandKey("process.retry", replay.ID, "caller", map[string]any{"command": "retry"})
+	key := workflowCommandKey("process.retry", replay.ProcessID, "caller", map[string]any{"command": "retry"})
 	workflowRecordCommand(&replay, "process.retry", key)
 	store.processes["process"] = replay
 	if actual, err := workflowProcessMutationService(store, worker, nil).RetryWorkflowProcessWithKey(t.Context(), "process", "caller", admin); err != nil || actual.Status != "failed" {
@@ -268,7 +268,7 @@ func TestResolveWorkflowProcessFailureContractsStateStoreAndPersistenceOutcomes(
 
 func TestDecideTaskCancellationAuthorizationIdempotencyAndRuntimeOutcomes(t *testing.T) {
 	principal := workflowAdminPrincipal()
-	task := workflowmodel.WorkflowTask{ID: "task", ProcessID: "process", AssigneeUserID: principal.UserID}
+	task := workflowmodel.WorkflowTask{TaskID: "task", ProcessID: "process", AssigneeUserID: principal.UserID}
 	process := workflowMutationProcess("waiting")
 	request := workflowmodel.WorkflowTaskDecisionRequest{Decision: " APPROVE ", Comment: " ok ", IdempotencyKey: "key"}
 	base := func() *workflowProcessStoreEdgeStub {
@@ -307,19 +307,19 @@ func TestDecideTaskCancellationAuthorizationIdempotencyAndRuntimeOutcomes(t *tes
 	}
 	store = base()
 	replayed := store.processes["process"]
-	key := workflowCommandKey("task.decision", task.ID, request.IdempotencyKey, map[string]any{"decision": "approve", "comment": "ok"})
-	workflowRecordCommand(&replayed, "task.decision:"+task.ID, key)
+	key := workflowCommandKey("task.decision", task.TaskID, request.IdempotencyKey, map[string]any{"decision": "approve", "comment": "ok"})
+	workflowRecordCommand(&replayed, "task.decision:"+task.TaskID, key)
 	store.processes["process"] = replayed
 	service = workflowProcessQueryService(store, nil)
 	service.decisions = workflowDecisionRuntimeEdgeStub{handled: true}
-	if actual, err := service.DecideTask(t.Context(), " task ", request, principal); err != nil || actual.ID != "process" {
+	if actual, err := service.DecideTask(t.Context(), " task ", request, principal); err != nil || actual.ProcessID != "process" {
 		t.Fatalf("replay=%+v err=%v", actual, err)
 	}
 	store = base()
 	store.getTaskFound = false
 	service = workflowProcessQueryService(store, nil)
 	service.decisions = workflowDecisionRuntimeEdgeStub{process: process, handled: true}
-	if actual, err := service.DecideTask(t.Context(), "task", request, principal); err != nil || actual.ID != "process" {
+	if actual, err := service.DecideTask(t.Context(), "task", request, principal); err != nil || actual.ProcessID != "process" {
 		t.Fatalf("handled=%+v err=%v", actual, err)
 	}
 	store = base()
@@ -328,7 +328,7 @@ func TestDecideTaskCancellationAuthorizationIdempotencyAndRuntimeOutcomes(t *tes
 	store.processes["process"] = fresh
 	service = workflowProcessQueryService(store, nil)
 	service.decisions = workflowDecisionRuntimeEdgeStub{process: process, handled: true}
-	if actual, err := service.DecideTask(t.Context(), "task", request, principal); err != nil || actual.ID != "process" {
+	if actual, err := service.DecideTask(t.Context(), "task", request, principal); err != nil || actual.ProcessID != "process" {
 		t.Fatalf("nonreplay handled=%+v err=%v", actual, err)
 	}
 	store = base()

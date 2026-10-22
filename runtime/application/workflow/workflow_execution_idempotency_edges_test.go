@@ -51,8 +51,8 @@ func workflowIdempotencyService(worker *workflowIdempotencyWorkerEdgeStub, audit
 func TestWorkflowExecutionIdempotencyClaimDecisionMatrix(t *testing.T) {
 	workflow := definitionmodel.WorkflowSchema{Key: "flow", Name: "Flow"}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user"}, RequestID: "request-owner"}
-	receipt := workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkspaceID: "workspace-1", WorkflowKey: "flow", IdempotencyKey: "key", ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 3}
-	execution := workflowmodel.WorkflowExecution{ID: "execution", Status: "completed"}
+	receipt := workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt", WorkspaceID: "workspace-1", WorkflowKey: "flow", IdempotencyKey: "key", ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 3}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", Status: "completed"}
 
 	for name, testCase := range map[string]struct {
 		decision     idempotency.Decision
@@ -65,7 +65,7 @@ func TestWorkflowExecutionIdempotencyClaimDecisionMatrix(t *testing.T) {
 	}{
 		"acquired":             {decision: idempotency.DecisionAcquired, receipt: receipt},
 		"replay":               {decision: idempotency.DecisionReplay, receipt: receipt, executions: map[string]workflowmodel.WorkflowExecution{"execution": execution}, replayed: true},
-		"replay missing id":    {decision: idempotency.DecisionReplay, receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt"}, expectedCode: idempotency.ErrorCodeReceiptUnavailable},
+		"replay missing id":    {decision: idempotency.DecisionReplay, receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt"}, expectedCode: idempotency.ErrorCodeReceiptUnavailable},
 		"replay read failure":  {decision: idempotency.DecisionReplay, receipt: receipt, getErr: errors.New("get"), expectedCode: "backend.internal"},
 		"replay not found":     {decision: idempotency.DecisionReplay, receipt: receipt, executions: map[string]workflowmodel.WorkflowExecution{}, expectedCode: idempotency.ErrorCodeReceiptUnavailable},
 		"fingerprint conflict": {decision: idempotency.DecisionFingerprintConflict, receipt: receipt, expectedCode: idempotency.ErrorCodeKeyReused},
@@ -87,7 +87,7 @@ func TestWorkflowExecutionIdempotencyClaimDecisionMatrix(t *testing.T) {
 			if replayed != testCase.replayed {
 				t.Fatalf("replayed=%v", replayed)
 			}
-			if replayed && actual.ID != execution.ID {
+			if replayed && actual.ExecutionID != execution.ExecutionID {
 				t.Fatalf("execution=%+v", actual)
 			}
 			if testCase.claimErr == nil && claim.Decision != testCase.decision {
@@ -104,7 +104,7 @@ func TestWorkflowExecutionIdempotencyBypassFingerprintOwnerAndCompletion(t *test
 	workflow := definitionmodel.WorkflowSchema{Key: "flow"}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary", UserID: "user"}}
 	audits := []string{}
-	worker := &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkflowKey: "flow", WorkspaceID: "workspace-primary", LeaseOwner: "owner", FencingToken: 2}}}
+	worker := &workflowIdempotencyWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt", WorkflowKey: "flow", WorkspaceID: "workspace-primary", LeaseOwner: "owner", FencingToken: 2}}}
 	service := workflowIdempotencyService(worker, &audits)
 	if _, _, found, err := service.beginWorkflowExecution(t.Context(), workflow, nil, principal, "manual", "", 0, false); err != nil || found {
 		t.Fatalf("empty key found=%v err=%v", found, err)
@@ -126,18 +126,18 @@ func TestWorkflowExecutionIdempotencyBypassFingerprintOwnerAndCompletion(t *test
 		t.Fatal(err)
 	}
 	emptyReceipt := claim
-	emptyReceipt.Receipt.ID = ""
+	emptyReceipt.Receipt.OperationID = ""
 	if err := service.completeWorkflowExecutionReceipt(t.Context(), emptyReceipt, workflowmodel.WorkflowExecution{}, principal); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.completeWorkflowExecutionReceipt(t.Context(), claim, workflowmodel.WorkflowExecution{ID: "execution"}, principal); err != nil {
+	if err := service.completeWorkflowExecutionReceipt(t.Context(), claim, workflowmodel.WorkflowExecution{ExecutionID: "execution"}, principal); err != nil {
 		t.Fatal(err)
 	}
 	if len(worker.completions) != 1 || len(audits) != 1 || !strings.Contains(audits[0], "succeeded") {
 		t.Fatalf("completions=%v audits=%v", worker.completions, audits)
 	}
 	worker.completionErr = errors.New("complete")
-	if err := service.completeWorkflowExecutionReceipt(t.Context(), claim, workflowmodel.WorkflowExecution{ID: "execution"}, principal); err == nil {
+	if err := service.completeWorkflowExecutionReceipt(t.Context(), claim, workflowmodel.WorkflowExecution{ExecutionID: "execution"}, principal); err == nil {
 		t.Fatal("expected completion error")
 	}
 	service.auditMetadata = nil
@@ -162,14 +162,14 @@ func TestWorkflowCommandReplayAndRecordingHelpers(t *testing.T) {
 	if workflowStringValue(nil) != "" || workflowStringValue(" value ") != "value" {
 		t.Fatal("string normalization mismatch")
 	}
-	task := workflowmodel.WorkflowTask{ID: "task", ProcessID: "process"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", ProcessID: "process"}
 	req := workflowmodel.WorkflowTaskDecisionRequest{Decision: " APPROVE ", Comment: " ok ", IdempotencyKey: "caller"}
 	decisionKey := workflowCommandKey("task.decision", "task", "caller", map[string]any{"decision": "approve", "comment": "ok"})
-	replayProcess := workflowmodel.WorkflowProcessInstance{ID: "process"}
+	replayProcess := workflowmodel.WorkflowProcessInstance{ProcessID: "process"}
 	workflowRecordCommand(&replayProcess, "task.decision:task", decisionKey)
 	store := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": replayProcess}}
 	actual, replayed := workflowDecisionReplay(t.Context(), "workspace", store, task, req)
-	if !replayed || actual.ID != "process" {
+	if !replayed || actual.ProcessID != "process" {
 		t.Fatalf("process=%+v replayed=%v", actual, replayed)
 	}
 	if _, replayed := workflowDecisionReplay(t.Context(), "workspace", &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}}, task, req); replayed {

@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
@@ -20,11 +20,25 @@ import (
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
 
-var workflowProcessIDSequence atomic.Uint64
-
 func workflowProcessID(ctx context.Context, prefix string) string {
 	_ = ctx
-	return fmt.Sprintf("%s_%d_%d", prefix, time.Now().UnixNano(), workflowProcessIDSequence.Add(1))
+	canonicalPrefix, ok := map[string]string{
+		"process":        "wfproc",
+		"node":           "wfnode",
+		"task":           "wftask",
+		"event":          "wfevt",
+		"step":           "wfstep",
+		"execution":      "wfexec",
+		"workflow-claim": "wfclaim",
+	}[strings.TrimSpace(prefix)]
+	if !ok {
+		panic("workflow entity ID kind is not registered: " + prefix)
+	}
+	value, err := entityid.New(canonicalPrefix)
+	if err != nil {
+		panic(fmt.Sprintf("generate workflow %s ID: %v", prefix, err))
+	}
+	return value
 }
 
 func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, process *workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, principal principalmodel.Principal) (string, bool, error) {
@@ -48,9 +62,9 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 		return "", false, badRequest("backend.workflow.agent_task_contract_required", "node", node.ID)
 	}
 	contract := *node.Contract.AgentTask
-	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
-	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ID, node.ID, instance.Iteration)
-	instance.ID = nodeInstanceID
+	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
+	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ProcessID, node.ID, instance.Iteration)
+	instance.NodeInstanceID = nodeInstanceID
 	input := renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal)
 	instance.Input = workflowpolicy.WorkflowCloneMap(input)
 	instance.Input["agent_task_run_id"] = runID
@@ -64,7 +78,7 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 		return "", false, internalError("prepare Agent Task", err)
 	}
 	result, err := e.runtime.dependencies.StartAgentTask(ctx, WorkflowAgentTaskPreparation{
-		RunID: runID, WorkspaceID: process.WorkspaceID, ProcessID: process.ID, NodeInstanceID: instance.ID,
+		RunID: runID, WorkspaceID: process.WorkspaceID, ProcessID: process.ProcessID, NodeInstanceID: instance.NodeInstanceID,
 		NodeID: node.ID, Iteration: instance.Iteration, DefinitionVersionID: process.DefinitionVersionID, DefinitionSnapshotHash: process.DefinitionHash,
 		Contract: contract, Input: input, Initiator: principal, CorrelationID: principal.CorrelationID,
 	})
@@ -77,7 +91,7 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 		return "", false, internalError("start Agent Task", fmt.Errorf("Agent capability returned status %q", result.Status))
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, Event: "agent_task_waiting", ActorID: valueOrDefault(principal.UserID, "system"), Summary: node.Name, Metadata: map[string]any{"task_run_id": runID, "task_key": contract.TaskKey, "task_version": contract.TaskVersion, "agent_external_run_id": result.ExternalRunID}, CreatedAt: now}
+	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, EventID: workflowProcessID(ctx, "event"), ProcessID: process.ProcessID, NodeID: node.ID, Event: "agent_task_waiting", ActorID: valueOrDefault(principal.UserID, "system"), Summary: node.Name, Metadata: map[string]any{"task_run_id": runID, "task_key": contract.TaskKey, "task_version": contract.TaskVersion, "agent_external_run_id": result.ExternalRunID}, CreatedAt: now}
 	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{WorkspaceID: process.WorkspaceID, Events: []workflowmodel.WorkflowProcessEvent{event}}); err != nil {
 		return "", false, internalError("record Agent Task dispatch", err)
 	}
@@ -100,7 +114,7 @@ func (e *WorkflowProcessEngine) failPreparedAgentTaskNode(ctx context.Context, i
 func workflowAgentTaskCorrelation(processID, nodeID string, iteration int) (string, string) {
 	seed := fmt.Sprintf("%s:%s:%d", strings.TrimSpace(processID), strings.TrimSpace(nodeID), iteration)
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(seed)))
-	return "agent_node_" + hash[:24], "agent_task_" + hash[:24]
+	return workflowProcessID(context.Background(), "node"), "agent_task_" + hash[:24]
 }
 
 func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, principal principalmodel.Principal) (map[string]any, error) {
@@ -117,7 +131,7 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 	if recordID == "" || recordID == "<nil>" {
 		recordID = process.RecordID
 	}
-	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(*process, process.ID+":"+node.ID))
+	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(*process, process.ProcessID+":"+node.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +144,8 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 	// key, but advance the key after a durable failed node is recorded. This
 	// allows an operator to retry a recovered approval after fixing the cause
 	// of a terminal Action failure without replaying that failed receipt.
-	nodeIteration := e.nextNodeIteration(ctx, process.WorkspaceID, process.ID, node.ID)
-	actionIdempotencyKey := fmt.Sprintf("%s:%s:%d:%s", process.ID, node.ID, nodeIteration, valueOrDefault(process.DefinitionHash, fmt.Sprint(process.DefinitionVersion)))
+	nodeIteration := e.nextNodeIteration(ctx, process.WorkspaceID, process.ProcessID, node.ID)
+	actionIdempotencyKey := fmt.Sprintf("%s:%s:%d:%s", process.ProcessID, node.ID, nodeIteration, valueOrDefault(process.DefinitionHash, fmt.Sprint(process.DefinitionVersion)))
 	var invocation WorkflowBusinessActionInvocationResult
 	for attempt := 1; ; attempt++ {
 		execCtx := ctx
@@ -144,7 +158,7 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 		}
 		invocation, err = e.runtime.dependencies.InvokeAction(execCtx, WorkflowBusinessActionInvocation{
 			ActionKey: actionKey, ObjectKey: objectKey, RecordID: recordID, Input: input, Principal: actionPrincipal,
-			Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ID, NodeID: node.ID,
+			Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ProcessID, NodeID: node.ID,
 			IdempotencyKey: actionIdempotencyKey,
 		})
 		if cancel != nil {
@@ -153,7 +167,7 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 		if err == nil || !invocation.Retryable || attempt == maxAttempts {
 			break
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "business_action_retry_scheduled", actionPrincipal.UserID, node.Name, map[string]any{"attempt": attempt, "max_attempts": maxAttempts, "error_code": invocation.ErrorCode})
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "business_action_retry_scheduled", actionPrincipal.UserID, node.Name, map[string]any{"attempt": attempt, "max_attempts": maxAttempts, "error_code": invocation.ErrorCode})
 	}
 	if err != nil {
 		return nil, err
@@ -185,7 +199,7 @@ func (e *WorkflowProcessEngine) executeActionNode(ctx context.Context, process *
 }
 
 func (e *WorkflowProcessEngine) appendEvent(ctx context.Context, workspaceID, processID, nodeID, taskID, event, actorID, summary string, metadata map[string]any) {
-	_ = e.runtime.dependencies.Processes.InsertEvent(ctx, workspaceID, workflowmodel.WorkflowProcessEvent{WorkspaceID: workspaceID, ID: workflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: event, ActorID: valueOrDefault(actorID, "system"), Summary: summary, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+	_ = e.runtime.dependencies.Processes.InsertEvent(ctx, workspaceID, workflowmodel.WorkflowProcessEvent{WorkspaceID: workspaceID, EventID: workflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: event, ActorID: valueOrDefault(actorID, "system"), Summary: summary, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 }
 
 func (e *WorkflowProcessEngine) failProcess(ctx context.Context, process workflowmodel.WorkflowProcessInstance, code, actorID string) (workflowmodel.WorkflowProcessInstance, error) {
@@ -195,7 +209,7 @@ func (e *WorkflowProcessEngine) failProcess(ctx context.Context, process workflo
 	process.UpdatedAt = now
 	process.CompletedAt = now
 	_ = e.runtime.dependencies.Processes.UpdateProcess(ctx, process.WorkspaceID, process)
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, "", "", "process_failed", actorID, process.ErrorCode, nil)
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, "", "", "process_failed", actorID, process.ErrorCode, nil)
 	return process, badRequest(process.ErrorCode)
 }
 
@@ -230,7 +244,7 @@ func (e *WorkflowProcessEngine) ResumeTimerNode(ctx context.Context, workspaceID
 	if !found {
 		return workflowmodel.WorkflowProcessInstance{}, notFound("backend.workflow.process_not_found")
 	}
-	nodes, err := e.runtime.dependencies.Processes.ListNodes(ctx, workspaceID, process.ID)
+	nodes, err := e.runtime.dependencies.Processes.ListNodes(ctx, workspaceID, process.ProcessID)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, internalError("list timer workflow nodes", err)
 	}
@@ -280,7 +294,7 @@ func (e *WorkflowProcessEngine) ResumeTimerNode(ctx context.Context, workspaceID
 	if !claimed {
 		return process, conflict("backend.workflow.timer_node_not_waiting")
 	}
-	e.appendEvent(ctx, workspaceID, process.ID, nodeID, "", "timer_fired", continuationPrincipal.UserID, "workflow.event.timer.fired", nil)
+	e.appendEvent(ctx, workspaceID, process.ProcessID, nodeID, "", "timer_fired", continuationPrincipal.UserID, "workflow.event.timer.fired", nil)
 	waitingNodes := workflowpolicy.WorkflowRemoveString(process.CurrentNodeIDs, nodeID)
 	next := e.nextNodeIDs(process.DefinitionSnapshot.Graph, nodeID, "success")
 	return e.runWithContext(ctx, process, next, waitingNodes, continuationPrincipal)
@@ -316,7 +330,7 @@ func (e *WorkflowProcessEngine) timerContinuationPrincipal(ctx context.Context, 
 	}
 	principal.RequestID, principal.CorrelationID, principal.CausationID = worker.RequestID, worker.CorrelationID, worker.CausationID
 	if strings.TrimSpace(principal.RequestID) == "" {
-		principal.RequestID = process.ID + ":timer"
+		principal.RequestID = process.ProcessID + ":timer"
 	}
 	return principal, nil
 }
@@ -331,11 +345,11 @@ func containsWorkflowString(values []string, expected string) bool {
 }
 
 func workflowDecisionExecution(process workflowmodel.WorkflowProcessInstance, principal principalmodel.Principal, now string) workflowmodel.WorkflowExecution {
-	return workflowmodel.WorkflowExecution{WorkspaceID: process.WorkspaceID, ID: process.ID, OperationID: process.OperationID, WorkflowKey: process.WorkflowKey, Name: process.WorkflowName, Trigger: "workflow_decision_continuation", Status: process.Status, ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(process.DefinitionSnapshot.Action), Payload: workflowpolicy.WorkflowCloneMap(process.Variables), Result: map[string]any{}, ProcessID: process.ID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(process.DefinitionSnapshot), MaxAttempts: workflowpolicy.WorkflowMaxAttempts(process.DefinitionSnapshot), Message: "workflow.message.decisionCommitted", CreatedAt: process.CreatedAt, UpdatedAt: now}
+	return workflowmodel.WorkflowExecution{WorkspaceID: process.WorkspaceID, ExecutionID: workflowProcessID(context.Background(), "execution"), OperationID: process.OperationID, WorkflowKey: process.WorkflowKey, Name: process.WorkflowName, Trigger: "workflow_decision_continuation", Status: process.Status, ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(process.DefinitionSnapshot.Action), Payload: workflowpolicy.WorkflowCloneMap(process.Variables), Result: map[string]any{}, ProcessID: process.ProcessID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(process.DefinitionSnapshot), MaxAttempts: workflowpolicy.WorkflowMaxAttempts(process.DefinitionSnapshot), Message: "workflow.message.decisionCommitted", CreatedAt: process.CreatedAt, UpdatedAt: now}
 }
 
 func workflowDecisionEvent(ctx context.Context, processID, nodeID, taskID, event, actorID, summary string, metadata map[string]any, createdAt string) workflowmodel.WorkflowProcessEvent {
-	return workflowmodel.WorkflowProcessEvent{ID: workflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: event, ActorID: valueOrDefault(actorID, "system"), Summary: summary, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: createdAt}
+	return workflowmodel.WorkflowProcessEvent{EventID: workflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: event, ActorID: valueOrDefault(actorID, "system"), Summary: summary, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: createdAt}
 }
 
 func (engine *WorkflowProcessEngine) RunWithContext(ctx context.Context, process workflowmodel.WorkflowProcessInstance, queue, waiting []string, principal principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error) {
@@ -365,11 +379,11 @@ func WorkflowProcessID(ctx context.Context, prefix string) string {
 }
 
 func (e *WorkflowProcessEngine) recordFailedNode(ctx context.Context, process workflowmodel.WorkflowProcessInstance, node definitionmodel.WorkflowGraphNode, input map[string]any, nodeErr error, actorID string) {
-	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "failed", input, nil)
+	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "failed", input, nil)
 	instance.ErrorCode = serviceErrorCode(nodeErr)
 	instance.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, instance); err != nil {
 		return
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "node_failed", actorID, instance.ErrorCode, map[string]any{"node_type": node.Type})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "node_failed", actorID, instance.ErrorCode, map[string]any{"node_type": node.Type})
 }

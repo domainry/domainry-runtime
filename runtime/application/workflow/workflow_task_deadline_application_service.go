@@ -47,18 +47,18 @@ func (s *WorkflowApplicationService) ProcessApprovalDeadlineTimer(ctx context.Co
 		return nil
 	}
 	contract := workflowpolicy.WorkflowApprovalNodeContract(node)
-	events, err := s.processRepo.ListEvents(ctx, workspaceID, process.ID, 2000)
+	events, err := s.processRepo.ListEvents(ctx, workspaceID, process.ProcessID, 2000)
 	if err != nil {
 		return internalError("list workflow approval deadline events", err)
 	}
 	switch strings.TrimSpace(phase) {
 	case "reminder":
-		if workflowTaskEventExists(events, task.ID, "task_reminder_queued") {
+		if workflowTaskEventExists(events, task.TaskID, "task_reminder_queued") {
 			return nil
 		}
 		return s.queueWorkflowTaskReminder(ctx, process, node, task, contract, principal)
 	case "escalation":
-		if contract.EscalationSeconds <= 0 || workflowTaskEventExists(events, task.ID, "task_escalated") {
+		if contract.EscalationSeconds <= 0 || workflowTaskEventExists(events, task.TaskID, "task_escalated") {
 			return nil
 		}
 		previousAssignee, err := s.prepareWorkflowTaskEscalation(ctx, process, &task, contract, principal)
@@ -77,19 +77,19 @@ func (s *WorkflowApplicationService) queueWorkflowTaskReminder(ctx context.Conte
 		input[key] = value
 	}
 	input["recipients"] = []string{task.AssigneeUserID}
-	input["workflow_process_id"] = process.ID
+	input["workflow_process_id"] = process.ProcessID
 	input["workflow_node_id"] = node.ID
-	input["workflow_task_id"] = task.ID
+	input["workflow_task_id"] = task.TaskID
 	invocation := WorkflowBusinessActionInvocationResult{}
 	if strings.TrimSpace(contract.ReminderActionKey) != "" {
-		actionPrincipal, err := s.workflowPrincipalForExecution(ctx, process.DefinitionSnapshot, actor, workflowPrincipalExecutionForProcess(process, task.ID))
+		actionPrincipal, err := s.workflowPrincipalForExecution(ctx, process.DefinitionSnapshot, actor, workflowPrincipalExecutionForProcess(process, task.TaskID))
 		if err != nil {
 			return err
 		}
 		invocation, err = s.invokeAction(ctx, WorkflowBusinessActionInvocation{
 			ActionKey: contract.ReminderActionKey, ObjectKey: process.ObjectKey, RecordID: process.RecordID, Input: input,
-			Principal: actionPrincipal, Actor: actor, Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ID, NodeID: node.ID,
-			IdempotencyKey: task.ID + ":deadline-reminder",
+			Principal: actionPrincipal, Actor: actor, Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ProcessID, NodeID: node.ID,
+			IdempotencyKey: task.TaskID + ":deadline-reminder",
 		})
 		if err != nil {
 			return err
@@ -98,22 +98,22 @@ func (s *WorkflowApplicationService) queueWorkflowTaskReminder(ctx context.Conte
 	metadata := map[string]any{"invocation_id": invocation.InvocationID, "outbox_ids": invocation.OutboxIDs, "recipient_user_id": task.AssigneeUserID}
 	compiler, committer := s.processEngine.runtime.dependencies.CompileNotification, s.processEngine.runtime.dependencies.TaskNotificationCommit
 	if compiler == nil && committer == nil {
-		return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_reminder_queued", "workflow.task.reminderQueued", actor.UserID, metadata)
+		return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, task.TaskID, "task_reminder_queued", "workflow.task.reminderQueued", actor.UserID, metadata)
 	}
 	if compiler == nil || committer == nil {
 		return internalError("compile workflow reminder notification", nil)
 	}
 	now := s.worker.Clock.Now().Format(time.RFC3339Nano)
 	event, err := compiler(notificationmodel.NotificationIntent{
-		ID: "notification_" + task.ID + "_reminded", WorkspaceID: process.WorkspaceID, SourceEventID: task.ID + ":reminded:" + task.UpdatedAt,
+		WorkspaceID: process.WorkspaceID, SourceEventID: task.TaskID + ":reminded:" + task.UpdatedAt,
 		EventType: "workflow.task.reminded", RecipientUserIDs: []string{task.AssigneeUserID},
-		SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.ID),
+		SubjectType: "workflow_task", SubjectID: task.TaskID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.TaskID),
 		OccurredAt: now, ExpiresAt: task.DueAt, Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "decision": task.Decision},
 	})
 	if err != nil {
 		return err
 	}
-	processEvent := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: WorkflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, TaskID: task.ID, Event: "task_reminder_queued", ActorID: valueOrDefault(actor.UserID, "system"), Summary: "workflow.task.reminderQueued", Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: now}
+	processEvent := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, EventID: WorkflowProcessID(ctx, "event"), ProcessID: process.ProcessID, NodeID: node.ID, TaskID: task.TaskID, Event: "task_reminder_queued", ActorID: valueOrDefault(actor.UserID, "system"), Summary: "workflow.task.reminderQueued", Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: now}
 	return committer.CommitWorkflowTaskReminderNotification(ctx, process.WorkspaceID, processEvent, event)
 }
 
@@ -122,7 +122,7 @@ func (s *WorkflowApplicationService) escalateWorkflowTask(ctx context.Context, p
 	if err != nil {
 		return err
 	}
-	return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_escalated", "workflow.task.escalated", actor.UserID, map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence})
+	return s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, task.TaskID, "task_escalated", "workflow.task.escalated", actor.UserID, map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence})
 }
 
 func (s *WorkflowApplicationService) prepareWorkflowTaskEscalation(ctx context.Context, process workflowmodel.WorkflowProcessInstance, task *workflowmodel.WorkflowTask, contract definitionmodel.WorkflowApprovalNodeContract, actor principalmodel.Principal) (string, error) {
@@ -152,7 +152,7 @@ func (s *WorkflowApplicationService) commitWorkflowTaskEscalation(ctx context.Co
 	metadata := map[string]any{"previous_assignee_user_id": previousAssignee, "assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence}
 	compiler, committer := s.processEngine.runtime.dependencies.CompileNotification, s.processEngine.runtime.dependencies.TaskNotificationCommit
 	if compiler == nil && committer == nil {
-		if err := s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_escalated", "workflow.task.escalated", actor.UserID, metadata); err != nil {
+		if err := s.recordWorkflowTaskDeadlineEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, task.TaskID, "task_escalated", "workflow.task.escalated", actor.UserID, metadata); err != nil {
 			return err
 		}
 		if err := s.processRepo.UpdateTask(ctx, process.WorkspaceID, task); err != nil {
@@ -166,19 +166,16 @@ func (s *WorkflowApplicationService) commitWorkflowTaskEscalation(ctx context.Co
 	now := s.worker.Clock.Now().Format(time.RFC3339Nano)
 	previousTask := task
 	previousTask.AssigneeUserID = previousAssignee
-	oldEvent, err := compileWorkflowTaskLifecycleNotification(compiler, process, previousTask, "workflow.task.cancelled", "cancelled", "", now)
+	oldEvent, err := compileWorkflowTaskLifecycleNotification(compiler, process, previousTask, "workflow.task.cancelled", "cancelled", "", now, task.TaskID+":reassigned_from:"+previousAssignee+":"+task.UpdatedAt)
 	if err != nil {
 		return err
 	}
-	oldEvent.ID = "notification_" + task.ID + "_reassigned_from_" + previousAssignee + "_" + task.UpdatedAt
-	oldEvent.SourceEventID = task.ID + ":reassigned_from:" + previousAssignee + ":" + task.UpdatedAt
-	newEvent, err := s.processEngine.compileTaskAssignedNotification(process, task, "", compiler)
+	newEvent, err := s.processEngine.compileTaskAssignedNotification(process, task, "", compiler, task.TaskID+":assigned_to:"+task.AssigneeUserID+":"+task.UpdatedAt)
 	if err != nil {
 		return err
 	}
-	newEvent.ID = "notification_" + task.ID + "_assigned_to_" + task.AssigneeUserID + "_" + task.UpdatedAt
 	newEvent.OccurredAt = now
-	processEvent := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, ID: WorkflowProcessID(ctx, "event"), ProcessID: process.ID, NodeID: node.ID, TaskID: task.ID, Event: "task_escalated", ActorID: valueOrDefault(actor.UserID, "system"), Summary: "workflow.task.escalated", Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: now}
+	processEvent := workflowmodel.WorkflowProcessEvent{WorkspaceID: process.WorkspaceID, EventID: WorkflowProcessID(ctx, "event"), ProcessID: process.ProcessID, NodeID: node.ID, TaskID: task.TaskID, Event: "task_escalated", ActorID: valueOrDefault(actor.UserID, "system"), Summary: "workflow.task.escalated", Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: now}
 	return committer.CommitWorkflowTaskEscalationNotification(ctx, process.WorkspaceID, task, processEvent, []notificationmodel.NotificationEvent{oldEvent, newEvent})
 }
 
@@ -192,5 +189,5 @@ func workflowTaskEventExists(events []workflowmodel.WorkflowProcessEvent, taskID
 }
 
 func (s *WorkflowApplicationService) recordWorkflowTaskDeadlineEvent(ctx context.Context, workspaceID, processID, nodeID, taskID, eventName, summaryKey, actorID string, metadata map[string]any) error {
-	return s.workerRepo.InsertProcessEvent(ctx, workspaceID, workflowmodel.WorkflowProcessEvent{WorkspaceID: workspaceID, ID: WorkflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: eventName, ActorID: valueOrDefault(actorID, "system"), Summary: summaryKey, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: s.worker.Clock.Now().Format(time.RFC3339Nano)})
+	return s.workerRepo.InsertProcessEvent(ctx, workspaceID, workflowmodel.WorkflowProcessEvent{WorkspaceID: workspaceID, EventID: WorkflowProcessID(ctx, "event"), ProcessID: processID, NodeID: nodeID, TaskID: taskID, Event: eventName, ActorID: valueOrDefault(actorID, "system"), Summary: summaryKey, Metadata: workflowpolicy.WorkflowCloneMap(metadata), CreatedAt: s.worker.Clock.Now().Format(time.RFC3339Nano)})
 }

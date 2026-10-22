@@ -86,7 +86,7 @@ func TestStoreReadsOnlyIntegrationConnectorPublications(t *testing.T) {
 	if err := runtimeStore.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	insert := `INSERT INTO _publication_outbox (id,publication_type,workspace_id,connector_key,operation,status,payload_json,dedup_key,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
+	insert := `INSERT INTO _publication_outbox (message_id,publication_type,workspace_id,connector_key,operation,status,payload_json,dedup_key,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`
 	createdAt := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC).UnixMilli()
 	for _, row := range [][]any{
 		{"connector-1", "integration.connector", "workspace-a", "crm", "upsert", "queued", `{"id":"1"}`, "dedup-1", createdAt, createdAt},
@@ -98,7 +98,7 @@ func TestStoreReadsOnlyIntegrationConnectorPublications(t *testing.T) {
 	}
 	store := NewPublicationStore(runtimeStore)
 	values, err := store.ListOutbox(t.Context(), "workspace-a", "", "", 10)
-	if err != nil || len(values) != 1 || values[0].ID != "connector-1" || values[0].Payload["id"] != "1" {
+	if err != nil || len(values) != 1 || values[0].MessageID != "connector-1" || values[0].Payload["id"] != "1" {
 		t.Fatalf("values=%#v err=%v", values, err)
 	}
 	if _, found, err := store.GetOutbox(t.Context(), "workspace-a", "notification-1"); err != nil || found {
@@ -123,17 +123,17 @@ func TestWorkerStoreOwnsClaimFencingAndCompletion(t *testing.T) {
 	worker := NewWorkerStore(runtimeStore)
 	now := time.Now().UTC().Format(time.RFC3339)
 	due, err := worker.ListDueOutbox(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "test Runtime publication worker"), 10, now)
-	if err != nil || len(due) != 1 || due[0].ID != message.ID {
+	if err != nil || len(due) != 1 || due[0].MessageID != message.MessageID {
 		t.Fatalf("due=%#v err=%v", due, err)
 	}
-	claimed, changed, err := worker.ClaimOutbox(t.Context(), message.WorkspaceID, message.ID, "worker-a", now)
+	claimed, changed, err := worker.ClaimOutbox(t.Context(), message.WorkspaceID, message.MessageID, "worker-a", now)
 	if err != nil || !changed || claimed.Status != "sending" || claimed.FencingToken != 1 {
 		t.Fatalf("claimed=%#v changed=%v err=%v", claimed, changed, err)
 	}
-	if _, err := worker.HeartbeatOutbox(t.Context(), message.WorkspaceID, message.ID, "worker-a", claimed.FencingToken+1, now); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
+	if _, err := worker.HeartbeatOutbox(t.Context(), message.WorkspaceID, message.MessageID, "worker-a", claimed.FencingToken+1, now); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale fencing heartbeat=%v", err)
 	}
-	completed, err := worker.UpdateOutboxStatus(t.Context(), message.WorkspaceID, message.ID, "worker-a", claimed.FencingToken, "accepted", "invocation-1", "", now)
+	completed, err := worker.UpdateOutboxStatus(t.Context(), message.WorkspaceID, message.MessageID, "worker-a", claimed.FencingToken, "accepted", "invocation-1", "", now)
 	if err != nil || completed.Status != "accepted" || completed.LeaseOwner != "" || completed.ResponseRef != "invocation-1" {
 		t.Fatalf("completed=%#v err=%v", completed, err)
 	}
@@ -158,7 +158,7 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	second, err := store.InsertOutbox(t.Context(), message.WorkspaceID, message)
-	if err != nil || second.ID != first.ID {
+	if err != nil || second.MessageID != first.MessageID {
 		t.Fatalf("deduplicated publication=%#v err=%v", second, err)
 	}
 	message.Payload = map[string]any{"id": "different"}
@@ -166,12 +166,12 @@ func TestStoreOwnsIdempotentPublicationMutation(t *testing.T) {
 		t.Fatalf("fingerprint conflict=%v", err)
 	}
 	statusContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-status")
-	updated, err := store.UpdateOutboxStatus(statusContext, message.WorkspaceID, first.ID, "accepted", "invocation-1", "")
+	updated, err := store.UpdateOutboxStatus(statusContext, message.WorkspaceID, first.MessageID, "accepted", "invocation-1", "")
 	if err != nil || updated.OperationID != "operation-status" || updated.Status != "accepted" || updated.ResponseRef != "invocation-1" {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}
 	retryContext := requestcontext.WithOwnerExecutionID(t.Context(), "operation-retry")
-	retried, err := store.ScheduleOutboxRetry(retryContext, message.WorkspaceID, first.ID, 1, "retry")
+	retried, err := store.ScheduleOutboxRetry(retryContext, message.WorkspaceID, first.MessageID, 1, "retry")
 	if err != nil || retried.OperationID != "operation-retry" || retried.Status != "queued" || retried.AttemptCount != 1 || retried.NextAttemptAt == "" {
 		t.Fatalf("retried=%#v err=%v", retried, err)
 	}
@@ -191,7 +191,7 @@ func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) 
 		t.Fatal(err)
 	}
 	committed, err := NewPublicationStore(producerStore).InsertOutbox(t.Context(), "workspace-a", publicationmodel.Message{
-		ID: "outbox-crash-after-commit", WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", DedupKey: "record:1", Payload: map[string]any{"id": "1"},
+		MessageID: "outbox-crash-after-commit", WorkspaceID: "workspace-a", ConnectorKey: "crm", Operation: "upsert", DedupKey: "record:1", Payload: map[string]any{"id": "1"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -207,10 +207,10 @@ func TestOutboxCrashAfterCommitIsRecoveredByReopenedWorkerProcess(t *testing.T) 
 	worker := NewWorkerStore(recoveredStore)
 	pollAt := time.Now().UTC().Add(time.Second).Format(time.RFC3339)
 	due, err := worker.ListDueOutbox(t.Context(), principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "recover Runtime publication after restart"), 10, pollAt)
-	if err != nil || len(due) != 1 || due[0].ID != committed.ID {
+	if err != nil || len(due) != 1 || due[0].MessageID != committed.MessageID {
 		t.Fatalf("reopened worker did not recover committed Outbox: due=%#v err=%v", due, err)
 	}
-	claimed, ok, err := worker.ClaimOutbox(t.Context(), committed.WorkspaceID, committed.ID, "worker-b", pollAt)
+	claimed, ok, err := worker.ClaimOutbox(t.Context(), committed.WorkspaceID, committed.MessageID, "worker-b", pollAt)
 	if err != nil || !ok || claimed.Status != "sending" {
 		t.Fatalf("reopened worker could not claim durable Outbox: claimed=%#v ok=%v err=%v", claimed, ok, err)
 	}

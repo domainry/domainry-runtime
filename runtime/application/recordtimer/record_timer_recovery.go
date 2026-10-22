@@ -82,9 +82,13 @@ func (s *RecordTimerApplicationService) transitionRecordTimerFailure(ctx context
 		record.Data["cancelled_at"] = now.Format(time.RFC3339Nano)
 	}
 	record.UpdatedAt = now.Format(time.RFC3339Nano)
+	eventCommit, err := buildRecordTimerEventCommit(eventObject, record, eventType, principal.UserID, "", strings.TrimSpace(reason), recordTimerString(record, "due_at"), now)
+	if err != nil {
+		return recordmodel.Record{}, err
+	}
 	commits := []transactionmodel.RecordMutationCommit{
 		{Operation: "update", Object: object, Record: record, Conditions: map[string]any{"status": "failed", "fencing_token": record.Data["fencing_token"]}},
-		buildRecordTimerEventCommit(eventObject, record, eventType, principal.UserID, "", strings.TrimSpace(reason), recordTimerString(record, "due_at"), now),
+		eventCommit,
 	}
 	if err := s.repository.CommitRecordMutationBatch(ctx, principal.WorkspaceID, commits); err != nil {
 		return recordmodel.Record{}, recordTimerInternalError("transition failed record timer", err)

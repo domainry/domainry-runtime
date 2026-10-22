@@ -143,7 +143,7 @@ func TestBusinessReceiptReadRechecksRelationOriginsAndFields(t *testing.T) {
 func TestBusinessReceiptReadRechecksProcessMembershipWithoutToolGrant(t *testing.T) {
 	h, resolver, _, a := newConversationBusinessFixture(t)
 	enableBusinessEvidence(t, h)
-	port := &businessWorkflowPortProbe{process: workflowmodel.WorkflowProcessInstance{ID: "process", WorkflowKey: "review", WorkspaceID: a.WorkspaceID, InitiatorID: a.UserID, Status: "waiting", ObjectKey: "customer", RecordID: "own-1", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "review"}}}
+	port := &businessWorkflowPortProbe{process: workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkflowKey: "review", WorkspaceID: a.WorkspaceID, InitiatorID: a.UserID, Status: "waiting", ObjectKey: "customer", RecordID: "own-1", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "review"}}}
 	if err := WithConversationBusinessWorkflows(port)(h); err != nil {
 		t.Fatal(err)
 	}

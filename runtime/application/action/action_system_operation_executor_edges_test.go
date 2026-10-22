@@ -101,13 +101,13 @@ func TestRecordSystemOperationHandlerSuccessAndFailureEdges(t *testing.T) {
 			if fail {
 				return transactionmodel.MutationPlan{}, recordmodel.Record{}, wantErr
 			}
-			return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "created"}, nil
+			return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "created"}, nil
 		},
 		PlanUpdateMutation: func(context.Context, string, string, map[string]any, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 			if fail {
 				return transactionmodel.MutationPlan{}, recordmodel.Record{}, wantErr
 			}
-			return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "updated"}, nil
+			return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "updated"}, nil
 		},
 		PlanDeleteMutation: func(context.Context, string, string, string, principalmodel.Principal) ([]transactionmodel.MutationPlan, error) {
 			if fail {
@@ -119,14 +119,14 @@ func TestRecordSystemOperationHandlerSuccessAndFailureEdges(t *testing.T) {
 			if fail {
 				return transactionmodel.MutationPlan{}, recordmodel.Record{}, wantErr
 			}
-			return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "restored"}, nil
+			return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "restored"}, nil
 		},
 		PlanConditionalUpdate: func(_ context.Context, _ string, _ string, input transactionmodel.ConditionalUpdateInput, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 			conditional = input
 			if fail {
 				return transactionmodel.MutationPlan{}, recordmodel.Record{}, wantErr
 			}
-			return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "conditional"}, nil
+			return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "conditional"}, nil
 		},
 	}
 	handlers := NewRecordSystemOperationHandlers(dependencies)
@@ -185,7 +185,7 @@ func TestTransitionSystemOperationFailsClosedWithoutStatePayload(t *testing.T) {
 		},
 		PlanUpdateMutation: func(context.Context, string, string, map[string]any, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 			planned++
-			return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "record"}, nil
+			return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "record"}, nil
 		},
 	}
 	handlers := NewRecordSystemOperationHandlers(dependencies)

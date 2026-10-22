@@ -40,7 +40,7 @@ func TestRecordContainsPreservesLiteralSubstringsAndRejectsNonText(t *testing.T)
 			t.Fatalf("invalid filter accepted: %+v", filter)
 		}
 	}
-	filter := recordmodel.RecordFilterExpression{Field: "id", Operator: "contains", Value: "order-"}
+	filter := recordmodel.RecordFilterExpression{Field: "record_id", Operator: "contains", Value: "order-"}
 	if _, err := RecordNormalizeFilterExpression(object, &filter); err != nil {
 		t.Fatalf("record identity substring: %v", err)
 	}

@@ -39,7 +39,7 @@ type deleteRepositoryProbe struct {
 
 func TestDeleteServiceCombinesExpectedVersionWithAtomicDeletePredicate(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	repository := &deleteRepositoryProbe{records: map[string]recordmodel.Record{"customer:customer-1": {ID: "customer-1", UpdatedAt: "version-2", Data: map[string]any{"name": "Acme"}}}}
+	repository := &deleteRepositoryProbe{records: map[string]recordmodel.Record{"customer:customer-1": {RecordID: "customer-1", UpdatedAt: "version-2", Data: map[string]any{"name": "Acme"}}}}
 	service := NewRecordDeleteApplicationService(RecordDeleteDependencies{
 		Repository: repository,
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -61,7 +61,7 @@ func TestDeleteServiceCombinesExpectedVersionWithAtomicDeletePredicate(t *testin
 func TestDeleteServiceUsesPersistedRelationScope(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "emergency_contact", Fields: []definitionmodel.FieldSchema{{Key: "member_id", Type: "relation"}}}
 	repository := &deleteRepositoryProbe{records: map[string]recordmodel.Record{
-		"emergency_contact:contact-1": {ID: "contact-1", Data: map[string]any{"member_id": "member-1"}},
+		"emergency_contact:contact-1": {RecordID: "contact-1", Data: map[string]any{"member_id": "member-1"}},
 	}}
 	persistedScopeCalled := false
 	service := NewRecordDeleteApplicationService(RecordDeleteDependencies{
@@ -71,7 +71,7 @@ func TestDeleteServiceUsesPersistedRelationScope(t *testing.T) {
 		},
 		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return false },
 		CanAccessScope: func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record, write bool) (bool, error) {
-			persistedScopeCalled = record.ID == "contact-1" && !write
+			persistedScopeCalled = record.RecordID == "contact-1" && !write
 			return true, nil
 		},
 	})
@@ -86,7 +86,7 @@ func TestDeleteServiceUsesPersistedRelationScope(t *testing.T) {
 func TestPlanDeleteMutationDoesNotCommit(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
 	repository := &deleteRepositoryProbe{records: map[string]recordmodel.Record{
-		"customer:customer-1": {ID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{"name": "Acme"}},
+		"customer:customer-1": {RecordID: "customer-1", UpdatedAt: "revision-1", Data: map[string]any{"name": "Acme"}},
 	}}
 	service := NewRecordDeleteApplicationService(RecordDeleteDependencies{
 		Repository: repository,
@@ -141,7 +141,7 @@ func TestDeleteServiceOwnsSoftDeleteTransaction(t *testing.T) {
 		{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}, {Key: "version", Type: "number"}, {Key: "name", Type: "text"},
 	}}
 	repository := &deleteRepositoryProbe{records: map[string]recordmodel.Record{
-		"customer:customer-1": {ID: "customer-1", Data: map[string]any{"status": "active", "deleted_at": "", "deleted_by": "", "version": float64(2), "name": "Acme"}},
+		"customer:customer-1": {RecordID: "customer-1", Data: map[string]any{"status": "active", "deleted_at": "", "deleted_by": "", "version": float64(2), "name": "Acme"}},
 	}}
 	automationCalled, policyCalled := false, false
 	var executed []workflowmodel.WorkflowExecution
@@ -161,13 +161,13 @@ func TestDeleteServiceOwnsSoftDeleteTransaction(t *testing.T) {
 			return nil
 		},
 		AfterOutbox: func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
-			return []publicationmodel.Message{{ID: "outbox-1"}}, nil
+			return []publicationmodel.Message{{MessageID: "outbox-1"}}, nil
 		},
 		UpdatedTriggers: func(string, map[string]any, map[string]any) []string {
 			return []string{"record_updated:customer.status"}
 		},
 		PrepareWorkflow: func(context.Context, string, recordmodel.Record, map[string]any, principalmodel.Principal, string) ([]workflowmodel.WorkflowExecution, error) {
-			return []workflowmodel.WorkflowExecution{{ID: "workflow-1"}}, nil
+			return []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1"}}, nil
 		},
 		ExecuteWorkflow: func(_ context.Context, intents []workflowmodel.WorkflowExecution, _ principalmodel.Principal) {
 			executed = append(executed, intents...)
@@ -200,12 +200,12 @@ func TestDeleteServiceOwnsHardDeleteCascadeAndSetNull(t *testing.T) {
 	schema := map[string]definitionmodel.ObjectSchema{"root": root, "child": child, "note": note}
 	repository := &deleteRepositoryProbe{
 		records: map[string]recordmodel.Record{
-			"root:root-1":   {ID: "root-1", Data: map[string]any{"name": "Root"}},
-			"child:child-1": {ID: "child-1", Data: map[string]any{"root_id": "root-1"}},
+			"root:root-1":   {RecordID: "root-1", Data: map[string]any{"name": "Root"}},
+			"child:child-1": {RecordID: "child-1", Data: map[string]any{"root_id": "root-1"}},
 		},
 		lists: map[string][]recordmodel.Record{
-			"child": {{ID: "child-1", Data: map[string]any{"root_id": "root-1"}}},
-			"note":  {{ID: "note-1", Data: map[string]any{"root_id": "root-1"}}},
+			"child": {{RecordID: "child-1", Data: map[string]any{"root_id": "root-1"}}},
+			"note":  {{RecordID: "note-1", Data: map[string]any{"root_id": "root-1"}}},
 		},
 	}
 	automationCalls := 0
@@ -227,7 +227,7 @@ func TestDeleteServiceOwnsHardDeleteCascadeAndSetNull(t *testing.T) {
 			return nil
 		},
 		PlanUpdateReference: func(_ context.Context, reference recordservice.RecordDeleteReference, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-			setNullRecords = append(setNullRecords, reference.Record.ID)
+			setNullRecords = append(setNullRecords, reference.Record.RecordID)
 			updated := reference.Record
 			updated.Data = map[string]any{"root_id": nil}
 			mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceHTTP, CorrelationID: "delete-cascade", ApplicationSchemaRevision: "revision-1"})
@@ -266,8 +266,8 @@ func TestCascadeDeleteBatchFailureLeavesNoPartialCommitOrPostCommitEffect(t *tes
 	schema := map[string]definitionmodel.ObjectSchema{"root": root, "child": child}
 	failure := errors.New("injected batch failure")
 	repository := &deleteRepositoryProbe{
-		records:  map[string]recordmodel.Record{"root:root-1": {ID: "root-1", UpdatedAt: "root-v1", Data: map[string]any{}}, "child:child-1": {ID: "child-1", UpdatedAt: "child-v1", Data: map[string]any{"root_id": "root-1"}}},
-		lists:    map[string][]recordmodel.Record{"child": {{ID: "child-1", UpdatedAt: "child-v1", Data: map[string]any{"root_id": "root-1"}}}},
+		records:  map[string]recordmodel.Record{"root:root-1": {RecordID: "root-1", UpdatedAt: "root-v1", Data: map[string]any{}}, "child:child-1": {RecordID: "child-1", UpdatedAt: "child-v1", Data: map[string]any{"root_id": "root-1"}}},
+		lists:    map[string][]recordmodel.Record{"child": {{RecordID: "child-1", UpdatedAt: "child-v1", Data: map[string]any{"root_id": "root-1"}}}},
 		batchErr: failure,
 	}
 	effects := 0

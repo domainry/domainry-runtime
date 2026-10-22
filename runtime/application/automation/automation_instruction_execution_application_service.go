@@ -23,7 +23,7 @@ func AutomationWorkflowInstructionResult(workflowKey string, run workflowmodel.W
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"workflow_key": workflowKey, "execution_id": run.Execution.ID, "status": run.Execution.Status}, nil
+	return map[string]any{"workflow_key": workflowKey, "execution_id": run.Execution.ExecutionID, "status": run.Execution.Status}, nil
 }
 
 const automationInstructionLeaseDuration = 30 * time.Second
@@ -69,7 +69,7 @@ func (s *AutomationInstructionExecutionApplicationService) Execute(ctx context.C
 		idempotencyKey = automationruntime.AutomationInstructionIdempotencyKey(request.Rule, instruction, request.Record)
 		recordID := "unknown"
 		if request.Record != nil {
-			recordID = valueOrDefault(request.Record.ID, "unknown")
+			recordID = valueOrDefault(request.Record.RecordID, "unknown")
 		}
 		claim := automationmodel.AutomationInstructionExecution{
 			WorkspaceID: request.WorkspaceID, IdempotencyKey: idempotencyKey, RuleKey: request.Rule.Key, ObjectKey: request.Rule.ObjectKey,

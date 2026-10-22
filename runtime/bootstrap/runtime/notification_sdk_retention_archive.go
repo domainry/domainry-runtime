@@ -50,7 +50,7 @@ func (s *notificationSDKRetentionArchiveStore) ArchivePayload(ctx context.Contex
 		return false, fmt.Errorf("shared Lifecycle retention archive store is unavailable")
 	}
 	return target.ArchivePayload(ctx, owner,
-		lifecyclemodel.CleanupJob{ID: job.ID, WorkspaceID: job.WorkspaceID, PolicyKey: policy.Key, PolicyVersion: policy.Version, UpdatedAt: job.ArchivedAt},
+		lifecyclemodel.CleanupJob{JobID: job.JobID, WorkspaceID: job.WorkspaceID, PolicyKey: policy.Key, PolicyVersion: policy.Version, UpdatedAt: job.ArchivedAt},
 		lifecyclemodel.PolicyVersion{WorkspaceID: job.WorkspaceID, Policy: lifecyclemodel.RetentionPolicy{Key: policy.Key, Version: policy.Version, Owner: owner}},
 		sourceTable, resourceID, payload)
 }

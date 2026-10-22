@@ -47,7 +47,7 @@ func (s *OperationsApplicationService) prepareResultEvidence(ctx context.Context
 		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_workspace_unavailable", nil, nil)
 	}
 	reference, err := s.resultArtifacts.PutOperationsResult(ctx, operationsrepository.OperationsResultArtifact{
-		OperationID: receipt.Command.ID,
+		OperationID: receipt.Command.OperationID,
 		WorkspaceID: workspaceID,
 		CreatedBy:   receipt.Command.RequestedBy,
 		Content:     append([]byte(nil), receipt.Result...),
@@ -58,14 +58,14 @@ func (s *OperationsApplicationService) prepareResultEvidence(ctx context.Context
 		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_write_failed", err, nil)
 	}
 	pointer := operationsmodel.OperationsResultEvidence{Artifact: &operationsmodel.OperationsResultArtifactPointer{
-		Schema: operationsmodel.OperationsResultArtifactSchemaV1, ArtifactID: reference.ID,
+		Schema: operationsmodel.OperationsResultArtifactSchemaV1, ArtifactID: reference.ArtifactID,
 		ContentSHA256: reference.ContentSHA256, SizeBytes: reference.SizeBytes,
 	}}
 	receipt.Result, err = json.Marshal(pointer)
 	if err != nil {
 		return operationsmodel.OperationsReceipt{}, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_pointer_invalid", err, nil)
 	}
-	receipt.Evidence = appendUniqueOperationsEvidence(receipt.Evidence, "artifact:"+reference.ID)
+	receipt.Evidence = appendUniqueOperationsEvidence(receipt.Evidence, "artifact:"+reference.ArtifactID)
 	return receipt, nil
 }
 
@@ -85,12 +85,12 @@ func (s *OperationsApplicationService) receiptResult(ctx context.Context, receip
 	if s.resultArtifacts == nil {
 		return nil, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_unavailable", nil, nil)
 	}
-	content, reference, err := s.resultArtifacts.GetOperationsResult(ctx, operationsResultWorkspaceID(receipt), receipt.Command.ID, evidence.Artifact.ArtifactID)
+	content, reference, err := s.resultArtifacts.GetOperationsResult(ctx, operationsResultWorkspaceID(receipt), receipt.Command.OperationID, evidence.Artifact.ArtifactID)
 	if err != nil {
 		return nil, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_read_failed", err, nil)
 	}
 	digest := sha256.Sum256(content)
-	if reference.ID != evidence.Artifact.ArtifactID || reference.SizeBytes != evidence.Artifact.SizeBytes || int64(len(content)) != evidence.Artifact.SizeBytes ||
+	if reference.ArtifactID != evidence.Artifact.ArtifactID || reference.SizeBytes != evidence.Artifact.SizeBytes || int64(len(content)) != evidence.Artifact.SizeBytes ||
 		reference.ContentSHA256 != evidence.Artifact.ContentSHA256 || hex.EncodeToString(digest[:]) != evidence.Artifact.ContentSHA256 {
 		return nil, apperror.New(apperror.KindInternal, "backend.operations.result_artifact_integrity_failed", nil, nil)
 	}

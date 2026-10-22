@@ -24,12 +24,12 @@ func TestWorkflowProcessPagesTraverseBeyond500WithTiesAndLiveVisibility(t *testi
 		if i >= 501 {
 			user = "other"
 		}
-		process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ID: fmt.Sprintf("process_%04d", i), WorkflowKey: "approval", ObjectKey: "application", InitiatorID: user, Status: "waiting", CreatedAt: createdAt, UpdatedAt: createdAt}
+		process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-a", ProcessID: fmt.Sprintf("process_%04d", i), WorkflowKey: "approval", ObjectKey: "application", InitiatorID: user, Status: "waiting", CreatedAt: createdAt, UpdatedAt: createdAt}
 		if err := repository.InsertProcess(t.Context(), "workspace-a", process); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := repository.InsertProcess(t.Context(), "workspace-b", workflowmodel.WorkflowProcessInstance{ID: "foreign", WorkflowKey: "approval", ObjectKey: "application", InitiatorID: "user", Status: "waiting", CreatedAt: createdAt, UpdatedAt: createdAt}); err != nil {
+	if err := repository.InsertProcess(t.Context(), "workspace-b", workflowmodel.WorkflowProcessInstance{ProcessID: "foreign", WorkflowKey: "approval", ObjectKey: "application", InitiatorID: "user", Status: "waiting", CreatedAt: createdAt, UpdatedAt: createdAt}); err != nil {
 		t.Fatal(err)
 	}
 	service := workflowapplication.NewWorkflowApplicationService(workflowapplication.WorkflowDependencies{Processes: repository})
@@ -61,7 +61,7 @@ func TestWorkflowProcessPagesTraverseBeyond500WithTiesAndLiveVisibility(t *testi
 		}
 		if number == 0 {
 			// New rows above the first page cannot shift the following keyset pages.
-			if err := repository.InsertProcess(t.Context(), "workspace-a", workflowmodel.WorkflowProcessInstance{ID: "new_after_first_page", WorkflowKey: "approval", ObjectKey: "application", InitiatorID: "user", Status: "waiting", CreatedAt: "2026-09-15T00:00:00Z", UpdatedAt: createdAt}); err != nil {
+			if err := repository.InsertProcess(t.Context(), "workspace-a", workflowmodel.WorkflowProcessInstance{ProcessID: "new_after_first_page", WorkflowKey: "approval", ObjectKey: "application", InitiatorID: "user", Status: "waiting", CreatedAt: "2026-09-15T00:00:00Z", UpdatedAt: createdAt}); err != nil {
 				t.Fatal(err)
 			}
 			for _, filter := range []workflowmodel.WorkflowProcessFilter{{ObjectKey: "different", Cursor: page.NextCursor}, {ObjectKey: "application", Cursor: "invalid"}} {

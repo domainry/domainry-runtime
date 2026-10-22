@@ -27,7 +27,7 @@ func TestManagedDatabaseCohortSchemaIsCanonicalForEveryDialect(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, fragment := range []string{ManagedDatabaseCohortTable, "marker_id", "SMALLINT NOT NULL PRIMARY KEY", "contract_version", "VARCHAR(128) NOT NULL", "database_identity_sha256", "CHAR(64) NOT NULL"} {
+			for _, fragment := range []string{ManagedDatabaseCohortTable, "id", "PRIMARY KEY", "marker_id", "SMALLINT NOT NULL", "UNIQUE", "contract_version", "VARCHAR(128) NOT NULL", "database_identity_sha256", "VARCHAR(64) NOT NULL"} {
 				if !strings.Contains(statement, fragment) {
 					t.Fatalf("DDL %q lacks %q", statement, fragment)
 				}

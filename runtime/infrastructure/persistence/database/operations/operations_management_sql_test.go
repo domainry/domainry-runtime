@@ -13,7 +13,7 @@ import (
 
 func breakGlassFixture(now time.Time) operationsmodel.OperationsBreakGlassGrant {
 	return operationsmodel.OperationsBreakGlassGrant{
-		ID: "grant", WorkspaceID: "workspace", State: operationsmodel.OperationsBreakGlassActive, ActorID: "actor",
+		BreakGlassGrantID: "grant", WorkspaceID: "workspace", State: operationsmodel.OperationsBreakGlassActive, ActorID: "actor",
 		ApproverIDs: []string{"approver"}, Reason: "reason", IncidentRef: "incident", AlertTarget: "security",
 		AuditEventID: "audit", ExpiresAt: now.Add(time.Hour), Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
@@ -25,17 +25,17 @@ func breakGlassQueryStep(grant operationsmodel.OperationsBreakGlassGrant) operat
 	if grant.RevokedAt != nil {
 		revokedAt = grant.RevokedAt.Format(time.RFC3339Nano)
 	}
-	return operationsSQLQueryStep{columns: operationsBreakGlassColumns(), rows: [][]driver.Value{{grant.ID, grant.WorkspaceID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.Format(time.RFC3339Nano), grant.UpdatedAt.Format(time.RFC3339Nano), revokedAt, grant.RevokedBy, grant.RevocationNote}}}
+	return operationsSQLQueryStep{columns: operationsBreakGlassColumns(), rows: [][]driver.Value{{grant.ID, grant.BreakGlassGrantID, grant.WorkspaceID, string(grant.State), grant.ActorID, string(approvers), grant.Reason, grant.IncidentRef, grant.AlertTarget, grant.AuditEventID, grant.ExpiresAt.Format(time.RFC3339Nano), grant.Revision, grant.CreatedAt.Format(time.RFC3339Nano), grant.UpdatedAt.Format(time.RFC3339Nano), revokedAt, grant.RevokedBy, grant.RevocationNote}}}
 }
 
 func operationsBreakGlassColumns() []string {
-	return []string{"id", "workspace_id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
+	return []string{"id", "break_glass_grant_id", "workspace_id", "state", "actor_id", "approver_ids_json", "reason", "incident_ref", "alert_target", "audit_event_id", "expires_at", "revision", "created_at", "updated_at", "revoked_at", "revoked_by", "revocation_note"}
 }
 
 func operationsScanBreakGlass(scanner operationsScanner) (operationsmodel.OperationsBreakGlassGrant, error) {
 	var record sharedoperation.BreakGlassGrant
 	var approvers string
-	if err := scanner.Scan(&record.ID, &record.WorkspaceID, &record.State, &record.ActorID, &approvers, &record.Reason, &record.IncidentRef, &record.AlertTarget, &record.AuditEventID, &record.ExpiresAt, &record.Revision, &record.CreatedAt, &record.UpdatedAt, &record.RevokedAt, &record.RevokedBy, &record.RevocationNote); err != nil {
+	if err := scanner.Scan(&record.ID, &record.BreakGlassGrantID, &record.WorkspaceID, &record.State, &record.ActorID, &approvers, &record.Reason, &record.IncidentRef, &record.AlertTarget, &record.AuditEventID, &record.ExpiresAt, &record.Revision, &record.CreatedAt, &record.UpdatedAt, &record.RevokedAt, &record.RevokedBy, &record.RevocationNote); err != nil {
 		return operationsmodel.OperationsBreakGlassGrant{}, err
 	}
 	record.ApproverIDsJSON = json.RawMessage(approvers)
@@ -74,7 +74,7 @@ func TestOperationsBreakGlassSQLStages(t *testing.T) {
 	if _, err := zero.CreateOperationsBreakGlass(t.Context(), grant); err == nil {
 		t.Fatal("unavailable create succeeded")
 	}
-	if _, _, err := zero.GetOperationsBreakGlass(t.Context(), grant.ID); err == nil {
+	if _, _, err := zero.GetOperationsBreakGlass(t.Context(), grant.BreakGlassGrantID); err == nil {
 		t.Fatal("unavailable get succeeded")
 	}
 
@@ -83,7 +83,7 @@ func TestOperationsBreakGlassSQLStages(t *testing.T) {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{err: errOperationsSQL}}})
-	if _, _, err := store.GetOperationsBreakGlass(t.Context(), grant.ID); !errors.Is(err, errOperationsSQL) {
+	if _, _, err := store.GetOperationsBreakGlass(t.Context(), grant.BreakGlassGrantID); !errors.Is(err, errOperationsSQL) {
 		t.Fatalf("get error=%v", err)
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{{err: errOperationsSQL}}})
@@ -110,7 +110,7 @@ func TestOperationsBreakGlassSQLStages(t *testing.T) {
 	if parsed, err := operationsScanBreakGlass(scannerValues(breakGlassQueryStep(grant).rows[0])); err != nil || parsed.RevokedAt == nil {
 		t.Fatalf("grant=%+v err=%v", parsed, err)
 	}
-	for _, index := range []int{4, 9, 11, 12, 13} {
+	for _, index := range []int{5, 10, 12, 13, 14} {
 		row := append([]driver.Value(nil), breakGlassQueryStep(grant).rows[0]...)
 		row[index] = "invalid"
 		if _, err := operationsScanBreakGlass(scannerValues(row)); err == nil {

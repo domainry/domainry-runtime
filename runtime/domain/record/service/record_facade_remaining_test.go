@@ -19,15 +19,15 @@ func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 	customer := definitionmodel.ObjectSchema{Key: "customer"}
 	order := definitionmodel.ObjectSchema{Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "customer_id", Type: "relation", Validation: definitionmodel.FieldValidation{Target: "customer"}}}}
 	repository := &readRepositoryProbe{
-		page:   recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}, Total: 1},
-		record: recordmodel.Record{ID: "customer-1"},
+		page:   recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1"}}, Total: 1},
+		record: recordmodel.Record{RecordID: "customer-1"},
 		found:  true,
 	}
 	reader := NewRecordReadDomainService(RecordReadDependencies{
 		Repository: repository,
 		Policy:     readPolicyProbe{object: customer, allow: true},
 	})
-	referenceRepository := &referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:customer-1": {ID: "customer-1"}}}
+	referenceRepository := &referenceRepositoryProbe{records: map[string]recordmodel.Record{"customer:customer-1": {RecordID: "customer-1"}}}
 	references := NewRecordReferenceDomainService(RecordReferenceDependencies{
 		Repository: referenceRepository,
 		Objects: func() map[string]definitionmodel.ObjectSchema {
@@ -41,8 +41,8 @@ func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 		},
 		CanAccess: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool { return true },
 		ListRecords: func(_ context.Context, key string, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
-			if key == customer.Key && query.Filters["id__in"] != nil {
-				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}, Total: 1}, nil
+			if key == customer.Key && query.Filters["record_id__in"] != nil {
+				return recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1"}}, Total: 1}, nil
 			}
 			if key != order.Key || query.Filters["customer_id"] != "customer-1" {
 				t.Fatalf("related delegation key=%q query=%#v", key, query)
@@ -58,7 +58,7 @@ func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 	if page, err := service.ListRecordsForAction(t.Context(), customer.Key, recordmodel.RecordListQuery{}, principal); err != nil || page.Total != 1 {
 		t.Fatalf("action list page=%#v err=%v", page, err)
 	}
-	if record, err := service.GetRecord(t.Context(), customer.Key, "customer-1", principal); err != nil || record.ID != "customer-1" {
+	if record, err := service.GetRecord(t.Context(), customer.Key, "customer-1", principal); err != nil || record.RecordID != "customer-1" {
 		t.Fatalf("get record=%#v err=%v", record, err)
 	}
 	for name, call := range map[string]func() (recordmodel.Record, error){
@@ -72,7 +72,7 @@ func TestRecordDomainServiceDelegatesOwnerOperations(t *testing.T) {
 			return service.GetRecordForUpdateForAction(t.Context(), customer.Key, "customer-1", principal)
 		},
 	} {
-		if record, err := call(); err != nil || record.ID != "customer-1" {
+		if record, err := call(); err != nil || record.RecordID != "customer-1" {
 			t.Fatalf("%s record=%#v err=%v", name, record, err)
 		}
 	}

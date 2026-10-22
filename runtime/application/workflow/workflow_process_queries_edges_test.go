@@ -79,14 +79,14 @@ func (s *workflowProcessStoreEdgeStub) ListProcesses(_ context.Context, _ string
 	}
 	out := []workflowmodel.WorkflowProcessInstance{}
 	for _, process := range s.listProcesses {
-		if filter.VisibleToUserID != "" && process.InitiatorID != filter.VisibleToUserID && !workflowTasksContainAssignee(s.tasks, process.ID, filter.VisibleToUserID) {
+		if filter.VisibleToUserID != "" && process.InitiatorID != filter.VisibleToUserID && !workflowTasksContainAssignee(s.tasks, process.ProcessID, filter.VisibleToUserID) {
 			continue
 		}
 		if filter.ApproverID != "" {
 			if s.listTasksErr != nil {
 				return nil, s.listTasksErr
 			}
-			if !workflowTasksContainAssignee(s.tasks, process.ID, filter.ApproverID) {
+			if !workflowTasksContainAssignee(s.tasks, process.ProcessID, filter.ApproverID) {
 				continue
 			}
 		}
@@ -178,7 +178,7 @@ func workflowProcessQueryPrincipal() principalmodel.Principal {
 
 func TestWorkflowProcessSummaryAssigneeAndVisibilityOutcomes(t *testing.T) {
 	process := workflowmodel.WorkflowProcessInstance{
-		ID: "process", WorkspaceID: "workspace", InitiatorID: "initiator", Status: "waiting", UpdatedAt: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
+		ProcessID: "process", WorkspaceID: "workspace", InitiatorID: "initiator", Status: "waiting", UpdatedAt: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
 		CurrentNodeIDs: []string{"named", "unnamed"}, Result: map[string]any{"retry_count": 2}, Variables: map[string]any{"approval_decision": " approved "},
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "named", Name: "Named"}, {ID: "unnamed"}, {ID: "failed", Name: "Failed"}}}},
 	}
@@ -208,7 +208,7 @@ func TestWorkflowProcessSummaryAssigneeAndVisibilityOutcomes(t *testing.T) {
 	_ = service.enrichWorkflowProcessSummary(t.Context(), process)
 	store.listNodesErr = nil
 
-	tasks := []workflowmodel.WorkflowTask{{ID: "task", AssigneeUserID: "assignee"}}
+	tasks := []workflowmodel.WorkflowTask{{TaskID: "task", AssigneeUserID: "assignee"}}
 	if actual := service.workflowTasksWithAssigneeNames(t.Context(), tasks); actual[0].AssigneeName != "" {
 		t.Fatalf("nil identity tasks=%v", actual)
 	}
@@ -231,7 +231,7 @@ func TestWorkflowProcessSummaryAssigneeAndVisibilityOutcomes(t *testing.T) {
 	if service.workflowProcessVisible(t.Context(), process, operator) {
 		t.Fatal("route Action must not broaden business-process visibility")
 	}
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "task"}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "task"}}
 	if !service.workflowProcessVisible(t.Context(), process, principal) {
 		t.Fatal("approver hidden")
 	}
@@ -247,8 +247,8 @@ func TestWorkflowProcessSummaryAssigneeAndVisibilityOutcomes(t *testing.T) {
 
 func TestWorkflowProcessListAndMyTasksAuthorizationFilterAndFailureOutcomes(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", InitiatorID: principal.UserID}
-	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}, listProcesses: []workflowmodel.WorkflowProcessInstance{process}, tasks: []workflowmodel.WorkflowTask{{ID: "task", AssigneeUserID: principal.UserID}}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", InitiatorID: principal.UserID}
+	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}, listProcesses: []workflowmodel.WorkflowProcessInstance{process}, tasks: []workflowmodel.WorkflowTask{{TaskID: "task", AssigneeUserID: principal.UserID}}}
 	service := workflowProcessQueryService(store, workflowIdentityEdgeStub{user: identitysdk.User{Name: "User"}, found: true})
 	if _, err := service.WorkflowProcesses(t.Context(), principalmodel.Principal{}, workflowmodel.WorkflowProcessFilter{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("process authorization=%v", err)
@@ -272,7 +272,7 @@ func TestWorkflowProcessListAndMyTasksAuthorizationFilterAndFailureOutcomes(t *t
 		t.Fatalf("list error=%v", err)
 	}
 	store.listProcessesErr = nil
-	store.listProcesses = []workflowmodel.WorkflowProcessInstance{{ID: "hidden", WorkspaceID: "workspace", InitiatorID: "other"}}
+	store.listProcesses = []workflowmodel.WorkflowProcessInstance{{ProcessID: "hidden", WorkspaceID: "workspace", InitiatorID: "other"}}
 	store.tasks = nil
 	if items, err := service.WorkflowProcesses(t.Context(), principal, workflowmodel.WorkflowProcessFilter{}); err != nil || len(items) != 0 {
 		t.Fatalf("hidden items=%v err=%v", items, err)
@@ -280,7 +280,7 @@ func TestWorkflowProcessListAndMyTasksAuthorizationFilterAndFailureOutcomes(t *t
 	if _, err := service.MyWorkflowTasks(t.Context(), principalmodel.Principal{}, "", 10); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("task authorization=%v", err)
 	}
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "task", AssigneeUserID: principal.UserID}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "task", AssigneeUserID: principal.UserID}}
 	tasks, err := service.MyWorkflowTasks(t.Context(), principal, "", 10)
 	if err != nil || len(tasks) != 1 || tasks[0].AssigneeName != "User" {
 		t.Fatalf("tasks=%v err=%v", tasks, err)
@@ -296,8 +296,8 @@ func TestWorkflowProcessListAndMyTasksAuthorizationFilterAndFailureOutcomes(t *t
 
 func TestWorkflowProcessListLoadsFailedNodesInOneBatch(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	first := workflowmodel.WorkflowProcessInstance{ID: "first", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "failed"}
-	second := workflowmodel.WorkflowProcessInstance{ID: "second", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "configuration_error"}
+	first := workflowmodel.WorkflowProcessInstance{ProcessID: "first", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "failed"}
+	second := workflowmodel.WorkflowProcessInstance{ProcessID: "second", WorkspaceID: "workspace", InitiatorID: principal.UserID, Status: "configuration_error"}
 	store := &workflowProcessStoreEdgeStub{
 		workflowExecutionProcessStub: workflowExecutionProcessStub{nodes: map[string][]workflowmodel.WorkflowNodeInstance{
 			"first":  {{ProcessID: "first", NodeID: "one", Status: "failed"}},
@@ -316,9 +316,9 @@ func TestWorkflowProcessListLoadsFailedNodesInOneBatch(t *testing.T) {
 
 func TestWorkflowProcessDetailLookupVisibilityAndChildFailureOutcomes(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", InitiatorID: principal.UserID}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", InitiatorID: principal.UserID}
 	base := func() *workflowProcessStoreEdgeStub {
-		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{ID: "node"}}}}, tasks: []workflowmodel.WorkflowTask{{ID: "task"}}, events: []workflowmodel.WorkflowProcessEvent{{ID: "event"}}}
+		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {{NodeInstanceID: "node"}}}}, tasks: []workflowmodel.WorkflowTask{{TaskID: "task"}}, events: []workflowmodel.WorkflowProcessEvent{{EventID: "event"}}}
 	}
 	if _, err := workflowProcessQueryService(base(), nil).WorkflowProcess(t.Context(), "process", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization=%v", err)
@@ -334,7 +334,7 @@ func TestWorkflowProcessDetailLookupVisibilityAndChildFailureOutcomes(t *testing
 		t.Fatalf("not found=%v", err)
 	}
 	store = base()
-	store.processes["process"] = workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", InitiatorID: "other"}
+	store.processes["process"] = workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", InitiatorID: "other"}
 	store.tasks = nil
 	if _, err := workflowProcessQueryService(store, nil).WorkflowProcess(t.Context(), "process", principal); apperror.CodeOf(err) != "backend.workflow.process_access_denied" {
 		t.Fatalf("access error=%v", err)
@@ -353,13 +353,13 @@ func TestWorkflowProcessDetailLookupVisibilityAndChildFailureOutcomes(t *testing
 		})
 	}
 	detail, err := workflowProcessQueryService(base(), workflowIdentityEdgeStub{user: identitysdk.User{Name: "User"}, found: true}).WorkflowProcess(t.Context(), "process", principal)
-	if err != nil || detail.Process.ID != "process" || len(detail.Nodes) != 1 || len(detail.Tasks) != 1 || len(detail.Events) != 1 {
+	if err != nil || detail.Process.ProcessID != "process" || len(detail.Nodes) != 1 || len(detail.Tasks) != 1 || len(detail.Events) != 1 {
 		t.Fatalf("detail=%+v err=%v", detail, err)
 	}
 }
 
 func (s *workflowProcessStoreEdgeStub) ClaimWorkflowTimer(ctx context.Context, workspaceID string, process workflowmodel.WorkflowProcessInstance, node workflowmodel.WorkflowNodeInstance, expectedUpdatedAt string) (bool, error) {
-	current, ok := s.processes[process.ID]
+	current, ok := s.processes[process.ProcessID]
 	if !ok || current.Status != "waiting" || current.UpdatedAt != expectedUpdatedAt {
 		return false, nil
 	}

@@ -26,7 +26,7 @@ func recordCreateEdgeDependencies(repository *createRepositoryProbe) RecordCreat
 			return object, nil
 		},
 		CanWrite:    func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
-		NewRecordID: func(string) string { return "customer-1" },
+		NewRecordID: func(string) (string, error) { return "customer-1", nil },
 	}
 }
 
@@ -39,7 +39,7 @@ func TestCreateClaimedUsesExistingClaimWithoutBeginningAnother(t *testing.T) {
 	claim := recordmodel.RecordMutationClaimResult{
 		Decision: idempotency.DecisionAcquired,
 		Execution: recordmodel.RecordMutationExecution{
-			ID: "execution-1", WorkspaceID: "workspace-a", LeaseOwner: "request-a", FencingToken: 7,
+			OperationID: "execution-1", WorkspaceID: "workspace-a", LeaseOwner: "request-a", FencingToken: 7,
 		},
 	}
 
@@ -47,7 +47,7 @@ func TestCreateClaimedUsesExistingClaimWithoutBeginningAnother(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if record.ID != "customer-1" || executions.beginCalls != 0 || executions.commitCalls != 1 || executions.commit.Record.ID != record.ID || repository.commit.Operation != "" {
+	if record.RecordID != "customer-1" || executions.beginCalls != 0 || executions.commitCalls != 1 || executions.commit.Record.RecordID != record.RecordID || repository.commit.Operation != "" {
 		t.Fatalf("record=%#v begin=%d commit=%d execution commit=%#v repository commit=%#v", record, executions.beginCalls, executions.commitCalls, executions.commit, repository.commit)
 	}
 }
@@ -69,13 +69,13 @@ func TestCreatePrefersRelationAwareCandidateScopeAuthorization(t *testing.T) {
 		return false
 	}
 	dependencies.CanWriteCandidate = func(_ context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, candidate recordmodel.Record) (bool, error) {
-		if principal.WorkspaceID != "workspace-a" || object.Key != "customer" || candidate.ID != "customer-1" || candidate.Data["name"] != "Acme" {
+		if principal.WorkspaceID != "workspace-a" || object.Key != "customer" || candidate.RecordID != "customer-1" || candidate.Data["name"] != "Acme" {
 			t.Fatalf("principal=%#v object=%#v candidate=%#v", principal, object, candidate)
 		}
 		return true, nil
 	}
 	record, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "customer", map[string]any{"name": "Acme"}, recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}))
-	if err != nil || record.ID != "customer-1" || fallbackCalled {
+	if err != nil || record.RecordID != "customer-1" || fallbackCalled {
 		t.Fatalf("record=%#v fallback=%v err=%v", record, fallbackCalled, err)
 	}
 
@@ -211,7 +211,7 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 	t.Run("nil data and explicit record id", func(t *testing.T) {
 		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
 		plan, candidate, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", nil, " customer-explicit ", principal)
-		if err != nil || candidate.ID != " customer-explicit " || plan.CanonicalCommit().Record.ID != candidate.ID {
+		if err != nil || candidate.RecordID != " customer-explicit " || plan.CanonicalCommit().Record.RecordID != candidate.RecordID {
 			t.Fatalf("candidate=%#v err=%v", candidate, err)
 		}
 	})
@@ -250,10 +250,10 @@ func TestPlanCreateMutationCoversInputAuthorizationReplayAndPlannerEdges(t *test
 	t.Run("replay rejected", func(t *testing.T) {
 		dependencies := recordCreateEdgeDependencies(&createRepositoryProbe{})
 		dependencies.FindReplay = func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error) {
-			return recordmodel.Record{ID: "existing"}, true, nil
+			return recordmodel.Record{RecordID: "existing"}, true, nil
 		}
 		_, candidate, err := NewRecordCreateApplicationService(dependencies).PlanCreateMutation(t.Context(), "customer", nil, "", principal)
-		if candidate.ID != "existing" || apperror.CodeOf(err) != "backend.record.create_replayed" {
+		if candidate.RecordID != "existing" || apperror.CodeOf(err) != "backend.record.create_replayed" {
 			t.Fatalf("candidate=%#v err=%v", candidate, err)
 		}
 	})

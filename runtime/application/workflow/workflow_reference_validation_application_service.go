@@ -289,7 +289,7 @@ func (s *WorkflowReferenceValidator) workflowIdentityReferenceCatalog(ctx contex
 	}
 	if values, err := s.identity.ListUsers(ctx, identitysdk.ProjectionQuery{}); err == nil {
 		for _, user := range values {
-			users[user.ID] = true
+			users[user.UserID] = true
 		}
 	}
 	if values, err := s.identity.ListRoles(ctx, identitysdk.ProjectionQuery{}); err == nil {

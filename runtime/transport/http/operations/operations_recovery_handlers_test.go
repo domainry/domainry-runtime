@@ -51,7 +51,7 @@ func (operationsHTTPBreakGlassAlert) BreakGlassAlert(context.Context, string, op
 type operationsHTTPLegacyControl struct{}
 
 func (operationsHTTPLegacyControl) IdempotencyReceipts(context.Context, principalmodel.Principal, string, int) ([]idempotency.ReceiptSummary, error) {
-	return []idempotency.ReceiptSummary{{Owner: "record", ID: "receipt-1"}}, nil
+	return []idempotency.ReceiptSummary{{Owner: "record", OperationID: "receipt-1"}}, nil
 }
 
 func (operationsHTTPLegacyControl) RetryIdempotencyReceipt(context.Context, principalmodel.Principal, string, string) error {
@@ -111,7 +111,7 @@ func TestOperationsRecoveryHandlersExecuteThroughHTTP(t *testing.T) {
 		"incident_ref": "INC-1", "alert_target": "security-ops",
 	}, http.StatusOK)
 	grant := enabled["grant"].(map[string]any)
-	grantID := grant["id"].(string)
+	grantID := grant["break_glass_grant_id"].(string)
 	listed := operationsRequest(t, mux, http.MethodGet, "/operations/break-glass-grants?limit=5", "", nil, http.StatusOK)
 	if listed["count"].(float64) != 1 {
 		t.Fatalf("listed=%#v", listed)
@@ -220,7 +220,7 @@ func TestOwnerOperationHeadersAndReason(t *testing.T) {
 	if response.Header().Get("Operation-ID") != "" {
 		t.Fatalf("blank receipt headers=%v", response.Header())
 	}
-	result := operationsapplication.OperationsOwnerExecutionResult{Replayed: true, Receipt: operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-1"}, StatusURL: "/operations/operation-1"}}
+	result := operationsapplication.OperationsOwnerExecutionResult{Replayed: true, Receipt: operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{OperationID: "operation-1"}, StatusURL: "/operations/operation-1"}}
 	WriteOwnerReceiptHeaders(response, result)
 	if response.Header().Get("Operation-ID") != "operation-1" || response.Header().Get("Location") != "/operations/operation-1" || response.Header().Get("Idempotency-Replayed") != "true" {
 		t.Fatalf("receipt headers=%v", response.Header())

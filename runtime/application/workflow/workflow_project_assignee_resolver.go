@@ -42,7 +42,7 @@ func (e *WorkflowProcessEngine) resolveProjectAssignees(ctx context.Context, pro
 	defer cancel()
 	capabilities := &projectAssigneeResolverCapabilities{dependencies: e.runtime.dependencies, descriptor: binding.Descriptor, workspaceID: process.WorkspaceID, principal: principal}
 	candidates, err := binding.Resolver.Resolve(resolverCtx, capabilities, runtimeext.AssigneeResolverContext{
-		WorkspaceID: process.WorkspaceID, ProcessID: process.ID, WorkflowKey: process.WorkflowKey, DefinitionVersion: process.DefinitionVersion,
+		WorkspaceID: process.WorkspaceID, ProcessID: process.ProcessID, WorkflowKey: process.WorkflowKey, DefinitionVersion: process.DefinitionVersion,
 		NodeID: nodeID, ObjectKey: process.ObjectKey, RecordID: process.RecordID, InitiatorUserID: process.InitiatorID, InitiatorRoleKey: process.InitiatorRoleKey,
 		Variables: cloneAssigneeMap(process.Variables), Config: cloneAssigneeMap(config),
 	})
@@ -210,8 +210,8 @@ func (c *projectAssigneeResolverCapabilities) UsersForRole(ctx context.Context, 
 	}
 	roleID := ""
 	for _, role := range roles {
-		if role.ID == roleKey || role.Key == roleKey {
-			roleID = role.ID
+		if role.RoleID == roleKey || role.Key == roleKey {
+			roleID = role.RoleID
 			break
 		}
 	}
@@ -234,7 +234,7 @@ func (c *projectAssigneeResolverCapabilities) UsersForRole(ctx context.Context, 
 	}
 	result := []runtimeext.AssigneeIdentityUser{}
 	for _, user := range users {
-		if assigned[user.ID] && user.Status == identitysdk.UserStatusActive {
+		if assigned[user.UserID] && user.Status == identitysdk.UserStatusActive {
 			result = append(result, projectAssigneeIdentityUser(user))
 		}
 	}
@@ -307,11 +307,11 @@ func projectAssigneeRecord(objectKey string, record recordmodel.Record, fields [
 			projection[field] = cloneAssigneeValue(value)
 		}
 	}
-	return runtimeext.AssigneeRecord{ObjectKey: strings.TrimSpace(objectKey), RecordID: record.ID, Fields: projection}
+	return runtimeext.AssigneeRecord{ObjectKey: strings.TrimSpace(objectKey), RecordID: record.RecordID, Fields: projection}
 }
 
 func projectAssigneeIdentityUser(user identitysdk.User) runtimeext.AssigneeIdentityUser {
-	return runtimeext.AssigneeIdentityUser{UserID: user.ID, DisplayName: user.Name, ManagerUserID: user.ManagerUserID, Status: string(user.Status)}
+	return runtimeext.AssigneeIdentityUser{UserID: user.UserID, DisplayName: user.Name, ManagerUserID: user.ManagerUserID, Status: string(user.Status)}
 }
 
 func validAssigneeEvidenceFacts(facts []runtimeext.AssigneeEvidenceFact) bool {

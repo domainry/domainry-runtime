@@ -40,8 +40,8 @@ func (s workflowApprovalIdentityStub) ListUsers(context.Context, identitysdk.Pro
 	}
 	users := make([]identitysdk.User, 0, len(s.users))
 	for id, user := range s.users {
-		if user.ID == "" {
-			user.ID = id
+		if user.UserID == "" {
+			user.UserID = id
 		}
 		users = append(users, user)
 	}
@@ -71,7 +71,7 @@ func workflowEngineEdge(store *workflowProcessStoreEdgeStub, identity identitysd
 }
 
 func workflowEngineProcess(nodes []definitionmodel.WorkflowGraphNode, edges []definitionmodel.WorkflowGraphEdge) workflowmodel.WorkflowProcessInstance {
-	return workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", WorkflowKey: "flow", ObjectKey: "order", RecordID: "record", InitiatorID: "initiator", Variables: map[string]any{"employee": "employee", "record_owner": "owner"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: nodes, Edges: edges}}}
+	return workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", WorkflowKey: "flow", ObjectKey: "order", RecordID: "record", InitiatorID: "initiator", Variables: map[string]any{"employee": "employee", "record_owner": "owner"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: nodes, Edges: edges}}}
 }
 
 func TestWorkflowProcessEngineStartAndRunFailureOutcomes(t *testing.T) {
@@ -255,7 +255,7 @@ func TestWorkflowProcessEngineNodeAndActionOutcomes(t *testing.T) {
 	retryEngine := workflowEngineEdge(store, nil, func(_ context.Context, invocation WorkflowBusinessActionInvocation) (WorkflowBusinessActionInvocationResult, error) {
 		attempts++
 		idempotencyKeys = append(idempotencyKeys, invocation.IdempotencyKey)
-		if invocation.Source != WorkflowBusinessActionSourceWorkflow || invocation.ProcessID != process.ID || invocation.NodeID != retry.ID {
+		if invocation.Source != WorkflowBusinessActionSourceWorkflow || invocation.ProcessID != process.ProcessID || invocation.NodeID != retry.ID {
 			t.Fatalf("invocation=%#v", invocation)
 		}
 		if attempts == 1 {
@@ -267,7 +267,7 @@ func TestWorkflowProcessEngineNodeAndActionOutcomes(t *testing.T) {
 		t.Fatalf("retry attempts=%d keys=%v err=%v", attempts, idempotencyKeys, err)
 	}
 	firstExecutionKey := idempotencyKeys[0]
-	store.nodes[process.ID] = append(store.nodes[process.ID], workflowmodel.WorkflowNodeInstance{NodeID: retry.ID, Iteration: 99, Status: "failed"})
+	store.nodes[process.ProcessID] = append(store.nodes[process.ProcessID], workflowmodel.WorkflowNodeInstance{NodeID: retry.ID, Iteration: 99, Status: "failed"})
 	idempotencyKeys = nil
 	attempts = 1
 	if _, err := retryEngine.executeActionNode(t.Context(), &process, retry, principal); err != nil || len(idempotencyKeys) != 1 || idempotencyKeys[0] == firstExecutionKey {
@@ -282,7 +282,7 @@ func TestWorkflowProcessEngineNodeAndActionOutcomes(t *testing.T) {
 		t.Fatalf("exhausted attempts=%d err=%v", attempts, err)
 	}
 	store.listNodesErr = errors.New("nodes")
-	instance := engine.newNodeInstance(t.Context(), process.WorkspaceID, process.ID, action, "running", nil, nil)
+	instance := engine.newNodeInstance(t.Context(), process.WorkspaceID, process.ProcessID, action, "running", nil, nil)
 	if instance.CompletedAt != "" {
 		t.Fatalf("running instance=%+v", instance)
 	}
@@ -295,7 +295,7 @@ func TestWorkflowProcessEngineNodeAndActionOutcomes(t *testing.T) {
 
 func TestWorkflowProcessEngineApprovalCCAndWaitingRunOutcomes(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
-	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{"approver": {ID: "approver", Name: "Approver"}}}
+	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{"approver": {UserID: "approver", Name: "Approver"}}}
 	base := func() *workflowProcessStoreEdgeStub {
 		return &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	}
@@ -371,12 +371,12 @@ func TestWorkflowProcessEngineApprovalCCAndWaitingRunOutcomes(t *testing.T) {
 func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	identity := workflowApprovalIdentityStub{
 		users: map[string]identitysdk.User{
-			"initiator": {ID: "initiator", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
-			"employee":  {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
-			"manager":   {ID: "manager", Name: "Manager", Status: identitysdk.UserStatusActive},
+			"initiator": {UserID: "initiator", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
+			"employee":  {UserID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
+			"manager":   {UserID: "manager", Name: "Manager", Status: identitysdk.UserStatusActive},
 		},
-		identityUsers: []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}, {ID: "disabled", Status: "disabled"}},
-		roles:         []identitysdk.Role{{ID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
+		identityUsers: []identitysdk.User{{UserID: "role-user", Status: identitysdk.UserStatusActive}, {UserID: "disabled", Status: "disabled"}},
+		roles:         []identitysdk.Role{{RoleID: "role-id", Key: "approver"}}, assignments: map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "role-id"}}, "disabled": {{UserID: "disabled", RoleID: "role-id"}}},
 	}
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	engine := workflowEngineEdge(store, identity, nil)
@@ -399,7 +399,7 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 		t.Fatalf("missing identity=%v", err)
 	}
 	node := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Name: "Approve", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "sequential", Resolvers: strategies[:1]}}}
-	instance := workflowmodel.WorkflowNodeInstance{ID: "node"}
+	instance := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "node"}
 	count, err := engine.createApprovalTasks(t.Context(), process, node, instance, principal)
 	if err != nil || count != 1 || len(store.insertedTasks) != 1 || store.insertedTasks[0].AssigneeName != "" {
 		t.Fatalf("count=%d tasks=%+v err=%v", count, store.insertedTasks, err)
@@ -454,7 +454,7 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	}
 
 	approvalProcess := workflowEngineProcess([]definitionmodel.WorkflowGraphNode{node}, nil)
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "a", NodeID: "approval", Status: "approved", Sequence: 1}, {ID: "b", NodeID: "approval", Status: "open", Sequence: 2}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "a", NodeID: "approval", Status: "approved", Sequence: 1}, {TaskID: "b", NodeID: "approval", Status: "open", Sequence: 2}}
 	if outcome, complete, err := engine.aggregateApproval(t.Context(), approvalProcess, "approval", principal); err != nil || outcome != "" || complete {
 		t.Fatalf("sequential outcome=%s complete=%v err=%v", outcome, complete, err)
 	}
@@ -474,7 +474,7 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 	if _, _, err := engine.aggregateApproval(t.Context(), approvalProcess, "approval", principal); apperror.CodeOf(err) != "backend.workflow.approval_tasks_missing" {
 		t.Fatalf("missing tasks=%v", err)
 	}
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "unrelated", NodeID: "other", Status: "approved"}, {ID: "open", NodeID: "approval", Status: "open"}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "unrelated", NodeID: "other", Status: "approved"}, {TaskID: "open", NodeID: "approval", Status: "open"}}
 	anyProcess := approvalProcess
 	anyProcess.DefinitionSnapshot.Graph = &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "any"}}}}}
 	if outcome, complete, err := engine.aggregateApproval(t.Context(), anyProcess, "approval", principal); err != nil || outcome != "" || complete {
@@ -484,8 +484,8 @@ func TestWorkflowApprovalResolverTaskAndAggregationOutcomes(t *testing.T) {
 
 func TestWorkflowResolvedAssigneesPreservePerCandidateRoleEvidenceAndDataSource(t *testing.T) {
 	identity := workflowApprovalIdentityStub{
-		roles:         []identitysdk.Role{{ID: "finance-role", Key: "finance"}, {ID: "legal-role", Key: "legal"}},
-		identityUsers: []identitysdk.User{{ID: "finance-user", Status: identitysdk.UserStatusActive}, {ID: "legal-user", Status: identitysdk.UserStatusActive}},
+		roles:         []identitysdk.Role{{RoleID: "finance-role", Key: "finance"}, {RoleID: "legal-role", Key: "legal"}},
+		identityUsers: []identitysdk.User{{UserID: "finance-user", Status: identitysdk.UserStatusActive}, {UserID: "legal-user", Status: identitysdk.UserStatusActive}},
 		assignments: map[string][]identitysdk.UserRoleAssignment{
 			"finance-user": {{UserID: "finance-user", RoleID: "finance-role"}},
 			"legal-user":   {{UserID: "legal-user", RoleID: "legal-role"}},
@@ -496,7 +496,7 @@ func TestWorkflowResolvedAssigneesPreservePerCandidateRoleEvidenceAndDataSource(
 	engine := NewWorkflowProcessEngine(WorkflowDependencies{
 		Identity: identity,
 		RecordReader: workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{
-			"record": {ID: "record", Data: map[string]any{"record_owner": "record-user"}},
+			"record": {RecordID: "record", Data: map[string]any{"record_owner": "record-user"}},
 		}},
 		ObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema {
 			return map[string]definitionmodel.ObjectSchema{"order": {Key: "order", Fields: []definitionmodel.FieldSchema{{Key: "record_owner", Type: "user"}}}}
@@ -543,7 +543,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 		t.Fatal("expected employee lookup error")
 	}
 	managerIdentity := baseIdentity
-	managerIdentity.users = map[string]identitysdk.User{"employee": {ID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive}}
+	managerIdentity.users = map[string]identitysdk.User{"employee": {UserID: "employee", ManagerUserID: "manager", Status: identitysdk.UserStatusActive}}
 	if users, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("missing manager users=%v err=%v", users, err)
 	}
@@ -552,7 +552,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 		t.Fatal("expected manager lookup error")
 	}
 	managerIdentity.findErr = nil
-	managerIdentity.users["manager"] = identitysdk.User{ID: "manager", Status: "disabled"}
+	managerIdentity.users["manager"] = identitysdk.User{UserID: "manager", Status: "disabled"}
 	if users, err := workflowEngineEdge(store, managerIdentity, nil).resolveApprovalAssigneeStrategy(t.Context(), process, managerResolver, principal); err != nil || len(users) != 0 {
 		t.Fatalf("disabled manager users=%v err=%v", users, err)
 	}
@@ -564,8 +564,8 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	for name, identity := range map[string]workflowApprovalIdentityStub{
 		"roles":        {rolesErr: errors.New("roles")},
 		"missing role": {roles: []identitysdk.Role{}},
-		"users":        {roles: []identitysdk.Role{{ID: "role", Key: "approver"}}, usersErr: errors.New("users")},
-		"assignments":  {roles: []identitysdk.Role{{ID: "role", Key: "approver"}}, identityUsers: []identitysdk.User{{ID: "user", Status: identitysdk.UserStatusActive}}, assignmentErr: errors.New("assignments")},
+		"users":        {roles: []identitysdk.Role{{RoleID: "role", Key: "approver"}}, usersErr: errors.New("users")},
+		"assignments":  {roles: []identitysdk.Role{{RoleID: "role", Key: "approver"}}, identityUsers: []identitysdk.User{{UserID: "user", Status: identitysdk.UserStatusActive}}, assignmentErr: errors.New("assignments")},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := workflowEngineEdge(store, identity, nil).usersForApprovalRole(t.Context(), "approver"); err == nil {
@@ -573,11 +573,11 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 			}
 		})
 	}
-	roleByID := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "irrelevant", Key: "irrelevant"}, {ID: "role-id", Key: "approver"}}, identityUsers: []identitysdk.User{{ID: "matched", Status: identitysdk.UserStatusActive}, {ID: "unmatched", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"matched": {{RoleID: "role-id"}}, "unmatched": {{RoleID: "other"}}}}
+	roleByID := workflowApprovalIdentityStub{roles: []identitysdk.Role{{RoleID: "irrelevant", Key: "irrelevant"}, {RoleID: "role-id", Key: "approver"}}, identityUsers: []identitysdk.User{{UserID: "matched", Status: identitysdk.UserStatusActive}, {UserID: "unmatched", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"matched": {{RoleID: "role-id"}}, "unmatched": {{RoleID: "other"}}}}
 	if users, err := workflowEngineEdge(store, roleByID, nil).usersForApprovalRole(t.Context(), "role-id"); err != nil || len(users) != 1 {
 		t.Fatalf("role by id users=%v err=%v", users, err)
 	}
-	adminIdentity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{ID: "admin-role", Key: "admin"}}, identityUsers: []identitysdk.User{{ID: "admin", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"admin": {{RoleID: "admin-role"}}}}
+	adminIdentity := workflowApprovalIdentityStub{roles: []identitysdk.Role{{RoleID: "admin-role", Key: "admin"}}, identityUsers: []identitysdk.User{{UserID: "admin", Status: identitysdk.UserStatusActive}}, assignments: map[string][]identitysdk.UserRoleAssignment{"admin": {{RoleID: "admin-role"}}}}
 	adminNode := definitionmodel.WorkflowGraphNode{Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{EmptyAssigneePolicy: "admin"}}}
 	if users, err := workflowEngineEdge(store, adminIdentity, nil).resolveApprovalAssignees(t.Context(), process, adminNode, principal); err != nil || len(users) != 1 || users[0].RoleKey != "admin" {
 		t.Fatalf("admin fallback users=%v err=%v", users, err)
@@ -590,7 +590,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 		t.Fatalf("list tasks=%v", err)
 	}
 	store.listTasksErr = nil
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "approved", NodeID: "approval", Status: "approved"}, {ID: "open", NodeID: "approval", Status: "open", WorkspaceID: "workspace", ProcessID: "process"}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "approved", NodeID: "approval", Status: "approved"}, {TaskID: "open", NodeID: "approval", Status: "open", WorkspaceID: "workspace", ProcessID: "process"}}
 	if outcome, complete, err := engine.aggregateApproval(t.Context(), approvalProcess, "approval", principal); err != nil || outcome != "approved" || !complete {
 		t.Fatalf("any outcome=%s complete=%v err=%v", outcome, complete, err)
 	}
@@ -605,7 +605,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	}
 	approvalNode.Contract.Approval.Mode = "sequential"
 	approvalProcess.DefinitionSnapshot.Graph.Nodes[0] = approvalNode
-	store.tasks = []workflowmodel.WorkflowTask{{ID: "approved", NodeID: "approval", Status: "approved", Sequence: 1}, {ID: "pending", NodeID: "approval", Status: "pending", Sequence: 2}}
+	store.tasks = []workflowmodel.WorkflowTask{{TaskID: "approved", NodeID: "approval", Status: "approved", Sequence: 1}, {TaskID: "pending", NodeID: "approval", Status: "pending", Sequence: 2}}
 	store.updateTaskErr = errors.New("open")
 	if _, _, err := engine.aggregateApproval(t.Context(), approvalProcess, "approval", principal); apperror.CodeOf(err) != "backend.internal" {
 		t.Fatalf("sequential update=%v", err)
@@ -614,7 +614,7 @@ func TestWorkflowApprovalFailureRoleCompletionAndPreparationOutcomes(t *testing.
 	if outcome, complete, err := engine.aggregateApproval(t.Context(), approvalProcess, "approval", principal); err != nil || outcome != "" || complete {
 		t.Fatalf("sequential open outcome=%s complete=%v err=%v", outcome, complete, err)
 	}
-	engine.cancelUnfinishedApprovalTasks(t.Context(), []workflowmodel.WorkflowTask{{ID: "pending", Status: "pending", WorkspaceID: "workspace", ProcessID: "process"}, {ID: "done", Status: "done"}}, "", principal.UserID)
+	engine.cancelUnfinishedApprovalTasks(t.Context(), []workflowmodel.WorkflowTask{{TaskID: "pending", Status: "pending", WorkspaceID: "workspace", ProcessID: "process"}, {TaskID: "done", Status: "done"}}, "", principal.UserID)
 
 	store.listNodesErr = errors.New("nodes")
 	if err := engine.completeApprovalNode(t.Context(), "workspace", "process", "approval", "approved", principal.UserID); apperror.CodeOf(err) != "backend.internal" {

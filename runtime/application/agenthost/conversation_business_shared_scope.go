@@ -9,6 +9,7 @@ import (
 	identity "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-identity-sdk/authorization/evaluator"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
 
@@ -83,6 +84,7 @@ func businessReadScopeFastCovers(reader, producer principalmodel.Principal, a, b
 // The SDK binds Subject/org/business claims. Generated SQL is compared only;
 // no statement is executed and no Runtime-owned scope evaluator is invented.
 func businessBoundPredicate(p identity.Predicate, principal principalmodel.Principal) (string, bool) {
+	p = businessCanonicalPredicate(p)
 	compiled, err := evaluator.CompileSQLWithContext(evaluator.RecordFilter{Allow: []identity.Predicate{p}}, recordpolicy.RecordSDKEvaluationContext(principal), func(fact string) (string, bool) {
 		return "scope_fact_" + hex.EncodeToString([]byte(fact)), fact != ""
 	})
@@ -90,6 +92,23 @@ func businessBoundPredicate(p identity.Predicate, principal principalmodel.Princ
 		return "", false
 	}
 	return conversationBusinessDigest(compiled), true
+}
+
+func businessCanonicalPredicate(p identity.Predicate) identity.Predicate {
+	if p.Fact == recordmodel.IDField {
+		p.Fact = "record_id"
+	}
+	for index := range p.All {
+		p.All[index] = businessCanonicalPredicate(p.All[index])
+	}
+	for index := range p.Any {
+		p.Any[index] = businessCanonicalPredicate(p.Any[index])
+	}
+	if p.Not != nil {
+		value := businessCanonicalPredicate(*p.Not)
+		p.Not = &value
+	}
+	return p
 }
 
 // Conservative boolean implication supports common AND/OR scope composition.
@@ -166,6 +185,7 @@ func businessPredicateImplication(broad identity.Predicate, broadPrincipal princ
 // prefix extension implies its shorter prefix; %/_/backslash remain literals
 // because the SDK escapes them. Do not invent a case/collation normalization.
 func businessAtomicScopeCovers(broad identity.Predicate, broadPrincipal principalmodel.Principal, narrow identity.Predicate, narrowPrincipal principalmodel.Principal, preserveUnknown bool) bool {
+	broad, narrow = businessCanonicalPredicate(broad), businessCanonicalPredicate(narrow)
 	if len(broad.Path) != 0 || len(narrow.Path) != 0 {
 		return false
 	}
@@ -198,6 +218,7 @@ func businessAtomicScopeCovers(broad identity.Predicate, broadPrincipal principa
 }
 
 func businessExistenceScope(p identity.Predicate, principal principalmodel.Principal) (string, bool, bool) {
+	p = businessCanonicalPredicate(p)
 	negated := false
 	for depth := 0; depth <= 24; depth++ {
 		if p.Not != nil {
@@ -237,6 +258,7 @@ func businessExcludedPredicate(p identity.Predicate) (identity.Predicate, bool) 
 // scope as an in-list. Keep conjunctions structural: intersecting values by
 // JSON type could incorrectly call a SQL-coercible conjunction empty.
 func businessFinitePredicateSet(p identity.Predicate, principal principalmodel.Principal, depth int) (string, map[string]bool, bool) {
+	p = businessCanonicalPredicate(p)
 	if depth > 24 || len(p.Path) != 0 {
 		return "", nil, false
 	}

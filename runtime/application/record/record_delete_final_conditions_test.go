@@ -27,27 +27,27 @@ func TestRecordDeleteAuthorizationSchedulerAndSoftValidationEdges(t *testing.T) 
 	if err := service.Delete(t.Context(), "customer", "customer-1", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("authorization error = %v", err)
 	}
-	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "run-1", Data: map[string]any{}}}
+	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "run-1", Data: map[string]any{}}}
 	dependencies := recordDeleteEdgeDependencies(repository, definitionmodel.ObjectSchema{Key: "record_timer", Config: map[string]any{"record_timer_runtime": true}})
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "record_timer", "timer-1", principal); apperror.CodeOf(err) != "backend.record_timer.runtime_api_required" {
 		t.Fatalf("scheduler guard error = %v", err)
 	}
 
 	requiredObject := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}, {Key: "name", Type: "text", Required: true}}}
-	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}}
+	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active"}}}
 	dependencies = recordDeleteEdgeDependencies(repository, requiredObject)
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "customer", "customer-1", principal); apperror.CodeOf(err) != "backend.validation.required" {
 		t.Fatalf("soft-delete validation error = %v", err)
 	}
 	invalidObject := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}, {Key: "age", Type: "number"}}}
-	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active", "age": "invalid"}}}
+	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active", "age": "invalid"}}}
 	dependencies = recordDeleteEdgeDependencies(repository, invalidObject)
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), "customer", "customer-1", principal); apperror.CodeOf(err) != "backend.validation.number" {
 		t.Fatalf("soft-delete normalization error = %v", err)
 	}
 
 	writableObject := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}}}
-	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}}
+	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active"}}}
 	dependencies = recordDeleteEdgeDependencies(repository, writableObject)
 	denied := principal
 	accessfixture.Set(&denied, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: "customer", FieldKey: "status", Read: true, Write: false}}})
@@ -58,7 +58,7 @@ func TestRecordDeleteAuthorizationSchedulerAndSoftValidationEdges(t *testing.T) 
 
 func TestRecordSoftDeleteMissingOptionalFieldsAndPorts(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}, {Key: "deleted_at", Type: "datetime"}, {Key: "deleted_by", Type: "text"}}}
-	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}}
+	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active"}}}
 	dependencies := recordDeleteEdgeDependencies(repository, object)
 	dependencies.CanAccess = nil
 	dependencies.CanWrite = nil
@@ -78,7 +78,7 @@ func TestRecordHardDeleteRelationFailureCancellationNilUpdateAndOutbox(t *testin
 	note := definitionmodel.ObjectSchema{Key: "note", Fields: []definitionmodel.FieldSchema{{Key: "root_id", Type: "relation", Config: map[string]any{"target": "root", "on_delete": "set_null"}}}}
 	schema := map[string]definitionmodel.ObjectSchema{"root": root, "note": note}
 	edgeErr := errors.New("relation list failed")
-	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "root-1", Data: map[string]any{"name": "root"}}, listErr: edgeErr}
+	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "root-1", Data: map[string]any{"name": "root"}}, listErr: edgeErr}
 	dependencies := recordDeleteEdgeDependencies(repository, root)
 	dependencies.Relations = recordservice.NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return schema })
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), root.Key, "root-1", principal); !errors.Is(err, edgeErr) {
@@ -86,19 +86,19 @@ func TestRecordHardDeleteRelationFailureCancellationNilUpdateAndOutbox(t *testin
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
-	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "root-1", Data: map[string]any{"name": "root"}}, lists: map[string][]recordmodel.Record{}, onList: cancel}
+	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "root-1", Data: map[string]any{"name": "root"}}, lists: map[string][]recordmodel.Record{}, onList: cancel}
 	dependencies = recordDeleteEdgeDependencies(repository, root)
 	dependencies.Relations = recordservice.NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return schema })
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(ctx, root.Key, "root-1", principal); !errors.Is(err, context.Canceled) {
 		t.Fatalf("post-relation cancellation = %v", err)
 	}
 
-	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "root-1", Data: map[string]any{"name": "root"}}, lists: map[string][]recordmodel.Record{"note": {{ID: "note-1", Data: map[string]any{"root_id": "root-1"}}}}}
+	repository = &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "root-1", Data: map[string]any{"name": "root"}}, lists: map[string][]recordmodel.Record{"note": {{RecordID: "note-1", Data: map[string]any{"root_id": "root-1"}}}}}
 	dependencies = recordDeleteEdgeDependencies(repository, root)
 	dependencies.Relations = recordservice.NewRecordDeleteRelationDomainService(repository, func() map[string]definitionmodel.ObjectSchema { return schema })
 	dependencies.PlanUpdateReference = nil
 	dependencies.AfterOutbox = func(context.Context, string, string, map[string]any, recordmodel.Record, principalmodel.Principal) ([]publicationmodel.Message, error) {
-		return []publicationmodel.Message{{ID: "outbox"}}, nil
+		return []publicationmodel.Message{{MessageID: "outbox"}}, nil
 	}
 	if err := NewRecordDeleteApplicationService(dependencies).Delete(t.Context(), root.Key, "root-1", principal); apperror.CodeOf(err) != "backend.internal" || len(repository.commits) != 0 {
 		t.Fatalf("missing relation planner commits=%#v err=%v", repository.commits, err)

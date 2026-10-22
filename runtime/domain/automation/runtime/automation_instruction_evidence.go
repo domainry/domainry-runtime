@@ -33,7 +33,7 @@ func AutomationRuleIdempotencyKey(rule automationmodel.AutomationRuleSchema, rec
 func automationExecutionFingerprint(useCase, target string, rule automationmodel.AutomationRuleSchema, record *recordmodel.Record) string {
 	recordID := "unknown"
 	if record != nil {
-		recordID = valueOrDefault(strings.TrimSpace(record.ID), "unknown")
+		recordID = valueOrDefault(strings.TrimSpace(record.RecordID), "unknown")
 	}
 	key, _ := idempotency.Fingerprint(idempotency.FingerprintInput{
 		UseCase: useCase, ResourceType: "automation", TargetID: target,

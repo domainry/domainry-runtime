@@ -8,7 +8,7 @@ import (
 
 func TestProjectEngineRecordPreservesReadOnlyOwnerDisplay(t *testing.T) {
 	record := recordmodel.Record{
-		ID: "task-1", Data: map[string]any{"owner": "user-1"},
+		RecordID: "task-1", Data: map[string]any{"owner": "user-1"},
 		OwnerUserID: "user-1", OwnerUserName: "销售甲",
 	}
 	projected := projectEngineRecord("crm_task", record)

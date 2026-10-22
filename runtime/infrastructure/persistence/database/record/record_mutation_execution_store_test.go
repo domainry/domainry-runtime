@@ -13,6 +13,7 @@ import (
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -36,9 +37,7 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if err := notificationsdkfixture.BindTransactions(store); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE idempotent_create_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "idempotent_create_record", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 17, 0, 0, 0, time.UTC)
 	request := recordmodel.RecordMutationClaimRequest{
@@ -60,25 +59,31 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 		t.Fatalf("conflict=%#v err=%v", conflict, err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "idempotent_create_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	record := recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
+	record := recordmodel.Record{RecordID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
-		Audit:              &auditmodel.AuditEvent{ID: "create-audit-1", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:             []publicationmodel.Message{{ID: "create-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "record-1-created"}},
-		WorkflowIntents:    []workflowmodel.WorkflowExecution{{ID: "create-workflow-1", WorkflowKey: "customer-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
-		NotificationEvents: []notificationmodel.NotificationEvent{{ID: "create-notification-1", WorkspaceID: "workspace-a", Source: "record", SourceEventID: "record-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"admin"}, ActionState: "none", OccurredAt: now.Format(time.RFC3339Nano), Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Record created", Body: "The record was created."}, Status: "queued", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		Audit:              &auditmodel.AuditEvent{AuditEventID: recordAuditTestID("create-audit-1"), Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.RecordID, CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox:             []publicationmodel.Message{{MessageID: "create-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "record-1-created"}},
+		WorkflowIntents:    []workflowmodel.WorkflowExecution{{ExecutionID: "create-workflow-1", WorkflowKey: "customer-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.RecordID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		NotificationEvents: []notificationmodel.NotificationEvent{{EventID: recordNotificationTestID("create-notification-1"), WorkspaceID: "workspace-a", Source: "record", SourceEventID: "record-1-created", EventType: "record.created", Category: "business", Severity: "info", RecipientUserIDs: []string{"admin"}, ActionState: "none", OccurredAt: now.Format(time.RFC3339Nano), Snapshot: notificationmodel.NotificationInboxSnapshot{Title: "Record created", Body: "The record was created."}, Status: "queued", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
-	completed, err := repository.CommitRecordMutationExecution(t.Context(), commit, recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(24 * time.Hour), Now: now})
-	if err != nil || completed.Status != string(idempotency.StatusSucceeded) || completed.Result.ID != record.ID {
+	completed, err := repository.CommitRecordMutationExecution(t.Context(), commit, recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(24 * time.Hour), Now: now})
+	if err != nil || completed.Status != string(idempotency.StatusSucceeded) || completed.Result.RecordID != record.RecordID {
 		t.Fatalf("completed=%#v err=%v", completed, err)
 	}
-	if found, ok, err := repository.FindRecordMutationExecution(t.Context(), request.Execution); err != nil || !ok || found.ID != claim.Execution.ID {
+	if found, ok, err := repository.FindRecordMutationExecution(t.Context(), request.Execution); err != nil || !ok || found.OperationID != claim.Execution.OperationID {
 		t.Fatalf("find execution=%#v ok=%v err=%v", found, ok, err)
 	}
-	for table, id := range map[string]string{"_audit_events": "create-audit-1", "_publication_outbox": "create-outbox-1", "_workflow_executions": "create-workflow-1", "_notification_events": "create-notification-1", "_operations": claim.Execution.ID} {
+	for table, identity := range map[string]struct{ column, value string }{
+		"_audit_events":        {"audit_event_id", recordAuditTestID("create-audit-1")},
+		"_publication_outbox":  {"message_id", "create-outbox-1"},
+		"_workflow_executions": {"execution_id", "create-workflow-1"},
+		"_notification_events": {"event_id", recordNotificationTestID("create-notification-1")},
+		"_operations":          {"operation_id", claim.Execution.OperationID},
+	} {
 		var count int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", id).Scan(&count); err != nil || count != 1 {
-			t.Fatalf("atomic fact %s/%s count=%d err=%v", table, id, count, err)
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(identity.column)+" = ?", identity.value).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("atomic fact %s/%s count=%d err=%v", table, identity.value, count, err)
 		}
 	}
 	workspaces, err := store.WorkerQueueScopePage(t.Context(), store.DB(), database.WorkerScopeOwnerWorkflowContinuation, 10)
@@ -90,33 +95,33 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 		t.Fatalf("legacy record mutation table count=%d err=%v", legacyTables, err)
 	}
 	replay, err := repository.TryBeginRecordMutation(t.Context(), request)
-	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Result.ID != record.ID {
+	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Result.RecordID != record.RecordID {
 		t.Fatalf("replay=%#v err=%v", replay, err)
 	}
-	staleDelete := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, RecordID: record.ID, ExpectedUpdatedAt: "stale-version"}
+	staleDelete := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, RecordID: record.RecordID, ExpectedUpdatedAt: "stale-version"}
 	if err := repository.CommitRecordMutation(t.Context(), request.Execution.WorkspaceID, staleDelete); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
 		t.Fatalf("stale delete error=%v", err)
 	}
-	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.ID); err != nil || !found {
+	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.RecordID); err != nil || !found {
 		t.Fatalf("stale delete removed record found=%v err=%v", found, err)
 	}
 	deleteRequest := recordmodel.RecordMutationClaimRequest{
-		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "delete", ObjectKey: object.Key, TargetID: record.ID, IdempotencyKey: "delete-1", ActorID: "admin"},
+		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "delete", ObjectKey: object.Key, TargetID: record.RecordID, IdempotencyKey: "delete-1", ActorID: "admin"},
 		RequestFingerprint: "delete-fingerprint", LeaseOwner: "runtime-delete", LeaseTTL: time.Minute, Now: now,
 	}
 	deleteClaim, err := repository.TryBeginRecordMutation(t.Context(), deleteRequest)
 	if err != nil || deleteClaim.Decision != idempotency.DecisionAcquired {
 		t.Fatalf("delete claim=%+v err=%v", deleteClaim, err)
 	}
-	deleteCommit := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, RecordID: record.ID, ExpectedUpdatedAt: record.UpdatedAt}
+	deleteCommit := transactionmodel.RecordMutationCommit{Operation: "delete", Object: object, RecordID: record.RecordID, ExpectedUpdatedAt: record.UpdatedAt}
 	completedDelete, err := repository.CommitRecordMutationBatchExecution(t.Context(), []transactionmodel.RecordMutationCommit{deleteCommit}, recordmodel.RecordMutationCompletion{
-		WorkspaceID: deleteClaim.Execution.WorkspaceID, ExecutionID: deleteClaim.Execution.ID, LeaseOwner: deleteClaim.Execution.LeaseOwner, FencingToken: deleteClaim.Execution.FencingToken,
+		WorkspaceID: deleteClaim.Execution.WorkspaceID, OperationID: deleteClaim.Execution.OperationID, LeaseOwner: deleteClaim.Execution.LeaseOwner, FencingToken: deleteClaim.Execution.FencingToken,
 		Result: map[string]any{"deleted": true}, ExpiresAt: now.Add(24 * time.Hour), Now: now,
 	})
 	if err != nil || completedDelete.Status != string(idempotency.StatusSucceeded) || completedDelete.ResponseStatus != 204 {
 		t.Fatalf("completed delete=%+v err=%v", completedDelete, err)
 	}
-	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.ID); err != nil || found {
+	if _, found, err := repository.GetRecord(t.Context(), request.Execution.WorkspaceID, object, record.RecordID); err != nil || found {
 		t.Fatalf("idempotent delete found=%v err=%v", found, err)
 	}
 	deleteReplay, err := repository.TryBeginRecordMutation(t.Context(), deleteRequest)
@@ -131,8 +136,8 @@ func TestRecordMutationExecutionClaimCommitReplayConflictAndRollback(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	badCommit := transactionmodel.RecordMutationCommit{Operation: "unsupported", Object: object, Record: recordmodel.Record{ID: "must-not-exist"}}
-	if _, err := repository.CommitRecordMutationExecution(t.Context(), badCommit, recordmodel.RecordMutationCompletion{WorkspaceID: rollbackClaim.Execution.WorkspaceID, ExecutionID: rollbackClaim.Execution.ID, LeaseOwner: rollbackClaim.Execution.LeaseOwner, FencingToken: rollbackClaim.Execution.FencingToken, ExpiresAt: now.Add(time.Hour), Now: now}); err == nil {
+	badCommit := transactionmodel.RecordMutationCommit{Operation: "unsupported", Object: object, Record: recordmodel.Record{RecordID: "must-not-exist"}}
+	if _, err := repository.CommitRecordMutationExecution(t.Context(), badCommit, recordmodel.RecordMutationCompletion{WorkspaceID: rollbackClaim.Execution.WorkspaceID, OperationID: rollbackClaim.Execution.OperationID, LeaseOwner: rollbackClaim.Execution.LeaseOwner, FencingToken: rollbackClaim.Execution.FencingToken, ExpiresAt: now.Add(time.Hour), Now: now}); err == nil {
 		t.Fatal("expected commit failure")
 	}
 	current, found, err := repository.findRecordMutationExecution(t.Context(), rollbackClaim.Execution)
@@ -197,12 +202,10 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE concurrent_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "concurrent_record", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	object := definitionmodel.ObjectSchema{Key: "concurrent_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	initial := recordmodel.Record{ID: "shared", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00.001Z", Data: map[string]any{"name": "initial"}}
+	initial := recordmodel.Record{RecordID: "shared", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00.001Z", Data: map[string]any{"name": "initial"}}
 	if err := repository.CommitRecordMutation(t.Context(), "workspace-primary", transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: initial}); err != nil {
 		t.Fatal(err)
 	}
@@ -222,11 +225,11 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 			updatedAt := time.Date(2026, 7, 19, 0, 0, 0, 2_000_000+worker*1_000_000, time.UTC).Format(time.RFC3339Nano)
 			commit := transactionmodel.RecordMutationCommit{
 				Operation: "update", Object: object,
-				Record:            recordmodel.Record{ID: initial.ID, CreatedAt: initial.CreatedAt, UpdatedAt: updatedAt, Data: map[string]any{"name": identity}},
+				Record:            recordmodel.Record{RecordID: initial.RecordID, CreatedAt: initial.CreatedAt, UpdatedAt: updatedAt, Data: map[string]any{"name": identity}},
 				ExpectedUpdatedAt: initial.UpdatedAt,
-				Audit:             &auditmodel.AuditEvent{ID: "update-audit-" + identity, Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z"},
-				Outbox:            []publicationmodel.Message{{ID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
-				WorkflowIntents:   []workflowmodel.WorkflowExecution{{ID: "update-workflow-" + identity, WorkflowKey: "concurrent-record-updated", Trigger: "record_updated", Status: "pending", ObjectKey: object.Key, RecordID: initial.ID, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}},
+				Audit:             &auditmodel.AuditEvent{AuditEventID: recordAuditTestID("update-audit-" + identity), Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: object.Key, RecordID: initial.RecordID, CreatedAt: "2026-07-19T00:00:00Z"},
+				Outbox:            []publicationmodel.Message{{MessageID: "update-outbox-" + identity, WorkspaceID: "workspace-primary", ConnectorKey: "webhook", Operation: "concurrent.record.updated", DedupKey: identity}},
+				WorkflowIntents:   []workflowmodel.WorkflowExecution{{ExecutionID: "update-workflow-" + identity, WorkflowKey: "concurrent-record-updated", Trigger: "record_updated", Status: "pending", ObjectKey: object.Key, RecordID: initial.RecordID, CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}},
 			}
 			err := repository.CommitRecordMutation(t.Context(), "workspace-primary", commit)
 			switch {
@@ -250,21 +253,30 @@ func TestRecordMutationHundredConcurrentUpdatesHaveNoLostUpdateOrPartialCommit(t
 	if succeeded.Load() != 1 || conflicted.Load()+transientlyRejected.Load() != 99 {
 		t.Fatalf("succeeded=%d conflicted=%d transiently_rejected=%d", succeeded.Load(), conflicted.Load(), transientlyRejected.Load())
 	}
-	current, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, initial.ID)
+	current, found, err := repository.GetRecord(t.Context(), "workspace-primary", object, initial.RecordID)
 	if err != nil || !found || current.UpdatedAt == initial.UpdatedAt || current.Data["name"] == "initial" {
 		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
 	}
 	winner := current.Data["name"].(string)
-	for table, prefix := range map[string]string{
-		"_audit_events":        "update-audit-",
-		"_publication_outbox":  "update-outbox-",
-		"_workflow_executions": "update-workflow-",
+	var auditCount, winnerAuditCount int
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE "+store.Identifier("workspace_id")+" = ?", "workspace-primary").Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier("_audit_events")+" WHERE "+store.Identifier("audit_event_id")+" = ?", recordAuditTestID("update-audit-"+winner)).Scan(&winnerAuditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 1 || winnerAuditCount != 1 {
+		t.Fatalf("partial commit in _audit_events: count=%d winner_count=%d winner=%s", auditCount, winnerAuditCount, winner)
+	}
+	for table, identity := range map[string]struct{ column, prefix string }{
+		"_publication_outbox":  {"message_id", "update-outbox-"},
+		"_workflow_executions": {"execution_id", "update-workflow-"},
 	} {
 		var count, winnerCount int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" LIKE ?", prefix+"%").Scan(&count); err != nil {
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(identity.column)+" LIKE ?", identity.prefix+"%").Scan(&count); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", prefix+winner).Scan(&winnerCount); err != nil {
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(identity.column)+" = ?", identity.prefix+winner).Scan(&winnerCount); err != nil {
 			t.Fatal(err)
 		}
 		if count != 1 || winnerCount != 1 {
@@ -290,7 +302,7 @@ func TestRecordMutationOperationCompletionIsFencedAndReplayable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	completion := recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: 99, Result: recordmodel.RecordImportApplyResult{ObjectKey: "customer", Created: 2}, ExpiresAt: now.Add(24 * time.Hour), Now: now}
+	completion := recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: 99, Result: recordmodel.RecordImportApplyResult{ObjectKey: "customer", Created: 2}, ExpiresAt: now.Add(24 * time.Hour), Now: now}
 	if _, err := repository.CompleteRecordMutationExecution(t.Context(), completion); !mutation.IsMutationConflict(err, mutation.MutationConflictLeaseLost) {
 		t.Fatalf("stale operation completion=%v", err)
 	}
@@ -325,7 +337,7 @@ func TestRecordMutationTerminalFailureCompletionPersistsReplayEvidenceAtomically
 		t.Fatalf("claim=%+v err=%v", claim, err)
 	}
 	completed, err := repository.CompleteRecordMutationExecution(t.Context(), recordmodel.RecordMutationCompletion{
-		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{}, ResponseStatus: 409, ErrorCode: "backend.record.version_conflict", ExpiresAt: now.Add(30 * 24 * time.Hour), Now: now.Add(time.Second),
 	})
 	if err != nil {
@@ -361,7 +373,7 @@ func TestRecordMutationRetryableFailureCanBeReclaimedAndClearsPriorFailure(t *te
 		t.Fatal(err)
 	}
 	failed, err := repository.CompleteRecordMutationExecution(t.Context(), recordmodel.RecordMutationCompletion{
-		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{}, ResponseStatus: 503, ErrorCode: "backend.storage.unavailable", Retryable: true, ExpiresAt: now.Add(time.Hour), Now: now,
 	})
 	if err != nil || failed.Status != string(idempotency.StatusFailedRetryable) {
@@ -399,13 +411,13 @@ func TestRecordMutationExecutionWorkspaceScopeDoesNotConflictOrLeakReplay(t *tes
 	workspaceA := claim("workspace-a", "runtime-a")
 	if _, err := repository.CompleteRecordMutationExecution(t.Context(), recordmodel.RecordMutationCompletion{
 		WorkspaceID: workspaceA.Execution.WorkspaceID,
-		ExecutionID: workspaceA.Execution.ID, LeaseOwner: workspaceA.Execution.LeaseOwner, FencingToken: workspaceA.Execution.FencingToken,
+		OperationID: workspaceA.Execution.OperationID, LeaseOwner: workspaceA.Execution.LeaseOwner, FencingToken: workspaceA.Execution.FencingToken,
 		Result: map[string]any{"private": "workspace-a-only"}, ExpiresAt: now.Add(time.Hour), Now: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	workspaceB := claim("workspace-b", "runtime-b")
-	if workspaceB.Decision != idempotency.DecisionAcquired || workspaceB.Execution.ID == workspaceA.Execution.ID || len(workspaceB.Execution.OperationResult) != 0 {
+	if workspaceB.Decision != idempotency.DecisionAcquired || workspaceB.Execution.OperationID == workspaceA.Execution.OperationID || len(workspaceB.Execution.OperationResult) != 0 {
 		t.Fatalf("workspace result leaked: workspace-a=%+v workspace-b=%+v", workspaceA, workspaceB)
 	}
 	replayA := claim("workspace-a", "runtime-c")

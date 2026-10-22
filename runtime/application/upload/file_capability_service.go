@@ -70,7 +70,7 @@ func (s *FileCapabilityService) VerifyClean(ctx context.Context, workspaceID str
 		return runtimeext.FileVerificationEvidence{}, err
 	}
 	return runtimeext.FileVerificationEvidence{
-		FileID: evidence.FileID, ObjectKey: evidence.ObjectKey, FieldKey: evidence.FieldKey, ContentSHA256: evidence.SHA256, Filename: evidence.Filename, ContentType: evidence.ContentType,
+		FileID: evidence.ArtifactID, ObjectKey: evidence.ObjectKey, FieldKey: evidence.FieldKey, ContentSHA256: evidence.SHA256, Filename: evidence.Filename, ContentType: evidence.ContentType,
 		Size: evidence.Size, Status: evidence.Status, Provider: evidence.Provider, EvidenceRef: evidence.EvidenceRef, ScanReceipt: evidence.Receipt,
 	}, nil
 }
@@ -89,7 +89,7 @@ func (s *FileCapabilityService) VerifyRecordReference(ctx context.Context, works
 	if err != nil {
 		return err
 	}
-	if evidence.ObjectKey != strings.TrimSpace(objectKey) || evidence.FieldKey != strings.TrimSpace(fieldKey) || evidence.FileID != reference.FileID || evidence.Filename != reference.Filename || !strings.EqualFold(evidence.ContentType, reference.ContentType) || evidence.Size != reference.Size || !strings.EqualFold(evidence.SHA256, reference.ContentSHA256) {
+	if evidence.ObjectKey != strings.TrimSpace(objectKey) || evidence.FieldKey != strings.TrimSpace(fieldKey) || evidence.ArtifactID != reference.FileID || evidence.Filename != reference.Filename || !strings.EqualFold(evidence.ContentType, reference.ContentType) || evidence.Size != reference.Size || !strings.EqualFold(evidence.SHA256, reference.ContentSHA256) {
 		return errors.New("backend.upload.file_identity_mismatch")
 	}
 	if scanRequired {
@@ -223,7 +223,7 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 		}
 		if existing.Status == lifecyclecontract.FileScanClean {
 			if bindSubject {
-				artifact := lifecyclecontract.UploadArtifact{ID: existing.FileID, WorkspaceID: existing.WorkspaceID, ObjectKey: existing.ObjectKey, FieldKey: existing.FieldKey, Filename: existing.Filename, ContentType: existing.ContentType, SHA256: existing.SHA256, Size: existing.Size}
+				artifact := lifecyclecontract.UploadArtifact{ArtifactID: existing.ArtifactID, WorkspaceID: existing.WorkspaceID, ObjectKey: existing.ObjectKey, FieldKey: existing.FieldKey, Filename: existing.Filename, ContentType: existing.ContentType, SHA256: existing.SHA256, Size: existing.Size}
 				if err := s.subjects.Ensure(ctx, artifact, principal); err != nil {
 					return runtimeext.DerivedFileEvidence{}, err
 				}
@@ -242,13 +242,13 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", err)
 	}
 	now := s.clock().UTC()
-	artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: workspaceID, ObjectKey: strings.TrimSpace(request.ObjectKey), FieldKey: strings.TrimSpace(request.FieldKey), Filename: storageName, ContentType: contentType, SHA256: digest, Size: size, CreatedAt: now}
+	artifact := lifecyclecontract.UploadArtifact{ArtifactID: fileID, WorkspaceID: workspaceID, ObjectKey: strings.TrimSpace(request.ObjectKey), FieldKey: strings.TrimSpace(request.FieldKey), Filename: storageName, ContentType: contentType, SHA256: digest, Size: size, CreatedAt: now}
 	if errors.Is(lookupErr, sql.ErrNoRows) {
 		if err := s.store.RegisterUpload(ctx, artifact); err != nil {
 			return runtimeext.DerivedFileEvidence{}, err
 		}
 	}
-	scan := lifecyclecontract.FileScanEvidence{FileID: fileID, WorkspaceID: workspaceID, Filename: storageName, ContentType: contentType, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: digest, Size: size, Status: lifecyclecontract.FileScanClean, Provider: "domainry-derived-file-v1", EvidenceRef: "derived:sha256:" + digest, ScannedAt: now}
+	scan := lifecyclecontract.FileScanEvidence{ArtifactID: fileID, WorkspaceID: workspaceID, Filename: storageName, ContentType: contentType, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: digest, Size: size, Status: lifecyclecontract.FileScanClean, Provider: "domainry-derived-file-v1", EvidenceRef: "derived:sha256:" + digest, ScannedAt: now}
 	if err := s.store.RecordFileScan(ctx, scan); err != nil {
 		return runtimeext.DerivedFileEvidence{}, err
 	}
@@ -261,12 +261,12 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 }
 
 func (s *FileCapabilityService) derivedFileResult(ctx context.Context, workspaceID, filename, contentType string, scan lifecyclecontract.FileScanEvidence) (runtimeext.DerivedFileEvidence, error) {
-	verified, err := s.verifier.Status(ctx, workspaceID, scan.FileID)
+	verified, err := s.verifier.Status(ctx, workspaceID, scan.ArtifactID)
 	if err != nil {
 		return runtimeext.DerivedFileEvidence{}, err
 	}
 	return runtimeext.DerivedFileEvidence{
-		FileVerificationEvidence: runtimeext.FileVerificationEvidence{FileID: verified.FileID, ContentSHA256: verified.SHA256, Filename: verified.Filename, ContentType: verified.ContentType, Size: verified.Size, Status: verified.Status, Provider: verified.Provider, EvidenceRef: verified.EvidenceRef, ScanReceipt: verified.Receipt},
+		FileVerificationEvidence: runtimeext.FileVerificationEvidence{FileID: verified.ArtifactID, ContentSHA256: verified.SHA256, Filename: verified.Filename, ContentType: verified.ContentType, Size: verified.Size, Status: verified.Status, Provider: verified.Provider, EvidenceRef: verified.EvidenceRef, ScanReceipt: verified.Receipt},
 		Filename:                 filename, ContentType: contentType, ProtectedDownload: "/uploads/" + verified.Filename,
 	}, nil
 }

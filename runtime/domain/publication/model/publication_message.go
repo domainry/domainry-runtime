@@ -4,7 +4,8 @@
 package publicationmodel
 
 type Message struct {
-	ID                 string         `json:"id"`
+	ID                 int64          `json:"id"`
+	MessageID          string         `json:"message_id"`
 	WorkspaceID        string         `json:"workspace_id,omitempty"`
 	OperationID        string         `json:"operation_id,omitempty"`
 	ConnectorKey       string         `json:"connector_key"`

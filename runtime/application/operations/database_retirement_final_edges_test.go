@@ -35,14 +35,14 @@ func TestDatabaseRetirementConstructorAuthorizationAndDiscoveryConditions(t *tes
 		})
 	}
 
-	valid := operationsmodel.DatabaseRetirement{ID: "id", Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old"}, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record"}}
+	valid := operationsmodel.DatabaseRetirement{OperationID: databaseRetirementTestOperationID("valid"), Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old"}, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record"}}
 	invalid := []operationsmodel.DatabaseRetirement{
 		{Object: valid.Object, Evidence: valid.Evidence},
-		{ID: valid.ID, Object: operationsmodel.DatabaseObjectIdentity{Database: "runtime", Kind: "table", Name: "old"}, Evidence: valid.Evidence},
-		{ID: valid.ID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Kind: "table", Name: "old"}, Evidence: valid.Evidence},
-		{ID: valid.ID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Name: "old"}, Evidence: valid.Evidence},
-		{ID: valid.ID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table"}, Evidence: valid.Evidence},
-		{ID: valid.ID, Object: valid.Object},
+		{OperationID: valid.OperationID, Object: operationsmodel.DatabaseObjectIdentity{Database: "runtime", Kind: "table", Name: "old"}, Evidence: valid.Evidence},
+		{OperationID: valid.OperationID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Kind: "table", Name: "old"}, Evidence: valid.Evidence},
+		{OperationID: valid.OperationID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Name: "old"}, Evidence: valid.Evidence},
+		{OperationID: valid.OperationID, Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table"}, Evidence: valid.Evidence},
+		{OperationID: valid.OperationID, Object: valid.Object},
 	}
 	for index, retirement := range invalid {
 		if err := validateDatabaseRetirementDiscovery(retirement); err == nil {
@@ -59,10 +59,10 @@ func TestDatabaseRetirementOperationalStatusConditionCombinations(t *testing.T) 
 	fresh := now.Add(-time.Hour)
 	stale := now.Add(-2 * operationspolicy.MaximumRetirementEvidenceAge)
 	items := map[string]operationsmodel.DatabaseRetirement{
-		"quiet": {ID: "quiet", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{}},
-		"write": {ID: "write", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Observation: operationsmodel.DatabaseAccessObservation{WriteCount: 1}, BackupVerifiedAt: &fresh, RestoreDrillAt: &fresh}},
-		"fresh": {ID: "fresh", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{BackupVerifiedAt: &fresh, RestoreDrillAt: &fresh}},
-		"stale": {ID: "stale", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{BackupVerifiedAt: &stale, RestoreDrillAt: &stale}},
+		"quiet": {OperationID: "quiet", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{}},
+		"write": {OperationID: "write", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{Observation: operationsmodel.DatabaseAccessObservation{WriteCount: 1}, BackupVerifiedAt: &fresh, RestoreDrillAt: &fresh}},
+		"fresh": {OperationID: "fresh", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{BackupVerifiedAt: &fresh, RestoreDrillAt: &fresh}},
+		"stale": {OperationID: "stale", State: operationsmodel.DatabaseRetirementDiscovered, Evidence: operationsmodel.DatabaseRetirementEvidence{BackupVerifiedAt: &stale, RestoreDrillAt: &stale}},
 	}
 	service := NewDatabaseRetirementApplicationService(&databaseRetirementRepositoryFake{items: items}, nil, func() time.Time { return now }, nil)
 	for id, wantAlerts := range map[string]int{"quiet": 0, "write": 1, "fresh": 0, "stale": 2} {
@@ -90,47 +90,47 @@ func TestDatabaseRetirementNestedFailuresAndPostEffectValidation(t *testing.T) {
 	}
 
 	current := operationsDatabaseRetirementFixture(now)
-	repository.items[current.ID] = current
+	repository.items[current.OperationID] = current
 	executor.applyResult = func(next operationsmodel.DatabaseRetirement) operationsmodel.DatabaseRetirement {
 		next.Evidence.Owner = ""
 		return next
 	}
-	if _, err := service.Advance(t.Context(), current.ID, operationsmodel.DatabaseRetirementReplacementReady, current.Evidence, principal); apperror.KindOf(err) != apperror.KindConflict {
+	if _, err := service.Advance(t.Context(), current.OperationID, operationsmodel.DatabaseRetirementReplacementReady, current.Evidence, principal); apperror.KindOf(err) != apperror.KindConflict {
 		t.Fatalf("post-effect validation error = %v", err)
 	}
 
 	quarantineEnded := now.Add(-time.Minute)
 	current.State = operationsmodel.DatabaseRetirementQuarantined
 	current.Evidence.QuarantineUntil = &quarantineEnded
-	repository.items[current.ID] = current
+	repository.items[current.OperationID] = current
 	executor.applyResult = nil
 	quarantineActive := now.Add(time.Minute)
 	current.Evidence.QuarantineUntil = &quarantineActive
-	repository.items[current.ID] = current
-	if _, err := service.Execute(t.Context(), current.ID, principal); apperror.KindOf(err) != apperror.KindConflict {
+	repository.items[current.OperationID] = current
+	if _, err := service.Execute(t.Context(), current.OperationID, principal); apperror.KindOf(err) != apperror.KindConflict {
 		t.Fatalf("active quarantine validation error = %v", err)
 	}
 	current.Evidence.QuarantineUntil = &quarantineEnded
-	repository.items[current.ID] = current
+	repository.items[current.OperationID] = current
 	executor.previewErr = errors.New("preview unavailable")
-	if _, err := service.Execute(t.Context(), current.ID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_preview_blocked" {
+	if _, err := service.Execute(t.Context(), current.OperationID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_preview_blocked" {
 		t.Fatalf("execute preview error = %v", err)
 	}
 	executor.previewErr = nil
 	executor.dirty = true
 	executor.blockedReason = ""
-	if _, err := service.Execute(t.Context(), current.ID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_failed" {
+	if _, err := service.Execute(t.Context(), current.OperationID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_failed" {
 		t.Fatalf("dirty execution error = %v", err)
 	}
-	if got := repository.items[current.ID].BlockedReason; got != "destructive execution failed" {
+	if got := repository.items[current.OperationID].BlockedReason; got != "destructive execution failed" {
 		t.Fatalf("fallback blocked reason = %q", got)
 	}
 
 	// An execution error without a dirty result must still force the retirement into a blocked state.
-	repository.items[current.ID] = current
+	repository.items[current.OperationID] = current
 	executor.dirty = false
 	executor.executeErr = context.DeadlineExceeded
-	if _, err := service.Execute(t.Context(), current.ID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_failed" {
+	if _, err := service.Execute(t.Context(), current.OperationID, principal); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_failed" {
 		t.Fatalf("execution error = %v", err)
 	}
 }

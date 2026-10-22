@@ -6,6 +6,7 @@ import (
 
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/mutation"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 
@@ -21,6 +22,7 @@ import (
 
 	"testing"
 
+	ormschema "github.com/domainry/domainry-orm/schema"
 	. "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
@@ -34,26 +36,24 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 				t.Fatalf("ensure runtime schema: %v", err)
 			}
 			auditmodulefixture.Bind(t, t.Context(), store)
+			object := definitionmodel.ObjectSchema{Key: "dialect_record", Name: "Dialect Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
+			createGeneratedRecordTable(t, store, object.Key, ormschema.Column("status", ormschema.Text()))
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
 			if options := (&sql.TxOptions{Isolation: sql.LevelSerializable}); options.Isolation != sql.LevelSerializable || options.ReadOnly {
 				t.Fatalf("unexpected record UoW transaction options: %#v", options)
 			}
-			object := definitionmodel.ObjectSchema{Key: "dialect_record", Name: "Dialect Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE dialect_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
-				t.Fatalf("create table: %v", err)
-			}
 			repository := store
 			for _, id := range []string{"first", "second"} {
-				if err := recordStore(repository).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
+				if err := recordStore(repository).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
 					t.Fatalf("insert %s: %v", id, err)
 				}
 			}
 
 			conflicting := []transactionmodel.RecordMutationCommit{
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "first-conflict"), Outbox: []publicationmodel.Message{dialectOutbox(driver, "conflict")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "conflict")}},
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2025-12-31T00:00:00Z", Audit: dialectAudit(driver, "second-conflict")},
+				{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "first-conflict"), Outbox: []publicationmodel.Message{dialectOutbox(driver, "conflict")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "conflict")}},
+				{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2025-12-31T00:00:00Z", Audit: dialectAudit(driver, "second-conflict")},
 			}
 			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", conflicting); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
 				t.Fatalf("expected typed optimistic concurrency conflict, got %v", err)
@@ -64,8 +64,8 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			assertDialectOutboxCount(t, store, driver, 0)
 
 			successful := []transactionmodel.RecordMutationCommit{
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "first-success"), Audits: []auditmodel.AuditEvent{*dialectAudit(driver, "first-mandatory-domain-event")}, Outbox: []publicationmodel.Message{dialectOutbox(driver, "success")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}},
-				{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "second-success")},
+				{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "first-success"), Audits: []auditmodel.AuditEvent{*dialectAudit(driver, "first-mandatory-domain-event")}, Outbox: []publicationmodel.Message{dialectOutbox(driver, "success")}, WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}},
+				{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z", Audit: dialectAudit(driver, "second-success")},
 			}
 			if err := recordStore(repository).CommitRecordMutationBatch(t.Context(), "workspace-primary", successful); err != nil {
 				t.Fatalf("commit successful batch: %v", err)
@@ -75,11 +75,11 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 			assertDialectWorkflowIntentCount(t, store, driver, 1)
 			assertDialectOutboxCount(t, store, driver, 1)
 
-			duplicateRecord := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "2026-01-03T00:00:00Z", UpdatedAt: "2026-01-03T00:00:00Z", Data: map[string]any{"status": "duplicate"}}}
+			duplicateRecord := transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{RecordID: "first", CreatedAt: "2026-01-03T00:00:00Z", UpdatedAt: "2026-01-03T00:00:00Z", Data: map[string]any{"status": "duplicate"}}}
 			if err := recordStore(repository).CommitRecordMutation(t.Context(), "workspace-primary", duplicateRecord); !mutation.IsMutationConflict(err, mutation.MutationConflictUnique) {
 				t.Fatalf("expected typed unique conflict, got %v", err)
 			}
-			duplicateIntent := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-03T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-02T00:00:00Z", WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}}
+			duplicateIntent := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-03T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-02T00:00:00Z", WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(driver, "success")}}
 			if err := recordStore(repository).CommitRecordMutation(t.Context(), "workspace-primary", duplicateIntent); !mutation.IsMutationConflict(err, mutation.MutationConflictIdempotency) {
 				t.Fatalf("expected typed idempotency conflict, got %v", err)
 			}
@@ -92,15 +92,19 @@ func TestContextRecordMutationDialectContracts(t *testing.T) {
 }
 
 func dialectAudit(driver, suffix string) *auditmodel.AuditEvent {
-	return &auditmodel.AuditEvent{ID: fmt.Sprintf("audit_%s_%s", driver, suffix), Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: "dialect_record", RecordID: suffix, CreatedAt: "2026-01-02T00:00:00Z"}
+	auditEventID, err := entityid.Derive("audevt", "runtime.record.dialect-test", driver, suffix)
+	if err != nil {
+		panic(err)
+	}
+	return &auditmodel.AuditEvent{AuditEventID: auditEventID, Family: auditmodel.EventFamilyBusinessRecord, Event: "record_updated", ObjectKey: "dialect_record", RecordID: suffix, CreatedAt: "2026-01-02T00:00:00Z"}
 }
 
 func dialectWorkflowIntent(driver, suffix string) workflowmodel.WorkflowExecution {
-	return workflowmodel.WorkflowExecution{ID: fmt.Sprintf("workflow_intent_%s_%s", driver, suffix), WorkflowKey: "notify", Name: "Notify", Trigger: "record_updated:dialect_record", Status: "pending", ActionType: "workflow_graph", Action: map[string]any{}, Payload: map[string]any{"record_id": "first"}, Result: map[string]any{"transactional_intent": true}, ObjectKey: "dialect_record", RecordID: "first", ActorID: "tester", Attempt: 0, MaxAttempts: 3, Message: "workflow.message.queued", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
+	return workflowmodel.WorkflowExecution{ExecutionID: fmt.Sprintf("workflow_intent_%s_%s", driver, suffix), WorkflowKey: "notify", Name: "Notify", Trigger: "record_updated:dialect_record", Status: "pending", ActionType: "workflow_graph", Action: map[string]any{}, Payload: map[string]any{"record_id": "first"}, Result: map[string]any{"transactional_intent": true}, ObjectKey: "dialect_record", RecordID: "first", ActorID: "tester", Attempt: 0, MaxAttempts: 3, Message: "workflow.message.queued", CreatedAt: "2026-01-02T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z"}
 }
 
 func dialectOutbox(driver, suffix string) publicationmodel.Message {
-	return publicationmodel.Message{ID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "workspace-primary", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
+	return publicationmodel.Message{MessageID: fmt.Sprintf("outbox_%s_%s", driver, suffix), WorkspaceID: "workspace-primary", ConnectorKey: "test", Operation: "notify", DedupKey: "dialect:" + driver + ":" + suffix, Status: "queued", Payload: map[string]any{"record_id": "first"}, CreatedBy: "tester"}
 }
 
 func assertDialectRecords(t *testing.T, repository interface {
@@ -121,7 +125,7 @@ func assertDialectRecords(t *testing.T, repository interface {
 func assertDialectAuditCount(t *testing.T, store *RuntimeStore, driver string, expected int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _audit_events WHERE id LIKE ?`, "audit_"+driver+"_%").Scan(&count); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _audit_events WHERE workspace_id = ?`, "workspace-primary").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != expected {
@@ -132,7 +136,7 @@ func assertDialectAuditCount(t *testing.T, store *RuntimeStore, driver string, e
 func assertDialectWorkflowIntentCount(t *testing.T, store *RuntimeStore, driver string, expected int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _workflow_executions WHERE id LIKE ?`, "workflow_intent_"+driver+"_%").Scan(&count); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _workflow_executions WHERE execution_id LIKE ?`, "workflow_intent_"+driver+"_%").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != expected {
@@ -143,7 +147,7 @@ func assertDialectWorkflowIntentCount(t *testing.T, store *RuntimeStore, driver 
 func assertDialectOutboxCount(t *testing.T, store *RuntimeStore, driver string, expected int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _publication_outbox WHERE id LIKE ?`, "outbox_"+driver+"_%").Scan(&count); err != nil {
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM _publication_outbox WHERE message_id LIKE ?`, "outbox_"+driver+"_%").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != expected {
@@ -159,17 +163,15 @@ func TestCommitRecordMutationBatchRollsBackEveryRecordOnConflict(t *testing.T) {
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
 	object := definitionmodel.ObjectSchema{Key: "atomic_record", Name: "Atomic Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE atomic_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
-		t.Fatalf("create table: %v", err)
-	}
+	createGeneratedRecordTable(t, store, object.Key, ormschema.Column("status", ormschema.Text()))
 	for _, id := range []string{"first", "second"} {
-		if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
+		if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
 			t.Fatalf("insert %s: %v", id, err)
 		}
 	}
 	commits := []transactionmodel.RecordMutationCommit{
-		{Operation: "update", Object: object, Record: recordmodel.Record{ID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z"},
-		{Operation: "update", Object: object, Record: recordmodel.Record{ID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2025-12-31T00:00:00Z"},
+		{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "first", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z"},
+		{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "second", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2025-12-31T00:00:00Z"},
 	}
 	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", commits); !mutation.IsMutationConflict(err, mutation.MutationConflictOptimistic) {
 		t.Fatalf("expected typed optimistic concurrency conflict, got %v", err)
@@ -196,13 +198,11 @@ func TestRecordMutationAuthorizationScopeGuardsUpdateDeleteAndWholeBatch(t *test
 		{Key: "owner_user_id", Type: "text"},
 		{Key: "status", Type: "text"},
 	}}
-	if _, err := store.DB().Exec(`CREATE TABLE scoped_mutation (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, owner_user_id TEXT, status TEXT, PRIMARY KEY (workspace_id, id))`); err != nil {
-		t.Fatal(err)
-	}
+	createGeneratedRecordTable(t, store, object.Key, ormschema.Column("status", ormschema.Text()))
 	repository := recordStore(store)
 	for _, candidate := range []recordmodel.Record{
-		{ID: "owned", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"owner_user_id": "user-a", "status": "pending"}},
-		{ID: "foreign", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"owner_user_id": "user-b", "status": "pending"}},
+		{RecordID: "owned", OwnerUserID: "user-a", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}},
+		{RecordID: "foreign", OwnerUserID: "user-b", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}},
 	} {
 		if err := repository.InsertRecord(t.Context(), "workspace-primary", object, candidate); err != nil {
 			t.Fatal(err)
@@ -212,7 +212,7 @@ func TestRecordMutationAuthorizationScopeGuardsUpdateDeleteAndWholeBatch(t *test
 	update := func(id, version, status string) transactionmodel.RecordMutationCommit {
 		return transactionmodel.RecordMutationCommit{
 			Operation: "update", Object: object, AuthorizationScope: scope,
-			Record:            recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: version, Data: map[string]any{"owner_user_id": map[string]string{"owned": "user-a", "foreign": "user-b"}[id], "status": status}},
+			Record:            recordmodel.Record{RecordID: id, OwnerUserID: map[string]string{"owned": "user-a", "foreign": "user-b"}[id], CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: version, Data: map[string]any{"status": status}},
 			ExpectedUpdatedAt: "2026-01-01T00:00:00Z",
 		}
 	}
@@ -257,20 +257,18 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 				t.Fatal(err)
 			}
 			auditmodulefixture.Bind(t, t.Context(), store)
+			object := definitionmodel.ObjectSchema{Key: "capacity", Fields: []definitionmodel.FieldSchema{{Key: "reserved", Type: "number"}, {Key: "status", Type: "text"}}}
+			createGeneratedRecordTable(t, store, object.Key, ormschema.Column("reserved", ormschema.Decimal(38, 10)), ormschema.Column("status", ormschema.Text()))
 			if err := store.SetEngineForTesting(driver); err != nil {
 				t.Fatal(err)
 			}
-			object := definitionmodel.ObjectSchema{Key: "capacity", Fields: []definitionmodel.FieldSchema{{Key: "reserved", Type: "number"}, {Key: "status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE capacity (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, reserved REAL, status TEXT)`); err != nil {
-				t.Fatal(err)
-			}
-			initial := recordmodel.Record{ID: "class-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"reserved": 19.0, "status": "open"}}
+			initial := recordmodel.Record{RecordID: "class-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"reserved": 19.0, "status": "open"}}
 			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, initial); err != nil {
 				t.Fatal(err)
 			}
 			commit := transactionmodel.RecordMutationCommit{
 				Operation: "update", Object: object,
-				Record:     recordmodel.Record{ID: initial.ID, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"reserved": 20.0, "status": "open"}},
+				Record:     recordmodel.Record{RecordID: initial.RecordID, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"reserved": 20.0, "status": "open"}},
 				Predicates: []transactionmodel.MutationPredicate{{Field: "reserved", Operator: "lt", Value: 20.0, ErrorCode: "capacity_full"}, {Field: "status", Operator: "eq", Value: "open", ErrorCode: "capacity_closed"}},
 			}
 			if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err != nil {
@@ -283,7 +281,7 @@ func TestConditionalMutationPredicateIsAtomicAcrossDialects(t *testing.T) {
 			if !errors.As(err, &conflict) || conflict.Code != "capacity_full" || conflict.Field != "reserved" {
 				t.Fatalf("business conflict=%#v err=%v", conflict, err)
 			}
-			persisted, found, err := recordStore(store).GetRecord(t.Context(), "workspace-primary", object, initial.ID)
+			persisted, found, err := recordStore(store).GetRecord(t.Context(), "workspace-primary", object, initial.RecordID)
 			if err != nil || !found || fmt.Sprint(persisted.Data["reserved"]) != "20" || persisted.UpdatedAt != "2026-01-02T00:00:00Z" {
 				t.Fatalf("predicate failure leaked mutation: record=%#v found=%v err=%v", persisted, found, err)
 			}
@@ -307,10 +305,8 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 			}
 			auditmodulefixture.Bind(t, t.Context(), store)
 			object := definitionmodel.ObjectSchema{Key: "failure_window_record", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-			if _, err := store.DB().Exec(`CREATE TABLE failure_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
-				t.Fatal(err)
-			}
-			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
+			createGeneratedRecordTable(t, store, object.Key, ormschema.Column("status", ormschema.Text()))
+			if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
 				t.Fatal(err)
 			}
 			trigger := "fail_" + failure.name
@@ -318,7 +314,7 @@ func TestMutationSideFactFailureWindowsRollbackRecordAuditOutboxAndWorkflowInten
 				t.Fatal(err)
 			}
 			commit := transactionmodel.RecordMutationCommit{
-				Operation: "update", Object: object, Record: recordmodel.Record{ID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z",
+				Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: "2026-01-01T00:00:00Z",
 				Audit:           dialectAudit(failure.name, "rollback"),
 				Outbox:          []publicationmodel.Message{dialectOutbox(failure.name, "rollback")},
 				WorkflowIntents: []workflowmodel.WorkflowExecution{dialectWorkflowIntent(failure.name, "rollback")},
@@ -344,14 +340,15 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE booking_slot (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, owner TEXT, starts_at BIGINT, ends_at BIGINT, status TEXT)`); err != nil {
-		t.Fatal(err)
-	}
 	object := definitionmodel.ObjectSchema{Key: "booking_slot", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "relation"}, {Key: "starts_at", Type: "datetime"}, {Key: "ends_at", Type: "datetime"}, {Key: "status", Type: "select"}}, Validations: []definitionmodel.ValidationSchema{{
 		Key: "owner_schedule", Type: "temporal_exclusion", Message: "booking.owner_busy", Config: map[string]any{"start_field": "starts_at", "end_field": "ends_at", "scope_fields": []any{"owner"}, "status_field": "status", "excluded_statuses": []any{"cancelled"}},
 	}}}
+	createGeneratedRecordTable(t, store, object.Key,
+		ormschema.Column("owner", ormschema.Text()), ormschema.Column("starts_at", ormschema.BigInt()),
+		ormschema.Column("ends_at", ormschema.BigInt()), ormschema.Column("status", ormschema.Text()),
+	)
 	commit := func(id, owner, start, end, status string) transactionmodel.RecordMutationCommit {
-		return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"owner": owner, "starts_at": start, "ends_at": end, "status": status}}}
+		return transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: recordmodel.Record{RecordID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"owner": owner, "starts_at": start, "ends_at": end, "status": status}}}
 	}
 	if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit("one", "coach-1", "2026-07-21T10:00:00Z", "2026-07-21T11:00:00Z", "confirmed")); err != nil {
 		t.Fatal(err)
@@ -367,7 +364,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 		commit("excluded", "coach-1", "2026-07-21T10:30:00Z", "2026-07-21T11:30:00Z", "cancelled"),
 	} {
 		if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", allowed); err != nil {
-			t.Fatalf("allowed temporal mutation %s: %v", allowed.Record.ID, err)
+			t.Fatalf("allowed temporal mutation %s: %v", allowed.Record.RecordID, err)
 		}
 	}
 	batch := []transactionmodel.RecordMutationCommit{
@@ -379,7 +376,7 @@ func TestTemporalExclusionIsEnforcedInsideMutationTransaction(t *testing.T) {
 	}
 	for _, id := range []string{"overlap", "batch-one", "batch-overlap"} {
 		var count int
-		if err := store.DB().QueryRow(`SELECT COUNT(*) FROM booking_slot WHERE id = ?`, id).Scan(&count); err != nil || count != 0 {
+		if err := store.DB().QueryRow(`SELECT COUNT(*) FROM booking_slot WHERE booking_slot_id = ?`, id).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("temporal conflict leaked %s count=%d err=%v", id, count, err)
 		}
 	}
@@ -392,19 +389,13 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	for _, ddl := range []string{
-		`CREATE TABLE payment_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, paid_amount TEXT)`,
-		`CREATE TABLE refund_fact (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, payment_id TEXT, amount TEXT, status TEXT)`,
-		`CREATE TABLE class_limit (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, capacity REAL)`,
-		`CREATE TABLE class_booking (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, class_id TEXT, status TEXT)`,
-	} {
-		if _, err := store.DB().Exec(ddl); err != nil {
-			t.Fatal(err)
-		}
-	}
+	createGeneratedRecordTable(t, store, "payment_limit", ormschema.Column("paid_amount", ormschema.Text()))
+	createGeneratedRecordTable(t, store, "refund_fact", ormschema.Column("payment_id", ormschema.Text()), ormschema.Column("amount", ormschema.Text()), ormschema.Column("status", ormschema.Text()))
+	createGeneratedRecordTable(t, store, "class_limit", ormschema.Column("capacity", ormschema.Decimal(38, 10)))
+	createGeneratedRecordTable(t, store, "class_booking", ormschema.Column("class_id", ormschema.Text()), ormschema.Column("status", ormschema.Text()))
 	currency := definitionmodel.FieldSchema{Key: "amount", Type: "currency", Config: map[string]any{"precision": 12, "scale": 2}}
 	payment := definitionmodel.ObjectSchema{Key: "payment_limit", Fields: []definitionmodel.FieldSchema{{Key: "paid_amount", Type: "currency", Config: currency.Config}}}
-	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", payment, recordmodel.Record{ID: "payment-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"paid_amount": "100.00"}}); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", payment, recordmodel.Record{RecordID: "payment-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"paid_amount": "100.00"}}); err != nil {
 		t.Fatal(err)
 	}
 	refund := definitionmodel.ObjectSchema{Key: "refund_fact", Fields: []definitionmodel.FieldSchema{
@@ -413,11 +404,11 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 		"relation_field": "payment_id", "aggregate": "sum", "value_field": "amount", "limit_field": "paid_amount", "operator": "lte", "status_field": "status", "included_statuses": []any{"pending", "approved"},
 	}}}}
 	refundCommit := func(id, amount, status string) transactionmodel.RecordMutationCommit {
-		return transactionmodel.RecordMutationCommit{Operation: "create", Object: refund, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"payment_id": "payment-1", "amount": amount, "status": status}}}
+		return transactionmodel.RecordMutationCommit{Operation: "create", Object: refund, Record: recordmodel.Record{RecordID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"payment_id": "payment-1", "amount": amount, "status": status}}}
 	}
 	for _, commit := range []transactionmodel.RecordMutationCommit{refundCommit("refund-60", "60.00", "approved"), refundCommit("refund-40", "40.00", "pending"), refundCommit("refund-cancelled", "50.00", "cancelled")} {
 		if err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", commit); err != nil {
-			t.Fatalf("allowed refund %s: %v", commit.Record.ID, err)
+			t.Fatalf("allowed refund %s: %v", commit.Record.RecordID, err)
 		}
 	}
 	err := recordStore(store).CommitRecordMutation(t.Context(), "workspace-primary", refundCommit("refund-over", "0.01", "approved"))
@@ -427,7 +418,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 	}
 
 	class := definitionmodel.ObjectSchema{Key: "class_limit", Fields: []definitionmodel.FieldSchema{{Key: "capacity", Type: "number"}}}
-	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", class, recordmodel.Record{ID: "class-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"capacity": 2}}); err != nil {
+	if err := recordStore(store).InsertRecord(t.Context(), "workspace-primary", class, recordmodel.Record{RecordID: "class-1", CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"capacity": 2}}); err != nil {
 		t.Fatal(err)
 	}
 	booking := definitionmodel.ObjectSchema{Key: "class_booking", Fields: []definitionmodel.FieldSchema{
@@ -436,7 +427,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 		"relation_field": "class_id", "aggregate": "count", "limit_field": "capacity", "operator": "lte", "status_field": "status", "included_statuses": []any{"reserved"},
 	}}}}
 	bookingCommit := func(id string) transactionmodel.RecordMutationCommit {
-		return transactionmodel.RecordMutationCommit{Operation: "create", Object: booking, Record: recordmodel.Record{ID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"class_id": "class-1", "status": "reserved"}}}
+		return transactionmodel.RecordMutationCommit{Operation: "create", Object: booking, Record: recordmodel.Record{RecordID: id, CreatedAt: "now", UpdatedAt: "now", Data: map[string]any{"class_id": "class-1", "status": "reserved"}}}
 	}
 	if err := recordStore(store).CommitRecordMutationBatch(t.Context(), "workspace-primary", []transactionmodel.RecordMutationCommit{bookingCommit("booking-1"), bookingCommit("booking-2")}); err != nil {
 		t.Fatal(err)
@@ -450,7 +441,7 @@ func TestRelatedAggregateInvariantLocksParentAndUsesExactCandidateAggregate(t *t
 			table = "class_booking"
 		}
 		var count int
-		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+table+" WHERE id = ?", id).Scan(&count); err != nil || count != 0 {
+		if err := store.DB().QueryRow("SELECT COUNT(*) FROM "+table+" WHERE "+table+"_id = ?", id).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("aggregate conflict leaked %s count=%d err=%v", id, count, err)
 		}
 	}

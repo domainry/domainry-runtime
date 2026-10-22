@@ -24,7 +24,7 @@ func (s ApplicationSchemaStore) ProjectModelMatches(ctx context.Context, scope p
 		return false, err
 	}
 	statement, args, err := query.NewSelectBuilder(s.store.SQLRenderer, "_project_model_state").
-		Columns("model_hash", "initialized_at", "project_key").Where(query.Equal("id", "current")).Build()
+		Columns("model_hash", "initialized_at", "project_key").Where(query.Equal("state_key", "current")).Build()
 	if err != nil {
 		return false, fmt.Errorf("build project model lookup: %w", err)
 	}
@@ -169,7 +169,7 @@ func (s ApplicationSchemaStore) syncProjectModelDefinitions(ctx context.Context,
 
 func (s ApplicationSchemaStore) recordProjectModelProjection(ctx context.Context, model projectmodel.RuntimeModel) error {
 	now := time.Now().UTC().Format(time.RFC3339)
-	columns := []string{"id", "schema_version", "model_hash", "catalog_hash", "project_key", "default_locale", "time_zone", "name", "initialized_at", "catalog_updated_at"}
+	columns := []string{"state_key", "schema_version", "model_hash", "catalog_hash", "project_key", "default_locale", "time_zone", "name", "initialized_at", "catalog_updated_at"}
 	values := []any{"current", model.SchemaVersion, model.ContentHash, model.ContentHash, model.ProjectKey, projectModelDefaultLocale(model), model.EffectiveTimeZone(), model.ProjectName, timevalue.Millis(now), timevalue.Millis(now)}
 	insert := query.NewInsertBuilder(s.store.SQLRenderer, "_project_model_state").Columns(columns...).Values(values...)
 	assignments := make([]query.Assignment, 0, len(columns)-1)
@@ -177,7 +177,7 @@ func (s ApplicationSchemaStore) recordProjectModelProjection(ctx context.Context
 		assignments = append(assignments, query.AssignExpression(column, query.InsertedValue(column)))
 	}
 	var err error
-	insert, err = s.store.Engine.ApplyUpsert(insert, []string{"id"}, assignments...)
+	insert, err = s.store.Engine.ApplyUpsert(insert, []string{"state_key"}, assignments...)
 	if err != nil {
 		return fmt.Errorf("build project model projection upsert: %w", err)
 	}

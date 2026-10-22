@@ -26,19 +26,19 @@ func (h *OperationsHandler) listOperations(w http.ResponseWriter, r *http.Reques
 	limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
 	values := r.URL.Query()
 	page, err := h.service.SearchReceipts(r.Context(), operationsmodel.OperationsReceiptFilter{
-		Status:       operationsmodel.OperationsStatus(strings.TrimSpace(values.Get("status"))),
-		FailureClass: operationsmodel.OperationsFailureClass(strings.TrimSpace(values.Get("failure_class"))),
-		Owner:        values.Get("owner"),
-		Kind:         values.Get("kind"),
-		ParentID:     values.Get("parent_operation_id"),
-		ResourceType: values.Get("resource_type"),
-		ResourceID:   values.Get("resource_id"),
-		RequestedBy:  values.Get("requested_by"),
-		Correlation:  values.Get("correlation"),
-		CreatedFrom:  values.Get("created_from"),
-		CreatedTo:    values.Get("created_to"),
-		Search:       values.Get("search"),
-		Limit:        limit,
+		Status:            operationsmodel.OperationsStatus(strings.TrimSpace(values.Get("status"))),
+		FailureClass:      operationsmodel.OperationsFailureClass(strings.TrimSpace(values.Get("failure_class"))),
+		Owner:             values.Get("owner"),
+		Kind:              values.Get("kind"),
+		ParentOperationID: values.Get("parent_operation_id"),
+		ResourceType:      values.Get("resource_type"),
+		ResourceID:        values.Get("resource_id"),
+		RequestedBy:       values.Get("requested_by"),
+		Correlation:       values.Get("correlation"),
+		CreatedFrom:       values.Get("created_from"),
+		CreatedTo:         values.Get("created_to"),
+		Search:            values.Get("search"),
+		Limit:             limit,
 	}, h.principal(r))
 	if err != nil {
 		h.writeServiceError(w, r, err)

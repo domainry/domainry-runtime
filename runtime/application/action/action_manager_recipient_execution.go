@@ -55,7 +55,7 @@ func (e *businessActionExecution) ResolveRecordManagerRecipient(ctx context.Cont
 	if err != nil {
 		return "", err
 	}
-	if !found || strings.TrimSpace(owner.ID) != ownerID {
+	if !found || strings.TrimSpace(owner.UserID) != ownerID {
 		return "", nil
 	}
 	managerID := strings.TrimSpace(owner.ManagerUserID)
@@ -69,7 +69,7 @@ func (e *businessActionExecution) ResolveRecordManagerRecipient(ctx context.Cont
 	if err != nil {
 		return "", err
 	}
-	if !found || strings.TrimSpace(manager.ID) != managerID || strings.TrimSpace(manager.Status) != identitysdk.UserStatusActive || strings.TrimSpace(manager.WorkStatus) == "terminated" {
+	if !found || strings.TrimSpace(manager.UserID) != managerID || strings.TrimSpace(manager.Status) != identitysdk.UserStatusActive || strings.TrimSpace(manager.WorkStatus) == "terminated" {
 		return "", nil
 	}
 	return managerID, nil

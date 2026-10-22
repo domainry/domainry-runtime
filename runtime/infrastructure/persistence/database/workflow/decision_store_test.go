@@ -42,7 +42,7 @@ func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
 			store, object, process, node, task := workflowDecisionStoreFixture(t)
 			defer store.Close()
 			processStore := NewWorkflowProcessStore(store)
-			event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", ID: "decision_event", ProcessID: process.ID, NodeID: node.NodeID, TaskID: task.ID, Event: "task_approved", ActorID: "manager", Summary: "workflow.event.task.approved", CreatedAt: workflowTestTimeV2}
+			event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", EventID: "decision_event", ProcessID: process.ProcessID, NodeID: node.NodeID, TaskID: task.TaskID, Event: "task_approved", ActorID: "manager", Summary: "workflow.event.task.approved", CreatedAt: workflowTestTimeV2}
 			if test.duplicate {
 				if err := processStore.InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 					t.Fatal(err)
@@ -67,8 +67,8 @@ func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
 				DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: "manager",
 				Process: &completedProcess, UpdateNodes: []workflowmodel.WorkflowNodeInstance{completedNode}, Events: []workflowmodel.WorkflowProcessEvent{event},
 				RecordMutations: []transactionmodel.RecordMutationCommit{{
-					Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: workflowTestTimeV1,
-					Audit: &auditmodel.AuditEvent{ID: "decision_audit", Family: auditmodel.EventFamilyRuntimeWorkflow, Event: "workflow_task_decided", ObjectKey: object.Key, RecordID: "business_1", ActorID: "manager", CreatedAt: workflowTestTimeV2},
+					Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "approved"}}, ExpectedUpdatedAt: workflowTestTimeV1,
+					Audit: &auditmodel.AuditEvent{AuditEventID: workflowTestAuditEventID("decision-audit"), Family: auditmodel.EventFamilyRuntimeWorkflow, Event: "workflow_task_decided", ObjectKey: object.Key, RecordID: "business_1", ActorID: "manager", CreatedAt: workflowTestTimeV2},
 				}},
 			}
 			committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), commit)
@@ -92,7 +92,7 @@ func TestContextWorkflowDecisionCommitIsAtomic(t *testing.T) {
 func TestWorkflowStateCommitRollsBackRecoveryWhenEventWriteFails(t *testing.T) {
 	store, object, process, node, task := workflowDecisionStoreFixture(t)
 	defer store.Close()
-	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", ID: "state_event", ProcessID: process.ID, NodeID: node.NodeID, TaskID: task.ID, Event: "process_failure_resolved", ActorID: "manager", CreatedAt: workflowTestTimeV2}
+	event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", EventID: "state_event", ProcessID: process.ProcessID, NodeID: node.NodeID, TaskID: task.TaskID, Event: "process_failure_resolved", ActorID: "manager", CreatedAt: workflowTestTimeV2}
 	if err := NewWorkflowProcessStore(store).InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeCorrelation(t *testing.T) 
 	for _, duplicateEvent := range []bool{false, true} {
 		store, _, process, _, _ := workflowDecisionStoreFixture(t)
 		processStore := NewWorkflowProcessStore(store)
-		event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", ID: "agent_waiting", ProcessID: process.ID, NodeID: "agent", Event: "agent_task_waiting", ActorID: "user", CreatedAt: workflowTestTimeV2}
+		event := workflowmodel.WorkflowProcessEvent{WorkspaceID: "workspace-primary", EventID: "agent_waiting", ProcessID: process.ProcessID, NodeID: "agent", Event: "agent_task_waiting", ActorID: "user", CreatedAt: workflowTestTimeV2}
 		if duplicateEvent {
 			if err := processStore.InsertEvent(t.Context(), "workspace-primary", event); err != nil {
 				t.Fatal(err)
@@ -121,7 +121,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeCorrelation(t *testing.T) 
 		}
 		commit := transactionmodel.WorkflowStateCommit{
 			WorkspaceID: "workspace-primary",
-			InsertNodes: []workflowmodel.WorkflowNodeInstance{{WorkspaceID: "workspace-primary", ID: "agent-node", ProcessID: process.ID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "agent-run"}, Output: map[string]any{}, StartedAt: workflowTestTimeV2}},
+			InsertNodes: []workflowmodel.WorkflowNodeInstance{{WorkspaceID: "workspace-primary", NodeInstanceID: "agent-node", ProcessID: process.ProcessID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "agent-run"}, Output: map[string]any{}, StartedAt: workflowTestTimeV2}},
 			Events:      []workflowmodel.WorkflowProcessEvent{event},
 		}
 		err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), commit)
@@ -136,7 +136,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeCorrelation(t *testing.T) 
 			want = 0
 		}
 		var count int
-		query := "SELECT COUNT(*) FROM " + store.TableIdentifier("_workflow_node_instances") + " WHERE " + store.Identifier("id") + " = " + store.Placeholder(1)
+		query := "SELECT COUNT(*) FROM " + store.TableIdentifier("_workflow_node_instances") + " WHERE " + store.Identifier("node_instance_id") + " = " + store.Placeholder(1)
 		if err := store.DB().QueryRowContext(t.Context(), query, "agent-node").Scan(&count); err != nil || count != want {
 			t.Fatalf("node count=%d want=%d err=%v", count, want, err)
 		}
@@ -147,7 +147,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeCorrelation(t *testing.T) 
 func assertWorkflowDecisionAuditCount(t *testing.T, store *database.RuntimeStore, want int) {
 	t.Helper()
 	var count int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE id = ?`, "decision_audit").Scan(&count); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _audit_events WHERE audit_event_id = ?`, workflowTestAuditEventID("decision-audit")).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != want {
@@ -184,8 +184,8 @@ func TestContextWorkflowDecisionConflictDoesNotApplySideEffects(t *testing.T) {
 	committed, err := newAgentWorkflowDecisionStore(store).CommitWorkflowDecision(t.Context(), transactionmodel.WorkflowDecisionCommit{
 		WorkspaceID: "workspace-primary",
 		DecidedTask: decided, ExpectedTaskStatus: "open", ExpectedAssigneeID: "other-user", Process: &process,
-		Events:          []workflowmodel.WorkflowProcessEvent{{WorkspaceID: "workspace-primary", ID: "must_not_exist", ProcessID: process.ID, Event: "task_approved", ActorID: "other-user", CreatedAt: workflowTestTimeV2}},
-		RecordMutations: []transactionmodel.RecordMutationCommit{{Operation: "update", Object: object, Record: recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "approved"}}}},
+		Events:          []workflowmodel.WorkflowProcessEvent{{WorkspaceID: "workspace-primary", EventID: "must_not_exist", ProcessID: process.ProcessID, Event: "task_approved", ActorID: "other-user", CreatedAt: workflowTestTimeV2}},
+		RecordMutations: []transactionmodel.RecordMutationCommit{{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV2, Data: map[string]any{"status": "approved"}}}},
 	})
 	if err != nil || committed {
 		t.Fatalf("expected idempotency conflict without error, committed=%v err=%v", committed, err)
@@ -248,17 +248,17 @@ func workflowDecisionStoreFixture(t *testing.T) (*database.RuntimeStore, definit
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "decision_business", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE decision_business (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
+	if _, err := store.DB().Exec(`CREATE TABLE decision_business (id INTEGER PRIMARY KEY AUTOINCREMENT, workspace_id TEXT NOT NULL, decision_business_id TEXT NOT NULL UNIQUE, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT)`); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}
-	if err := recordpersistence.NewRecordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1, Data: map[string]any{"status": "pending"}}); err != nil {
+	if err := recordpersistence.NewRecordStore(store).InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: "business_1", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1, Data: map[string]any{"status": "pending"}}); err != nil {
 		store.Close()
 		t.Fatal(err)
 	}
-	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-primary", ID: "process_1", WorkflowKey: "approval", WorkflowName: "Approval", DefinitionVersion: 1, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "approval"}, InitiatorID: "requester", Status: "waiting", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
-	node := workflowmodel.WorkflowNodeInstance{WorkspaceID: "workspace-primary", ID: "node_1", ProcessID: process.ID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{}, Output: map[string]any{}, StartedAt: workflowTestTimeV1}
-	task := workflowmodel.WorkflowTask{WorkspaceID: "workspace-primary", ID: "task_1", ProcessID: process.ID, NodeInstanceID: node.ID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: "open", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-primary", ProcessID: "process_1", WorkflowKey: "approval", WorkflowName: "Approval", DefinitionVersion: 1, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "approval"}, InitiatorID: "requester", Status: "waiting", CurrentNodeIDs: []string{"approve"}, Variables: map[string]any{}, Result: map[string]any{}, CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
+	node := workflowmodel.WorkflowNodeInstance{WorkspaceID: "workspace-primary", NodeInstanceID: "node_1", ProcessID: process.ProcessID, NodeID: "approve", NodeType: "approval", Iteration: 1, Status: "waiting", Input: map[string]any{}, Output: map[string]any{}, StartedAt: workflowTestTimeV1}
+	task := workflowmodel.WorkflowTask{WorkspaceID: "workspace-primary", TaskID: "task_1", ProcessID: process.ProcessID, NodeInstanceID: node.NodeInstanceID, NodeID: node.NodeID, Title: "Approve", AssigneeUserID: "manager", Sequence: 1, Status: "open", CreatedAt: workflowTestTimeV1, UpdatedAt: workflowTestTimeV1}
 	processStore := NewWorkflowProcessStore(store)
 	if err := processStore.InsertProcess(t.Context(), "workspace-primary", process); err != nil {
 		store.Close()
@@ -286,7 +286,7 @@ func assertWorkflowDecisionState(t *testing.T, store *database.RuntimeStore, obj
 	if err != nil || !ok || process.Status != processStatus {
 		t.Fatalf("process status=%q ok=%v err=%v, want %q", process.Status, ok, err, processStatus)
 	}
-	nodes, err := processStore.ListNodes(t.Context(), "workspace-primary", process.ID)
+	nodes, err := processStore.ListNodes(t.Context(), "workspace-primary", process.ProcessID)
 	if err != nil || len(nodes) != 1 || nodes[0].Status != nodeStatus {
 		t.Fatalf("nodes=%#v err=%v, want status %q", nodes, err, nodeStatus)
 	}

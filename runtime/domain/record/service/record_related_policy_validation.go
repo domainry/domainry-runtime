@@ -236,7 +236,7 @@ func (v *RecordRelatedPolicyValidator) ValidateTimeOverlapPolicies(ctx context.C
 				return relatedPolicyInternalError("check time overlap policy", err)
 			}
 			for _, candidate := range result.Items {
-				if strings.TrimSpace(candidate.ID) == strings.TrimSpace(recordID) || !v.canAccess(principal, object, candidate) || (policy.StatusField != "" && recordvalidation.RecordContainsText(policy.ExcludedStatuses, strings.TrimSpace(fmt.Sprint(candidate.Data[policy.StatusField])))) || !recordvalidation.RecordTimeOverlapScopeMatches(policy.Definition, data, candidate.Data) {
+				if strings.TrimSpace(candidate.RecordID) == strings.TrimSpace(recordID) || !v.canAccess(principal, object, candidate) || (policy.StatusField != "" && recordvalidation.RecordContainsText(policy.ExcludedStatuses, strings.TrimSpace(fmt.Sprint(candidate.Data[policy.StatusField])))) || !recordvalidation.RecordTimeOverlapScopeMatches(policy.Definition, data, candidate.Data) {
 					continue
 				}
 				candidateStart, candidateEnd, candidateOK, err := recordvalidation.RecordTimeOverlapRange(candidate.Data, policy.StartField, policy.EndField)
@@ -244,7 +244,7 @@ func (v *RecordRelatedPolicyValidator) ValidateTimeOverlapPolicies(ctx context.C
 					return err
 				}
 				if candidateOK && start.Before(candidateEnd) && candidateStart.Before(end) {
-					return recordStateMachineError(apperror.KindConflict, policy.ErrorCode, "policy", policy.Key, "conflicting_record_id", candidate.ID)
+					return recordStateMachineError(apperror.KindConflict, policy.ErrorCode, "policy", policy.Key, "conflicting_record_id", candidate.RecordID)
 				}
 			}
 			if !result.HasNext {

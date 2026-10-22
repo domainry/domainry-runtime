@@ -2,8 +2,6 @@ package action
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"strconv"
 	"strings"
 	"time"
@@ -58,13 +56,11 @@ func (e *businessActionExecution) prepareNotificationBatch(ctx context.Context, 
 	receipts := make([]runtimeext.NotificationReceipt, len(intents))
 	events := make([]notificationmodel.NotificationEvent, len(intents))
 	for index, intent := range intents {
-		identityHash := sha256.Sum256([]byte(e.workspace.ID + "\x00" + strings.TrimSpace(intent.EventType) + "\x00" + strings.TrimSpace(intent.SourceEventID)))
-		receipt := runtimeext.NotificationReceipt{ID: "project_notification:" + hex.EncodeToString(identityHash[:])}
-		event, err := e.dependencies.CompileNotification(e.unitOfWork.executionContext(ctx), receipt.ID, intent, e.invocation.Principal)
+		event, err := e.dependencies.CompileNotification(e.unitOfWork.executionContext(ctx), intent, e.invocation.Principal)
 		if err != nil {
 			return nil, nil, err
 		}
-		event.ID = receipt.ID
+		receipt := runtimeext.NotificationReceipt{ID: event.EventID}
 		event.WorkspaceID = e.workspace.ID
 		event.SourceEventID = strings.TrimSpace(intent.SourceEventID)
 		event.EventType = strings.TrimSpace(intent.EventType)

@@ -63,11 +63,11 @@ func (s workflowIdentityEdgeStub) ListUsers(context.Context, identitysdk.Project
 	if !s.found {
 		return nil, nil
 	}
-	if s.user.ID == "" {
+	if s.user.UserID == "" {
 		assignee := s.user
-		assignee.ID = "assignee"
+		assignee.UserID = "assignee"
 		user := s.user
-		user.ID = "user"
+		user.UserID = "user"
 		return []identitysdk.User{assignee, user}, nil
 	}
 	return []identitysdk.User{s.user}, nil
@@ -86,10 +86,10 @@ func workflowDeadlineService(worker *workflowDeadlineWorkerEdgeStub, invoke func
 
 func TestWorkflowTaskLifecycleNotificationAdvancesAcrossRecoveredDecisions(t *testing.T) {
 	compile := func(intent notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
-		return notificationmodel.NotificationEvent{ID: intent.ID, SourceEventID: intent.SourceEventID, GroupKey: intent.GroupKey}, nil
+		return notificationmodel.NotificationEvent{EventID: intent.SourceEventID, SourceEventID: intent.SourceEventID, GroupKey: intent.GroupKey}, nil
 	}
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", WorkflowName: "Refund approval"}
-	first := workflowmodel.WorkflowTask{ID: "task", UpdatedAt: "2026-07-30T01:00:00Z"}
+	first := workflowmodel.WorkflowTask{TaskID: "task", UpdatedAt: "2026-07-30T01:00:00Z"}
 	second := first
 	second.UpdatedAt = "2026-07-30T01:01:00Z"
 	firstEvent, err := compileWorkflowTaskLifecycleNotification(compile, process, first, "workflow.task.completed", "completed", "", first.UpdatedAt)
@@ -100,16 +100,16 @@ func TestWorkflowTaskLifecycleNotificationAdvancesAcrossRecoveredDecisions(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstEvent.ID == recoveredEvent.ID || firstEvent.SourceEventID == recoveredEvent.SourceEventID || firstEvent.GroupKey != recoveredEvent.GroupKey {
+	if firstEvent.EventID == recoveredEvent.EventID || firstEvent.SourceEventID == recoveredEvent.SourceEventID || firstEvent.GroupKey != recoveredEvent.GroupKey {
 		t.Fatalf("first=%+v recovered=%+v", firstEvent, recoveredEvent)
 	}
 }
 
 func TestWorkflowTaskReminderProviderAndEventOutcomes(t *testing.T) {
 	actor := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "actor", WorkspaceID: "workspace"}}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", Variables: map[string]any{"name": "Ada"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", Variables: map[string]any{"name": "Ada"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
 	node := definitionmodel.WorkflowGraphNode{ID: "approval"}
-	task := workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "approver"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "approver"}
 	contract := definitionmodel.WorkflowApprovalNodeContract{ReminderActionKey: "notify", ReminderInput: map[string]any{"subject": "Hello $payload.name"}}
 	worker := &workflowDeadlineWorkerEdgeStub{}
 	var invocation WorkflowBusinessActionInvocation
@@ -142,12 +142,12 @@ func TestWorkflowTaskReminderProviderAndEventOutcomes(t *testing.T) {
 
 func TestWorkflowTaskEscalationRecipientAndEventOutcomes(t *testing.T) {
 	actor := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "actor", WorkspaceID: "workspace"}}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
 	node := definitionmodel.WorkflowGraphNode{ID: "approval"}
 	worker := &workflowDeadlineWorkerEdgeStub{}
 	service := workflowDeadlineService(worker, nil)
 	service.processEngine = NewWorkflowProcessRuntime(WorkflowDependencies{}).ProcessEngine()
-	task := workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "old"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "old"}
 	contract := definitionmodel.WorkflowApprovalNodeContract{EscalationResolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users", UserIDs: []string{"new", "new"}}}}
 	if err := service.escalateWorkflowTask(t.Context(), process, node, &task, contract, actor); err != nil {
 		t.Fatal(err)
@@ -155,18 +155,18 @@ func TestWorkflowTaskEscalationRecipientAndEventOutcomes(t *testing.T) {
 	if task.AssigneeUserID != "new" || task.AssigneeName != "" || task.AssigneeResolverKey != "users" || len(task.AssigneeEvidence.Matches) != 1 || len(worker.events) != 1 {
 		t.Fatalf("task=%+v events=%+v", task, worker.events)
 	}
-	service.identity = workflowIdentityEdgeStub{user: identitysdk.User{ID: "new", Name: "New User"}, found: true}
-	namedTask := workflowmodel.WorkflowTask{ID: "named", AssigneeUserID: "old"}
+	service.identity = workflowIdentityEdgeStub{user: identitysdk.User{UserID: "new", Name: "New User"}, found: true}
+	namedTask := workflowmodel.WorkflowTask{TaskID: "named", AssigneeUserID: "old"}
 	if err := service.escalateWorkflowTask(t.Context(), process, node, &namedTask, contract, actor); err != nil || namedTask.AssigneeName != "New User" {
 		t.Fatalf("named task=%+v err=%v", namedTask, err)
 	}
 	service.identity = workflowIdentityEdgeStub{err: errors.New("identity")}
-	unnamedTask := workflowmodel.WorkflowTask{ID: "unnamed", AssigneeUserID: "old"}
+	unnamedTask := workflowmodel.WorkflowTask{TaskID: "unnamed", AssigneeUserID: "old"}
 	if err := service.escalateWorkflowTask(t.Context(), process, node, &unnamedTask, contract, actor); err != nil || unnamedTask.AssigneeName != "" {
 		t.Fatalf("unnamed task=%+v err=%v", unnamedTask, err)
 	}
 	service.identity = workflowIdentityEdgeStub{}
-	missingNameTask := workflowmodel.WorkflowTask{ID: "missing-name", AssigneeUserID: "old"}
+	missingNameTask := workflowmodel.WorkflowTask{TaskID: "missing-name", AssigneeUserID: "old"}
 	if err := service.escalateWorkflowTask(t.Context(), process, node, &missingNameTask, contract, actor); err != nil || missingNameTask.AssigneeName != "" {
 		t.Fatalf("missing name task=%+v err=%v", missingNameTask, err)
 	}
@@ -196,7 +196,7 @@ func TestWorkflowTaskEscalationRecipientAndEventOutcomes(t *testing.T) {
 
 func TestWorkflowCCNodeValidationRecipientProviderAndSuccessOutcomes(t *testing.T) {
 	actor := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "actor", WorkspaceID: "workspace"}}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", Variables: map[string]any{"name": "Ada"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", ObjectKey: "order", RecordID: "record", Variables: map[string]any{"name": "Ada"}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow"}}
 	for name, contract := range map[string]definitionmodel.WorkflowCCNodeContract{
 		"missing action":    {},
 		"missing recipient": {NotificationActionKey: "notify", Resolvers: []definitionmodel.WorkflowAssigneeResolver{{Type: "users"}}},
@@ -237,7 +237,7 @@ func TestWorkflowRecordFailedNodeIgnoresPersistenceFailure(t *testing.T) {
 		insertNodeErr:                errors.New("insert node"),
 	}
 	engine := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: processStore}).ProcessEngine()
-	engine.recordFailedNode(t.Context(), workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace"}, definitionmodel.WorkflowGraphNode{ID: "node"}, nil, errors.New("failure"), "actor")
+	engine.recordFailedNode(t.Context(), workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace"}, definitionmodel.WorkflowGraphNode{ID: "node"}, nil, errors.New("failure"), "actor")
 	if len(processStore.events) != 0 {
 		t.Fatalf("unexpected events=%v", processStore.events)
 	}

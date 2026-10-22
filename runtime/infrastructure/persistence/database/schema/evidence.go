@@ -29,7 +29,8 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 	idempotencyScopeText := types.IdempotencyScope
 	tables := map[string][]string{
 		"_release_cohorts": {
-			"cohort_key " + text + " PRIMARY KEY",
+			physicalAutoIncrementID(s.Driver()),
+			"cohort_key " + text + " NOT NULL",
 			"combination_sha256 " + indexText + " NOT NULL DEFAULT ''",
 			"identity_json TEXT NOT NULL DEFAULT ''",
 			"generation BIGINT NOT NULL DEFAULT 0",
@@ -37,7 +38,8 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"updated_at BIGINT NOT NULL DEFAULT 0",
 		},
 		"_release_instances": {
-			"instance_id " + text + " PRIMARY KEY",
+			physicalAutoIncrementID(s.Driver()),
+			"instance_id " + text + " NOT NULL",
 			"combination_sha256 " + indexText + " NOT NULL",
 			"generation BIGINT NOT NULL",
 			"lease_expires_at " + timestampNumber + " NOT NULL",
@@ -45,8 +47,9 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"heartbeat_at BIGINT NOT NULL",
 		},
 		WorkflowExecutionsTable: {
+			physicalAutoIncrementID(s.Driver()),
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
-			"id " + text + " PRIMARY KEY",
+			"execution_id " + text + " NOT NULL",
 			"operation_id " + text + " NOT NULL DEFAULT ''",
 			"workflow_key " + text + " NOT NULL",
 			"name TEXT NOT NULL",
@@ -75,7 +78,8 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"updated_at BIGINT NOT NULL",
 		},
 		"_action_assurance_grants": {
-			"id " + text + " PRIMARY KEY",
+			physicalAutoIncrementID(s.Driver()),
+			"grant_id " + text + " NOT NULL",
 			"token_hash " + text + " NOT NULL",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"user_id " + idempotencyScopeText + " NOT NULL",
@@ -91,7 +95,8 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"consumed_at BIGINT NOT NULL DEFAULT 0",
 		},
 		"_automation_runs": {
-			"id " + text + " PRIMARY KEY",
+			physicalAutoIncrementID(s.Driver()),
+			"run_id " + text + " NOT NULL",
 			"workspace_id " + automationWorkspaceText + " NOT NULL",
 			"run_kind " + automationKindText + " NOT NULL",
 			"idempotency_key " + indexText + " NOT NULL",
@@ -120,7 +125,8 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"updated_at BIGINT NOT NULL",
 		},
 		"_publication_outbox": {
-			"id " + text + " PRIMARY KEY",
+			physicalAutoIncrementID(s.Driver()),
+			"message_id " + text + " NOT NULL",
 			"publication_type " + idempotencyScopeText + " NOT NULL DEFAULT 'integration.connector'",
 			"workspace_id " + idempotencyScopeText + " NOT NULL",
 			"operation_id " + text + " NOT NULL DEFAULT ''",

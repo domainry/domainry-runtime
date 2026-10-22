@@ -22,8 +22,8 @@ func recordMutationScopeAllowedTx(ctx context.Context, tx TransactionExecutor, s
 		return false, fmt.Errorf("compile record mutation scope inspection: %w", err)
 	}
 	statement, args, err := query.NewWorkspaceSelectBuilder(store.SQLRenderer, object.Key, workspaceID).
-		Columns("id").
-		Where(query.And(query.Equal("id", recordID), predicate)).
+		Columns(recordBusinessIDColumn(object.Key)).
+		Where(query.And(query.Equal(recordBusinessIDColumn(object.Key), recordID), predicate)).
 		Limit(1).
 		Build()
 	if err != nil {

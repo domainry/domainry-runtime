@@ -25,7 +25,7 @@ func TestFindRequiresExactPublishedCapabilityAndFailsClosedOnCollision(t *testin
 		schema.Column("full_name", schema.Text()),
 		schema.Column("version", schema.Integer()),
 		schema.Column("portrait_file", schema.TextKey(255)),
-	).PrimaryKey("workspace_id", "id").Build()
+	).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestFindRequiresExactPublishedCapabilityAndFailsClosedOnCollision(t *testin
 	insert := func(workspace, id, key, status string) {
 		t.Helper()
 		statement, arguments, err := query.NewInsertBuilder(runtimeStore.RuntimeRenderer(), "card").
-			Columns("workspace_id", "id", "created_at", "updated_at", "share_key", "publication_status", "full_name", "version", "portrait_file").
+			Columns("workspace_id", "card_id", "created_at", "updated_at", "share_key", "publication_status", "full_name", "version", "portrait_file").
 			Values(workspace, id, "2026-09-18T00:00:00Z", "2026-09-18T00:00:00Z", key, status, "Yuki", int64(3), "source-1").Build()
 		if err != nil {
 			t.Fatal(err)

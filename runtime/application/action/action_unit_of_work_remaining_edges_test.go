@@ -99,7 +99,7 @@ func TestActionUnitOfWorkBeginReturnsCachedRecordReplay(t *testing.T) {
 			"action_key": "booking.reserve",
 			"object_key": "booking",
 			"record_id":  "booking-1",
-			"record":     map[string]any{"id": "booking-1"},
+			"record":     map[string]any{"id": int64(1), "record_id": "booking-1"},
 		},
 	}
 	manager := NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store))

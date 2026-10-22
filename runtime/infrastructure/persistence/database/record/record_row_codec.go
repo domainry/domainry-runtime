@@ -3,8 +3,10 @@ package record
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
+	recordschema "github.com/domainry/domainry-orm/recordschema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	persistencedriver "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/driver"
@@ -53,13 +55,27 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 					if values[i] == nil {
 						record.QuerySortValues[key] = nil
 					} else {
-						record.QuerySortValues[key] = value
+						if key == recordmodel.IDField {
+							physicalID, parseErr := recordIDValue(value)
+							if parseErr != nil {
+								return nil, fmt.Errorf("decode %s id cursor: %w", object.Key, parseErr)
+							}
+							record.QuerySortValues[key] = physicalID
+						} else {
+							record.QuerySortValues[key] = value
+						}
 					}
 				}
 			}
 			switch column {
 			case "id":
-				record.ID = fmt.Sprint(value)
+				physicalID, parseErr := recordIDValue(value)
+				if parseErr != nil {
+					return nil, fmt.Errorf("decode %s id: %w", object.Key, parseErr)
+				}
+				record.ID = physicalID
+			case recordschema.EntityIDColumn(object.Key):
+				record.RecordID = fmt.Sprint(value)
 			case "created_at":
 				record.CreatedAt = recordTimestampValue(value)
 			case "updated_at":
@@ -92,6 +108,23 @@ func recordsFromRows(profile persistencedriver.EngineProfile, object definitionm
 		return nil, fmt.Errorf("read records: %w", err)
 	}
 	return records, nil
+}
+
+func recordIDValue(value any) (int64, error) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, nil
+	case int:
+		return int64(typed), nil
+	case int32:
+		return int64(typed), nil
+	case []byte:
+		return strconv.ParseInt(string(typed), 10, 64)
+	case string:
+		return strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
+	default:
+		return 0, fmt.Errorf("unsupported value %T", value)
+	}
 }
 
 func recordStringValue(value any) string {

@@ -27,7 +27,7 @@ const dataExchangeDownloadTTL = 15 * time.Minute
 type ExportPayload struct {
 	WorkspaceID              string                                  `json:"workspace_id"`
 	RequesterUserID          string                                  `json:"requester_user_id"`
-	PrepareReceiptID         string                                  `json:"prepare_receipt_id"`
+	PrepareOperationID       string                                  `json:"prepare_operation_id"`
 	RetryOfJobID             string                                  `json:"retry_of_job_id,omitempty"`
 	ReportKey                string                                  `json:"report_key"`
 	ObjectKey                string                                  `json:"object_key"`
@@ -103,7 +103,7 @@ func exchangePayload(options []byte, referenceID string) (ExportPayload, error) 
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_audit_binding_changed"}
 	}
 	payload.AuditID = referenceID
-	if strings.TrimSpace(payload.PrepareReceiptID) == "" {
+	if strings.TrimSpace(payload.PrepareOperationID) == "" {
 		return payload, &apperror.AppError{Kind: apperror.KindConflict, Code: "backend.report.export_receipt_invalid"}
 	}
 	return payload, nil
@@ -113,7 +113,7 @@ func (p *DataExchangeProvider) verifyCompletedReportExportReceipt(ctx context.Co
 	if p == nil || p.dependencies.Receipts == nil {
 		return internalError(nil)
 	}
-	receipt, found, err := p.dependencies.Receipts.GetReportExportPrepareReceipt(ctx, payload.WorkspaceID, payload.PrepareReceiptID)
+	receipt, found, err := p.dependencies.Receipts.GetReportExportPrepareReceipt(ctx, payload.WorkspaceID, payload.PrepareOperationID)
 	if err != nil {
 		return internalError(err)
 	}

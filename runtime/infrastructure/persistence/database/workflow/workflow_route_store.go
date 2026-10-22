@@ -33,7 +33,11 @@ func (r WorkflowRouteStore) database() workflowDatabase {
 	return r.store.DB()
 }
 
-var workflowRouteStepColumns = []string{"workspace_id", "id", "process_id", "node_id", "step_no", "step_key", "title", "mode", "required_approvals", "status", "assignee_snapshot_json", "configured_by", "configured_at", "configure_source", "node_instance_id", "created_at", "updated_at"}
+var workflowRouteStepColumns = []string{"workspace_id", "route_step_id", "process_id", "node_id", "step_no", "step_key", "title", "mode", "required_approvals", "status", "assignee_snapshot_json", "configured_by", "configured_at", "configure_source", "node_instance_id", "created_at", "updated_at"}
+
+func workflowRouteStepSelectColumns() []string {
+	return append([]string{"id"}, workflowRouteStepColumns...)
+}
 
 func workflowRouteStepValues(step workflowmodel.WorkflowRouteStep) ([]any, error) {
 	assignees := step.AssigneeSnapshot
@@ -44,14 +48,14 @@ func workflowRouteStepValues(step workflowmodel.WorkflowRouteStep) ([]any, error
 	if err != nil {
 		return nil, fmt.Errorf("encode workflow route assignees: %w", err)
 	}
-	return []any{step.WorkspaceID, step.ID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}, nil
+	return []any{step.WorkspaceID, step.RouteStepID, step.ProcessID, step.NodeID, step.StepNo, step.StepKey, step.Title, step.Mode, step.RequiredApprovals, step.Status, string(snapshot), step.ConfiguredBy, timevalue.Millis(step.ConfiguredAt), step.ConfigureSource, step.NodeInstanceID, timevalue.Millis(step.CreatedAt), timevalue.Millis(step.UpdatedAt)}, nil
 }
 
 func scanWorkflowRouteStep(scanner interface{ Scan(...any) error }) (workflowmodel.WorkflowRouteStep, error) {
 	var step workflowmodel.WorkflowRouteStep
 	var snapshot string
 	var configuredAt, createdAt, updatedAt int64
-	if err := scanner.Scan(&step.WorkspaceID, &step.ID, &step.ProcessID, &step.NodeID, &step.StepNo, &step.StepKey, &step.Title, &step.Mode, &step.RequiredApprovals, &step.Status, &snapshot, &step.ConfiguredBy, &configuredAt, &step.ConfigureSource, &step.NodeInstanceID, &createdAt, &updatedAt); err != nil {
+	if err := scanner.Scan(&step.ID, &step.WorkspaceID, &step.RouteStepID, &step.ProcessID, &step.NodeID, &step.StepNo, &step.StepKey, &step.Title, &step.Mode, &step.RequiredApprovals, &step.Status, &snapshot, &step.ConfiguredBy, &configuredAt, &step.ConfigureSource, &step.NodeInstanceID, &createdAt, &updatedAt); err != nil {
 		return workflowmodel.WorkflowRouteStep{}, err
 	}
 	step.ConfiguredAt, step.CreatedAt, step.UpdatedAt = timevalue.String(configuredAt), timevalue.String(createdAt), timevalue.String(updatedAt)
@@ -97,8 +101,8 @@ func (r WorkflowRouteStore) ListRouteSteps(ctx context.Context, workspaceID, pro
 		return nil, fmt.Errorf("workflow route process is required")
 	}
 	statement, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, workflowRouteStepsTable, workspaceID).
-		Columns(workflowRouteStepColumns...).Where(query.Equal("process_id", processID)).
-		OrderBy(query.Ascending("step_no")).Build()
+		Columns(workflowRouteStepSelectColumns()...).Where(query.Equal("process_id", processID)).
+		OrderBy(query.Ascending("step_no"), query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +163,7 @@ func updateWorkflowRouteStepTx(ctx context.Context, store *database.RuntimeStore
 		}
 		builder.Set(column, values[index])
 	}
-	predicates := []query.Predicate{query.Equal("id", step.ID), store.SubjectEvidenceWriteAllowed(step.WorkspaceID, workflowRouteStepsTable, step.ID)}
+	predicates := []query.Predicate{query.Equal("route_step_id", step.RouteStepID), store.SubjectEvidenceWriteAllowed(step.WorkspaceID, workflowRouteStepsTable, step.RouteStepID)}
 	if expected := strings.TrimSpace(expectedStatus); expected != "" {
 		predicates = append(predicates, query.Equal("status", expected))
 	}

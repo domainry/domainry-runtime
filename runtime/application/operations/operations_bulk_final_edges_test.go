@@ -100,7 +100,7 @@ func TestOperationsBulkApplyFinalValidationAndSubmissionConditions(t *testing.T)
 	}
 	for index, mutate := range mutations {
 		for key, receipt := range ledger.receipts {
-			if receipt.Command.ID == original.Command.ID {
+			if receipt.Command.OperationID == original.Command.OperationID {
 				mutated := original
 				mutate(&mutated)
 				ledger.receipts[key] = mutated
@@ -111,7 +111,7 @@ func TestOperationsBulkApplyFinalValidationAndSubmissionConditions(t *testing.T)
 		}
 	}
 	for key, receipt := range ledger.receipts {
-		if receipt.Command.ID == original.Command.ID {
+		if receipt.Command.OperationID == original.Command.OperationID {
 			ledger.receipts[key] = original
 		}
 	}

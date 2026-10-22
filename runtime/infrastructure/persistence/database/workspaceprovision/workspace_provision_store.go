@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/recordschema"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
@@ -184,7 +186,7 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInitializationRequired
 	}
 
-	workspaceID, err := randomID("workspace")
+	workspaceID, err := randomID("ws")
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
@@ -397,8 +399,12 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 		for _, field := range object.Fields {
 			fields[field.Key] = field
 		}
-		columns := []string{"workspace_id", "id", "owner_org_id", "created_at", "updated_at"}
-		values := []any{result.WorkspaceID, stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key), result.FirstStoreID, nowMillis, nowMillis}
+		recordID, identityErr := stableApplicationBootstrapRecordID(result.WorkspaceID, capabilityKey, object.Key)
+		if identityErr != nil {
+			return fmt.Errorf("derive application Workspace bootstrap record identity: %w", identityErr)
+		}
+		columns := []string{"workspace_id", recordschema.EntityIDColumn(object.Key), "owner_org_id", "created_at", "updated_at"}
+		values := []any{result.WorkspaceID, recordID, result.FirstStoreID, nowMillis, nowMillis}
 		if result.FirstStoreID == "" && result.InitialAdminUserID != "" {
 			columns = append(columns, "owner_user_id")
 			values = append(values, result.InitialAdminUserID)
@@ -485,9 +491,8 @@ func normalizeApplicationBootstrapInput(descriptor runtimeext.WorkspaceBootstrap
 	return result, nil
 }
 
-func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey string) string {
-	digest := sha256.Sum256([]byte("domainry-runtime/application-workspace-bootstrap/v1\x00" + workspaceID + "\x00" + capabilityKey + "\x00" + objectKey))
-	return objectKey + "_" + hex.EncodeToString(digest[:12])
+func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey string) (string, error) {
+	return entityid.Derive("rec", "runtime.application-workspace-bootstrap", workspaceID, capabilityKey, objectKey)
 }
 
 func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, installationIdentity string) error {
@@ -500,7 +505,7 @@ func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context
 	}
 	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
 		Columns(
-			"id", "canonical_code", "name", "status", "initial_installation_identity",
+			"workspace_id", "canonical_code", "name", "status", "initial_installation_identity",
 			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
 			"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
 			"billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
@@ -525,11 +530,14 @@ func (store *WorkspaceProvisionStore) insertConfigurationAndReceipt(ctx context.
 	if err != nil {
 		return err
 	}
-	operationID := workspaceProvisioningOperationID(request.RequestID)
+	operationID, err := workspaceProvisioningOperationID(request.RequestID)
+	if err != nil {
+		return err
+	}
 	inserted, err := sharedoperation.NewSQLStore(store.runtime.DB(), store.runtime.RuntimeRenderer()).InsertRecord(
 		sharedoperation.WithExecutor(ctx, tx),
 		sharedoperation.Record{
-			ID: operationID, SystemPurpose: workspaceProvisioningPurpose, Owner: workspaceProvisioningOwner, Kind: workspaceProvisioningKind,
+			OperationID: operationID, SystemPurpose: workspaceProvisioningPurpose, Owner: workspaceProvisioningOwner, Kind: workspaceProvisioningKind,
 			ActionKey: workspaceProvisioningAction, ResourceType: "workspace", ResourceID: result.WorkspaceID, IdempotencyKey: request.RequestID,
 			RequestFingerprint: fingerprint, RequestedBy: result.InitialAdminUserID, Reason: request.WorkspaceName, Reference: result.CanonicalCode,
 			Status: "succeeded", StatusURL: "/operations/" + operationID, ResultJSON: json.RawMessage(resultJSON), MetadataJSON: json.RawMessage(metadataJSON),
@@ -579,9 +587,9 @@ func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fi
 	return result, true, nil
 }
 
-func workspaceProvisioningOperationID(requestID string) string {
+func workspaceProvisioningOperationID(requestID string) (string, error) {
 	digest := sha256.Sum256([]byte("domainry-runtime/workspace-provisioning-operation/v1\x00" + strings.TrimSpace(requestID)))
-	return "workspace_provision_" + hex.EncodeToString(digest[:16])
+	return entityid.Derive("op", "runtime.workspace-provisioning", hex.EncodeToString(digest[:]))
 }
 
 type workspaceProvisioningOperationResult struct {
@@ -627,7 +635,7 @@ func (store *WorkspaceProvisionStore) afterFailedInsert(ctx context.Context, req
 		replay.CredentialDelivery = workspaceprovisionmodel.CredentialUnavailableResetRequired
 		return replay, nil
 	}
-	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("id").Where(query.Equal("canonical_code", request.WorkspaceCode)).Build()
+	statement, arguments, err := query.NewSelectBuilder(store.runtime.RuntimeRenderer(), "_workspaces").Columns("workspace_id").Where(query.Equal("canonical_code", request.WorkspaceCode)).Build()
 	if err == nil {
 		var id string
 		if scanErr := store.runtime.DB().QueryRowContext(ctx, statement, arguments...).Scan(&id); scanErr == nil && id != "" {
@@ -664,11 +672,11 @@ func requestFingerprint(request workspaceprovisionmodel.Request, configuration, 
 }
 
 func randomID(prefix string) (string, error) {
-	buffer := make([]byte, 12)
-	if _, err := rand.Read(buffer); err != nil {
+	value, err := entityid.New(prefix)
+	if err != nil {
 		return "", fmt.Errorf("generate workspace provisioning identity: %w", err)
 	}
-	return prefix + "_" + hex.EncodeToString(buffer), nil
+	return value, nil
 }
 
 func randomInitialAdministratorPassword() (string, error) {

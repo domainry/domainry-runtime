@@ -118,17 +118,17 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	roleID, memberRoleID := "", ""
 	for _, role := range roles {
 		if role.Key == "member_onboarding" {
-			roleID = role.ID
+			roleID = role.RoleID
 		}
 		if role.Key == "member" {
-			memberRoleID = role.ID
+			memberRoleID = role.RoleID
 		}
 	}
 	if roleID == "" || memberRoleID == "" {
 		t.Fatal("member or onboarding role missing")
 	}
 	now := time.Now().UTC().UnixMilli()
-	statement, args, err := query.NewWorkspaceInsertBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Columns("id", "user_id", "role_id", "source", "status", "created_at", "updated_at").Values("onboarding-assignment", request.InitialAdminUserID, roleID, "manual", "active", now, now).Build()
+	statement, args, err := query.NewWorkspaceInsertBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Columns("user_id", "role_id", "source", "status", "created_at", "updated_at").Values(request.InitialAdminUserID, roleID, "manual", "active", now, now).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	t.Cleanup(func() { _ = binding.Close(context.Background()) })
 	control := realBindingReportControl()
 	definition := reportmodel.ReportSchema{Key: "revenue", ObjectSQLV1: &reportmodel.ReportObjectSQLSchema{SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"}, ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
-	records := &realBindingReportRecords{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved"}}}
+	records := &realBindingReportRecords{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved"}}}
 	owner := &realBindingReportExports{definition: reportmodel.ReportExportDefinition{Report: definition, Control: control}}
 	service := reportexportapplication.NewReportExportApplicationService(reportexportapplication.ReportExportApplicationDependencies{Records: records, Audit: realBindingReportAudit{}, DataExchange: binding, DataExchangeProviders: providers, PrepareReceipts: reportpersistence.NewReportExportPrepareReceiptStore(store)})
 	if err := service.BindReportExports(owner); err != nil {
@@ -194,7 +194,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 		t.Fatal(err)
 	}
 	owner.sourceVersion = "changed-after-first-prepare"
-	frozen, err := binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.ID, Provider: "reports", Operation: "export"})
+	frozen, err := binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.JobID, Provider: "reports", Operation: "export"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	var failed dataexchange.Job
 	deadline := time.Now().Add(12 * time.Second)
 	for time.Now().Before(deadline) {
-		failed, err = binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.ID, Provider: "reports", Operation: "export"})
+		failed, err = binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.JobID, Provider: "reports", Operation: "export"})
 		if err != nil {
 			bundle, _ := json.Marshal(principal.AccessBundle)
 			t.Fatalf("job access: %v bundle=%s", err, bundle)
@@ -239,26 +239,26 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 		adapters[0].Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil).WithContext(callContext))
 		return response
 	}
-	if response := get(requestContext, "/data-exchange/jobs/"+first.ID); response.Code != 200 {
+	if response := get(requestContext, "/data-exchange/jobs/"+first.JobID); response.Code != 200 {
 		t.Fatalf("own query without Foundation scope: %d %s", response.Code, response.Body.String())
 	}
-	prepare.IdempotencyKey, prepare.RetryOfJobID = "new-attempt", first.ID
+	prepare.IdempotencyKey, prepare.RetryOfJobID = "new-attempt", first.JobID
 	second, err := service.PrepareResolvedExport(requestContext, prepare, definition, control, principal)
-	if err != nil || second.ID == first.ID {
+	if err != nil || second.JobID == first.JobID {
 		t.Fatalf("retry=%+v err=%v", second, err)
 	}
-	completed := waitRealBindingReportJob(t, requestContext, binding, principal, second.ID)
+	completed := waitRealBindingReportJob(t, requestContext, binding, principal, second.JobID)
 	if completed.ArtifactID == "" || completed.Checkpoint != 1 {
 		t.Fatalf("artifact not completed: %+v", completed)
 	}
-	if response := get(requestContext, "/data-exchange/jobs/"+second.ID+"/download"); response.Code != 200 || !strings.Contains(response.Body.String(), "customer-1") {
+	if response := get(requestContext, "/data-exchange/jobs/"+second.JobID+"/download"); response.Code != 200 || !strings.Contains(response.Body.String(), "customer-1") {
 		t.Fatalf("real CSV download: %d %s", response.Code, response.Body.String())
 	}
-	old, err := binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.ID, Provider: "reports", Operation: "export"})
+	old, err := binding.Job(requestContext, dataexchange.JobRequest{Scope: dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID}, JobID: first.JobID, Provider: "reports", Operation: "export"})
 	if err != nil || !reflect.DeepEqual(old, failed) {
 		t.Fatal("retry rewrote original failed job")
 	}
-	statement, args, err = query.NewWorkspaceUpdateBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Set("status", "revoked").Where(query.Equal("id", "onboarding-assignment")).Build()
+	statement, args, err = query.NewWorkspaceUpdateBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Set("status", "revoked").Where(query.And(query.Equal("user_id", request.InitialAdminUserID), query.Equal("role_id", roleID), query.Equal("source", "manual"))).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if changed.AuthorizationRevision == principal.AuthorizationRevision {
 		t.Fatal("revocation did not change authority")
 	}
-	if response := get(changedContext, "/data-exchange/jobs/"+second.ID+"/download"); response.Code == 200 {
+	if response := get(changedContext, "/data-exchange/jobs/"+second.JobID+"/download"); response.Code == 200 {
 		t.Fatal("revoked frozen scope still downloads")
 	}
 	statement, args, err = query.NewWorkspaceUpdateBuilder(store.RuntimeRenderer(), "_identity_user_role_assignments", request.WorkspaceID).Set("status", "revoked").Where(query.And(query.Equal("user_id", request.InitialAdminUserID), query.Equal("role_id", memberRoleID), query.Equal("status", "active"))).Build()
@@ -286,7 +286,7 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if recovered := providers.ResolvePrincipal(requestContext, dataexchange.Scope{WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey}); recovered.Known {
 		t.Fatal("cached authenticated principal restored a revoked primary role")
 	}
-	if response := get(requestContext, "/data-exchange/jobs/"+second.ID+"/download"); response.Code != http.StatusForbidden {
+	if response := get(requestContext, "/data-exchange/jobs/"+second.JobID+"/download"); response.Code != http.StatusForbidden {
 		t.Fatalf("revoked primary role downloaded through stale authenticated context: %d %s", response.Code, response.Body.String())
 	}
 }

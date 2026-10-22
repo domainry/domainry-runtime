@@ -29,7 +29,7 @@ func TestInsertPublicationHandoffPersistsExplicitIntentOnMySQL(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = tx.Rollback() })
 	message := publicationmodel.Message{
-		ID: "mysql-explicit-intent", WorkspaceID: "mysql-explicit-intent-workspace",
+		MessageID: "mysql-explicit-intent", WorkspaceID: "mysql-explicit-intent-workspace",
 		ConnectorKey: "test", Operation: "publish", DedupKey: "mysql-explicit-intent",
 		Payload: map[string]any{"record_id": "record-1"},
 	}
@@ -37,7 +37,7 @@ func TestInsertPublicationHandoffPersistsExplicitIntentOnMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	var intentJSON string
-	if err := tx.QueryRowContext(t.Context(), "SELECT intent_json FROM "+store.Identifier("_publication_outbox")+" WHERE workspace_id = "+store.Placeholder(1)+" AND id = "+store.Placeholder(2), message.WorkspaceID, message.ID).Scan(&intentJSON); err != nil {
+	if err := tx.QueryRowContext(t.Context(), "SELECT intent_json FROM "+store.Identifier("_publication_outbox")+" WHERE workspace_id = "+store.Placeholder(1)+" AND id = "+store.Placeholder(2), message.WorkspaceID, message.MessageID).Scan(&intentJSON); err != nil {
 		t.Fatal(err)
 	}
 	if intentJSON != "{}" {

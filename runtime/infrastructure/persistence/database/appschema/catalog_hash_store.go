@@ -31,7 +31,7 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(ctx context.Con
 	hash := sha256.New()
 	hash.Write([]byte("metadata:"))
 	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_project_model_state").
-		Columns("time_zone").Where(query.Equal("id", "current")).Build()
+		Columns("time_zone").Where(query.Equal("state_key", "current")).Build()
 	if err != nil {
 		return err
 	}
@@ -45,8 +45,8 @@ func (r ApplicationSchemaStore) refreshCatalogHashWithExecutorAt(ctx context.Con
 	}
 	value := hex.EncodeToString(hash.Sum(nil))
 	insert := query.NewInsertBuilder(r.store.SQLRenderer, "_project_model_state").
-		Columns("id", "catalog_hash", "catalog_updated_at").Values("current", value, timevalue.Millis(now))
-	insert, err = r.store.Engine.ApplyUpsert(insert, []string{"id"},
+		Columns("state_key", "catalog_hash", "catalog_updated_at").Values("current", value, timevalue.Millis(now))
+	insert, err = r.store.Engine.ApplyUpsert(insert, []string{"state_key"},
 		query.AssignExpression("catalog_hash", query.InsertedValue("catalog_hash")),
 		query.AssignExpression("catalog_updated_at", query.InsertedValue("catalog_updated_at")),
 	)

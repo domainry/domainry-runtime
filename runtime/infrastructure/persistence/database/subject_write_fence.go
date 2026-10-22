@@ -22,7 +22,7 @@ const (
 )
 
 func (s *RuntimeStore) subjectErasureFenceRequests(workspace, request, subject string) *query.SelectBuilder {
-	requestIDs := query.NewWorkspaceSelectBuilder(s.SQLRenderer, sharedSubjectRequestsTable, workspace).Columns("id").Where(query.And(
+	requestIDs := query.NewWorkspaceSelectBuilder(s.SQLRenderer, sharedSubjectRequestsTable, workspace).Columns("request_id").Where(query.And(
 		query.NotEqual("request_type", "external_erasure"),
 		query.Equal("kind", "erase"),
 		query.Equal("resolved_identity", subject),

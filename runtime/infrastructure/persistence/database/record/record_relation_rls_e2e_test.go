@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	ormschema "github.com/domainry/domainry-orm/schema"
 
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 
@@ -78,7 +79,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 		{accountID: "account-1", want: true},
 		{accountID: "account-2", want: false},
 	} {
-		matched, matchErr := repository.CandidateScopeMatches(t.Context(), "workspace-primary", recordmodel.Record{ID: "ledger-new", Data: map[string]any{"account_id": test.accountID, "status": "posted"}}, *compiled)
+		matched, matchErr := repository.CandidateScopeMatches(t.Context(), "workspace-primary", recordmodel.Record{RecordID: "ledger-new", Data: map[string]any{"account_id": test.accountID, "status": "posted"}}, *compiled)
 		if matchErr != nil || matched != test.want {
 			t.Fatalf("candidate account=%s matched=%v want=%v err=%v", test.accountID, matched, test.want, matchErr)
 		}
@@ -125,10 +126,10 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "ledger-1" || page.HasNext {
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != "ledger-1" || page.HasNext {
 		t.Fatalf("member list/page total leaked scope: %#v", page)
 	}
-	if record, err := reader.GetRecord(t.Context(), "ledger", "ledger-1", memberPrincipal); err != nil || record.ID != "ledger-1" {
+	if record, err := reader.GetRecord(t.Context(), "ledger", "ledger-1", memberPrincipal); err != nil || record.RecordID != "ledger-1" {
 		t.Fatalf("allowed detail=%#v err=%v", record, err)
 	}
 	writerRole := memberRole
@@ -187,7 +188,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	coachPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "reverse", RelationFieldKey: "member_id", TargetObjectKey: "package"}}, FieldKey: "coach_id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	coachPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "coach-1"}}, accessfixture.Bundle{Key: "coach", Permissions: []string{"member.read"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "member", Read: true, Predicate: coachPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "member", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, coachPrincipal)
-	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "member-1" {
+	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != "member-1" {
 		t.Fatalf("reverse existence scope page=%#v err=%v", page, err)
 	}
 
@@ -201,7 +202,7 @@ func TestRelationAwareRLSEndToEndUsesDatabaseForListTotalDetailAndReverseExisten
 	studentPredicate := &accessfixture.PredicateFixture{Operator: "eq", Path: []accessfixture.RelationSegmentFixture{{Direction: "forward", RelationFieldKey: "package_id", TargetObjectKey: "training_package"}, {Direction: "forward", RelationFieldKey: "student_id", TargetObjectKey: "student"}}, FieldKey: "id", ValueSource: "actor_claim", ClaimKey: "business_profile_id"}
 	studentPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-primary"}, ActiveBusinessProfile: &profilebindingmodel.Reference{RecordID: "student-1"}}, accessfixture.Bundle{Key: "student", Permissions: []string{"training_session.read", "training_session.export"}, DataPolicies: []accessfixture.DataPolicyFixture{{ObjectKey: "training_session", Read: true, Predicate: studentPredicate}}})
 	page, err = reader.ListRecords(t.Context(), "training_session", recordmodel.RecordListQuery{Page: 1, PageSize: 20}, studentPrincipal)
-	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != "training-session-1" {
+	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != "training-session-1" {
 		t.Fatalf("session-package-student list scope mismatch: page=%#v err=%v", page, err)
 	}
 	if _, err := reader.GetRecord(t.Context(), "training_session", "training-session-2", studentPrincipal); apperror.KindOf(err) != apperror.KindNotFound {
@@ -238,7 +239,7 @@ func sqliteExplainQueryPlan(t *testing.T, store *RuntimeStore, query string, arg
 func assertRelationScopeAcrossReadAndExport(t *testing.T, reader *recordservice.RecordReadDomainService, exporter *recordapplication.RecordExportApplicationService, principal principalmodel.Principal, objectKey, allowedID, deniedID string) {
 	t.Helper()
 	page, err := reader.ListRecords(t.Context(), objectKey, recordmodel.RecordListQuery{Page: 1, PageSize: 20}, principal)
-	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != allowedID {
+	if err != nil || page.Total != 1 || len(page.Items) != 1 || page.Items[0].RecordID != allowedID {
 		t.Fatalf("%s list scope mismatch: page=%#v err=%v", objectKey, page, err)
 	}
 	if _, err := reader.GetRecord(t.Context(), objectKey, deniedID, principal); apperror.KindOf(err) != apperror.KindNotFound {
@@ -303,19 +304,15 @@ func relationRLSObjects() []definitionmodel.ObjectSchema {
 
 func createRelationRLSTable(t *testing.T, store *RuntimeStore, object definitionmodel.ObjectSchema) {
 	t.Helper()
-	columns := []string{
-		store.Identifier("workspace_id") + " TEXT NOT NULL", store.Identifier("id") + " TEXT NOT NULL",
-		store.Identifier("created_at") + " TEXT NOT NULL", store.Identifier("updated_at") + " TEXT NOT NULL",
-		store.Identifier("deleted") + " BOOLEAN NOT NULL DEFAULT FALSE", store.Identifier("ext_info") + " TEXT NOT NULL DEFAULT '{}'",
-		store.Identifier("create_by") + " TEXT", store.Identifier("update_by") + " TEXT",
-	}
+	columns := make([]ormschema.ColumnDefinition, 0, len(object.Fields))
 	for _, field := range object.Fields {
-		columns = append(columns, store.Identifier(field.Key)+" TEXT")
+		columnType := ormschema.Text()
+		if field.Type == "integer" {
+			columnType = ormschema.BigInt()
+		}
+		columns = append(columns, ormschema.Column(field.Key, columnType))
 	}
-	columns = append(columns, "PRIMARY KEY ("+store.Identifier("workspace_id")+", "+store.Identifier("id")+")")
-	if _, err := store.DB().Exec("CREATE TABLE " + store.Identifier(object.Key) + " (" + strings.Join(columns, ", ") + ")"); err != nil {
-		t.Fatal(err)
-	}
+	createGeneratedRecordTable(t, store, object.Key, columns...)
 	for _, field := range object.Fields {
 		if field.Type == "relation" {
 			if _, err := store.DB().Exec("CREATE INDEX " + store.Identifier("idx_"+object.Key+"_"+field.Key) + " ON " + store.Identifier(object.Key) + " (" + store.Identifier("workspace_id") + ", " + store.Identifier(field.Key) + ")"); err != nil {
@@ -327,7 +324,7 @@ func createRelationRLSTable(t *testing.T, store *RuntimeStore, object definition
 
 func insertRelationRLSRecord(t *testing.T, repository recordpersistence.RecordStore, object definitionmodel.ObjectSchema, id string, data map[string]any) {
 	t.Helper()
-	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: data}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: data}); err != nil {
 		t.Fatalf("insert %s.%s: %v", object.Key, id, err)
 	}
 }

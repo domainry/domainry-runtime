@@ -108,6 +108,6 @@ func afterInstructionRequest(execute func(context.Context) (automationmodel.Auto
 		Phase: "after", WorkspaceID: "workspace-1",
 		Rule:        automationmodel.AutomationRuleSchema{Key: "notify", ObjectKey: "order", Trigger: automationmodel.AutomationTriggerSchema{Operation: "update"}},
 		Instruction: automationmodel.AutomationInstructionSchema{Key: "send", Type: "emit_event"},
-		Record:      &recordmodel.Record{ID: "order-1", UpdatedAt: "v1"}, Execute: execute,
+		Record:      &recordmodel.Record{RecordID: "order-1", UpdatedAt: "v1"}, Execute: execute,
 	}
 }

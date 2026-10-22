@@ -134,18 +134,18 @@ func beginReportSnapshot(t *testing.T, snapshots reportsdkpersistence.SnapshotRe
 
 func reportNotificationEvent(id, sourceID string) notificationmodel.NotificationEvent {
 	return notificationmodel.NotificationEvent{
-		ID: id, WorkspaceID: "workspace-a", Source: "report", SourceEventID: sourceID, EventType: "report.snapshot.completed",
+		EventID: id, WorkspaceID: "workspace-a", Source: "report", SourceEventID: sourceID, EventType: "report.snapshot.completed",
 		Category: "long_task", Severity: "info", RecipientUserIDs: []string{"user-1"},
 		SubjectType: "report", SubjectID: "revenue", OccurredAt: "2026-07-28T01:00:00Z", Status: "queued",
 		CreatedAt: "2026-07-28T01:00:00Z", UpdatedAt: "2026-07-28T01:00:00Z",
 	}
 }
 
-func assertReportSnapshotStatus(t *testing.T, store *database.RuntimeStore, id, want string) {
+func assertReportSnapshotStatus(t *testing.T, store *database.RuntimeStore, id int64, want string) {
 	t.Helper()
 	var status string
 	query := "SELECT status FROM " + store.TableIdentifier("_report_snapshots") + " WHERE id = " + store.Placeholder(1)
 	if err := store.DB().QueryRowContext(t.Context(), query, id).Scan(&status); err != nil || status != want {
-		t.Fatalf("snapshot=%s status=%s want=%s err=%v", id, status, want, err)
+		t.Fatalf("snapshot=%d status=%s want=%s err=%v", id, status, want, err)
 	}
 }

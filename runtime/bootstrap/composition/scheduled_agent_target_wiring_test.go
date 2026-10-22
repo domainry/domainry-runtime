@@ -51,7 +51,7 @@ func (s *scheduledCallbackReceiptStore) TryBeginCallback(_ context.Context, requ
 		return dispatchmodel.CallbackClaimResult{Decision: idempotency.DecisionReplay, Receipt: s.receipt}, nil
 	}
 	s.receipt = request.Receipt
-	s.receipt.ID = "callback-receipt"
+	s.receipt.OperationID = "callback-receipt"
 	s.receipt.LeaseOwner = request.LeaseOwner
 	s.receipt.FencingToken = 1
 	return dispatchmodel.CallbackClaimResult{Decision: idempotency.DecisionAcquired, Receipt: s.receipt}, nil
@@ -101,7 +101,7 @@ func scheduledAgentPayload(t *testing.T, owner schedulersdk.ScheduledPlanOwner) 
 func TestScheduledAgentTargetResolvesCurrentIdentityAndMapsOnlyPublicContracts(t *testing.T) {
 	owner := schedulersdk.ScheduledPlanOwner{WorkspaceID: "workspace", UserID: "user", ProductKey: "product"}
 	resolver := &scheduledPrincipalResolver{resolution: identitysdk.PrincipalResolution{
-		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{ID: owner.UserID}},
+		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{UserID: owner.UserID}},
 		AccessBundle: identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(owner.WorkspaceID), SubjectID: identitysdk.SubjectID(owner.UserID)}},
 	}}
 	starter := &scheduledTaskStarter{}
@@ -143,7 +143,7 @@ func TestScheduledAgentTargetPreservesExplicitFollowUpScope(t *testing.T) {
 func TestScheduledAgentTargetRejectsStaleOwnerBeforeAgent(t *testing.T) {
 	owner := schedulersdk.ScheduledPlanOwner{WorkspaceID: "workspace", UserID: "user", ProductKey: "product"}
 	valid := identitysdk.PrincipalResolution{
-		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{ID: owner.UserID}},
+		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{UserID: owner.UserID}},
 		AccessBundle: identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(owner.WorkspaceID), SubjectID: identitysdk.SubjectID(owner.UserID)}},
 	}
 	tests := []struct {
@@ -154,7 +154,7 @@ func TestScheduledAgentTargetRejectsStaleOwnerBeforeAgent(t *testing.T) {
 	}{
 		{name: "wrong product", productKey: "other", resolution: valid, want: "backend.dispatch.scheduled_agent_product_denied"},
 		{name: "disabled user", productKey: owner.ProductKey, resolution: identitysdk.PrincipalResolution{}, want: "backend.dispatch.scheduled_agent_principal_denied"},
-		{name: "moved workspace", productKey: owner.ProductKey, resolution: identitysdk.PrincipalResolution{Principal: identitysdk.Principal{Known: true, WorkspaceID: "other", UserID: owner.UserID, User: identitysdk.User{ID: owner.UserID}}, AccessBundle: valid.AccessBundle}, want: "backend.dispatch.scheduled_agent_principal_denied"},
+		{name: "moved workspace", productKey: owner.ProductKey, resolution: identitysdk.PrincipalResolution{Principal: identitysdk.Principal{Known: true, WorkspaceID: "other", UserID: owner.UserID, User: identitysdk.User{UserID: owner.UserID}}, AccessBundle: valid.AccessBundle}, want: "backend.dispatch.scheduled_agent_principal_denied"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -172,7 +172,7 @@ func TestScheduledAgentTargetRejectsStaleOwnerBeforeAgent(t *testing.T) {
 func TestScheduledAgentTargetPropagatesCurrentAgentDenial(t *testing.T) {
 	owner := schedulersdk.ScheduledPlanOwner{WorkspaceID: "workspace", UserID: "user", ProductKey: "product"}
 	resolver := &scheduledPrincipalResolver{resolution: identitysdk.PrincipalResolution{
-		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{ID: owner.UserID}},
+		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{UserID: owner.UserID}},
 		AccessBundle: identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(owner.WorkspaceID), SubjectID: identitysdk.SubjectID(owner.UserID)}},
 	}}
 	denied := &agentsdk.Error{Class: "forbidden", Code: "agent.conversation.tool_access_denied"}
@@ -188,7 +188,7 @@ func TestSignedSchedulerCallbackReauthorizesAndStartsAgentTask(t *testing.T) {
 	now := time.Date(2026, time.September, 14, 1, 0, 0, 0, time.UTC)
 	owner := schedulersdk.ScheduledPlanOwner{WorkspaceID: "workspace", UserID: "user", ProductKey: "product"}
 	resolver := &scheduledPrincipalResolver{resolution: identitysdk.PrincipalResolution{
-		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{ID: owner.UserID}},
+		Principal:    identitysdk.Principal{Known: true, WorkspaceID: owner.WorkspaceID, UserID: owner.UserID, User: identitysdk.User{UserID: owner.UserID}},
 		AccessBundle: identitysdk.AccessBundle{Subject: identitysdk.Subject{WorkspaceID: identitysdk.WorkspaceID(owner.WorkspaceID), SubjectID: identitysdk.SubjectID(owner.UserID)}},
 	}}
 	starter := &scheduledTaskStarter{}

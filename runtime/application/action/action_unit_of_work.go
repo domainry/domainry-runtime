@@ -109,7 +109,7 @@ func (u *actionUnitOfWork) executionID() string {
 	if u == nil {
 		return ""
 	}
-	return strings.TrimSpace(u.claim.Execution.ID)
+	return strings.TrimSpace(u.claim.Execution.OperationID)
 }
 
 func (u *actionUnitOfWork) commit(ctx context.Context, result any, commits []transactionmodel.RecordMutationCommit, audits []auditmodel.AuditEvent) error {

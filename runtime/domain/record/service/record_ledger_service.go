@@ -34,10 +34,10 @@ func (e *RecordLedgerError) ErrorParams() map[string]string {
 
 func RecordLedgerEntryFromRecord(object definitionmodel.ObjectSchema, record recordmodel.Record) (recordmodel.RecordLedgerEntry, error) {
 	if object.LedgerPolicy == nil || object.LifecyclePolicy == nil || strings.TrimSpace(object.LifecyclePolicy.Mode) != definitionmodel.ObjectLifecycleAppendOnly {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.policy_required", record.ID, 0, "ledger_policy")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.policy_required", record.RecordID, 0, "ledger_policy")
 	}
 	entry := recordmodel.RecordLedgerEntry{
-		ID: record.ID, AccountID: recordLedgerText(record.Data["account_id"]), BusinessKey: recordLedgerText(record.Data["business_key"]),
+		ID: record.RecordID, AccountID: recordLedgerText(record.Data["account_id"]), BusinessKey: recordLedgerText(record.Data["business_key"]),
 		EntryKind: recordLedgerText(record.Data["entry_kind"]), Direction: recordLedgerText(record.Data["direction"]), BalanceBucket: recordLedgerText(record.Data["balance_bucket"]),
 		Currency: strings.ToUpper(recordLedgerText(record.Data["currency"])), SourceReference: recordLedgerText(record.Data["source_reference"]), ActorID: recordLedgerText(record.Data["actor_id"]),
 		RuleVersion: recordLedgerText(record.Data["rule_version"]), ReversalOf: recordLedgerText(record.Data["reversal_of"]), PreviousHash: recordLedgerText(record.Data["previous_hash"]),
@@ -51,27 +51,27 @@ func RecordLedgerEntryFromRecord(object definitionmodel.ObjectSchema, record rec
 		entry.Amount, configErr = recordmodel.RecordNormalizeDecimal(record.Data["amount"], config)
 	}
 	if configErr != nil {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.amount_invalid", record.ID, entry.Sequence, "amount")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.amount_invalid", record.RecordID, entry.Sequence, "amount")
 	}
 	for field, value := range map[string]string{
 		"account_id": entry.AccountID, "business_key": entry.BusinessKey, "entry_kind": entry.EntryKind, "balance_bucket": entry.BalanceBucket,
 		"currency": entry.Currency, "source_reference": entry.SourceReference, "actor_id": entry.ActorID, "rule_version": entry.RuleVersion,
 	} {
 		if value == "" {
-			return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.field_required", record.ID, entry.Sequence, field)
+			return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.field_required", record.RecordID, entry.Sequence, field)
 		}
 	}
 	if entry.Direction != recordmodel.RecordLedgerDirectionIncrease && entry.Direction != recordmodel.RecordLedgerDirectionDecrease {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.direction_invalid", record.ID, entry.Sequence, "direction")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.direction_invalid", record.RecordID, entry.Sequence, "direction")
 	}
 	if entry.Sequence < 1 {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.sequence_invalid", record.ID, entry.Sequence, "sequence")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.sequence_invalid", record.RecordID, entry.Sequence, "sequence")
 	}
 	if entry.OccurredAt.IsZero() {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.occurred_at_invalid", record.ID, entry.Sequence, "occurred_at")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.occurred_at_invalid", record.RecordID, entry.Sequence, "occurred_at")
 	}
 	if entry.ReversalOf != "" && entry.EntryKind != recordmodel.RecordLedgerKindReversal && entry.EntryKind != recordmodel.RecordLedgerKindAdjustment {
-		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.reversal_kind_invalid", record.ID, entry.Sequence, "entry_kind")
+		return recordmodel.RecordLedgerEntry{}, recordLedgerError("backend.ledger.reversal_kind_invalid", record.RecordID, entry.Sequence, "entry_kind")
 	}
 	return entry, nil
 }
@@ -97,7 +97,7 @@ func RecordLedgerBuildEvidence(object definitionmodel.ObjectSchema, record recor
 	record.Data["entry_hash"] = entry.EntryHash
 	if strings.TrimSpace(object.LedgerPolicy.Signature) == definitionmodel.ObjectLedgerSignatureHMACSHA256 {
 		if len(secret) == 0 {
-			return recordmodel.Record{}, recordLedgerError("backend.ledger.signature_key_required", record.ID, entry.Sequence, "signature")
+			return recordmodel.Record{}, recordLedgerError("backend.ledger.signature_key_required", record.RecordID, entry.Sequence, "signature")
 		}
 		record.Data["signature"] = recordLedgerSignature(entry.EntryHash, secret)
 	}

@@ -137,14 +137,14 @@ func candidateRelationScopeMatches(s Store, workspace string, candidate recordmo
 		return false, nil
 	}
 	first := expression.Path[0]
-	anchor := candidate.ID
+	anchor := candidate.RecordID
 	anchorField := first.RelationFieldKey
 	if first.Direction == "forward" {
 		relationID, exists := candidate.Data[first.RelationFieldKey]
 		if !exists || relationID == nil {
 			return false, nil
 		}
-		anchorField = "id"
+		anchorField = physicalRecordField(first.TargetObjectKey, "record_id")
 		anchor = strings.TrimSpace(fmt.Sprint(relationID))
 	} else if first.Direction != "reverse" {
 		return false, fmt.Errorf("unsupported compiled relation direction %q", first.Direction)
@@ -164,9 +164,9 @@ func candidateRelationScopeMatches(s Store, workspace string, candidate recordmo
 }
 
 func candidateScopeDirectMatch(candidate recordmodel.Record, expression recordmodel.RecordScopeExpression) bool {
-	var raw any = candidate.ID
-	exists := strings.TrimSpace(candidate.ID) != ""
-	if expression.FieldKey != "id" {
+	var raw any = candidate.RecordID
+	exists := strings.TrimSpace(candidate.RecordID) != ""
+	if expression.FieldKey != "record_id" {
 		raw, exists = candidate.Data[expression.FieldKey]
 	}
 	if expression.Operator == "exists" {
@@ -192,7 +192,7 @@ func candidateScopeDirectMatch(candidate recordmodel.Record, expression recordmo
 
 func resolvedMembershipLeaf(expression recordmodel.RecordScopeExpression, values []string) recordmodel.RecordScopeExpression {
 	first := expression.Path[0]
-	fieldKey := "id"
+	fieldKey := "record_id"
 	if first.Direction == "forward" {
 		fieldKey = first.RelationFieldKey
 	}
@@ -206,7 +206,7 @@ func buildScopeMembershipLookup(s Store, workspace string, expression recordmode
 func buildScopeMembershipLookupWithAnchor(s Store, workspace string, expression recordmodel.RecordScopeExpression, limit int, candidateAnchorField string, candidateAnchor any) (string, []any, error) {
 	first := expression.Path[0]
 	firstAlias := "permission_0"
-	anchorColumn := query.QualifiedColumn(firstAlias, "id")
+	anchorColumn := query.QualifiedColumn(firstAlias, physicalRecordField(first.TargetObjectKey, "record_id"))
 	if first.Direction == "reverse" {
 		anchorColumn = query.QualifiedColumn(firstAlias, first.RelationFieldKey)
 	} else if first.Direction != "forward" {
@@ -219,15 +219,17 @@ func buildScopeMembershipLookupWithAnchor(s Store, workspace string, expression 
 	currentReference := lastAlias
 	for pathIndex := lastIndex; pathIndex > 0; pathIndex-- {
 		segment := expression.Path[pathIndex]
+		previousObjectKey := expression.Path[pathIndex-1].TargetObjectKey
+		currentObjectKey := segment.TargetObjectKey
 		previousAlias := fmt.Sprintf("permission_%d", pathIndex-1)
 		previousColumn := func(field string) query.Expression { return query.QualifiedColumn(previousAlias, field) }
 		currentColumn := func(field string) query.Expression { return query.QualifiedColumn(currentReference, field) }
 		var relation query.Predicate
 		switch segment.Direction {
 		case "forward":
-			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
+			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn(physicalRecordField(currentObjectKey, "record_id")))
 		case "reverse":
-			relation = query.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
+			relation = query.EqualExpressions(previousColumn(physicalRecordField(previousObjectKey, "record_id")), currentColumn(segment.RelationFieldKey))
 		default:
 			return "", nil, fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
 		}
@@ -241,7 +243,7 @@ func buildScopeMembershipLookupWithAnchor(s Store, workspace string, expression 
 	conditions := []query.Predicate{
 		query.EqualValue(query.QualifiedColumn(lastAlias, "workspace_id"), workspace),
 		query.IsNotNullExpression(anchorColumn),
-		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
+		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, physicalRecordField(expression.Path[lastIndex].TargetObjectKey, expression.FieldKey)), expression.Operator, expression.Values),
 	}
 	conditions = append(conditions, relationConditions...)
 	if strings.TrimSpace(candidateAnchorField) != "" {
@@ -287,8 +289,8 @@ func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmo
 	}
 	first := expression.Path[0]
 	firstAlias := "permission_0"
-	anchorColumn := query.QualifiedColumn(firstAlias, "id")
-	rootAnchor := query.TableColumn(rootTable, "id")
+	anchorColumn := query.QualifiedColumn(firstAlias, physicalRecordField(first.TargetObjectKey, "record_id"))
+	rootAnchor := query.TableColumn(rootTable, physicalRecordField(rootTable, "record_id"))
 	if first.Direction == "forward" {
 		rootAnchor = query.TableColumn(rootTable, first.RelationFieldKey)
 	} else if first.Direction == "reverse" {
@@ -303,15 +305,17 @@ func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmo
 	currentReference := lastAlias
 	for pathIndex := lastIndex; pathIndex > 0; pathIndex-- {
 		segment := expression.Path[pathIndex]
+		previousObjectKey := expression.Path[pathIndex-1].TargetObjectKey
+		currentObjectKey := segment.TargetObjectKey
 		previousAlias := fmt.Sprintf("permission_%d", pathIndex-1)
 		previousColumn := func(field string) query.Expression { return query.QualifiedColumn(previousAlias, field) }
 		currentColumn := func(field string) query.Expression { return query.QualifiedColumn(currentReference, field) }
 		var relation query.Predicate
 		switch segment.Direction {
 		case "forward":
-			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn("id"))
+			relation = query.EqualExpressions(previousColumn(segment.RelationFieldKey), currentColumn(physicalRecordField(currentObjectKey, "record_id")))
 		case "reverse":
-			relation = query.EqualExpressions(previousColumn("id"), currentColumn(segment.RelationFieldKey))
+			relation = query.EqualExpressions(previousColumn(physicalRecordField(previousObjectKey, "record_id")), currentColumn(segment.RelationFieldKey))
 		default:
 			return nil, fmt.Errorf("unsupported compiled relation direction %q", segment.Direction)
 		}
@@ -324,7 +328,7 @@ func scopeRelationExistsPredicate(s Store, rootTable string, expression recordmo
 	conditions := []query.Predicate{
 		query.EqualExpressions(query.QualifiedColumn(lastAlias, "workspace_id"), query.TableColumn(rootTable, "workspace_id")),
 		query.EqualExpressions(anchorColumn, rootAnchor),
-		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, expression.FieldKey), expression.Operator, expression.Values),
+		scopeComparisonPredicate(query.QualifiedColumn(lastAlias, physicalRecordField(expression.Path[lastIndex].TargetObjectKey, expression.FieldKey)), expression.Operator, expression.Values),
 	}
 	conditions = append(conditions, relationConditions...)
 	subquery := query.NewSelectBuilder(storeRenderer{s}, expression.Path[lastIndex].TargetObjectKey).Alias(lastAlias).

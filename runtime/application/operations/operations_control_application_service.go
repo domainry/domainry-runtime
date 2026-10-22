@@ -69,7 +69,7 @@ func (s *OperationsControlApplicationService) Set(ctx context.Context, request O
 		return OperationsControlResult{Control: control, Receipt: receipt}, nil
 	}
 	systemScope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "apply durable Runtime operation control")
-	receipt, err = s.operations.Start(ctx, receipt.Command.ID, receipt.Command.Scope, systemScope)
+	receipt, err = s.operations.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, systemScope)
 	if err != nil {
 		return OperationsControlResult{}, err
 	}

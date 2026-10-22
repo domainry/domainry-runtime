@@ -73,7 +73,7 @@ func assertConcurrentOperationsReplayAndIsolation(t *testing.T, first, second Op
 	t.Helper()
 	now := time.Now().UTC()
 	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation-" + workspaceA, Owner: "persistence", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
+		OperationID: "operation-" + workspaceA, Owner: "persistence", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: workspaceA, ResourceType: "database"},
 		IdempotencyKey: "shared-command", RequestFingerprint: "same-fingerprint", RequestedBy: "operator", Reason: "dialect contract", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
 	}, StatusURL: "/operations/operation-" + workspaceA}
@@ -92,8 +92,8 @@ func assertConcurrentOperationsReplayAndIsolation(t *testing.T, first, second Op
 				errorsFound <- err
 				return
 			}
-			if persisted.Command.ID != receipt.Command.ID {
-				errorsFound <- fmt.Errorf("persisted operation %q, want %q", persisted.Command.ID, receipt.Command.ID)
+			if persisted.Command.OperationID != receipt.Command.OperationID {
+				errorsFound <- fmt.Errorf("persisted operation %q, want %q", persisted.Command.OperationID, receipt.Command.OperationID)
 				return
 			}
 			decisions <- decision
@@ -115,15 +115,15 @@ func assertConcurrentOperationsReplayAndIsolation(t *testing.T, first, second Op
 	}
 
 	changed := receipt
-	changed.Command.ID = "conflict-" + workspaceA
+	changed.Command.OperationID = "conflict-" + workspaceA
 	changed.Command.RequestFingerprint = "different-fingerprint"
 	if _, decision, err := second.RegisterOperationsCommand(t.Context(), changed); err != nil || decision != operationsmodel.OperationsSubmissionConflict {
 		t.Fatalf("fingerprint conflict decision=%q err=%v", decision, err)
 	}
-	if _, found, err := first.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: workspaceB}, receipt.Command.ID); err != nil || found {
+	if _, found, err := first.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: workspaceB}, receipt.Command.OperationID); err != nil || found {
 		t.Fatalf("workspace B observed workspace A operation: found=%v err=%v", found, err)
 	}
-	if persisted, found, err := second.GetOperationsReceipt(t.Context(), receipt.Command.Scope, receipt.Command.ID); err != nil || !found || persisted.Command.ID != receipt.Command.ID {
+	if persisted, found, err := second.GetOperationsReceipt(t.Context(), receipt.Command.Scope, receipt.Command.OperationID); err != nil || !found || persisted.Command.OperationID != receipt.Command.OperationID {
 		t.Fatalf("second instance cannot observe durable operation: persisted=%+v found=%v err=%v", persisted, found, err)
 	}
 }

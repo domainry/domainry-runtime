@@ -69,7 +69,7 @@ func (h *OperationsHandler) previewDatabaseRetirement(w http.ResponseWriter, r *
 		h.writeServiceError(w, r, err)
 		return
 	}
-	h.auditDatabaseRetirement(r, "preview", plan.RetirementID)
+	h.auditDatabaseRetirement(r, "preview", plan.OperationID)
 	h.writeJSON(w, http.StatusOK, plan)
 }
 

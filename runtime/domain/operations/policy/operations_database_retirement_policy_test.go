@@ -43,7 +43,7 @@ func TestDatabaseRetirementBlocksDropOnAccessWindowOrStaleRecoveryEvidence(t *te
 }
 
 func TestDatabaseDropPlanRejectsCascadeAndUnscopedExternalTarget(t *testing.T) {
-	plan := operationsmodel.DatabaseDropPlan{RetirementID: "retire-1", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Database: "runtime", Schema: "public", Kind: "table", Name: "old_table"}, Statements: []string{`DROP TABLE "old_table"`}, EstimatedLock: time.Second, LockTimeout: 5 * time.Second, Rollback: "restore backup-1", ApprovalID: "approval-1"}
+	plan := operationsmodel.DatabaseDropPlan{OperationID: "op_11111111111111111111111111111111", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Database: "runtime", Schema: "public", Kind: "table", Name: "old_table"}, Statements: []string{`DROP TABLE "old_table"`}, EstimatedLock: time.Second, LockTimeout: 5 * time.Second, Rollback: "restore backup-1", ApprovalID: "approval-1"}
 	if err := OperationsValidateDatabaseDropPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestDatabaseRetirementAllowsAuditedRestoreFromQuarantine(t *testing.T) {
 func databaseRetirementFixture(now time.Time) operationsmodel.DatabaseRetirement {
 	verified, drill := now.Add(-time.Hour), now.Add(-2*time.Hour)
 	return operationsmodel.DatabaseRetirement{
-		ID: "retire-1", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Database: "runtime", Schema: "public", Kind: "table", Name: "old_table"}, State: operationsmodel.DatabaseRetirementDiscovered, UpdatedAt: now,
+		OperationID: "op_11111111111111111111111111111111", Object: operationsmodel.DatabaseObjectIdentity{Engine: "postgres", Database: "runtime", Schema: "public", Kind: "table", Name: "old_table"}, State: operationsmodel.DatabaseRetirementDiscovered, UpdatedAt: now,
 		Evidence: operationsmodel.DatabaseRetirementEvidence{
 			Owner: "record", Replacement: "new_table", ExpectedSchemaVersion: "2", ExpectedDataVersion: "2", BackfillCheckpoint: "checkpoint-1", BackfillComplete: true,
 			ReadsSwitchVersion: "2.1", WritesDisableVersion: "2.2", WriteProtection: "rejecting trigger old_table_no_write",

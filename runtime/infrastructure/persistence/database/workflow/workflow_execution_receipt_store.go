@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
@@ -51,7 +52,10 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 	receipt.WorkspaceID = workspaceID
 	receipt.WorkflowKey, receipt.IdempotencyKey = strings.TrimSpace(receipt.WorkflowKey), strings.TrimSpace(receipt.IdempotencyKey)
 	receipt.RequestFingerprint, receipt.LeaseOwner = strings.TrimSpace(request.RequestFingerprint), strings.TrimSpace(request.LeaseOwner)
-	receipt.ID = workflowReceiptID(receipt.WorkspaceID, receipt.WorkflowKey, receipt.IdempotencyKey)
+	receipt.OperationID, err = workflowReceiptOperationID(receipt.WorkspaceID, receipt.WorkflowKey, receipt.IdempotencyKey)
+	if err != nil {
+		return workflowmodel.WorkflowExecutionClaimResult{}, err
+	}
 	receipt.Status, receipt.FencingToken = string(idempotency.StatusProcessing), 1
 	receipt.LeaseExpiresAt = now.Add(request.LeaseTTL).Format(time.RFC3339Nano)
 	receipt.CreatedAt, receipt.UpdatedAt = now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
@@ -61,7 +65,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		return workflowmodel.WorkflowExecutionClaimResult{}, beginErr
 	}
 	if guardErr := r.store.GuardSubjectEvidenceWrite(ctx, tx, workspaceID, sharedoperation.TableName,
-		[]string{"id", "owner", "resource_type", "resource_id"}, []any{receipt.ID, workflowReceiptOwner, "workflow", receipt.WorkflowKey}); guardErr != nil {
+		[]string{"operation_id", "owner", "resource_type", "resource_id"}, []any{receipt.OperationID, workflowReceiptOwner, "workflow", receipt.WorkflowKey}); guardErr != nil {
 		_ = tx.Rollback()
 		return workflowmodel.WorkflowExecutionClaimResult{}, guardErr
 	}
@@ -79,7 +83,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 		return workflowmodel.WorkflowExecutionClaimResult{}, err
 	}
 	if !found {
-		return workflowmodel.WorkflowExecutionClaimResult{}, database.MutationConstraintError(insertErr, "workflow_execution_receipt", receipt.ID, mutation.MutationConflictIdempotency)
+		return workflowmodel.WorkflowExecutionClaimResult{}, database.MutationConstraintError(insertErr, "workflow_execution_receipt", receipt.OperationID, mutation.MutationConflictIdempotency)
 	}
 	decision := idempotency.Classify(idempotency.ReceiptState{Status: idempotency.Status(current.Status), Fingerprint: current.RequestFingerprint, Lease: workflowReceiptLease(current)}, receipt.RequestFingerprint, now)
 	if request.PreventReclaim && decision == idempotency.DecisionAcquired {
@@ -93,7 +97,7 @@ func (r WorkflowWorkerStore) tryBeginExecutionOnce(ctx context.Context, request 
 	resultJSON, relatedIDs := json.RawMessage(`{}`), json.RawMessage(`[]`)
 	nowText := now.Format(time.RFC3339Nano)
 	changed, err := operationStore.PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: receipt.WorkspaceID, ID: receipt.ID, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
+		WorkspaceID: receipt.WorkspaceID, OperationID: receipt.OperationID, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
 		RequestFingerprint: receipt.RequestFingerprint, Status: string(idempotency.StatusProcessing), LeaseExpiresAtOrBefore: nowText,
 	}, sharedoperation.RecordChanges{
 		Status: &status, LeaseOwner: &receipt.LeaseOwner, LeaseExpiresAt: &receipt.LeaseExpiresAt, IncrementFencingToken: true,
@@ -132,7 +136,7 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 	status := string(idempotency.StatusSucceeded)
 	expiresAt, finishedAt, token := completion.ExpiresAt.UTC().Format(time.RFC3339Nano), now.Format(time.RFC3339Nano), completion.FencingToken
 	changed, err := sharedoperation.NewSQLStore(r.database(), r.store.SQLRenderer).PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: strings.TrimSpace(completion.ReceiptID), Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
+		WorkspaceID: workspaceID, OperationID: strings.TrimSpace(completion.OperationID), Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
 		LeaseOwner: strings.TrimSpace(completion.LeaseOwner), FencingToken: &token, Status: string(idempotency.StatusProcessing),
 	}, sharedoperation.RecordChanges{
 		Status: &status, ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDs, ExpiresAt: &expiresAt, FinishedAt: &finishedAt, UpdatedAt: &finishedAt,
@@ -142,7 +146,7 @@ func (r WorkflowWorkerStore) CompleteExecutionReceipt(ctx context.Context, compl
 	}
 	if !changed {
 		r.store.ObserveIdempotency(ctx, workspaceID, "workflow.execute", idempotency.OutcomeLeaseLost)
-		return mutation.MutationConflict("workflow_execution_receipt", completion.ReceiptID, mutation.MutationConflictLeaseLost, nil)
+		return mutation.MutationConflict("workflow_execution_receipt", completion.OperationID, mutation.MutationConflictLeaseLost, nil)
 	}
 	return nil
 }
@@ -152,9 +156,12 @@ func (r WorkflowWorkerStore) findExecutionReceipt(ctx context.Context, workspace
 	if err != nil {
 		return workflowmodel.WorkflowExecutionReceipt{}, false, err
 	}
-	id := workflowReceiptID(workspaceID, workflowKey, key)
+	operationID, err := workflowReceiptOperationID(workspaceID, workflowKey, key)
+	if err != nil {
+		return workflowmodel.WorkflowExecutionReceipt{}, false, err
+	}
 	record, found, err := sharedoperation.NewSQLStore(r.database(), r.store.SQLRenderer).GetRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: id, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
+		WorkspaceID: workspaceID, OperationID: operationID, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
 	})
 	if err != nil || !found {
 		return workflowmodel.WorkflowExecutionReceipt{}, found, err
@@ -179,11 +186,11 @@ func workflowReceiptRecord(value workflowmodel.WorkflowExecutionReceipt) sharedo
 		relatedIDs = related
 	}
 	return sharedoperation.Record{
-		ID: value.ID, WorkspaceID: value.WorkspaceID, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
+		ID: value.ID, OperationID: value.OperationID, WorkspaceID: value.WorkspaceID, Owner: workflowReceiptOwner, Kind: workflowReceiptKind,
 		ActionKey: "workflow.execute", ResourceType: "workflow", ResourceID: value.WorkflowKey,
-		IdempotencyKey: value.ID, RequestFingerprint: value.RequestFingerprint, Reference: value.IdempotencyKey,
-		Status: value.Status, StatusURL: "/operations/" + value.ID, ResultJSON: json.RawMessage(workflowReceiptResultJSON(value.ExecutionID)),
-		MetadataJSON: json.RawMessage(`{}`), RelatedIDsJSON: relatedIDs, Correlation: value.ID, EvidenceJSON: json.RawMessage(`[]`),
+		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, Reference: value.IdempotencyKey,
+		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: json.RawMessage(workflowReceiptResultJSON(value.ExecutionID)),
+		MetadataJSON: json.RawMessage(`{}`), RelatedIDsJSON: relatedIDs, Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -200,12 +207,12 @@ func workflowReceiptResultJSON(executionID string) string {
 
 func workflowReceipt(record sharedoperation.Record) (workflowmodel.WorkflowExecutionReceipt, error) {
 	value := workflowmodel.WorkflowExecutionReceipt{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, WorkflowKey: record.ResourceID, IdempotencyKey: record.Reference,
+		ID: record.ID, OperationID: record.OperationID, WorkspaceID: record.WorkspaceID, WorkflowKey: record.ResourceID, IdempotencyKey: record.Reference,
 		RequestFingerprint: record.RequestFingerprint, Status: record.Status, LeaseOwner: record.LeaseOwner,
 		LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken, ExpiresAt: record.ExpiresAt,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != workflowReceiptOwner || record.Kind != workflowReceiptKind || record.ActionKey != "workflow.execute" || record.ResourceType != "workflow" || record.IdempotencyKey != value.ID || record.Correlation != value.ID {
+	if record.Owner != workflowReceiptOwner || record.Kind != workflowReceiptKind || record.ActionKey != "workflow.execute" || record.ResourceType != "workflow" || record.IdempotencyKey != value.OperationID || record.Correlation != value.OperationID {
 		return workflowmodel.WorkflowExecutionReceipt{}, fmt.Errorf("workflow receipt operation identity is invalid")
 	}
 	var result workflowReceiptOperationResult
@@ -221,9 +228,9 @@ func workflowReceiptLease(value workflowmodel.WorkflowExecutionReceipt) idempote
 	return idempotency.Lease{Owner: value.LeaseOwner, Token: value.FencingToken, ExpiresAt: expiresAt}
 }
 
-func workflowReceiptID(workspaceID, workflowKey, key string) string {
+func workflowReceiptOperationID(workspaceID, workflowKey, key string) (string, error) {
 	sum := sha256.Sum256([]byte(strings.Join([]string{strings.TrimSpace(workspaceID), strings.TrimSpace(workflowKey), strings.TrimSpace(key)}, ":")))
-	return "workflow_receipt:" + hex.EncodeToString(sum[:])[:20]
+	return entityid.Derive("op", "runtime.workflow-receipt", hex.EncodeToString(sum[:]))
 }
 
 func workflowClaimBackoff(ctx context.Context, attempt int) error {

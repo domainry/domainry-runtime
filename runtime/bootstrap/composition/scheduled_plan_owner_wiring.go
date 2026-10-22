@@ -28,7 +28,7 @@ func resolveCurrentScheduledPlanOwner(ctx context.Context, productKey string, pr
 	}
 	principal := resolution.Principal
 	if !principal.Known || principal.WorkspaceID != owner.WorkspaceID || principal.UserID != owner.UserID ||
-		principal.User.ID != owner.UserID || string(resolution.AccessBundle.Subject.WorkspaceID) != owner.WorkspaceID ||
+		principal.User.UserID != owner.UserID || string(resolution.AccessBundle.Subject.WorkspaceID) != owner.WorkspaceID ||
 		string(resolution.AccessBundle.Subject.SubjectID) != owner.UserID {
 		return identitysdk.Principal{}, apperror.New(apperror.KindForbidden, principalDeniedCode, nil, nil)
 	}

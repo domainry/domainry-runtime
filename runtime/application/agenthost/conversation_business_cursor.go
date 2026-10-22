@@ -53,9 +53,9 @@ func (h *ConversationBusinessHost) encodeCursor(q agentsdk.ConversationBusinessQ
 	cursor := conversationBusinessCursor{Version: 1, Scope: h.cursorScope(a), Query: businessCursorQuery(q, relationScope...), Page: q.Page + 1}
 	for _, rule := range sort {
 		value, present := last.QuerySortValues[rule.Field]
-		if rule.Field == "id" {
+		if rule.Field == recordmodel.IDField {
 			value = last.ID
-			present = true
+			present = last.ID > 0
 		}
 		if !present {
 			return "", conversationBusinessError("unavailable")
@@ -99,8 +99,8 @@ func businessCursorFilter(cursor conversationBusinessCursor, sort []recordmodel.
 		if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
 			return nil, conversationBusinessError("bad_request")
 		}
-		if rule.Field == "id" {
-			if id, ok := value.(string); !ok || id == "" {
+		if rule.Field == recordmodel.IDField {
+			if id, ok := value.(json.Number); !ok || func() bool { parsed, err := id.Int64(); return err != nil || parsed < 1 }() {
 				return nil, conversationBusinessError("bad_request")
 			}
 		}
@@ -110,7 +110,7 @@ func businessCursorFilter(cursor conversationBusinessCursor, sort []recordmodel.
 				op = "lt"
 			}
 			comparison := recordmodel.RecordFilterExpression{Operator: op, Field: rule.Field, Value: value}
-			if rule.Field != "id" {
+			if rule.Field != recordmodel.IDField {
 				comparison = recordmodel.RecordFilterExpression{Operator: "or", Children: []recordmodel.RecordFilterExpression{comparison, {Operator: "is_null", Field: rule.Field}}}
 			}
 			terms := append(append([]recordmodel.RecordFilterExpression(nil), prefix...), comparison)

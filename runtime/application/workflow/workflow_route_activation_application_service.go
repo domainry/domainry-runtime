@@ -38,13 +38,13 @@ func (e *WorkflowProcessEngine) activateStartingProcess(ctx context.Context, pro
 	if graph == nil || len(graph.Nodes) == 0 {
 		return e.failProcess(ctx, process, "backend.workflow.process_graph_required", principal.UserID)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, "", "", "process_started", process.InitiatorID, "workflow.event.process.started", map[string]any{"workflow_key": process.WorkflowKey})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, "", "", "process_started", process.InitiatorID, "workflow.event.process.started", map[string]any{"workflow_key": process.WorkflowKey})
 	trigger := workflowpolicy.WorkflowGraphTrigger(graph)
-	triggerInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, trigger, "success", process.Variables, map[string]any{"triggered": true})
+	triggerInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, trigger, "success", process.Variables, map[string]any{"triggered": true})
 	if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, triggerInstance); err != nil {
 		return e.failProcess(ctx, process, "backend.workflow.node_insert_failed", principal.UserID)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, trigger.ID, "", "node_completed", principal.UserID, trigger.Name, map[string]any{"node_type": trigger.Type})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, trigger.ID, "", "node_completed", principal.UserID, trigger.Name, map[string]any{"node_type": trigger.Type})
 	process.Status = "running"
 	return e.runWithContext(ctx, process, e.nextNodeIDs(graph, trigger.ID, "success"), nil, principal)
 }
@@ -66,7 +66,7 @@ func (e *WorkflowProcessEngine) activateRouteApprovalStep(ctx context.Context, p
 	if e.runtime.dependencies.Routes == nil {
 		return "", false, internalError("activate workflow route step", fmt.Errorf("workflow route store is required"))
 	}
-	steps, err := e.runtime.dependencies.Routes.ListRouteSteps(ctx, process.WorkspaceID, process.ID)
+	steps, err := e.runtime.dependencies.Routes.ListRouteSteps(ctx, process.WorkspaceID, process.ProcessID)
 	if err != nil {
 		return "", false, internalError("list workflow route steps", err)
 	}
@@ -92,20 +92,20 @@ func (e *WorkflowProcessEngine) activateRouteApprovalStep(ctx context.Context, p
 		}
 	}
 	step.AssigneeSnapshot = assignees
-	nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
+	nodeInstance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
 	nodeInstance.Iteration = step.StepNo
 	if err := e.runtime.dependencies.Processes.InsertNode(ctx, process.WorkspaceID, nodeInstance); err != nil {
 		return "", false, internalError("insert route approval node", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	contract := workflowpolicy.WorkflowApprovalNodeContract(node)
-	for index, task := range WorkflowRouteStepTasks(ctx, *process, node, contract, step, nodeInstance.ID, now) {
+	for index, task := range WorkflowRouteStepTasks(ctx, *process, node, contract, step, nodeInstance.NodeInstanceID, now) {
 		if err := e.insertApprovalTaskWithNotification(ctx, *process, task, ""); err != nil {
 			return "", false, internalError("insert workflow route task", err)
 		}
-		e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, task.ID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": step.Mode, "sequence": index + 1, "step_key": step.StepKey})
+		e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, task.TaskID, "task_created", "system", task.Title, map[string]any{"assignee_user_id": task.AssigneeUserID, "assignee_role_key": task.AssigneeRoleKey, "resolver_key": task.AssigneeResolverKey, "assignee_evidence": task.AssigneeEvidence, "mode": step.Mode, "sequence": index + 1, "step_key": step.StepKey})
 	}
-	step.Status, step.NodeInstanceID, step.UpdatedAt = "active", nodeInstance.ID, now
+	step.Status, step.NodeInstanceID, step.UpdatedAt = "active", nodeInstance.NodeInstanceID, now
 	activated, err := e.runtime.dependencies.Routes.UpdateRouteStepCAS(ctx, process.WorkspaceID, step, "pending")
 	if err != nil {
 		return "", false, internalError("activate workflow route step", err)
@@ -113,8 +113,8 @@ func (e *WorkflowProcessEngine) activateRouteApprovalStep(ctx context.Context, p
 	if !activated {
 		return "", false, conflict("backend.workflow.route_step_not_activatable", "step_key", step.StepKey)
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", WorkflowRouteStepActivatedEvent, principal.UserID, step.Title, map[string]any{"step_key": step.StepKey, "step_no": step.StepNo, "assignee_count": len(assignees)})
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil)
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", WorkflowRouteStepActivatedEvent, principal.UserID, step.Title, map[string]any{"step_key": step.StepKey, "step_no": step.StepNo, "assignee_count": len(assignees)})
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "approval_waiting", principal.UserID, node.Name, nil)
 	return "waiting", true, nil
 }
 
@@ -130,7 +130,7 @@ func WorkflowRouteStepTasks(ctx context.Context, process workflowmodel.WorkflowP
 	for index, assignee := range step.AssigneeSnapshot {
 		resolverKey := "route:" + strings.TrimSpace(step.StepKey)
 		tasks = append(tasks, workflowmodel.WorkflowTask{
-			WorkspaceID: process.WorkspaceID, ID: workflowProcessID(ctx, "task"), ProcessID: process.ID, NodeInstanceID: nodeInstanceID,
+			WorkspaceID: process.WorkspaceID, TaskID: workflowProcessID(ctx, "task"), ProcessID: process.ProcessID, NodeInstanceID: nodeInstanceID,
 			NodeID: node.ID, Title: title, AssigneeUserID: assignee.UserID, AssigneeName: assignee.DisplayName, AssigneeRoleKey: assignee.RoleKey,
 			AssigneeResolverKey: resolverKey, AssigneeEvidence: workflowmodel.AssigneeEvidence{Matches: []workflowmodel.AssigneeEvidenceMatch{{ResolverType: "route", ResolverKey: resolverKey, ResolverIndex: index, RoleKey: assignee.RoleKey}}},
 			CandidateSource: "route", NodeDefinitionVersion: workflowpolicy.WorkflowGraphContractVersion(process.DefinitionSnapshot),
@@ -163,7 +163,7 @@ func (e *WorkflowProcessEngine) revalidateRouteStepAssignees(ctx context.Context
 		return kept, "", nil
 	}
 	metadata := map[string]any{"step_key": step.StepKey, "step_no": step.StepNo, "invalid_user_ids": invalid, "policy": route.RevalidateOnActivation}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", WorkflowRouteStepRevalidatedEvent, principal.UserID, step.Title, metadata)
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", WorkflowRouteStepRevalidatedEvent, principal.UserID, step.Title, metadata)
 	switch route.RevalidateOnActivation {
 	case "skip_invalid":
 		if len(kept) > 0 {

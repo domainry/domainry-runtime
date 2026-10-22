@@ -31,8 +31,8 @@ func TestManualWorkflowCallerKeyReplaysAndRejectsPayloadConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if replay.Execution.ID != first.Execution.ID {
-		t.Fatalf("replay created a second execution: first=%q replay=%q", first.Execution.ID, replay.Execution.ID)
+	if replay.Execution.ExecutionID != first.Execution.ExecutionID {
+		t.Fatalf("replay created a second execution: first=%q replay=%q", first.Execution.ExecutionID, replay.Execution.ExecutionID)
 	}
 	if first.Execution.IdempotencyKey != "manual-request-1" {
 		t.Fatalf("caller key was not persisted on execution: %q", first.Execution.IdempotencyKey)

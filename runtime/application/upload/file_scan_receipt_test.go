@@ -21,7 +21,7 @@ func (fileScanStoreStub) RecordFileScan(context.Context, lifecyclecontract.FileS
 }
 
 func TestFileScanReceiptIsCleanOnlyAndBoundToExactIdentity(t *testing.T) {
-	clean := lifecyclecontract.FileScanEvidence{FileID: "file-1", WorkspaceID: "workspace-a", ContentType: "image/png", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC)}
+	clean := lifecyclecontract.FileScanEvidence{ArtifactID: "file-1", WorkspaceID: "workspace-a", ContentType: "image/png", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC)}
 	service := NewFileScanReceiptVerifier(fileScanStoreStub{evidence: clean}, []byte("01234567890123456789012345678901"))
 	status, err := service.Status(t.Context(), "workspace-a", "file-1")
 	if err != nil || status.Receipt == "" {
@@ -41,7 +41,7 @@ func TestFileScanReceiptIsCleanOnlyAndBoundToExactIdentity(t *testing.T) {
 		t.Fatalf("changed MIME error = %v", err)
 	}
 	tampered := service
-	tampered.store = fileScanStoreStub{evidence: lifecyclecontract.FileScanEvidence{FileID: "file-2", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: clean.ScannedAt}}
+	tampered.store = fileScanStoreStub{evidence: lifecyclecontract.FileScanEvidence{ArtifactID: "file-2", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: lifecyclecontract.FileScanClean, Provider: "scanner", EvidenceRef: "scan-1", ScannedAt: clean.ScannedAt}}
 	if _, err := tampered.VerifyClean(t.Context(), "workspace-a", "file-2", "abc", status.Receipt); !errors.Is(err, ErrFileScanReceiptInvalid) {
 		t.Fatalf("cross-file receipt error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestFileScanReceiptIsCleanOnlyAndBoundToExactIdentity(t *testing.T) {
 func TestFileScanReceiptFailsClosedForNonCleanStates(t *testing.T) {
 	for _, state := range []string{lifecyclecontract.FileScanPending, lifecyclecontract.FileScanQuarantined, lifecyclecontract.FileScanFailed} {
 		t.Run(state, func(t *testing.T) {
-			service := NewFileScanReceiptVerifier(fileScanStoreStub{evidence: lifecyclecontract.FileScanEvidence{FileID: "file-1", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: state}}, []byte("01234567890123456789012345678901"))
+			service := NewFileScanReceiptVerifier(fileScanStoreStub{evidence: lifecyclecontract.FileScanEvidence{ArtifactID: "file-1", WorkspaceID: "workspace-a", SHA256: "abc", Size: 7, Status: state}}, []byte("01234567890123456789012345678901"))
 			status, err := service.Status(t.Context(), "workspace-a", "file-1")
 			if err != nil || status.Receipt != "" {
 				t.Fatalf("status = %#v, %v", status, err)

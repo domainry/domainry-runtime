@@ -102,7 +102,7 @@ func (p *reportDataExchangeBindingProbe) SubmitExport(_ context.Context, request
 	}
 	p.submission = request
 	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
-	p.job = dataexchange.Job{ID: "data_exchange:report", Provider: request.Provider, Operation: "export", Status: "queued", WorkspaceID: request.Scope.WorkspaceID, ObjectKey: request.ObjectKey, ActorID: request.Scope.ActorID, RoleKey: request.Scope.RoleKey, ReferenceID: request.ReferenceID, Options: append([]byte(nil), request.Options...), CreatedAt: now, UpdatedAt: now}
+	p.job = dataexchange.Job{JobID: "data_exchange:report", Provider: request.Provider, Operation: "export", Status: "queued", WorkspaceID: request.Scope.WorkspaceID, ObjectKey: request.ObjectKey, ActorID: request.Scope.ActorID, RoleKey: request.Scope.RoleKey, ReferenceID: request.ReferenceID, Options: append([]byte(nil), request.Options...), CreatedAt: now, UpdatedAt: now}
 	job, onSubmit := p.job, p.onSubmit
 	p.mu.Unlock()
 	if onSubmit != nil {
@@ -116,7 +116,7 @@ func (p *reportDataExchangeBindingProbe) Job(_ context.Context, request dataexch
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.jobCalls++
-	if request.JobID != p.job.ID || request.Scope.WorkspaceID != p.job.WorkspaceID || request.Scope.ActorID != p.job.ActorID || (request.Provider != "" && request.Provider != p.job.Provider) || (request.Operation != "" && request.Operation != p.job.Operation) {
+	if request.JobID != p.job.JobID || request.Scope.WorkspaceID != p.job.WorkspaceID || request.Scope.ActorID != p.job.ActorID || (request.Provider != "" && request.Provider != p.job.Provider) || (request.Operation != "" && request.Operation != p.job.Operation) {
 		return dataexchange.Job{}, dataexchange.ErrJobNotFound
 	}
 	return p.job, nil
@@ -147,7 +147,7 @@ func TestConcurrentReportExportPrepareClaimsBeforeMutableProbe(t *testing.T) {
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	exchange := &reportDataExchangeBindingProbe{}
@@ -175,12 +175,12 @@ func TestConcurrentReportExportPrepareClaimsBeforeMutableProbe(t *testing.T) {
 	}()
 	<-started
 	secondJob, secondErr := service.PrepareResolvedExport(t.Context(), request, reportDefinition, control, principal)
-	if apperror.CodeOf(secondErr) != "backend.idempotency.in_progress" || secondJob.ID != "" {
+	if apperror.CodeOf(secondErr) != "backend.idempotency.in_progress" || secondJob.JobID != "" {
 		t.Fatalf("concurrent loser job=%+v err=%v code=%q", secondJob, secondErr, apperror.CodeOf(secondErr))
 	}
 	close(release)
 	winner := <-first
-	if winner.err != nil || winner.job.ID == "" {
+	if winner.err != nil || winner.job.JobID == "" {
 		t.Fatalf("winner=%+v err=%v", winner.job, winner.err)
 	}
 	exchange.mu.Lock()
@@ -201,7 +201,7 @@ func TestConcurrentReportExportPrepareDifferentCallerHasStableAuditLoser(t *test
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	exchange := &reportDataExchangeBindingProbe{}
@@ -231,12 +231,12 @@ func TestConcurrentReportExportPrepareDifferentCallerHasStableAuditLoser(t *test
 	loserRequest := request
 	loserRequest.IdempotencyKey = "request-2"
 	loserJob, loserErr := service.PrepareResolvedExport(t.Context(), loserRequest, reportDefinition, control, principal)
-	if apperror.CodeOf(loserErr) != "backend.report.export_audit_operation_conflict" || loserJob.ID != "" {
+	if apperror.CodeOf(loserErr) != "backend.report.export_audit_operation_conflict" || loserJob.JobID != "" {
 		t.Fatalf("concurrent audit loser job=%+v err=%v code=%q", loserJob, loserErr, apperror.CodeOf(loserErr))
 	}
 	close(release)
 	winner := <-first
-	if winner.err != nil || winner.job.ID == "" {
+	if winner.err != nil || winner.job.JobID == "" {
 		t.Fatalf("winner=%+v err=%v", winner.job, winner.err)
 	}
 	exchange.mu.Lock()
@@ -258,7 +258,7 @@ func TestReportExportWorkerCompletionMayWinBeforeSubmitReceiptCompletion(t *test
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	receipts := newReportPrepareReceiptStore(t)
@@ -278,8 +278,8 @@ func TestReportExportWorkerCompletionMayWinBeforeSubmitReceiptCompletion(t *test
 			return err
 		}
 		return service.dataExchangeProvider.CompleteExport(t.Context(), dataexchange.ExportCompletion{
-			Scope: request.Scope, ObjectKey: request.ObjectKey, ReferenceID: request.ReferenceID, Options: request.Options, JobID: job.ID,
-			Artifact: dataexchange.Artifact{ID: job.ID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, Size: 14, ExpiresAt: now.Add(10 * time.Minute)},
+			Scope: request.Scope, ObjectKey: request.ObjectKey, ReferenceID: request.ReferenceID, Options: request.Options, JobID: job.JobID,
+			Artifact: dataexchange.Artifact{ArtifactID: job.JobID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, Size: 14, ExpiresAt: now.Add(10 * time.Minute)},
 			Rows:     payload.ExactTotal, ResultChunks: 1,
 		})
 	}
@@ -287,7 +287,7 @@ func TestReportExportWorkerCompletionMayWinBeforeSubmitReceiptCompletion(t *test
 		ReportKey: "revenue", ObjectKey: "customer", AuditID: "audit-1", IdempotencyKey: "request-1",
 		Scope: reportmodel.ReportExportScopeRequest{FieldProjection: []string{"id"}, Purpose: "worker race", Freshness: reportmodel.ReportExportFreshness{Mode: "realtime"}},
 	}, reportDefinition, control, principal)
-	if err != nil || job.ID != "data_exchange:report" {
+	if err != nil || job.JobID != "data_exchange:report" {
 		t.Fatalf("job=%+v err=%v", job, err)
 	}
 	if status := fmt.Sprint(store.audit.Data[control.RecordMapping.AuditStatusField]); status != "prepared" {
@@ -297,8 +297,8 @@ func TestReportExportWorkerCompletionMayWinBeforeSubmitReceiptCompletion(t *test
 	if err = json.Unmarshal(exchange.job.Options, &payload); err != nil {
 		t.Fatal(err)
 	}
-	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareReceiptID)
-	if err != nil || !found || receipt.JobID != job.ID || receipt.CompletionArtifactID != job.ID+":artifact" {
+	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareOperationID)
+	if err != nil || !found || receipt.JobID != job.JobID || receipt.CompletionArtifactID != job.JobID+":artifact" {
 		t.Fatalf("receipt=%+v found=%v err=%v", receipt, found, err)
 	}
 }
@@ -310,7 +310,7 @@ func TestReportExportRetryAfterUncertainSubmitUsesFrozenPayloadWithoutProbe(t *t
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	exchange := &reportDataExchangeBindingProbe{}
@@ -335,14 +335,14 @@ func TestReportExportRetryAfterUncertainSubmitUsesFrozenPayloadWithoutProbe(t *t
 	if err := json.Unmarshal(exchange.submission.Options, &frozen); err != nil {
 		t.Fatal(err)
 	}
-	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, frozen.PrepareReceiptID)
+	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, frozen.PrepareOperationID)
 	if err != nil || !found || receipt.Status != "failed_retryable" || strings.TrimSpace(receipt.ExpiresAt) == "" {
 		t.Fatalf("retained retryable receipt=%+v found=%v err=%v", receipt, found, err)
 	}
 	readCalls, versionCalls := owner.readCalls, owner.versionCalls
 	owner.sourceVersion = "version-after-submit"
 	job, err := service.PrepareResolvedExport(t.Context(), request, reportDefinition, control, principal)
-	if err != nil || job.ID != "data_exchange:report" {
+	if err != nil || job.JobID != "data_exchange:report" {
 		t.Fatalf("reclaimed job=%+v err=%v", job, err)
 	}
 	if owner.readCalls != readCalls || owner.versionCalls != versionCalls || exchange.submits != 2 {
@@ -357,7 +357,7 @@ func TestReportExportTerminalSubmitConflictReplaysStableTypedFailure(t *testing.
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	exchange := &reportDataExchangeBindingProbe{onSubmit: func(dataexchange.ExportRequest, dataexchange.Job) error {
@@ -390,7 +390,7 @@ func TestReportExportTerminalSubmitConflictReplaysStableTypedFailure(t *testing.
 	if err := json.Unmarshal(exchange.submission.Options, &payload); err != nil {
 		t.Fatal(err)
 	}
-	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareReceiptID)
+	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareOperationID)
 	if err != nil || !found || receipt.Status != "failed_terminal" || receipt.TerminalErrorCode != "backend.idempotency.key_reused" || strings.TrimSpace(receipt.ExpiresAt) == "" {
 		t.Fatalf("terminal receipt=%+v found=%v err=%v", receipt, found, err)
 	}
@@ -404,7 +404,7 @@ func TestReportExportFreshFailureReleasesReceiptAfterRequestCancellation(t *test
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
 	requestContext, cancel := context.WithCancel(t.Context())
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}, getErr: context.Canceled, getHook: cancel}
 	exchange := &reportDataExchangeBindingProbe{}
@@ -425,19 +425,19 @@ func TestReportExportFreshFailureReleasesReceiptAfterRequestCancellation(t *test
 	}
 	store.getErr, store.getHook = nil, nil
 	job, err := service.PrepareResolvedExport(t.Context(), request, reportDefinition, control, principal)
-	if err != nil || job.ID == "" || exchange.submits != 1 {
+	if err != nil || job.JobID == "" || exchange.submits != 1 {
 		t.Fatalf("prepare after cancelled release job=%+v err=%v submits=%d", job, err, exchange.submits)
 	}
 }
 
 func TestReportExportBusinessKeySeparatesCallerReceiptFromBusinessIdentity(t *testing.T) {
 	receipt := runtimereportmodel.ReportExportPrepareReceipt{
-		ID: "receipt-a", WorkspaceID: "workspace-a", RequesterUserID: "requester-a", UseCase: runtimereportmodel.ReportExportPrepareUseCase,
+		OperationID: "receipt-a", WorkspaceID: "workspace-a", RequesterUserID: "requester-a", UseCase: runtimereportmodel.ReportExportPrepareUseCase,
 		ReportKey: "revenue", ObjectKey: "customer", AuditID: "audit-a", CallerKey: "caller-a",
 	}
 	businessKey := reportExportBusinessJobKey(receipt)
 	otherCaller := receipt
-	otherCaller.ID, otherCaller.CallerKey = "receipt-b", "caller-b"
+	otherCaller.OperationID, otherCaller.CallerKey = "receipt-b", "caller-b"
 	if reportExportBusinessJobKey(otherCaller) != businessKey || reportExportArtifactKey(otherCaller) == reportExportArtifactKey(receipt) {
 		t.Fatal("caller receipt identity leaked into the Data Exchange business key or artifact receipt key lost isolation")
 	}
@@ -469,7 +469,7 @@ func TestReportExportPrepareRejectsTerminalAuditWithoutReplayReceipt(t *testing.
 		t.Run(terminalStatus, func(t *testing.T) {
 			control := reportExportLifecycleControl()
 			control.RecordMapping.AuditPreparedStatuses = append(control.RecordMapping.AuditPreparedStatuses, terminalStatus)
-			store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+			store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 				"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": terminalStatus,
 			}}}
 			exchange := &reportDataExchangeBindingProbe{}
@@ -497,7 +497,7 @@ func TestReportExportDownloadRejectsCompletedJobWithoutOwnedReceipt(t *testing.T
 	principal := reportPrincipal()
 	exchange := &reportDataExchangeBindingProbe{}
 	payload := reportexport.ExportPayload{
-		WorkspaceID: principal.WorkspaceID, RequesterUserID: principal.UserID, PrepareReceiptID: "missing-receipt",
+		WorkspaceID: principal.WorkspaceID, RequesterUserID: principal.UserID, PrepareOperationID: "missing-receipt",
 		ReportKey: "revenue", ObjectKey: "customer", Format: "csv",
 	}
 	options, err := json.Marshal(payload)
@@ -509,7 +509,7 @@ func TestReportExportDownloadRejectsCompletedJobWithoutOwnedReceipt(t *testing.T
 		ResolvePrincipal: func(context.Context, dataexchange.Scope) principalmodel.Principal { return principal },
 	})
 	_, err = provider.OpenDataExchangeArtifact(t.Context(), dataexchange.Job{
-		ID: "job-a", Provider: reportexport.DataExchangeProviderKey, Operation: "export", Status: "completed",
+		JobID: "job-a", Provider: reportexport.DataExchangeProviderKey, Operation: "export", Status: "completed",
 		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, ObjectKey: "customer", ReferenceID: "audit-a", Options: options, ArtifactID: "artifact-a",
 	}, reportexport.Scope(principal))
 	if apperror.CodeOf(err) != "backend.report.export_receipt_invalid" || exchange.downloads != 0 {
@@ -526,7 +526,7 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	exchange := &reportDataExchangeBindingProbe{}
@@ -546,13 +546,13 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exchange.submits != 1 || first.ID != exchange.job.ID {
+	if exchange.submits != 1 || first.JobID != exchange.job.JobID {
 		t.Fatalf("first=%+v submits=%d", first, exchange.submits)
 	}
 	readCalls, versionCalls := owner.readCalls, owner.versionCalls
 	owner.sourceVersion = "version-2"
 	queuedReplay, err := service.PrepareResolvedExport(t.Context(), request, reportDefinition, control, principal)
-	if err != nil || queuedReplay.ID != first.ID || exchange.submits != 1 || exchange.jobCalls != 1 {
+	if err != nil || queuedReplay.JobID != first.JobID || exchange.submits != 1 || exchange.jobCalls != 1 {
 		t.Fatalf("queued replay=%+v err=%v submits=%d job_calls=%d", queuedReplay, err, exchange.submits, exchange.jobCalls)
 	}
 	if owner.readCalls != readCalls || owner.versionCalls != versionCalls {
@@ -568,9 +568,9 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	expiresAt := now.Add(10 * time.Minute)
-	artifact := dataexchange.Artifact{ID: exchange.job.ID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: expiresAt}
+	artifact := dataexchange.Artifact{ArtifactID: exchange.job.JobID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: expiresAt}
 	completion := dataexchange.ExportCompletion{
-		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.ID,
+		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.JobID,
 		Artifact: artifact, Rows: 1, ResultChunks: 1,
 	}
 	store.audit.Data[control.RecordMapping.AuditStatusField] = control.RecordMapping.AuditPreparedStatus
@@ -586,7 +586,7 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 	if scopeHash := strings.TrimSpace(fmt.Sprint(store.audit.Data[control.RecordMapping.AuditScopeHashField])); !strings.HasPrefix(scopeHash, "sha256:") {
 		t.Fatalf("scope hash after same-status completion=%q", scopeHash)
 	}
-	exchange.job.Status, exchange.job.ArtifactID, exchange.job.Checkpoint, exchange.job.Total = "completed", artifact.ID, 1, 1
+	exchange.job.Status, exchange.job.ArtifactID, exchange.job.Checkpoint, exchange.job.Total = "completed", artifact.ArtifactID, 1, 1
 	exchange.artifact, exchange.content = artifact, "id\ncustomer-1\n"
 	opened, err := service.dataExchangeProvider.OpenDataExchangeArtifact(t.Context(), exchange.job, reportexport.Scope(principal))
 	if err != nil {
@@ -604,7 +604,7 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 		t.Fatalf("late completion regressed status=%q", status)
 	}
 	changedCompletion := completion
-	changedCompletion.Artifact.ID = "different-artifact"
+	changedCompletion.Artifact.ArtifactID = "different-artifact"
 	if err = service.dataExchangeProvider.CompleteExport(t.Context(), changedCompletion); apperror.CodeOf(err) != "backend.report.export_completion_conflict" {
 		t.Fatalf("changed completion error=%v code=%q", err, apperror.CodeOf(err))
 	}
@@ -623,7 +623,7 @@ func TestReportExportPrepareDownloadReplayLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if replayed.ID != first.ID || exchange.submits != 1 || exchange.jobCalls != 2 {
+	if replayed.JobID != first.JobID || exchange.submits != 1 || exchange.jobCalls != 2 {
 		t.Fatalf("replayed=%+v first=%+v submits=%d job_calls=%d", replayed, first, exchange.submits, exchange.jobCalls)
 	}
 	if owner.readCalls != readCalls || owner.versionCalls != versionCalls {
@@ -662,7 +662,7 @@ func TestReportExportLegacyCollapsedCompletionWritesMetadataAndReplaysSafely(t *
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved", "row_count": 0, "filters_hash": "pending",
 	}}}
 	audit := &reportAuditAppenderStub{}
@@ -690,8 +690,8 @@ func TestReportExportLegacyCollapsedCompletionWritesMetadataAndReplaysSafely(t *
 	}
 	store.audit.Data[control.RecordMapping.AuditStatusField] = control.RecordMapping.AuditPreparedStatus
 	completion := dataexchange.ExportCompletion{
-		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.ID,
-		Artifact: dataexchange.Artifact{ID: exchange.job.ID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: now.Add(10 * time.Minute)},
+		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.JobID,
+		Artifact: dataexchange.Artifact{ArtifactID: exchange.job.JobID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: now.Add(10 * time.Minute)},
 		Rows:     1, ResultChunks: 1,
 	}
 	transitionFailure := errors.New("injected audit transition failure")
@@ -703,8 +703,8 @@ func TestReportExportLegacyCollapsedCompletionWritesMetadataAndReplaysSafely(t *
 	if store.createCalls.Load() != 0 || audit.calls.Load() != auditCalls {
 		t.Fatalf("failed audit transition reached side effects: creates=%d audits=%d/%d", store.createCalls.Load(), audit.calls.Load(), auditCalls)
 	}
-	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareReceiptID)
-	if err != nil || !found || receipt.CompletionArtifactID != completion.Artifact.ID {
+	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareOperationID)
+	if err != nil || !found || receipt.CompletionArtifactID != completion.Artifact.ArtifactID {
 		t.Fatalf("durable completion binding receipt=%+v found=%v err=%v", receipt, found, err)
 	}
 	store.transitionErr = nil
@@ -717,7 +717,7 @@ func TestReportExportLegacyCollapsedCompletionWritesMetadataAndReplaysSafely(t *
 	if scopeHash := strings.TrimSpace(fmt.Sprint(store.audit.Data[control.RecordMapping.AuditScopeHashField])); !strings.HasPrefix(scopeHash, "sha256:") {
 		t.Fatalf("legacy recovered completion scope hash=%q", scopeHash)
 	}
-	if store.createCalls.Load() != 1 || store.download.ID == "" || audit.calls.Load() != auditCalls+1 {
+	if store.createCalls.Load() != 1 || store.download.RecordID == "" || audit.calls.Load() != auditCalls+1 {
 		t.Fatalf("legacy retry side effects: creates=%d download=%+v audits=%d/%d", store.createCalls.Load(), store.download, audit.calls.Load(), auditCalls+1)
 	}
 }
@@ -730,7 +730,7 @@ func TestReportExportDistinctDownloadedStatusRejectsFailedBindingRetry(t *testin
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	audit := &reportAuditAppenderStub{}
@@ -758,8 +758,8 @@ func TestReportExportDistinctDownloadedStatusRejectsFailedBindingRetry(t *testin
 	}
 	store.audit.Data[control.RecordMapping.AuditStatusField] = control.RecordMapping.AuditDownloadedStatus
 	completion := dataexchange.ExportCompletion{
-		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.ID,
-		Artifact: dataexchange.Artifact{ID: exchange.job.ID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: now.Add(10 * time.Minute)},
+		Scope: reportexport.Scope(principal), ObjectKey: "customer", ReferenceID: "audit-1", Options: exchange.job.Options, JobID: exchange.job.JobID,
+		Artifact: dataexchange.Artifact{ArtifactID: exchange.job.JobID + ":artifact", Filename: "revenue.csv", ContentType: "text/csv; charset=utf-8", SHA256: payload.CSVContentSHA256, ExpiresAt: now.Add(10 * time.Minute)},
 		Rows:     1, ResultChunks: 1,
 	}
 	auditCalls := audit.calls.Load()
@@ -768,11 +768,11 @@ func TestReportExportDistinctDownloadedStatusRejectsFailedBindingRetry(t *testin
 			t.Fatalf("pre-downloaded completion attempt %d error=%v code=%q", attempt, err, apperror.CodeOf(err))
 		}
 	}
-	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareReceiptID)
-	if err != nil || !found || receipt.CompletionArtifactID != completion.Artifact.ID {
+	receipt, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), principal.WorkspaceID, payload.PrepareOperationID)
+	if err != nil || !found || receipt.CompletionArtifactID != completion.Artifact.ArtifactID {
 		t.Fatalf("durable rejected binding receipt=%+v found=%v err=%v", receipt, found, err)
 	}
-	if store.createCalls.Load() != 0 || store.download.ID != "" || audit.calls.Load() != auditCalls {
+	if store.createCalls.Load() != 0 || store.download.RecordID != "" || audit.calls.Load() != auditCalls {
 		t.Fatalf("failed binding retry reached side effects: creates=%d download=%+v audits=%d/%d", store.createCalls.Load(), store.download, audit.calls.Load(), auditCalls)
 	}
 }
@@ -780,7 +780,7 @@ func TestReportExportDistinctDownloadedStatusRejectsFailedBindingRetry(t *testin
 func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testing.T) {
 	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
 	principal := reportPrincipal()
-	store := &reportExportStoreStub{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	store := &reportExportStoreStub{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	control := reportExportEdgeControl()
@@ -824,7 +824,7 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 	}
 	if err = service.dataExchangeProvider.CompleteExport(t.Context(), dataexchange.ExportCompletion{
 		Scope: scope, ObjectKey: "customer", ReferenceID: "audit-1", Options: options, JobID: "data_exchange:report",
-		Artifact: dataexchange.Artifact{ID: "data_exchange:report:artifact", Filename: plan.Filename, ContentType: plan.ContentType, SHA256: payload.CSVContentSHA256, Size: 14, ExpiresAt: plan.ExpiresAt},
+		Artifact: dataexchange.Artifact{ArtifactID: "data_exchange:report:artifact", Filename: plan.Filename, ContentType: plan.ContentType, SHA256: payload.CSVContentSHA256, Size: 14, ExpiresAt: plan.ExpiresAt},
 		Rows:     1, ResultChunks: 1,
 	}); err != nil {
 		t.Fatal(err)
@@ -833,11 +833,11 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 		t.Fatalf("download=%+v", store.download)
 	}
 	exchange.job = dataexchange.Job{
-		ID: "data_exchange:report", Provider: reportexport.DataExchangeProviderKey, Operation: "export", Status: "completed",
+		JobID: "data_exchange:report", Provider: reportexport.DataExchangeProviderKey, Operation: "export", Status: "completed",
 		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, ObjectKey: "customer", ReferenceID: "audit-1", Options: options,
 		ArtifactID: "data_exchange:report:artifact", Checkpoint: 1, Total: 1, CreatedAt: now, UpdatedAt: now,
 	}
-	exchange.artifact = dataexchange.Artifact{ID: exchange.job.ArtifactID, Filename: plan.Filename, ContentType: plan.ContentType, SHA256: payload.CSVContentSHA256, ExpiresAt: plan.ExpiresAt}
+	exchange.artifact = dataexchange.Artifact{ArtifactID: exchange.job.ArtifactID, Filename: plan.Filename, ContentType: plan.ContentType, SHA256: payload.CSVContentSHA256, ExpiresAt: plan.ExpiresAt}
 	exchange.content = "id\ncustomer-1\n"
 	opened, err := service.dataExchangeProvider.OpenDataExchangeArtifact(t.Context(), exchange.job, scope)
 	if err != nil {
@@ -848,7 +848,7 @@ func TestReportDataExchangeProviderPagesAndFinalizesBusinessProjection(t *testin
 		t.Fatal(err)
 	}
 	_ = opened.Content.Close()
-	if string(content) != exchange.content || opened.ID != exchange.artifact.ID || opened.SHA256 != exchange.artifact.SHA256 || opened.ExpiresAt != exchange.artifact.ExpiresAt {
+	if string(content) != exchange.content || opened.ArtifactID != exchange.artifact.ArtifactID || opened.SHA256 != exchange.artifact.SHA256 || opened.ExpiresAt != exchange.artifact.ExpiresAt {
 		t.Fatalf("opened=%+v content=%q", opened, content)
 	}
 	if exchange.jobCalls != 0 || exchange.downloads != 1 {

@@ -46,7 +46,7 @@ func TestOperationsDiagnosticsIsBoundedAndReceiptReplayDoesNotRecapture(t *testi
 		t.Fatalf("first=%#v calls=%d err=%v", first, probe.calls, err)
 	}
 	replay, err := service.CaptureDiagnostics(t.Context(), command, "diagnostics-key", principal)
-	if err != nil || probe.calls != 1 || replay.Receipt.Command.ID != first.Receipt.Command.ID {
+	if err != nil || probe.calls != 1 || replay.Receipt.Command.OperationID != first.Receipt.Command.OperationID {
 		t.Fatalf("replay=%#v calls=%d err=%v", replay, probe.calls, err)
 	}
 	if _, err := service.CaptureDiagnostics(t.Context(), OperationsDiagnosticsCommand{Sections: []string{"db_pool"}, PageSize: 51, Reason: "too much"}, "large", principal); apperror.CodeOf(err) != "backend.operations.diagnostics_cost_exceeded" {

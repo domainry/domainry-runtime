@@ -112,7 +112,7 @@ func (h *OperationsHandler) mutate(w http.ResponseWriter, r *http.Request, reset
 				return err
 			}
 			for _, receipt := range receipts {
-				if receipt.Owner == owner && receipt.ID == receiptID {
+				if receipt.Owner == owner && receipt.OperationID == receiptID {
 					return nil
 				}
 			}

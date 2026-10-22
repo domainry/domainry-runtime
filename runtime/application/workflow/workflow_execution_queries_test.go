@@ -16,7 +16,7 @@ import (
 )
 
 func TestWorkflowInspectExecutionContracts(t *testing.T) {
-	worker := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"execution-1": {ID: "execution-1"}}}
+	worker := &workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{"execution-1": {ExecutionID: "execution-1"}}}
 	service := newWorkflowExecutionService(worker)
 	principal := workflowExecutionPrincipal()
 	missingWorkspace := principal
@@ -32,7 +32,7 @@ func TestWorkflowInspectExecutionContracts(t *testing.T) {
 	if _, err := service.InspectWorkflowExecution(t.Context(), "missing", principal); apperror.CodeOf(err) != "backend.workflow.execution_not_found" {
 		t.Fatalf("not found=%v", err)
 	}
-	if execution, err := service.InspectWorkflowExecution(t.Context(), " execution-1 ", principal); err != nil || execution.ID != "execution-1" {
+	if execution, err := service.InspectWorkflowExecution(t.Context(), " execution-1 ", principal); err != nil || execution.ExecutionID != "execution-1" {
 		t.Fatalf("execution=%#v err=%v", execution, err)
 	}
 }
@@ -81,7 +81,7 @@ func TestWorkflowRunAndSimulationContracts(t *testing.T) {
 		t.Fatalf("invalid execution=%v", err)
 	}
 	result, err := service.RunWorkflow(t.Context(), workflow.Key, map[string]any{"order": "one"}, principal)
-	if err != nil || result.WorkflowKey != workflow.Key || result.Execution.ID == "" || result.Status != "completed" {
+	if err != nil || result.WorkflowKey != workflow.Key || result.Execution.ExecutionID == "" || result.Status != "completed" {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 
@@ -116,7 +116,7 @@ func TestManualWorkflowCallerKeyIsRequiredAndClaimed(t *testing.T) {
 		claim: workflowmodel.WorkflowExecutionClaimResult{
 			Decision: idempotency.DecisionAcquired,
 			Receipt: workflowmodel.WorkflowExecutionReceipt{
-				ID: "receipt-1", WorkspaceID: "workspace-1", WorkflowKey: workflow.Key,
+				OperationID: "receipt-1", WorkspaceID: "workspace-1", WorkflowKey: workflow.Key,
 				LeaseOwner: "owner-1", FencingToken: 1,
 			},
 		},
@@ -144,7 +144,7 @@ func TestManualWorkflowCallerKeyIsRequiredAndClaimed(t *testing.T) {
 		claim: workflowmodel.WorkflowExecutionClaimResult{
 			Decision: idempotency.DecisionAcquired,
 			Receipt: workflowmodel.WorkflowExecutionReceipt{
-				ID: "receipt-2", WorkspaceID: "workspace-1", WorkflowKey: workflow.Key,
+				OperationID: "receipt-2", WorkspaceID: "workspace-1", WorkflowKey: workflow.Key,
 				LeaseOwner: "owner-2", FencingToken: 1,
 			},
 		},

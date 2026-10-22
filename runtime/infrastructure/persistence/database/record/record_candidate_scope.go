@@ -106,7 +106,7 @@ func plannedRelationCandidates(
 	case "reverse":
 		result := []recordmodel.Record{}
 		for _, record := range targets {
-			if strings.TrimSpace(fmt.Sprint(record.Data[strings.TrimSpace(segment.RelationFieldKey)])) == strings.TrimSpace(candidate.ID) {
+			if strings.TrimSpace(fmt.Sprint(record.Data[strings.TrimSpace(segment.RelationFieldKey)])) == strings.TrimSpace(candidate.RecordID) {
 				result = append(result, record)
 			}
 		}

@@ -77,7 +77,7 @@ func optimisticTargetCommit(action definitionmodel.ActionSchema, recordID string
 	for index, commit := range commits {
 		commitRecordID := strings.TrimSpace(commit.RecordID)
 		if commitRecordID == "" {
-			commitRecordID = strings.TrimSpace(commit.Record.ID)
+			commitRecordID = strings.TrimSpace(commit.Record.RecordID)
 		}
 		if strings.TrimSpace(commit.Object.Key) != strings.TrimSpace(action.ObjectKey) || commitRecordID != strings.TrimSpace(recordID) || strings.TrimSpace(commit.Operation) == "create" {
 			continue

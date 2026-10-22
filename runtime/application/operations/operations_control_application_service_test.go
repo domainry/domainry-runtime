@@ -93,7 +93,7 @@ func TestOperationsControlPersistsSystemStateAndReceipt(t *testing.T) {
 		t.Fatalf("terminal receipt missing recovery evidence: %#v", result.Receipt)
 	}
 	replayed, err := service.Set(t.Context(), OperationsControlRequest{Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime", Active: true, Reason: "restore drill", Reference: "CHG-42"}, "maintenance-1", principal)
-	if err != nil || replayed.Control.Revision != 1 || replayed.Receipt.Command.ID != result.Receipt.Command.ID {
+	if err != nil || replayed.Control.Revision != 1 || replayed.Receipt.Command.OperationID != result.Receipt.Command.OperationID {
 		t.Fatalf("replay=%#v err=%v", replayed, err)
 	}
 }

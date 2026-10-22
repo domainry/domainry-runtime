@@ -47,7 +47,7 @@ func (e *businessActionExecution) StageWorkflowStart(ctx context.Context, start 
 		return runtimeext.WorkflowStartReceipt{}, err
 	}
 	e.workflowStarts = append(e.workflowStarts, commit)
-	receipt := runtimeext.WorkflowStartReceipt{ProcessID: commit.Process.ID}
+	receipt := runtimeext.WorkflowStartReceipt{ProcessID: commit.Process.ProcessID}
 	for _, step := range commit.RouteSteps {
 		receipt.StepKeys = append(receipt.StepKeys, step.StepKey)
 	}

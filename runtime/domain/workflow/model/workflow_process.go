@@ -3,8 +3,9 @@ package workflowmodel
 import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 
 type WorkflowProcessInstance struct {
+	ID                  int64                          `json:"id"`
 	WorkspaceID         string                         `json:"workspace_id"`
-	ID                  string                         `json:"id"`
+	ProcessID           string                         `json:"process_id"`
 	OperationID         string                         `json:"operation_id,omitempty"`
 	WorkflowKey         string                         `json:"workflow_key"`
 	WorkflowName        string                         `json:"workflow_name"`
@@ -53,18 +54,19 @@ type WorkflowProcessFilter struct {
 }
 
 type WorkflowNodeInstance struct {
-	WorkspaceID string         `json:"workspace_id"`
-	ID          string         `json:"id"`
-	ProcessID   string         `json:"process_id"`
-	NodeID      string         `json:"node_id"`
-	NodeType    string         `json:"node_type"`
-	Iteration   int            `json:"iteration"`
-	Status      string         `json:"status"`
-	Input       map[string]any `json:"input,omitempty"`
-	Output      map[string]any `json:"output,omitempty"`
-	ErrorCode   string         `json:"error_code,omitempty"`
-	StartedAt   string         `json:"started_at"`
-	CompletedAt string         `json:"completed_at,omitempty"`
+	ID             int64          `json:"id"`
+	WorkspaceID    string         `json:"workspace_id"`
+	NodeInstanceID string         `json:"node_instance_id"`
+	ProcessID      string         `json:"process_id"`
+	NodeID         string         `json:"node_id"`
+	NodeType       string         `json:"node_type"`
+	Iteration      int            `json:"iteration"`
+	Status         string         `json:"status"`
+	Input          map[string]any `json:"input,omitempty"`
+	Output         map[string]any `json:"output,omitempty"`
+	ErrorCode      string         `json:"error_code,omitempty"`
+	StartedAt      string         `json:"started_at"`
+	CompletedAt    string         `json:"completed_at,omitempty"`
 }
 
 // AssigneeEvidence is the immutable explanation of why one user entered a
@@ -93,8 +95,9 @@ type AssigneeEvidenceFact struct {
 }
 
 type WorkflowTask struct {
+	ID                    int64                                      `json:"id"`
 	WorkspaceID           string                                     `json:"workspace_id"`
-	ID                    string                                     `json:"id"`
+	TaskID                string                                     `json:"task_id"`
 	ProcessID             string                                     `json:"process_id"`
 	NodeInstanceID        string                                     `json:"node_instance_id"`
 	NodeID                string                                     `json:"node_id"`
@@ -119,8 +122,9 @@ type WorkflowTask struct {
 }
 
 type WorkflowProcessEvent struct {
+	ID          int64          `json:"id"`
 	WorkspaceID string         `json:"workspace_id"`
-	ID          string         `json:"id"`
+	EventID     string         `json:"event_id"`
 	ProcessID   string         `json:"process_id"`
 	NodeID      string         `json:"node_id,omitempty"`
 	TaskID      string         `json:"task_id,omitempty"`

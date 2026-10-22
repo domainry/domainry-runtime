@@ -76,16 +76,16 @@ func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectK
 	messages := make([]publicationmodel.Message, 0, len(matched))
 	for _, rule := range matched {
 		recordVersion := automationdomain.MutationVersion(before, record)
-		eventID := fmt.Sprintf("automation:%s:%s:%s:%s:%s", rule.Key, objectKey, record.ID, operation, recordVersion)
+		eventID := fmt.Sprintf("automation:%s:%s:%s:%s:%s", rule.Key, objectKey, record.RecordID, operation, recordVersion)
 		correlationID := valueOrDefault(strings.TrimSpace(principal.CorrelationID), principal.RequestID)
 		causationID := valueOrDefault(strings.TrimSpace(principal.CausationID), principal.RequestID)
 		event := automationmodel.AutomationLifecycleEvent{
-			ID: eventID, RuleKey: rule.Key, Rule: cloneAutomationRule(rule), ObjectKey: objectKey, Operation: operation, RecordID: record.ID, RecordVersion: recordVersion,
+			ID: eventID, RuleKey: rule.Key, Rule: cloneAutomationRule(rule), ObjectKey: objectKey, Operation: operation, RecordID: record.RecordID, RecordVersion: recordVersion,
 			Before: recordcontract.RecordCloneData(before), Record: record, ActorUserID: principal.UserID, ActorRoleKey: principal.RoleKey,
 			RequestID: principal.RequestID, CorrelationID: correlationID, CausationID: causationID, IdentityPolicy: "revalidate_initiator",
 			AutomationDepth: principal.AutomationDepth, VisitedRuleKeys: append([]string(nil), principal.VisitedRuleKeys...), OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
-		messages = append(messages, publicationmodel.Message{ID: eventID, WorkspaceID: workspaceID, ConnectorKey: "__automation__", Operation: rule.Key, Status: "queued", EventID: eventID, RequestRef: principal.RequestID, DedupKey: eventID, CreatedBy: principal.UserID, Payload: automationdomain.LifecycleEventPayload(event)})
+		messages = append(messages, publicationmodel.Message{MessageID: eventID, WorkspaceID: workspaceID, ConnectorKey: "__automation__", Operation: rule.Key, Status: "queued", EventID: eventID, RequestRef: principal.RequestID, DedupKey: eventID, CreatedBy: principal.UserID, Payload: automationdomain.LifecycleEventPayload(event)})
 	}
 	return messages
 }

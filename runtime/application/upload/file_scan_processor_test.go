@@ -169,18 +169,18 @@ func TestFileScanProcessorDrainsScannerStreamBeforeIdentityVerification(t *testi
 func fileScanCandidate(fileID, workspaceID, filename, contentType string, content []byte) lifecyclecontract.FileScanEvidence {
 	digest := sha256.Sum256(content)
 	return lifecyclecontract.FileScanEvidence{
-		FileID: fileID, WorkspaceID: workspaceID, Filename: filename, ContentType: contentType,
+		ArtifactID: fileID, WorkspaceID: workspaceID, Filename: filename, ContentType: contentType,
 		SHA256: hex.EncodeToString(digest[:]), Size: int64(len(content)), Status: lifecyclecontract.FileScanPending,
 	}
 }
 
 func storeScanCandidate(t *testing.T, blobs runtimefile.BlobStore, candidate lifecyclecontract.FileScanEvidence, content []byte) lifecyclecontract.FileScanEvidence {
 	t.Helper()
-	staged, err := blobs.Stage(t.Context(), runtimefile.BlobStageRequest{WorkspaceID: candidate.WorkspaceID, StageID: candidate.FileID, Content: strings.NewReader(string(content)), MaxBytes: int64(len(content)) + 1})
+	staged, err := blobs.Stage(t.Context(), runtimefile.BlobStageRequest{WorkspaceID: candidate.WorkspaceID, StageID: candidate.ArtifactID, Content: strings.NewReader(string(content)), MaxBytes: int64(len(content)) + 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate.Filename = staged.ContentSHA256 + "-" + candidate.FileID + ".bin"
+	candidate.Filename = staged.ContentSHA256 + "-" + candidate.ArtifactID + ".bin"
 	if _, err := blobs.Commit(t.Context(), runtimefile.BlobCommitRequest{WorkspaceID: candidate.WorkspaceID, StageKey: staged.BlobKey, BlobKey: candidate.Filename, ContentSHA256: staged.ContentSHA256, Size: staged.Size}); err != nil {
 		t.Fatal(err)
 	}

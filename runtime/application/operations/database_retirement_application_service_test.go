@@ -29,7 +29,7 @@ func TestDatabaseRetirementApplicationDoesNotAcceptSQLAndBlocksEarlyExecution(t 
 	if retirement.Evidence.AuditEventID != "" {
 		t.Fatalf("discovery stored synthetic Audit evidence %q", retirement.Evidence.AuditEventID)
 	}
-	if _, err := service.Execute(t.Context(), retirement.ID, principal); err == nil {
+	if _, err := service.Execute(t.Context(), retirement.OperationID, principal); err == nil {
 		t.Fatal("destructive execution before quarantine accepted")
 	}
 	if executor.executed {
@@ -42,31 +42,31 @@ func TestDatabaseRetirementApplicationMarksFailedExecutionBlocked(t *testing.T) 
 	quarantineEnded := now.Add(-time.Minute)
 	verified, drill := now.Add(-time.Hour), now.Add(-2*time.Hour)
 	retirement := operationsmodel.DatabaseRetirement{
-		ID: "retire-1", Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old_table"}, State: operationsmodel.DatabaseRetirementQuarantined, UpdatedAt: now.Add(-time.Hour),
+		OperationID: databaseRetirementTestOperationID("retire-1"), Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "old_table"}, State: operationsmodel.DatabaseRetirementQuarantined, UpdatedAt: now.Add(-time.Hour),
 		Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record", Replacement: "new_table", ExpectedSchemaVersion: "2", ExpectedDataVersion: "2", BackfillComplete: true, BackfillCheckpoint: "checkpoint", ReadsSwitchVersion: "2.1", WritesDisableVersion: "2.2", WriteProtection: "trigger", Observation: operationsmodel.DatabaseAccessObservation{WindowStarted: now.Add(-48 * time.Hour), WindowEnds: now.Add(-24 * time.Hour), SourceCounts: map[string]uint64{"runtime": 0}}, Comparison: operationsmodel.DatabaseDataComparison{SourceRows: 1, ReplacementRows: 1, SourceKeys: 1, ReplacementKeys: 1, SourceHash: "same", ReplacementHash: "same", BusinessChecks: []string{"count"}, ComparedAt: now.Add(-25 * time.Hour)}, Disposition: "migrate", BackupID: "backup", BackupChecksum: "checksum", BackupVerifiedAt: &verified, RestoreDrillAt: &drill, MaintenanceEvidence: "maintenance", DrainEvidence: "drain", ChangePlanID: "change", ApprovalID: "approval", QuarantineUntil: &quarantineEnded, Rollback: "restore", AuditEventID: "audit"},
 	}
-	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.ID: retirement}}
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.OperationID: retirement}}
 	executor := &databaseRetirementExecutorFake{fail: true}
 	service := NewDatabaseRetirementApplicationService(repository, executor, func() time.Time { return now }, nil)
-	if _, err := service.Execute(t.Context(), retirement.ID, databaseRetirementPrincipal()); err == nil {
+	if _, err := service.Execute(t.Context(), retirement.OperationID, databaseRetirementPrincipal()); err == nil {
 		t.Fatal("failed destructive execution reported success")
 	}
-	if repository.items[retirement.ID].State != operationsmodel.DatabaseRetirementBlocked {
-		t.Fatalf("failed execution state=%s", repository.items[retirement.ID].State)
+	if repository.items[retirement.OperationID].State != operationsmodel.DatabaseRetirementBlocked {
+		t.Fatalf("failed execution state=%s", repository.items[retirement.OperationID].State)
 	}
 }
 
 func TestDatabaseRetirementRetriesAreIdempotent(t *testing.T) {
 	now := time.Date(2026, 7, 19, 15, 0, 0, 0, time.UTC)
-	retirement := operationsmodel.DatabaseRetirement{ID: "retire-idempotent", Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "retired_table"}, State: operationsmodel.DatabaseRetirementDropped, UpdatedAt: now, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record", AuditEventID: "audit-success"}}
-	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.ID: retirement}}
+	retirement := operationsmodel.DatabaseRetirement{OperationID: databaseRetirementTestOperationID("retire-idempotent"), Object: operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "retired_table"}, State: operationsmodel.DatabaseRetirementDropped, UpdatedAt: now, Evidence: operationsmodel.DatabaseRetirementEvidence{Owner: "record", AuditEventID: "audit-success"}}
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{retirement.OperationID: retirement}}
 	executor := &databaseRetirementExecutorFake{}
 	service := NewDatabaseRetirementApplicationService(repository, executor, func() time.Time { return now }, nil)
-	result, err := service.Execute(t.Context(), retirement.ID, databaseRetirementPrincipal())
+	result, err := service.Execute(t.Context(), retirement.OperationID, databaseRetirementPrincipal())
 	if err != nil || result.ExecutedStatements != 0 || result.AuditEventID != "audit-success" || executor.executed || executor.verified != 1 {
 		t.Fatalf("idempotent execute result=%+v executed=%t verified=%d err=%v", result, executor.executed, executor.verified, err)
 	}
-	advanced, err := service.Advance(t.Context(), retirement.ID, retirement.State, retirement.Evidence, databaseRetirementPrincipal())
+	advanced, err := service.Advance(t.Context(), retirement.OperationID, retirement.State, retirement.Evidence, databaseRetirementPrincipal())
 	if err != nil || advanced.State != retirement.State {
 		t.Fatalf("idempotent advance=%+v err=%v", advanced, err)
 	}
@@ -77,27 +77,27 @@ func TestDatabaseRetirementRejectsUnverifiedTerminalAuditEvidence(t *testing.T) 
 	quarantineEnded := now.Add(-time.Minute)
 	current := operationsDatabaseRetirementFixture(now)
 	current.State, current.Evidence.QuarantineUntil = operationsmodel.DatabaseRetirementQuarantined, &quarantineEnded
-	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{current.ID: current}}
+	repository := &databaseRetirementRepositoryFake{items: map[string]operationsmodel.DatabaseRetirement{current.OperationID: current}}
 	executor := &databaseRetirementExecutorFake{verifyErr: errors.New("Audit event missing")}
 	service := NewDatabaseRetirementApplicationService(repository, executor, func() time.Time { return now }, nil)
-	if _, err := service.Advance(t.Context(), current.ID, operationsmodel.DatabaseRetirementDropped, current.Evidence, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_required" {
+	if _, err := service.Advance(t.Context(), current.OperationID, operationsmodel.DatabaseRetirementDropped, current.Evidence, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_execute_required" {
 		t.Fatalf("generic Advance bypassed destructive executor: %v", err)
 	}
 
-	result, err := service.Execute(t.Context(), current.ID, databaseRetirementPrincipal())
+	result, err := service.Execute(t.Context(), current.OperationID, databaseRetirementPrincipal())
 	if apperror.CodeOf(err) != "backend.operations.database_retirement_audit_evidence_unverified" || !result.Dirty || result.AuditEventID != "" {
 		t.Fatalf("unverified execution result=%+v err=%v", result, err)
 	}
-	stored := repository.items[current.ID]
+	stored := repository.items[current.OperationID]
 	if stored.State != operationsmodel.DatabaseRetirementBlocked || stored.Evidence.AuditEventID != "" {
 		t.Fatalf("unverified retirement stored=%+v", stored)
 	}
 
 	dropped := current
 	dropped.State, dropped.Evidence.AuditEventID = operationsmodel.DatabaseRetirementDropped, "claimed-audit"
-	repository.items[current.ID] = dropped
+	repository.items[current.OperationID] = dropped
 	executor.executed = false
-	if result, err := service.Execute(t.Context(), current.ID, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_audit_evidence_unverified" || result.AuditEventID != "" || executor.executed {
+	if result, err := service.Execute(t.Context(), current.OperationID, databaseRetirementPrincipal()); apperror.CodeOf(err) != "backend.operations.database_retirement_audit_evidence_unverified" || result.AuditEventID != "" || executor.executed {
 		t.Fatalf("unverified replay result=%+v executed=%t err=%v", result, executor.executed, err)
 	}
 }
@@ -139,10 +139,10 @@ func (r *databaseRetirementRepositoryFake) RegisterDatabaseRetirement(_ context.
 	if r.registerErr != nil {
 		return false, r.registerErr
 	}
-	if _, exists := r.items[value.ID]; exists {
+	if _, exists := r.items[value.OperationID]; exists {
 		return false, nil
 	}
-	r.items[value.ID] = value
+	r.items[value.OperationID] = value
 	return true, nil
 }
 func (r *databaseRetirementRepositoryFake) GetDatabaseRetirement(_ context.Context, id string) (operationsmodel.DatabaseRetirement, bool, error) {
@@ -171,11 +171,11 @@ func (r *databaseRetirementRepositoryFake) TransitionDatabaseRetirement(_ contex
 	if r.transitionChanged != nil {
 		return *r.transitionChanged, nil
 	}
-	current, found := r.items[value.ID]
+	current, found := r.items[value.OperationID]
 	if !found || current.State != expected {
 		return false, nil
 	}
-	r.items[value.ID] = value
+	r.items[value.OperationID] = value
 	return true, nil
 }
 func (r *databaseRetirementRepositoryFake) RecordDatabaseRetirementAccess(context.Context, string, string, string, time.Time) error {
@@ -211,9 +211,9 @@ func (e *databaseRetirementExecutorFake) PreviewDatabaseRetirement(_ context.Con
 		return operationsmodel.DatabaseDropPlan{}, e.previewErr
 	}
 	if e.invalidPlan {
-		return operationsmodel.DatabaseDropPlan{RetirementID: retirement.ID}, nil
+		return operationsmodel.DatabaseDropPlan{OperationID: retirement.OperationID}, nil
 	}
-	return operationsmodel.DatabaseDropPlan{RetirementID: retirement.ID, Object: retirement.Object, Statements: []string{"DROP TABLE old_table"}, EstimatedLock: time.Second, LockTimeout: 5 * time.Second, Rollback: "restore", ApprovalID: retirement.Evidence.ApprovalID}, nil
+	return operationsmodel.DatabaseDropPlan{OperationID: retirement.OperationID, Object: retirement.Object, Statements: []string{"DROP TABLE old_table"}, EstimatedLock: time.Second, LockTimeout: 5 * time.Second, Rollback: "restore", ApprovalID: retirement.Evidence.ApprovalID}, nil
 }
 func (e *databaseRetirementExecutorFake) ExecuteDatabaseRetirement(context.Context, operationsmodel.DatabaseRetirement, operationsmodel.DatabaseDropPlan) (operationscontract.DatabaseRetirementExecutionResult, error) {
 	e.executed = true

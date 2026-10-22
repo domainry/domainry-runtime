@@ -46,7 +46,7 @@ func (s workflowRecordReaderEdgeStub) GetWorkflowRecord(_ context.Context, _ str
 
 func (s workflowRecordReaderEdgeStub) ListWorkflowRecords(_ context.Context, _ string, _ definitionmodel.ObjectSchema, query recordmodel.RecordListQuery, _ principalmodel.Principal) (recordmodel.RecordPageResult, error) {
 	items := []recordmodel.Record{}
-	for _, raw := range query.Filters["id__in"].([]any) {
+	for _, raw := range query.Filters["record_id__in"].([]any) {
 		id := fmt.Sprint(raw)
 		if id == s.errID {
 			return recordmodel.RecordPageResult{}, errors.New("read")
@@ -194,11 +194,11 @@ func TestWorkflowExecutionVisibilityCoversAuthorizationAndRecordOutcomes(t *test
 	object := definitionmodel.ObjectSchema{Key: "order"}
 	execution := workflowmodel.WorkflowExecution{ObjectKey: "order", RecordID: "denied", Payload: map[string]any{"object_key": "order", "record_id": "allowed"}}
 	reader := workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{
-		"denied":  {ID: "denied"},
-		"allowed": {ID: "allowed"},
+		"denied":  {RecordID: "denied"},
+		"allowed": {RecordID: "allowed"},
 	}}
 	service := NewWorkflowExecutionVisibilityApplicationService(reader, func(_ context.Context, _ principalmodel.Principal, _ definitionmodel.ObjectSchema, record recordmodel.Record) bool {
-		return record.ID == "allowed"
+		return record.RecordID == "allowed"
 	})
 	visible, err := service.WorkflowExecutionVisible(t.Context(), principal, object, execution)
 	if err != nil || !visible {

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	ormschema "github.com/domainry/domainry-orm/schema"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 )
@@ -26,10 +27,8 @@ func TestRecordStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	repository := NewRecordStore(store)
 	var _ recordrepository.RecordRepository = repository
 	object := definitionmodel.ObjectSchema{Key: "context_record", Name: "Context Record", Fields: []definitionmodel.FieldSchema{{Key: "status", Name: "Status", Type: "text"}}}
-	if _, err := store.DB().Exec(`CREATE TABLE context_record (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, status TEXT, UNIQUE (workspace_id, id))`); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{ID: "record_1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
+	createTestRecordTable(t, store, object.Key, ormschema.Column("status", ormschema.Text()))
+	if err := repository.InsertRecord(t.Context(), "workspace-primary", object, recordmodel.Record{RecordID: "record_1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: map[string]any{"status": "pending"}}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -43,7 +42,7 @@ func TestRecordStoreImplementsContractAndCancelsSQL(t *testing.T) {
 	if _, err := repository.ListRecords(expired, "workspace-primary", object, recordmodel.RecordListQuery{Page: 1, PageSize: 10, AuthorizationMode: recordmodel.RecordQueryAuthorizationUnrestricted}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected SQL deadline error, got %v", err)
 	}
-	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{ID: "record_1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}}
+	commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: object, Record: recordmodel.Record{RecordID: "record_1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-02T00:00:00Z", Data: map[string]any{"status": "approved"}}}
 	if err := repository.CommitRecordMutation(ctx, "workspace-primary", commit); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancelled transaction, got %v", err)
 	}

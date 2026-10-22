@@ -57,25 +57,25 @@ type plan struct {
 	Rows        []rowReference                       `json:"rows"`
 }
 type spec struct {
-	table, status string
-	set           map[string]any
-	busy          []string
-	fence         bool
+	table, idColumn, status string
+	set                     map[string]any
+	busy                    []string
+	fence                   bool
 }
 
 var specs = []spec{
-	{table: sharedoperation.TableName, status: "status", busy: []string{"running", "executing", "processing"}, fence: true},
-	{table: "_workflow_process_instances", status: "status", set: map[string]any{"workflow_name": "", "definition_json": "{}", "initiator_id": "anonymous", "initiator_role_key": "", "current_node_ids_json": "[]", "variables_json": "{}", "result_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
-	{table: "_workflow_executions", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
-	{table: "_workflow_node_instances", status: "status", busy: []string{"running", "processing"}, set: map[string]any{"input_json": "{}", "output_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
-	{table: "_workflow_tasks", status: "status", set: map[string]any{"title": "", "assignee_user_id": "anonymous", "assignee_name": "", "assignee_role_key": "", "assignee_resolver_key": "", "assignee_evidence_json": "{\"matches\":[]}", "resolver_snapshot_json": "[]", "comment": "", "completed_by": "anonymous", "status": "cancelled"}},
-	{table: "_workflow_process_events", set: map[string]any{"actor_id": "anonymous", "summary": "", "metadata_json": "{}"}},
-	{table: "_workflow_route_steps", status: "status", set: map[string]any{"title": "", "assignee_snapshot_json": "[]", "configured_by": "anonymous", "status": "cancelled"}},
-	{table: "_publication_outbox", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
-	{table: "_action_assurance_grants"},
-	{table: "_artifact_bindings"},
-	{table: "_automation_runs", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": int64(0)}},
-	{table: sharedoperation.BreakGlassTableName},
+	{table: sharedoperation.TableName, idColumn: "operation_id", status: "status", busy: []string{"running", "executing", "processing"}, fence: true},
+	{table: "_workflow_process_instances", idColumn: "process_id", status: "status", set: map[string]any{"workflow_name": "", "definition_json": "{}", "initiator_id": "anonymous", "initiator_role_key": "", "current_node_ids_json": "[]", "variables_json": "{}", "result_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
+	{table: "_workflow_executions", idColumn: "execution_id", status: "status", busy: []string{"running", "processing", "executing"}, fence: true, set: map[string]any{"name": "", "action_json": "{}", "payload_json": "{}", "result_json": "{}", "actor_id": "anonymous", "run_as": "", "idempotency_key": "", "last_error": "", "message": "", "status": "cancelled", "next_run_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
+	{table: "_workflow_node_instances", idColumn: "node_instance_id", status: "status", busy: []string{"running", "processing"}, set: map[string]any{"input_json": "{}", "output_json": "{}", "status": "cancelled", "error_code": "runtime.subject_erased"}},
+	{table: "_workflow_tasks", idColumn: "task_id", status: "status", set: map[string]any{"title": "", "assignee_user_id": "anonymous", "assignee_name": "", "assignee_role_key": "", "assignee_resolver_key": "", "assignee_evidence_json": "{\"matches\":[]}", "resolver_snapshot_json": "[]", "comment": "", "completed_by": "anonymous", "status": "cancelled"}},
+	{table: "_workflow_process_events", idColumn: "event_id", set: map[string]any{"actor_id": "anonymous", "summary": "", "metadata_json": "{}"}},
+	{table: "_workflow_route_steps", idColumn: "route_step_id", status: "status", set: map[string]any{"title": "", "assignee_snapshot_json": "[]", "configured_by": "anonymous", "status": "cancelled"}},
+	{table: "_publication_outbox", idColumn: "message_id", status: "status", busy: []string{"sending", "processing", "running"}, fence: true, set: map[string]any{"intent_json": "{}", "payload_json": "{}", "created_by": "anonymous", "request_ref": "", "response_ref": "", "request_fingerprint": "", "error": "", "last_error": "", "status": "failed", "last_error_code": "runtime.subject_erased", "next_attempt_at": int64(0), "lease_owner": "", "lease_expires_at": int64(0)}},
+	{table: "_action_assurance_grants", idColumn: "grant_id"},
+	{table: "_artifact_bindings", idColumn: "artifact_id"},
+	{table: "_automation_runs", idColumn: "run_id", status: "status", busy: []string{"processing", "running"}, fence: true, set: map[string]any{"actor_id": "anonymous", "role_key": "", "candidate_json": "{}", "trace_json": "{}", "idempotency_key": "", "result_json": "{}", "status": "failed", "error_code": "runtime.subject_erased", "lease_owner": "", "lease_expires_at": int64(0)}},
+	{table: sharedoperation.BreakGlassTableName, idColumn: "break_glass_grant_id"},
 }
 
 func scope(ctx context.Context, workspace, subject string) error {
@@ -126,9 +126,9 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 				if lock && slices.Contains(s.busy, record.Status) {
 					return nil, fmt.Errorf("runtime.subject_evidence_busy: %s", s.table)
 				}
-				items = append(items, rowReference{Table: s.table, ID: record.ID})
+				items = append(items, rowReference{Table: s.table, ID: record.OperationID})
 				if record.Owner == "action" {
-					actionIDs = append(actionIDs, record.ID)
+					actionIDs = append(actionIDs, record.OperationID)
 				}
 			}
 			continue
@@ -139,7 +139,7 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 				return nil, err
 			}
 			for _, record := range records {
-				items = append(items, rowReference{Table: s.table, ID: record.ID})
+				items = append(items, rowReference{Table: s.table, ID: record.BreakGlassGrantID})
 			}
 			continue
 		}
@@ -171,11 +171,15 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		case "_publication_outbox":
 			predicate = query.Or(query.Equal("created_by", subject), in("request_ref", append(slices.Clone(actionIDs), executionIDs...)), in("event_id", events), in("source_event_id", events))
 		}
-		columns := []string{"id"}
+		columns := []string{s.idColumn}
 		if s.status != "" {
 			columns = append(columns, s.status)
 		}
-		builder := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, s.table, workspace).Columns(columns...).Where(predicate).OrderBy(query.Ascending("id"))
+		orderColumn := "id"
+		if s.table == "_artifact_bindings" {
+			orderColumn = s.idColumn
+		}
+		builder := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, s.table, workspace).Columns(columns...).Where(predicate).OrderBy(query.Ascending(orderColumn))
 		if lock && h.store.RuntimeEngine.Capabilities().RowLock {
 			builder.ForUpdate()
 		}
@@ -217,7 +221,7 @@ func (h *Handler) collect(ctx context.Context, tx *sql.Tx, workspace, subject st
 		rows.Close()
 	}
 	// Notification SaaS intents carry explicit recipient and subject identity.
-	statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, "_publication_outbox", workspace).Columns("id", "status", "intent_json").Where(query.Equal("publication_type", "notification.saas")).OrderBy(query.Ascending("id")).Build()
+	statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, "_publication_outbox", workspace).Columns("message_id", "status", "intent_json").Where(query.Equal("publication_type", "notification.saas")).OrderBy(query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +324,7 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 	for _, ref := range p.Rows {
 		ledger := sharedoperation.NewSQLStore(h.store.DB(), h.store.SQLRenderer)
 		if ref.Table == sharedoperation.TableName {
-			record, found, err := ledger.GetRecord(ctx, sharedoperation.RecordFilter{WorkspaceID: workspace, ID: ref.ID})
+			record, found, err := ledger.GetRecord(ctx, sharedoperation.RecordFilter{WorkspaceID: workspace, OperationID: ref.ID})
 			if err != nil {
 				return nil, err
 			}
@@ -339,7 +343,7 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 			}
 			continue
 		}
-		statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, ref.Table, workspace).Projections(query.Project(query.AllColumns())).Where(query.Equal("id", ref.ID)).Build()
+		statement, args, err := query.NewWorkspaceSelectBuilder(h.store.SQLRenderer, ref.Table, workspace).Projections(query.Project(query.AllColumns())).Where(query.Equal(subjectEvidenceIDColumn(ref.Table), ref.ID)).Build()
 		if err != nil {
 			return nil, err
 		}
@@ -382,8 +386,8 @@ func (h *Handler) ExportSubjectForRequest(ctx context.Context, _ string, workspa
 
 func operationRecordExport(record sharedoperation.Record) map[string]any {
 	return map[string]any{
-		"id": record.ID, "workspace_id": record.WorkspaceID, "system_purpose": record.SystemPurpose, "owner": record.Owner,
-		"kind": record.Kind, "action_key": record.ActionKey, "parent_id": record.ParentID, "resource_type": record.ResourceType,
+		"id": record.ID, "operation_id": record.OperationID, "workspace_id": record.WorkspaceID, "system_purpose": record.SystemPurpose, "owner": record.Owner,
+		"kind": record.Kind, "action_key": record.ActionKey, "parent_operation_id": record.ParentOperationID, "resource_type": record.ResourceType,
 		"resource_id": record.ResourceID, "idempotency_key": record.IdempotencyKey, "request_fingerprint": record.RequestFingerprint,
 		"requested_by": record.RequestedBy, "reason": record.Reason, "reference": record.Reference, "status": record.Status,
 		"status_url": record.StatusURL, "result_json": string(record.ResultJSON), "metadata_json": string(record.MetadataJSON),
@@ -397,7 +401,7 @@ func operationRecordExport(record sharedoperation.Record) map[string]any {
 
 func breakGlassExport(record sharedoperation.BreakGlassGrant) map[string]any {
 	return map[string]any{
-		"id": record.ID, "workspace_id": record.WorkspaceID, "state": record.State, "actor_id": record.ActorID,
+		"id": record.ID, "break_glass_grant_id": record.BreakGlassGrantID, "workspace_id": record.WorkspaceID, "state": record.State, "actor_id": record.ActorID,
 		"approver_ids_json": string(record.ApproverIDsJSON), "reason": record.Reason, "incident_ref": record.IncidentRef,
 		"alert_target": record.AlertTarget, "audit_event_id": record.AuditEventID, "expires_at": record.ExpiresAt,
 		"revision": record.Revision, "created_at": record.CreatedAt, "updated_at": record.UpdatedAt,
@@ -562,7 +566,7 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 			continue
 		}
 		statement, args, err := query.NewWorkspaceUpdateBuilder(h.store.SQLRenderer, ref.Table, workspace).
-			Set("status", "cancelled").Set("error_code", "runtime.subject_erased").Where(query.Equal("id", ref.ID)).Build()
+			Set("status", "cancelled").Set("error_code", "runtime.subject_erased").Where(query.Equal(subjectEvidenceIDColumn(ref.Table), ref.ID)).Build()
 		if err != nil {
 			return nil, err
 		}
@@ -594,7 +598,7 @@ func (h *Handler) PrepareSubjectErasure(ctx context.Context, request, workspace,
 			if ref.Table == "_publication_outbox" {
 				builder.Set("next_attempt_at", int64(0)).Set("last_error_code", "runtime.subject_erased")
 			}
-			statement, args, err := builder.Where(query.Equal("id", ref.ID)).Build()
+			statement, args, err := builder.Where(query.Equal(subjectEvidenceIDColumn(ref.Table), ref.ID)).Build()
 			if err != nil {
 				return nil, err
 			}
@@ -654,7 +658,7 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 		if ref.Table == sharedoperation.TableName {
 			digest := sha256.Sum256([]byte(ref.Table + ":" + ref.ID))
 			changed, err := ledger.EraseRecords(sharedoperation.WithExecutor(ctx, tx), workspace, []sharedoperation.RecordErasure{{
-				ID: ref.ID, IdempotencyKey: "erased:" + hex.EncodeToString(digest[:]),
+				OperationID: ref.ID, IdempotencyKey: "erased:" + hex.EncodeToString(digest[:]),
 			}})
 			if err != nil {
 				return nil, err
@@ -675,7 +679,11 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 			continue
 		}
 		if len(found.set) == 0 {
-			statement, args, err := query.NewWorkspaceDeleteBuilder(h.store.SQLRenderer, ref.Table, workspace).Where(query.Equal("id", ref.ID)).Build()
+			predicate := query.Predicate(query.Equal(found.idColumn, ref.ID))
+			if ref.Table == "_artifact_bindings" {
+				predicate = query.And(predicate, query.Equal("owner", foundationartifact.OwnerUploads), query.Equal("kind", foundationartifact.BindingSubject), query.Equal("resource_type", "identity_user"), query.Equal("resource_id", p.SubjectID))
+			}
+			statement, args, err := query.NewWorkspaceDeleteBuilder(h.store.SQLRenderer, ref.Table, workspace).Where(predicate).Build()
 			if err != nil {
 				return nil, err
 			}
@@ -698,7 +706,7 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 			}
 			builder.Set(key, value)
 		}
-		statement, args, err := builder.Where(query.Equal("id", ref.ID)).Build()
+		statement, args, err := builder.Where(query.Equal(found.idColumn, ref.ID)).Build()
 		if err != nil {
 			return nil, err
 		}
@@ -721,3 +729,12 @@ func (h *Handler) ErasePreparedSubject(ctx context.Context, request, workspace, 
 
 var _ contract.SubjectExecutionHandler = (*Handler)(nil)
 var _ contract.PreparedSubjectErasureHandler = (*Handler)(nil)
+
+func subjectEvidenceIDColumn(table string) string {
+	for _, value := range specs {
+		if value.table == table {
+			return value.idColumn
+		}
+	}
+	return "id"
+}

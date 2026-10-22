@@ -39,10 +39,10 @@ func TestSQLiteDatabaseRetirementExecutorDropsOnlyTypedApprovedObject(t *testing
 		t.Fatalf("retired table still exists: count=%d err=%v", count, err)
 	}
 	var event, recordID, operationID, ownerRunID string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT "+store.Identifier("event")+", "+store.Identifier("record_id")+", "+store.Identifier("operation_id")+", "+store.Identifier("owner_run_id")+" FROM "+store.TableIdentifier("_audit_events")+" WHERE "+store.Identifier("id")+" = "+store.Placeholder(1), result.AuditEventID).Scan(&event, &recordID, &operationID, &ownerRunID); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT "+store.Identifier("event")+", "+store.Identifier("record_id")+", "+store.Identifier("operation_id")+", "+store.Identifier("owner_run_id")+" FROM "+store.TableIdentifier("_audit_events")+" WHERE "+store.Identifier("audit_event_id")+" = "+store.Placeholder(1), result.AuditEventID).Scan(&event, &recordID, &operationID, &ownerRunID); err != nil {
 		t.Fatalf("load immutable retirement audit event: %v", err)
 	}
-	if event != "database_retirement_completed" || recordID != retirement.ID || operationID != "operation-1" || ownerRunID != retirement.ID {
+	if event != "database_retirement_completed" || recordID != retirement.OperationID || operationID != "operation-1" || ownerRunID != retirement.OperationID {
 		t.Fatalf("retirement audit event=%q record=%q operation=%q owner_run=%q", event, recordID, operationID, ownerRunID)
 	}
 	if err := executor.VerifyDatabaseRetirementCompletionAudit(t.Context(), retirement, result.AuditEventID); err != nil {
@@ -287,7 +287,7 @@ func openDatabaseRetirementExecutorStore(t *testing.T) *database.RuntimeStore {
 func executableDatabaseRetirement(now time.Time, object operationsmodel.DatabaseObjectIdentity) operationsmodel.DatabaseRetirement {
 	verified, drill, quarantine := now.Add(-time.Hour), now.Add(-2*time.Hour), now.Add(-time.Minute)
 	return operationsmodel.DatabaseRetirement{
-		ID: "retire-" + object.Name, Object: object, State: operationsmodel.DatabaseRetirementQuarantined, UpdatedAt: now.Add(-time.Hour),
+		OperationID: persistenceOperationsTestID("op", "retire-"+object.Name), Object: object, State: operationsmodel.DatabaseRetirementQuarantined, UpdatedAt: now.Add(-time.Hour),
 		Evidence: operationsmodel.DatabaseRetirementEvidence{
 			Owner: "record", Replacement: "replacement", ExpectedSchemaVersion: "2", ExpectedDataVersion: "2", BackfillCheckpoint: "checkpoint", BackfillComplete: true,
 			ReadsSwitchVersion: "2.1", WritesDisableVersion: "2.2", WriteProtection: "read_only",

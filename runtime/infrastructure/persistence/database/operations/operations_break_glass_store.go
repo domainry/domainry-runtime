@@ -34,7 +34,7 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 	}
 	approvers, _ := json.Marshal(grant.ApproverIDs)
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, grant.WorkspaceID, sharedoperation.BreakGlassTableName,
-		[]string{"id", "actor_id"}, []any{grant.ID, grant.ActorID}); err != nil {
+		[]string{"break_glass_grant_id", "actor_id"}, []any{grant.BreakGlassGrantID, grant.ActorID}); err != nil {
 		return false, err
 	}
 	for _, actor := range grant.ApproverIDs {
@@ -43,7 +43,7 @@ func (s OperationsStore) CreateOperationsBreakGlass(ctx context.Context, grant o
 		}
 	}
 	inserted, err := ledger.InsertBreakGlass(txContext, sharedoperation.BreakGlassGrant{
-		ID: grant.ID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID, ApproverIDsJSON: approvers,
+		ID: grant.ID, BreakGlassGrantID: grant.BreakGlassGrantID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID, ApproverIDsJSON: approvers,
 		Reason: grant.Reason, IncidentRef: grant.IncidentRef, AlertTarget: grant.AlertTarget, AuditEventID: grant.AuditEventID,
 		ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Revision: grant.Revision,
 		CreatedAt: grant.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: grant.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -107,7 +107,7 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 	}
 	defer func() { _ = tx.Rollback() }()
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, grant.WorkspaceID, sharedoperation.BreakGlassTableName,
-		[]string{"id", "revoked_by"}, []any{grant.ID, grant.RevokedBy}); err != nil {
+		[]string{"break_glass_grant_id", "revoked_by"}, []any{grant.BreakGlassGrantID, grant.RevokedBy}); err != nil {
 		return false, err
 	}
 	ledger, err := s.ledger()
@@ -115,7 +115,7 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 		return false, err
 	}
 	record := sharedoperation.BreakGlassGrant{
-		ID: grant.ID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID,
+		ID: grant.ID, BreakGlassGrantID: grant.BreakGlassGrantID, WorkspaceID: grant.WorkspaceID, State: string(grant.State), ActorID: grant.ActorID,
 		ApproverIDsJSON: json.RawMessage(`[]`), Reason: grant.Reason, IncidentRef: grant.IncidentRef, AlertTarget: grant.AlertTarget,
 		AuditEventID: grant.AuditEventID, ExpiresAt: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), Revision: grant.Revision,
 		CreatedAt: grant.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: grant.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -135,7 +135,7 @@ func (s OperationsStore) RevokeOperationsBreakGlass(ctx context.Context, grant o
 
 func operationsBreakGlassFromRecord(record sharedoperation.BreakGlassGrant) (operationsmodel.OperationsBreakGlassGrant, error) {
 	grant := operationsmodel.OperationsBreakGlassGrant{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, State: operationsmodel.OperationsBreakGlassState(record.State), ActorID: record.ActorID,
+		ID: record.ID, BreakGlassGrantID: record.BreakGlassGrantID, WorkspaceID: record.WorkspaceID, State: operationsmodel.OperationsBreakGlassState(record.State), ActorID: record.ActorID,
 		Reason: record.Reason, IncidentRef: record.IncidentRef, AlertTarget: record.AlertTarget, AuditEventID: record.AuditEventID,
 		Revision: record.Revision, RevokedBy: record.RevokedBy, RevocationNote: record.RevocationNote,
 	}

@@ -14,10 +14,9 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 	tables := []struct {
 		name    string
 		columns []ormschema.ColumnDefinition
-		primary []string
 	}{
 		{name: "_workspaces", columns: []ormschema.ColumnDefinition{
-			ormschema.Column("id", ormschema.TextKey(255)).NotNull(),
+			ormschema.Column("workspace_id", ormschema.TextKey(255)).NotNull(),
 			ormschema.Column("canonical_code", ormschema.TextKey(191)).NotNull(),
 			ormschema.Column("name", ormschema.Text()).NotNull(),
 			ormschema.Column("status", ormschema.TextKey(64)).NotNull(),
@@ -42,10 +41,10 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 			ormschema.Column("revision", ormschema.Integer()).NotNull().DefaultValue(1),
 			ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
 			ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
-		}, primary: []string{"id"}},
+		}},
 	}
 	for _, table := range tables {
-		statement, arguments, err := ormschema.NewTable(store.RuntimeRenderer(), table.name).IfNotExists().Columns(table.columns...).PrimaryKey(table.primary...).Build()
+		statement, arguments, err := ormschema.NewTableWithRequiredColumns(store.RuntimeRenderer(), table.name, physicalIDColumn()).IfNotExists().Columns(table.columns...).PrimaryKey("id").Build()
 		if err != nil {
 			return fmt.Errorf("build %s schema: %w", table.name, err)
 		}
@@ -58,6 +57,7 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 		table, name string
 		columns     []string
 	}{
+		{table: "_workspaces", name: "uniq_workspace_id", columns: []string{"workspace_id"}},
 		{table: "_workspaces", name: "uniq_workspace_code", columns: []string{"canonical_code"}},
 		{table: "_workspaces", name: "uniq_initial_workspace_installation", columns: []string{"initial_installation_identity"}},
 	} {

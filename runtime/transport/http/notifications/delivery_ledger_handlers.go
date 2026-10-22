@@ -53,7 +53,7 @@ func notificationOutboxMessage(value publicationmodel.Message) bool {
 
 func projectNotificationDelivery(value publicationmodel.Message) notificationDeliveryProjection {
 	return notificationDeliveryProjection{
-		ID: value.ID, ConnectorKey: value.ConnectorKey, ConnectionKey: value.ConnectionKey,
+		ID: value.MessageID, ConnectorKey: value.ConnectorKey, ConnectionKey: value.ConnectionKey,
 		Operation: value.Operation, Status: value.Status, Payload: value.Payload,
 		ResponseRef: value.ResponseRef, Error: value.Error, AttemptCount: value.AttemptCount,
 		NextAttemptAt: value.NextAttemptAt, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,

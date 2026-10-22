@@ -93,7 +93,7 @@ func installationAdministratorRecipients(ctx context.Context, projection identit
 	roleIDs := map[string]bool{}
 	for _, role := range roles {
 		if strings.TrimSpace(role.Key) == projectmodel.InstallationAdministratorRoleKey && strings.EqualFold(strings.TrimSpace(role.Status), identitysdk.UserStatusActive) {
-			roleIDs[strings.TrimSpace(role.ID)] = true
+			roleIDs[strings.TrimSpace(role.RoleID)] = true
 		}
 	}
 	if len(roleIDs) == 0 {
@@ -119,7 +119,7 @@ func installationAdministratorRecipients(ctx context.Context, projection identit
 	}
 	recipients := make([]string, 0, len(assigned))
 	for _, user := range users {
-		userID := strings.TrimSpace(user.ID)
+		userID := strings.TrimSpace(user.UserID)
 		if assigned[userID] && strings.EqualFold(strings.TrimSpace(user.Status), identitysdk.UserStatusActive) {
 			recipients = append(recipients, userID)
 		}
@@ -214,7 +214,7 @@ func integrationHealthTransitionIntent(workspaceID, recipient string, condition 
 	digest := sha256.Sum256([]byte(seed))
 	eventID := "integration-health-" + hex.EncodeToString(digest[:])
 	return notificationcontract.NotificationIntent{
-		ID: eventID, WorkspaceID: workspaceID, SourceEventID: eventID, EventType: eventType,
+		WorkspaceID: workspaceID, SourceEventID: eventID, EventType: eventType,
 		RecipientUserIDs: []string{recipient}, SubjectType: "integration_health", SubjectID: condition.Key, SubjectVersion: condition.ObservedAt,
 		GroupKey: groupKey, DedupeKey: eventID, AlertState: state, OccurredAt: condition.ObservedAt,
 		Variables: map[string]any{

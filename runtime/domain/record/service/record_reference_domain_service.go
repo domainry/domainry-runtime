@@ -154,7 +154,7 @@ func (s *RecordReferenceDomainService) accessibleRecord(ctx context.Context, obj
 	if s.dependencies.ListRecords == nil {
 		return recordmodel.Record{}, false, recordInternalError("resolve accessible record", fmt.Errorf("record list dependency is unavailable"))
 	}
-	page, err := s.dependencies.ListRecords(ctx, object.Key, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{recordID}}}, principal)
+	page, err := s.dependencies.ListRecords(ctx, object.Key, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"record_id__in": []any{recordID}}}, principal)
 	if err != nil {
 		return recordmodel.Record{}, false, err
 	}

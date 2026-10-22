@@ -26,7 +26,7 @@ type OperationsResultArtifact struct {
 }
 
 type OperationsResultArtifactReference struct {
-	ID            string
+	ArtifactID    string
 	ContentSHA256 string
 	SizeBytes     int64
 }

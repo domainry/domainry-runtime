@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	"github.com/domainry/domainry-foundation/mutation"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
@@ -32,15 +33,15 @@ func NewReportExportPrepareReceiptStore(store *database.RuntimeStore) *ReportExp
 	return &ReportExportPrepareReceiptStore{store: store}
 }
 
-func (s *ReportExportPrepareReceiptStore) GetReportExportPrepareReceipt(ctx context.Context, workspaceID, receiptID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
+func (s *ReportExportPrepareReceiptStore) GetReportExportPrepareReceipt(ctx context.Context, workspaceID, operationID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
 	if s == nil || s.store == nil || s.store.DB() == nil {
 		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("report export prepare receipt store is unavailable")
 	}
-	workspaceID, receiptID = strings.TrimSpace(workspaceID), strings.TrimSpace(receiptID)
-	if workspaceID == "" || receiptID == "" {
+	workspaceID, operationID = strings.TrimSpace(workspaceID), strings.TrimSpace(operationID)
+	if workspaceID == "" || operationID == "" {
 		return reportmodel.ReportExportPrepareReceipt{}, false, fmt.Errorf("report export prepare receipt lookup is incomplete")
 	}
-	return s.findReportExportPrepareByID(ctx, workspaceID, receiptID)
+	return s.findReportExportPrepareByID(ctx, workspaceID, operationID)
 }
 
 func (s *ReportExportPrepareReceiptStore) TryBeginReportExportPrepare(ctx context.Context, request reportmodel.ReportExportPrepareClaimRequest) (reportmodel.ReportExportPrepareClaimResult, error) {
@@ -64,8 +65,10 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 	if err != nil {
 		return reportmodel.ReportExportPrepareClaimResult{}, err
 	}
-	receipt.OperationID = reportExportPrepareOperationID(receipt)
-	receipt.ID = reportExportPrepareReceiptID(receipt)
+	receipt.OperationID, err = reportExportPrepareOperationID(receipt)
+	if err != nil {
+		return reportmodel.ReportExportPrepareClaimResult{}, err
+	}
 	receipt.RequestFingerprint = strings.TrimSpace(request.RequestFingerprint)
 	receipt.Status = string(idempotency.StatusProcessing)
 	receipt.LeaseOwner = strings.TrimSpace(request.LeaseOwner)
@@ -77,7 +80,7 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 		return reportmodel.ReportExportPrepareClaimResult{}, beginErr
 	}
 	if guardErr := s.store.GuardSubjectEvidenceWrite(ctx, tx, receipt.WorkspaceID, sharedoperation.TableName,
-		[]string{"id", "owner", "requested_by"}, []any{receipt.ID, reportExportPrepareOwner, receipt.RequesterUserID}); guardErr != nil {
+		[]string{"operation_id", "owner", "requested_by"}, []any{receipt.OperationID, reportExportPrepareOwner, receipt.RequesterUserID}); guardErr != nil {
 		_ = tx.Rollback()
 		return reportmodel.ReportExportPrepareClaimResult{}, guardErr
 	}
@@ -95,7 +98,7 @@ func (s *ReportExportPrepareReceiptStore) tryBeginReportExportPrepareOnce(ctx co
 			return reportmodel.ReportExportPrepareClaimResult{}, findErr
 		}
 		if !found {
-			return reportmodel.ReportExportPrepareClaimResult{}, database.MutationConstraintError(insertErr, "report_export_prepare_receipt", receipt.ID, mutation.MutationConflictIdempotency)
+			return reportmodel.ReportExportPrepareClaimResult{}, database.MutationConstraintError(insertErr, "report_export_prepare_receipt", receipt.OperationID, mutation.MutationConflictIdempotency)
 		}
 		if !sameReportExportPrepareOperation(current, receipt) {
 			return reportmodel.ReportExportPrepareClaimResult{}, fmt.Errorf("report export prepare operation identity collision")
@@ -131,12 +134,12 @@ func (s *ReportExportPrepareReceiptStore) adoptReportExportPrepareOrphan(ctx con
 	status, empty := string(idempotency.StatusProcessing), ""
 	metadataJSON := json.RawMessage(reportExportPrepareMetadataJSON(requested))
 	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: requested.WorkspaceID, ID: current.ID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: requested.WorkspaceID, OperationID: current.OperationID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		ActionKey: requested.UseCase, IdempotencyKey: requested.OperationID, Reference: requested.AuditID,
 		ResourceType: "report", ResourceID: requested.ReportKey, Status: status, LeaseExpiresAtOrBefore: nowValue,
 		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
 	}, sharedoperation.RecordChanges{
-		ID: &requested.ID, RequestedBy: &requested.RequesterUserID, RequestFingerprint: &requested.RequestFingerprint,
+		RequestedBy: &requested.RequesterUserID, RequestFingerprint: &requested.RequestFingerprint,
 		MetadataJSON: &metadataJSON, Status: &status, ErrorCode: &empty, FailureClass: &empty,
 		LeaseOwner: &requested.LeaseOwner, LeaseExpiresAt: &leaseExpiresAt, IncrementFencingToken: true,
 		UpdatedAt: &nowValue, ExpiresAt: &empty,
@@ -159,7 +162,7 @@ func (s *ReportExportPrepareReceiptStore) reclaimReportExportPrepare(ctx context
 	status, empty := string(idempotency.StatusProcessing), ""
 	metadataJSON := json.RawMessage(reportExportPrepareMetadataJSON(requested))
 	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: requested.WorkspaceID, ID: requested.ID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: requested.WorkspaceID, OperationID: requested.OperationID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		IdempotencyKey: requested.OperationID, RequestFingerprint: requested.RequestFingerprint, RequestedBy: requested.RequesterUserID,
 		MetadataJSON: metadataJSON, LeaseExpiresAtOrBefore: updatedAt,
 		ReclaimableStatus: string(idempotency.StatusFailedRetryable), ExpiredLeaseStatus: string(idempotency.StatusProcessing),
@@ -187,7 +190,7 @@ func (s *ReportExportPrepareReceiptStore) reclaimReportExportPrepare(ctx context
 
 func (s *ReportExportPrepareReceiptStore) SaveReportExportPreparePayload(ctx context.Context, value reportmodel.ReportExportPreparePayload) (reportmodel.ReportExportPrepareReceipt, error) {
 	now := normalizedReportExportPrepareTime(value.Now)
-	workspaceID, receiptID := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.ReceiptID)
+	workspaceID, receiptID := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.OperationID)
 	payloadJSON, businessJobKey := strings.TrimSpace(value.PayloadJSON), strings.TrimSpace(value.BusinessJobKey)
 	if workspaceID == "" || receiptID == "" || payloadJSON == "" || businessJobKey == "" || strings.TrimSpace(value.LeaseOwner) == "" || value.FencingToken < 1 {
 		return reportmodel.ReportExportPrepareReceipt{}, fmt.Errorf("report export prepare payload binding is incomplete")
@@ -204,7 +207,7 @@ func (s *ReportExportPrepareReceiptStore) SaveReportExportPreparePayload(ctx con
 	next.UpdatedAt = now.Format(time.RFC3339Nano)
 	resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
 	changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: workspaceID, OperationID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		Status: string(idempotency.StatusProcessing), LeaseOwner: strings.TrimSpace(value.LeaseOwner), FencingToken: &value.FencingToken,
 		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
 	}, sharedoperation.RecordChanges{ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDsJSON, UpdatedAt: &next.UpdatedAt})
@@ -226,7 +229,7 @@ func (s *ReportExportPrepareReceiptStore) SaveReportExportPreparePayload(ctx con
 
 func (s *ReportExportPrepareReceiptStore) CompleteReportExportPrepare(ctx context.Context, value reportmodel.ReportExportPrepareCompletion) error {
 	now := normalizedReportExportPrepareTime(value.Now)
-	workspaceID, receiptID, jobID := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.ReceiptID), strings.TrimSpace(value.JobID)
+	workspaceID, receiptID, jobID := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.OperationID), strings.TrimSpace(value.JobID)
 	if workspaceID == "" || receiptID == "" || jobID == "" || strings.TrimSpace(value.LeaseOwner) == "" || value.FencingToken < 1 {
 		return fmt.Errorf("report export prepare completion is incomplete")
 	}
@@ -248,7 +251,7 @@ func (s *ReportExportPrepareReceiptStore) CompleteReportExportPrepare(ctx contex
 	status, empty := next.Status, ""
 	resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
 	changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: workspaceID, OperationID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		Status: string(idempotency.StatusProcessing), LeaseOwner: strings.TrimSpace(value.LeaseOwner), FencingToken: &value.FencingToken,
 		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
 	}, sharedoperation.RecordChanges{
@@ -281,7 +284,7 @@ func (s *ReportExportPrepareReceiptStore) FailReportExportPrepareTerminal(ctx co
 }
 
 func (s *ReportExportPrepareReceiptStore) ReleaseReportExportPrepare(ctx context.Context, value reportmodel.ReportExportPrepareFailure) error {
-	workspaceID, receiptID, leaseOwner := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.ReceiptID), strings.TrimSpace(value.LeaseOwner)
+	workspaceID, receiptID, leaseOwner := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.OperationID), strings.TrimSpace(value.LeaseOwner)
 	if workspaceID == "" || receiptID == "" || leaseOwner == "" || value.FencingToken < 1 {
 		return fmt.Errorf("report export prepare release binding is incomplete")
 	}
@@ -293,7 +296,7 @@ func (s *ReportExportPrepareReceiptStore) ReleaseReportExportPrepare(ctx context
 		return reportExportPrepareLeaseLost(ctx, workspaceID, receiptID, s.store)
 	}
 	rows, err := s.operationStore().DeleteRecords(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: workspaceID, OperationID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		Status: string(idempotency.StatusProcessing), LeaseOwner: leaseOwner, FencingToken: &value.FencingToken,
 		ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
 	})
@@ -308,7 +311,7 @@ func (s *ReportExportPrepareReceiptStore) ReleaseReportExportPrepare(ctx context
 
 func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx context.Context, value reportmodel.ReportExportPrepareFailure, status idempotency.Status) error {
 	now := normalizedReportExportPrepareTime(value.Now)
-	workspaceID, receiptID, leaseOwner := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.ReceiptID), strings.TrimSpace(value.LeaseOwner)
+	workspaceID, receiptID, leaseOwner := strings.TrimSpace(value.WorkspaceID), strings.TrimSpace(value.OperationID), strings.TrimSpace(value.LeaseOwner)
 	errorCode := strings.TrimSpace(value.ErrorCode)
 	if workspaceID == "" || receiptID == "" || leaseOwner == "" || value.FencingToken < 1 || value.ExpiresAt.IsZero() || (status == idempotency.StatusFailedTerminal && errorCode == "") {
 		return fmt.Errorf("report export prepare failure binding is incomplete")
@@ -316,7 +319,7 @@ func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx c
 	statusValue, failureClass, empty := string(status), reportExportPrepareFailureClass(status), ""
 	nowValue, expiresAt := now.Format(time.RFC3339Nano), value.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	changed, err := s.operationStore().PatchRecord(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: workspaceID, OperationID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		Status: string(idempotency.StatusProcessing), LeaseOwner: leaseOwner, FencingToken: &value.FencingToken,
 	}, sharedoperation.RecordChanges{
 		Status: &statusValue, ErrorCode: &errorCode, FailureClass: &failureClass, LeaseOwner: &empty,
@@ -332,7 +335,7 @@ func (s *ReportExportPrepareReceiptStore) finishReportExportPrepareFailure(ctx c
 }
 
 func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context.Context, binding reportmodel.ReportExportCompletionBinding) (reportmodel.ReportExportCompletionBindingResult, error) {
-	workspaceID, receiptID := strings.TrimSpace(binding.WorkspaceID), strings.TrimSpace(binding.ReceiptID)
+	workspaceID, receiptID := strings.TrimSpace(binding.WorkspaceID), strings.TrimSpace(binding.OperationID)
 	payloadJSON := strings.TrimSpace(binding.PayloadJSON)
 	if workspaceID == "" || receiptID == "" || strings.TrimSpace(binding.JobID) == "" || strings.TrimSpace(binding.ArtifactID) == "" || payloadJSON == "" || strings.TrimSpace(binding.CompletionFingerprint) == "" {
 		return reportmodel.ReportExportCompletionBindingResult{}, fmt.Errorf("report export completion binding is incomplete")
@@ -363,7 +366,7 @@ func (s *ReportExportPrepareReceiptStore) BindReportExportCompletion(ctx context
 		status, empty := next.Status, ""
 		resultJSON, relatedIDsJSON := json.RawMessage(reportExportPrepareResultJSON(next)), json.RawMessage(reportExportPrepareRelatedIDsJSON(next))
 		changed, err := s.patchRecordWithSubjectGuard(ctx, current, sharedoperation.RecordFilter{
-			WorkspaceID: workspaceID, ID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+			WorkspaceID: workspaceID, OperationID: receiptID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 			Status: current.Status, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(current)),
 		}, sharedoperation.RecordChanges{
 			Status: &status, ResultJSON: &resultJSON, RelatedIDsJSON: &relatedIDsJSON, LeaseOwner: &empty,
@@ -389,7 +392,7 @@ func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByOperation(ctx
 
 func (s *ReportExportPrepareReceiptStore) findReportExportPrepareByID(ctx context.Context, workspaceID, receiptID string) (reportmodel.ReportExportPrepareReceipt, bool, error) {
 	return s.findReportExportPrepare(ctx, sharedoperation.RecordFilter{
-		WorkspaceID: strings.TrimSpace(workspaceID), ID: strings.TrimSpace(receiptID), Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		WorkspaceID: strings.TrimSpace(workspaceID), OperationID: strings.TrimSpace(receiptID), Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 	})
 }
 
@@ -431,25 +434,13 @@ func normalizedReportExportPrepareTime(value time.Time) time.Time {
 	return value.UTC()
 }
 
-func reportExportPrepareOperationID(receipt reportmodel.ReportExportPrepareReceipt) string {
+func reportExportPrepareOperationID(receipt reportmodel.ReportExportPrepareReceipt) (string, error) {
 	values := []string{receipt.WorkspaceID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID}
 	if receipt.RetryOfJobID != "" {
 		values = append(values, "retry", receipt.RetryOfJobID)
 	}
-	return reportExportPrepareDigest("operation", values...)
-}
-
-func reportExportPrepareReceiptID(receipt reportmodel.ReportExportPrepareReceipt) string {
-	values := []string{receipt.WorkspaceID, receipt.RequesterUserID, receipt.UseCase, receipt.ReportKey, receipt.ObjectKey, receipt.AuditID, receipt.CallerKey}
-	if receipt.RetryOfJobID != "" {
-		values = append(values, "retry", receipt.RetryOfJobID)
-	}
-	return reportExportPrepareDigest("receipt", values...)
-}
-
-func reportExportPrepareDigest(kind string, values ...string) string {
-	digest := sha256.Sum256([]byte(strings.Join(append([]string{"domainry-runtime/report-export-prepare/v1", kind}, values...), "\x00")))
-	return "report_export_prepare:" + hex.EncodeToString(digest[:])
+	digest := sha256.Sum256([]byte(strings.Join(append([]string{"domainry-runtime/report-export-prepare/v1"}, values...), "\x00")))
+	return entityid.Derive("op", "runtime.report-export-prepare", hex.EncodeToString(digest[:]))
 }
 
 func reportExportPrepareCallerKey(value string) string {
@@ -506,7 +497,7 @@ func (s *ReportExportPrepareReceiptStore) patchRecordWithSubjectGuard(ctx contex
 	}
 	defer func() { _ = tx.Rollback() }()
 	if err := s.store.GuardSubjectEvidenceWrite(ctx, tx, current.WorkspaceID, sharedoperation.TableName,
-		[]string{"id", "owner", "requested_by"}, []any{current.ID, reportExportPrepareOwner, current.RequesterUserID}); err != nil {
+		[]string{"operation_id", "owner", "requested_by"}, []any{current.OperationID, reportExportPrepareOwner, current.RequesterUserID}); err != nil {
 		return false, err
 	}
 	changed, err := s.operationStore().PatchRecord(sharedoperation.WithExecutor(ctx, tx), filter, changes)
@@ -529,10 +520,10 @@ func reportExportPrepareRecord(value reportmodel.ReportExportPrepareReceipt) sha
 		failureClass = "terminal"
 	}
 	return sharedoperation.Record{
-		ID: value.ID, WorkspaceID: value.WorkspaceID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
+		ID: value.ID, OperationID: value.OperationID, WorkspaceID: value.WorkspaceID, Owner: reportExportPrepareOwner, Kind: reportExportPrepareKind,
 		ActionKey: value.UseCase, ResourceType: "report", ResourceID: value.ReportKey, IdempotencyKey: value.OperationID,
 		RequestFingerprint: value.RequestFingerprint, RequestedBy: value.RequesterUserID, Reason: value.ObjectKey, Reference: value.AuditID,
-		Status: value.Status, StatusURL: "/operations/" + value.ID, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(value)),
+		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(value)),
 		MetadataJSON: json.RawMessage(reportExportPrepareMetadataJSON(value)), ErrorCode: value.TerminalErrorCode, FailureClass: failureClass,
 		RelatedIDsJSON: relatedIDs, Correlation: value.OperationID, EvidenceJSON: evidence,
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
@@ -583,8 +574,8 @@ func reportExportPrepareRelatedIDsJSON(value reportmodel.ReportExportPrepareRece
 
 func reportExportPrepareReceipt(record sharedoperation.Record) (reportmodel.ReportExportPrepareReceipt, error) {
 	value := reportmodel.ReportExportPrepareReceipt{
-		ID: record.ID, WorkspaceID: record.WorkspaceID, UseCase: record.ActionKey, ReportKey: record.ResourceID,
-		OperationID: record.IdempotencyKey, RequestFingerprint: record.RequestFingerprint, RequesterUserID: record.RequestedBy,
+		ID: record.ID, OperationID: record.OperationID, WorkspaceID: record.WorkspaceID, UseCase: record.ActionKey, ReportKey: record.ResourceID,
+		RequestFingerprint: record.RequestFingerprint, RequesterUserID: record.RequestedBy,
 		ObjectKey: record.Reason, AuditID: record.Reference, Status: record.Status, TerminalErrorCode: record.ErrorCode,
 		LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,

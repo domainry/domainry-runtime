@@ -43,7 +43,7 @@ func TestCallbackReceiptStoreReplaysConflictsAndFencesCompletion(t *testing.T) {
 	}
 
 	wrongFence := dispatchmodel.CallbackCompletion{
-		WorkspaceID: first.Receipt.WorkspaceID, ReceiptID: first.Receipt.ID,
+		WorkspaceID: first.Receipt.WorkspaceID, OperationID: first.Receipt.OperationID,
 		DownstreamID: "receipt-1", DownstreamOwner: "workflow", DownstreamStatus: "accepted",
 		LeaseOwner: first.Receipt.LeaseOwner, FencingToken: first.Receipt.FencingToken + 1,
 		Now: now, ExpiresAt: now.Add(time.Hour),
@@ -71,7 +71,7 @@ func TestCallbackReceiptStoreReclaimsRetryableAndExpiredClaimsWithFencing(t *tes
 		t.Fatal(err)
 	}
 	if err := repository.FailCallbackRetryable(t.Context(), dispatchmodel.CallbackFailure{
-		WorkspaceID: retryable.Receipt.WorkspaceID, ReceiptID: retryable.Receipt.ID,
+		WorkspaceID: retryable.Receipt.WorkspaceID, OperationID: retryable.Receipt.OperationID,
 		LeaseOwner: retryable.Receipt.LeaseOwner, FencingToken: retryable.Receipt.FencingToken,
 		Now: now, ExpiresAt: now.Add(time.Hour),
 	}); err != nil {
@@ -94,7 +94,7 @@ func TestCallbackReceiptStoreReclaimsRetryableAndExpiredClaimsWithFencing(t *tes
 		t.Fatalf("expired reclaim=%#v err=%v", reclaimedExpired, err)
 	}
 	stale := dispatchmodel.CallbackCompletion{
-		WorkspaceID: expired.Receipt.WorkspaceID, ReceiptID: expired.Receipt.ID,
+		WorkspaceID: expired.Receipt.WorkspaceID, OperationID: expired.Receipt.OperationID,
 		DownstreamID: "stale", DownstreamStatus: "accepted", LeaseOwner: expired.Receipt.LeaseOwner,
 		FencingToken: expired.Receipt.FencingToken, Now: expiredRequest.Now, ExpiresAt: expiredRequest.Now.Add(time.Hour),
 	}
@@ -102,7 +102,7 @@ func TestCallbackReceiptStoreReclaimsRetryableAndExpiredClaimsWithFencing(t *tes
 		t.Fatalf("stale completion error=%v", err)
 	}
 	alive, err := repository.HeartbeatCallback(t.Context(), dispatchmodel.CallbackHeartbeat{
-		WorkspaceID: reclaimedExpired.Receipt.WorkspaceID, ReceiptID: reclaimedExpired.Receipt.ID,
+		WorkspaceID: reclaimedExpired.Receipt.WorkspaceID, OperationID: reclaimedExpired.Receipt.OperationID,
 		LeaseOwner: reclaimedExpired.Receipt.LeaseOwner, FencingToken: reclaimedExpired.Receipt.FencingToken,
 		LeaseTTL: time.Minute, Now: expiredRequest.Now.Add(30 * time.Second),
 	})

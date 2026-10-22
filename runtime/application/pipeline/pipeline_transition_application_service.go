@@ -116,10 +116,10 @@ func (s *PipelineTransitionApplicationService) planAdvance(ctx context.Context, 
 	if err != nil {
 		return actionmodel.ActionResult{}, nil, err
 	}
-	if strings.TrimSpace(toStage.ID) == "" {
+	if strings.TrimSpace(toStage.RecordID) == "" {
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindBadRequest, "backend.pipeline.next_stage_not_found", nil)
 	}
-	if toStage.ID == currentStageID {
+	if toStage.RecordID == currentStageID {
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindBadRequest, "backend.pipeline.same_stage", nil)
 	}
 	if err := s.dependencies.Pipeline.ValidateStagePermission(toStage, principal); err != nil {
@@ -128,7 +128,7 @@ func (s *PipelineTransitionApplicationService) planAdvance(ctx context.Context, 
 	if err := pipelineservice.ValidateRequiredFields(toStage, record.Data); err != nil {
 		return actionmodel.ActionResult{}, nil, err
 	}
-	return s.PlanPersist(ctx, object, record, before, action, data, currentStageID, toStage.ID, principal)
+	return s.PlanPersist(ctx, object, record, before, action, data, currentStageID, toStage.RecordID, principal)
 }
 
 // advance remains the direct non-Action caller boundary. Runtime Action
@@ -152,7 +152,7 @@ func (s *PipelineTransitionApplicationService) planReopen(ctx context.Context, o
 		if err != nil {
 			return actionmodel.ActionResult{}, nil, err
 		}
-		toStageID = toStage.ID
+		toStageID = toStage.RecordID
 	}
 	if toStageID == "" {
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindBadRequest, "backend.pipeline.next_stage_not_found", nil)
@@ -161,7 +161,7 @@ func (s *PipelineTransitionApplicationService) planReopen(ctx context.Context, o
 	if err != nil {
 		return actionmodel.ActionResult{}, nil, err
 	}
-	if currentStageID != "" && toStage.ID == currentStageID {
+	if currentStageID != "" && toStage.RecordID == currentStageID {
 		return actionmodel.ActionResult{}, nil, pipelineTransitionError(apperror.KindBadRequest, "backend.pipeline.same_stage", nil)
 	}
 	if err := pipelineservice.ValidateStageBelongsToPipeline(toStage, pipelineID); err != nil {
@@ -242,13 +242,13 @@ func (s *PipelineTransitionApplicationService) PlanPersist(ctx context.Context, 
 	_ = s.dependencies.Pipeline.ApplyStageSLA(candidate, toStage, now, true)
 	patch := pipelineprojection.PipelineTransitionChangedPatch(object, before, candidate)
 	historyData := map[string]any{
-		"pipeline_item": record.ID, "from_stage": fromStageID, "to_stage": toStageID,
+		"pipeline_item": record.RecordID, "from_stage": fromStageID, "to_stage": toStageID,
 		"actor": principal.UserID, "owner": pipelineTransitionValueOr(principal.UserID, "system"),
 		"note": actionpolicy.ActionFirstString(data, "note", "comment"), "reason": actionpolicy.ActionFirstString(data, "reason"),
 		"field_changes": pipelineprojection.PipelineTransitionFieldChangesJSON(object, before, candidate), "transitioned_at": now,
 	}
 	ctx = pipelineMutationContext(ctx, action, object.Key, patch, historyData)
-	itemPlan, plannedRecord, err := s.dependencies.PlanUpdate(ctx, object.Key, record.ID, patch, principal)
+	itemPlan, plannedRecord, err := s.dependencies.PlanUpdate(ctx, object.Key, record.RecordID, patch, principal)
 	if err != nil {
 		return actionmodel.ActionResult{}, nil, err
 	}
@@ -259,7 +259,7 @@ func (s *PipelineTransitionApplicationService) PlanPersist(ctx context.Context, 
 	plans := []transactionmodel.MutationPlan{itemPlan, historyPlan}
 	intents := pipelineCommittedWorkflowIntents(plans)
 	return actionmodel.ActionResult{
-		ActionKey: action.Key, ObjectKey: object.Key, RecordID: plannedRecord.ID,
+		ActionKey: action.Key, ObjectKey: object.Key, RecordID: plannedRecord.RecordID,
 		Message: "backend.pipeline.transitioned", Record: recordpolicy.RecordFilterReadable(principal, object, plannedRecord),
 		TriggeredWorkflows: pipelineWorkflowSummaries(intents),
 	}, plans, nil
@@ -309,7 +309,7 @@ func pipelineCommittedWorkflowIntents(plans []transactionmodel.MutationPlan) []w
 func pipelineWorkflowSummaries(intents []workflowmodel.WorkflowExecution) []workflowmodel.WorkflowRunSummary {
 	summaries := make([]workflowmodel.WorkflowRunSummary, 0, len(intents))
 	for _, intent := range intents {
-		summaries = append(summaries, workflowmodel.WorkflowRunSummary{WorkflowKey: intent.WorkflowKey, Status: intent.Status, Action: intent.Action, ExecutionID: intent.ID, Message: intent.Message})
+		summaries = append(summaries, workflowmodel.WorkflowRunSummary{WorkflowKey: intent.WorkflowKey, Status: intent.Status, Action: intent.Action, ExecutionID: intent.ExecutionID, Message: intent.Message})
 	}
 	return summaries
 }

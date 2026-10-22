@@ -20,16 +20,16 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 	payload := map[string]any{"source": "conversation"}
 	key, _ := agentWorkflowInvocationKey(definition.Key, "original", principal)
 	fingerprint, _ := workflowExecutionFingerprint(definition, payload, "agent", 1)
-	execution := workflowmodel.WorkflowExecution{ID: "execution", ProcessID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, ActorID: principal.UserID, Trigger: "agent", IdempotencyKey: key, Status: "waiting", Payload: map[string]any{"private": "original-private-execution"}}
-	receipt := workflowmodel.WorkflowExecutionReceipt{WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, IdempotencyKey: key, RequestFingerprint: fingerprint, ExecutionID: execution.ID, Status: string(idempotency.StatusSucceeded), ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)}
-	probe := &agentWorkflowReceiptProbe{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ID: execution}}, receipt: receipt, found: true}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", ProcessID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, ActorID: principal.UserID, Trigger: "agent", IdempotencyKey: key, Status: "waiting", Payload: map[string]any{"private": "original-private-execution"}}
+	receipt := workflowmodel.WorkflowExecutionReceipt{WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, IdempotencyKey: key, RequestFingerprint: fingerprint, ExecutionID: execution.ExecutionID, Status: string(idempotency.StatusSucceeded), ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)}
+	probe := &agentWorkflowReceiptProbe{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{execution.ExecutionID: execution}}, receipt: receipt, found: true}
 	service := newWorkflowExecutionService(&probe.workflowExecutionWorkerStub, definition)
 	service.workerRepo = probe
 	processes := service.processRepo.(*workflowExecutionProcessStub)
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, WorkflowName: definition.Name, InitiatorID: principal.UserID, Status: "waiting", DefinitionSnapshot: definition, Variables: map[string]any{"private": "private-process-input"}, Result: map[string]any{"private": "private-process-output"}}
-	processes.processes[process.ID] = process
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: principal.WorkspaceID, WorkflowKey: definition.Key, WorkflowName: definition.Name, InitiatorID: principal.UserID, Status: "waiting", DefinitionSnapshot: definition, Variables: map[string]any{"private": "private-process-input"}, Result: map[string]any{"private": "private-process-output"}}
+	processes.processes[process.ProcessID] = process
 	out, found, err := service.ReadAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", principal)
-	if err != nil || !found || out.ExecutionID != execution.ID || out.ProcessID != process.ID {
+	if err != nil || !found || out.ExecutionID != execution.ExecutionID || out.ProcessID != process.ProcessID {
 		t.Fatal(out, found, err)
 	}
 	raw, _ := json.Marshal(out)
@@ -45,8 +45,8 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 	for _, change := range []string{"receipt-grant", "guardrail", "participant", "process-workspace", "process-workflow", "execution-actor", "fingerprint", "in-progress", "expiry", "missing", "disabled-definition"} {
 		t.Run(change, func(t *testing.T) {
 			p := principal
-			probe.receipt, probe.found, probe.executions[execution.ID] = receipt, true, execution
-			processes.processes[process.ID] = process
+			probe.receipt, probe.found, probe.executions[execution.ExecutionID] = receipt, true, execution
+			processes.processes[process.ProcessID] = process
 			service.registry.(*workflowRegistryStub).items[definition.Key] = definition
 			switch change {
 			case "receipt-grant":
@@ -56,19 +56,19 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 			case "participant":
 				v := process
 				v.InitiatorID = "other"
-				processes.processes[process.ID] = v
+				processes.processes[process.ProcessID] = v
 			case "process-workspace":
 				v := process
 				v.WorkspaceID = "other"
-				processes.processes[process.ID] = v
+				processes.processes[process.ProcessID] = v
 			case "process-workflow":
 				v := process
 				v.WorkflowKey = "other"
-				processes.processes[process.ID] = v
+				processes.processes[process.ProcessID] = v
 			case "execution-actor":
 				v := execution
 				v.ActorID = "other"
-				probe.executions[execution.ID] = v
+				probe.executions[execution.ExecutionID] = v
 			case "fingerprint":
 				probe.receipt.RequestFingerprint = "changed"
 			case "in-progress":
@@ -88,8 +88,8 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 		})
 	}
 	t.Run("shared-original-ledger-and-actual-participant", func(t *testing.T) {
-		probe.receipt, probe.found, probe.executions[execution.ID] = receipt, true, execution
-		processes.processes[process.ID] = process
+		probe.receipt, probe.found, probe.executions[execution.ExecutionID] = receipt, true, execution
+		processes.processes[process.ProcessID] = process
 		service.registry.(*workflowRegistryStub).items[definition.Key] = definition
 		participants := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: *processes}
 		service.processRepo = participants
@@ -101,7 +101,7 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 		if _, err := service.AgentSharedWorkflowReceiptDefinition(t.Context(), definition.Key, reader, principal); err == nil {
 			t.Fatal("self-only workflow metadata authorized another owner")
 		}
-		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ID, AssigneeUserID: reader.UserID}}
+		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ProcessID, AssigneeUserID: reader.UserID}}
 		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal); err == nil && found {
 			t.Fatal("self-only receipt policy authorized original producer")
 		}
@@ -121,7 +121,7 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 			t.Fatal("metadata producer crossed workspace")
 		}
 		out, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal)
-		if err != nil || !found || out.ExecutionID != execution.ID || out.ProcessID != process.ID {
+		if err != nil || !found || out.ExecutionID != execution.ExecutionID || out.ProcessID != process.ProcessID {
 			t.Fatal("current participant could not read original producer start ledger", out, found, err)
 		}
 		if _, found, err := service.ReadAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader); err == nil && found {
@@ -131,7 +131,7 @@ func TestWorkflowIndependentReceiptReadRequiresCurrentParticipantAndOriginalLedg
 		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, principal); err == nil && found {
 			t.Fatal("original producer participation authorized actual reader after withdrawal")
 		}
-		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ID, AssigneeUserID: reader.UserID}}
+		participants.tasks = []workflowmodel.WorkflowTask{{ProcessID: process.ProcessID, AssigneeUserID: reader.UserID}}
 		wrong := principal
 		wrong.UserID = "unrelated-actor"
 		if _, found, err := service.ReadSharedAgentWorkflowReceipt(t.Context(), definition.Key, payload, "original", reader, wrong); err == nil && found {

@@ -28,9 +28,9 @@ func RecordNormalizeListQuery(object definitionmodel.ObjectSchema, query recordm
 	query.Filters = normalizeListFilters(object, query.Filters)
 	query.Sort = allowedSortRules(object, query.Sort)
 	if len(query.Sort) == 0 {
-		query.Sort = []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
-	} else if !recordSortContainsField(query.Sort, "id") {
-		query.Sort = append(query.Sort, recordmodel.RecordSortRule{Field: "id", Direction: "asc"})
+		query.Sort = []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}
+	} else if !recordSortContainsField(query.Sort, recordmodel.IDField) {
+		query.Sort = append(query.Sort, recordmodel.RecordSortRule{Field: recordmodel.IDField, Direction: "asc"})
 	}
 	query.RootObjectKey = object.Key
 	return query
@@ -46,7 +46,7 @@ func recordSortContainsField(rules []recordmodel.RecordSortRule, field string) b
 }
 
 func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]any) map[string]any {
-	out, fields := map[string]any{}, map[string]definitionmodel.FieldSchema{}
+	out, fields := map[string]any{}, map[string]definitionmodel.FieldSchema{"id": {Key: "id", Type: "integer"}}
 	for _, field := range object.Fields {
 		fields[field.Key] = field
 	}
@@ -60,16 +60,16 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]an
 		if key == "" || RecordIsEmptyValue(value) {
 			continue
 		}
-		if key == "id" {
-			// Equality on the record identity is the single-value form of `id__in`.
+		if key == "record_id" {
+			// Equality on the business record identity is the single-value form of `record_id__in`.
 			if normalized := normalizedListFilterValues(definitionmodel.FieldSchema{}, []any{value}, true); len(normalized) > 0 {
-				out["id__in"] = normalized
+				out["record_id__in"] = normalized
 			}
 			continue
 		}
 		if baseKey, operator, ok := splitFilterOperator(key); ok {
-			if operator == "in" && (baseKey == "id" || fields[baseKey].Key != "") {
-				if normalized := normalizedListFilterValues(fields[baseKey], value, baseKey == "id"); len(normalized) > 0 {
+			if operator == "in" && (baseKey == "record_id" || fields[baseKey].Key != "") {
+				if normalized := normalizedListFilterValues(fields[baseKey], value, baseKey == "record_id"); len(normalized) > 0 {
 					out[baseKey+"__in"] = normalized
 				}
 				continue
@@ -100,7 +100,7 @@ func normalizeListFilters(object definitionmodel.ObjectSchema, raw map[string]an
 // filter had matched: a client reading "the record I asked for" from it reads
 // somebody else's. The refusal names the key so the caller fixes the query.
 func RecordValidateListFilters(object definitionmodel.ObjectSchema, raw map[string]any) error {
-	fields := map[string]definitionmodel.FieldSchema{"id": {Key: "id"}, "workspace_id": {Key: "workspace_id"}}
+	fields := map[string]definitionmodel.FieldSchema{"id": {Key: "id", Type: "integer"}, "record_id": {Key: "record_id", Type: "text"}, "workspace_id": {Key: "workspace_id"}}
 	for _, field := range object.Fields {
 		fields[field.Key] = field
 	}
@@ -254,7 +254,7 @@ func RecordFieldExists(object definitionmodel.ObjectSchema, fieldKey string) boo
 	return false
 }
 func metaFieldExists(fieldKey string) bool {
-	return fieldKey == "id" || fieldKey == "created_at" || fieldKey == "updated_at"
+	return fieldKey == recordmodel.IDField || fieldKey == "record_id" || fieldKey == "created_at" || fieldKey == "updated_at"
 }
 
 func RecordIntFromAny(value any, fallback int) int {

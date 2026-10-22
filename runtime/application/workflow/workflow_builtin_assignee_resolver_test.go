@@ -13,21 +13,21 @@ import (
 func TestWorkflowDeclarativeRelationAndManagerChainResolvers(t *testing.T) {
 	identity := workflowApprovalIdentityStub{
 		users: map[string]identitysdk.User{
-			"requester": {ID: "requester", ManagerUserID: "manager-1", Status: identitysdk.UserStatusActive},
-			"manager-1": {ID: "manager-1", ManagerUserID: "manager-2", Status: identitysdk.UserStatusActive},
-			"manager-2": {ID: "manager-2", Status: identitysdk.UserStatusActive},
-			"reviewer":  {ID: "reviewer", Status: identitysdk.UserStatusActive},
+			"requester": {UserID: "requester", ManagerUserID: "manager-1", Status: identitysdk.UserStatusActive},
+			"manager-1": {UserID: "manager-1", ManagerUserID: "manager-2", Status: identitysdk.UserStatusActive},
+			"manager-2": {UserID: "manager-2", Status: identitysdk.UserStatusActive},
+			"reviewer":  {UserID: "reviewer", Status: identitysdk.UserStatusActive},
 		},
-		identityUsers: []identitysdk.User{{ID: "role-user", Status: identitysdk.UserStatusActive}},
-		roles:         []identitysdk.Role{{ID: "finance-role", Key: "finance"}},
+		identityUsers: []identitysdk.User{{UserID: "role-user", Status: identitysdk.UserStatusActive}},
+		roles:         []identitysdk.Role{{RoleID: "finance-role", Key: "finance"}},
 		assignments:   map[string][]identitysdk.UserRoleAssignment{"role-user": {{UserID: "role-user", RoleID: "finance-role"}}},
 	}
 	objects := workflowAssigneeResolverObjects()
 	engine := NewWorkflowProcessEngine(WorkflowDependencies{
 		Identity: identity,
 		RecordReader: workflowRecordReaderEdgeStub{records: map[string]recordmodel.Record{
-			"record":       {ID: "record", Data: map[string]any{"department": "department-1", "requester": "requester"}},
-			"department-1": {ID: "department-1", Data: map[string]any{"reviewer": "reviewer", "approval_role": "finance"}},
+			"record":       {RecordID: "record", Data: map[string]any{"department": "department-1", "requester": "requester"}},
+			"department-1": {RecordID: "department-1", Data: map[string]any{"reviewer": "reviewer", "approval_role": "finance"}},
 		}},
 		ObjectMap: func(context.Context) map[string]definitionmodel.ObjectSchema { return objects },
 	})
@@ -63,8 +63,8 @@ func TestWorkflowDeclarativeRelationAndManagerChainResolvers(t *testing.T) {
 
 func TestWorkflowManagerChainRejectsCycles(t *testing.T) {
 	identity := workflowApprovalIdentityStub{users: map[string]identitysdk.User{
-		"requester": {ID: "requester", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
-		"manager":   {ID: "manager", ManagerUserID: "requester", Status: identitysdk.UserStatusActive},
+		"requester": {UserID: "requester", ManagerUserID: "manager", Status: identitysdk.UserStatusActive},
+		"manager":   {UserID: "manager", ManagerUserID: "requester", Status: identitysdk.UserStatusActive},
 	}}
 	engine := NewWorkflowProcessEngine(WorkflowDependencies{Identity: identity})
 	process := workflowEngineProcess(nil, nil)

@@ -33,7 +33,7 @@ func TestPipelineTransitionOptionalPortsAndAdvanceFailures(t *testing.T) {
 	service.dependencies.CheckPrecondition = func(context.Context, definitionmodel.ActionSchema, recordmodel.Record, principalmodel.Principal) error {
 		return nil
 	}
-	if _, err := service.Execute(t.Context(), object.Key, record.ID, action, map[string]any{"to_stage": "stage-new"}, principal); err != nil {
+	if _, err := service.Execute(t.Context(), object.Key, record.RecordID, action, map[string]any{"to_stage": "stage-new"}, principal); err != nil {
 		t.Fatal(err)
 	}
 	service, object, record = pipelineExecuteFixture(t)
@@ -47,7 +47,7 @@ func TestPipelineTransitionOptionalPortsAndAdvanceFailures(t *testing.T) {
 		audited = true
 	}
 	service.dependencies.ActionAllowed = func(principalmodel.Principal, definitionmodel.ActionSchema) bool { return false }
-	_, _ = service.Execute(t.Context(), object.Key, record.ID, action, nil, principal)
+	_, _ = service.Execute(t.Context(), object.Key, record.RecordID, action, nil, principal)
 	if !audited {
 		t.Fatal("denial audit was not delegated")
 	}
@@ -127,7 +127,7 @@ func TestPipelineTransitionDestinationAndReopenFailureConditions(t *testing.T) {
 		t.Fatal("destination pipeline mismatch accepted")
 	}
 	service, _, _ = pipelineExecuteFixture(t)
-	if stage, err := service.destinationStage(t.Context(), principal.WorkspaceID, "pipeline-1", "stage-old", nil); err != nil || stage.ID != "stage-new" {
+	if stage, err := service.destinationStage(t.Context(), principal.WorkspaceID, "pipeline-1", "stage-old", nil); err != nil || stage.RecordID != "stage-new" {
 		t.Fatalf("explicit pipeline next stage=%#v err=%v", stage, err)
 	}
 }

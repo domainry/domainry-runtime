@@ -44,7 +44,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 		t.Fatalf("same model restart failed: %v", err)
 	}
 	var states int
-	if err := store.database().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.store.TableIdentifier("_project_model_state")+" WHERE "+store.store.Identifier("id")+" = "+store.store.Placeholder(1), "current").Scan(&states); err != nil {
+	if err := store.database().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.store.TableIdentifier("_project_model_state")+" WHERE "+store.store.Identifier("state_key")+" = "+store.store.Placeholder(1), "current").Scan(&states); err != nil {
 		t.Fatal(err)
 	}
 	if states != 1 {
@@ -62,7 +62,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 	changed.ContentHash = strings.Repeat("b", 64)
 	changed.ProjectName = "CRM Inventory"
 	statement, args, err := query.NewInsertBuilder(store.store.SQLRenderer, "customer").
-		Columns("id", "workspace_id", "name").Values("retained-customer", principalmodel.InstallationWorkspaceID, "Retained customer").Build()
+		Columns("workspace_id", "customer_id", "name").Values(principalmodel.InstallationWorkspaceID, "retained-customer", "Retained customer").Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestProjectModelInitializationAppliesIncrementalSourceAndPreservesRecords(t
 	if matched, err := store.ProjectModelMatches(t.Context(), metadataTestInstallationScope(), changed); err != nil || !matched {
 		t.Fatalf("incremental restart matched=%t err=%v", matched, err)
 	}
-	statement, args, err = query.NewSelectBuilder(store.store.SQLRenderer, "customer").Columns("name").Where(query.Equal("id", "retained-customer")).Build()
+	statement, args, err = query.NewSelectBuilder(store.store.SQLRenderer, "customer").Columns("name").Where(query.Equal("customer_id", "retained-customer")).Build()
 	if err != nil {
 		t.Fatal(err)
 	}

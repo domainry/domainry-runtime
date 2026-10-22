@@ -44,7 +44,7 @@ func insertRecordOperationFixture(t *testing.T, store *database.RuntimeStore, va
 		value.fencingToken = 1
 	}
 	statement := store.InsertStatement("_operations", []string{
-		"id", "workspace_id", "owner", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference",
+		"operation_id", "workspace_id", "owner", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference",
 		"status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json",
 		"lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at",
 	})
@@ -77,7 +77,7 @@ func TestDeploymentStoreWorkspaceIsolationContract(t *testing.T) {
 		t.Fatalf("workspace A status=%#v err=%v", statusA, err)
 	}
 	receiptsA, err := repository.ListIdempotencyReceipts(t.Context(), "workspace-a", "", 10)
-	if err != nil || len(receiptsA) != 1 || receiptsA[0].ID != "receipt-a" || receiptsA[0].WorkspaceID != "workspace-a" {
+	if err != nil || len(receiptsA) != 1 || receiptsA[0].OperationID != "receipt-a" || receiptsA[0].WorkspaceID != "workspace-a" {
 		t.Fatalf("workspace A receipts=%#v err=%v", receiptsA, err)
 	}
 	if changed, err := repository.ResetIdempotencyReceipt(t.Context(), "workspace-b", "record", "receipt-a"); err != nil || changed {
@@ -134,8 +134,8 @@ func TestIdempotencyOperationalStatusAggregatesWorkspaceBacklogConflictsAndClean
 	for index := 0; index < 100; index++ {
 		store.ObserveIdempotency(t.Context(), "workspace-a", "record.create", idempotency.OutcomeReplayed)
 	}
-	leaseInsert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
-	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 9, now.UnixMilli(), int64(0), 3, "", now.UnixMilli()); err != nil {
+	leaseInsert := store.InsertStatement("_worker_scopes", []string{"owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
+	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 9, now.UnixMilli(), int64(0), 3, "", now.UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,8 +177,8 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	insertReceipt("expired-success", "succeeded", now.Add(-time.Minute))
 	insertReceipt("expired-processing", "processing", now.Add(-time.Minute))
 	insertReceipt("future-success", "succeeded", now.Add(time.Hour))
-	leaseInsert := store.InsertStatement("_worker_scopes", []string{"id", "owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
-	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, idempotencyCleanupLeaseID, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 7, now.UnixMilli(), int64(0), 0, "", now.UnixMilli()); err != nil {
+	leaseInsert := store.InsertStatement("_worker_scopes", []string{"owner", "scope_key", "lease_owner", "lease_expires_at", "fencing_token", "last_started_at", "last_completed_at", "checkpoint", "last_error", "updated_at"})
+	if _, err := store.DB().ExecContext(t.Context(), leaseInsert, "idempotency_cleanup", "receipts", "runtime-a", now.Add(time.Minute).UnixMilli(), 7, now.UnixMilli(), int64(0), 0, "", now.UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	repository := NewRuntimeStatusStore(store)
@@ -186,7 +186,7 @@ func TestIdempotencyCleanupLeasePreventsConcurrentDeletionAndFencesReclaim(t *te
 	if err != nil || blocked.Acquired || blocked.Deleted != 0 {
 		t.Fatalf("live lease cleanup=%#v err=%v", blocked, err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _worker_scopes SET lease_expires_at = ? WHERE id = ?`, now.Add(-time.Second).UnixMilli(), idempotencyCleanupLeaseID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `UPDATE _worker_scopes SET lease_expires_at = ? WHERE owner = ? AND scope_key = ?`, now.Add(-time.Second).UnixMilli(), "idempotency_cleanup", "receipts"); err != nil {
 		t.Fatal(err)
 	}
 	cleaned, err := repository.RunIdempotencyCleanup(t.Context(), deploymentmodel.IdempotencyCleanupRequest{LeaseOwner: "runtime-b", LeaseTTL: time.Minute, BatchSize: 10, Now: now})
@@ -215,7 +215,7 @@ func TestIdempotencyCleanupRevalidatesEligibilityAfterSelection(t *testing.T) {
 
 	repository := NewRuntimeStatusStore(store)
 	repository.beforeDeleteExpiredReceipts = func() {
-		statement := `UPDATE _operations SET status = ?, expires_at = ?, lease_owner = ?, lease_expires_at = ?, fencing_token = fencing_token + 1 WHERE workspace_id = ? AND owner = 'record' AND id = ?`
+		statement := `UPDATE _operations SET status = ?, expires_at = ?, lease_owner = ?, lease_expires_at = ?, fencing_token = fencing_token + 1 WHERE workspace_id = ? AND owner = 'record' AND operation_id = ?`
 		if _, err := store.DB().ExecContext(t.Context(), statement, string(idempotency.StatusProcessing), int64(0), "runtime-submit", now.Add(time.Minute).UnixMilli(), "workspace-a", "selected-then-reclaimed"); err != nil {
 			t.Fatal(err)
 		}
@@ -226,11 +226,11 @@ func TestIdempotencyCleanupRevalidatesEligibilityAfterSelection(t *testing.T) {
 	}
 	var status string
 	var expiresAt int64
-	if err = store.DB().QueryRowContext(t.Context(), `SELECT status, expires_at FROM _operations WHERE workspace_id = ? AND owner = 'record' AND id = ?`, "workspace-a", "selected-then-reclaimed").Scan(&status, &expiresAt); err != nil || status != string(idempotency.StatusProcessing) || expiresAt != 0 {
+	if err = store.DB().QueryRowContext(t.Context(), `SELECT status, expires_at FROM _operations WHERE workspace_id = ? AND owner = 'record' AND operation_id = ?`, "workspace-a", "selected-then-reclaimed").Scan(&status, &expiresAt); err != nil || status != string(idempotency.StatusProcessing) || expiresAt != 0 {
 		t.Fatalf("reclaimed receipt status=%q expires_at=%d err=%v", status, expiresAt, err)
 	}
 	var terminalCount int
-	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE workspace_id = ? AND owner = 'record' AND id = ?`, "workspace-a", "expired-terminal").Scan(&terminalCount); err != nil || terminalCount != 0 {
+	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _operations WHERE workspace_id = ? AND owner = 'record' AND operation_id = ?`, "workspace-a", "expired-terminal").Scan(&terminalCount); err != nil || terminalCount != 0 {
 		t.Fatalf("expired terminal count=%d err=%v", terminalCount, err)
 	}
 }
@@ -254,14 +254,14 @@ func TestReportExportPrepareReceiptsAreVisibleAndUseUnifiedCleanup(t *testing.T)
 		t.Fatal(err)
 	}
 	receipt, err := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-		WorkspaceID: "workspace-a", ReceiptID: claim.Receipt.ID, PayloadJSON: `{"receipt":"report"}`, BusinessJobKey: "business-a",
+		WorkspaceID: "workspace-a", OperationID: claim.Receipt.OperationID, PayloadJSON: `{"receipt":"report"}`, BusinessJobKey: "business-a",
 		LeaseOwner: claim.Receipt.LeaseOwner, FencingToken: claim.Receipt.FencingToken, Now: now.Add(-time.Hour),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = receipts.CompleteReportExportPrepare(t.Context(), reportmodel.ReportExportPrepareCompletion{
-		WorkspaceID: "workspace-a", ReceiptID: receipt.ID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
+		WorkspaceID: "workspace-a", OperationID: receipt.OperationID, JobID: "job-a", LeaseOwner: receipt.LeaseOwner,
 		FencingToken: receipt.FencingToken, Now: now.Add(-time.Hour), ExpiresAt: now.Add(-time.Minute),
 	}); err != nil {
 		t.Fatal(err)
@@ -278,14 +278,14 @@ func TestReportExportPrepareReceiptsAreVisibleAndUseUnifiedCleanup(t *testing.T)
 			t.Fatal(claimErr)
 		}
 		failureReceipt, saveErr := receipts.SaveReportExportPreparePayload(t.Context(), reportmodel.ReportExportPreparePayload{
-			WorkspaceID: "workspace-a", ReceiptID: claim.Receipt.ID, PayloadJSON: fmt.Sprintf(`{"receipt":%q}`, claim.Receipt.ID), BusinessJobKey: fmt.Sprintf("business-failure-%d", index),
+			WorkspaceID: "workspace-a", OperationID: claim.Receipt.OperationID, PayloadJSON: fmt.Sprintf(`{"receipt":%q}`, claim.Receipt.OperationID), BusinessJobKey: fmt.Sprintf("business-failure-%d", index),
 			LeaseOwner: claim.Receipt.LeaseOwner, FencingToken: claim.Receipt.FencingToken, Now: now.Add(-time.Hour),
 		})
 		if saveErr != nil {
 			t.Fatal(saveErr)
 		}
 		failure := reportmodel.ReportExportPrepareFailure{
-			WorkspaceID: "workspace-a", ReceiptID: failureReceipt.ID, LeaseOwner: failureReceipt.LeaseOwner,
+			WorkspaceID: "workspace-a", OperationID: failureReceipt.OperationID, LeaseOwner: failureReceipt.LeaseOwner,
 			FencingToken: failureReceipt.FencingToken, ErrorCode: "backend.report.export_failure", Now: now.Add(-time.Hour), ExpiresAt: now.Add(-time.Minute),
 		}
 		if terminal {
@@ -310,7 +310,7 @@ func TestReportExportPrepareReceiptsAreVisibleAndUseUnifiedCleanup(t *testing.T)
 			break
 		}
 	}
-	if reportReceipt == nil || reportReceipt.ID != receipt.ID || reportReceipt.Scope != reportmodel.ReportExportPrepareUseCase ||
+	if reportReceipt == nil || reportReceipt.OperationID != receipt.OperationID || reportReceipt.Scope != reportmodel.ReportExportPrepareUseCase ||
 		strings.Contains(reportReceipt.IdempotencyKeyHash+reportReceipt.RequestFingerprintHash, "private-") {
 		t.Fatalf("listed report receipt=%#v all=%#v", reportReceipt, listed)
 	}
@@ -318,7 +318,7 @@ func TestReportExportPrepareReceiptsAreVisibleAndUseUnifiedCleanup(t *testing.T)
 	if err != nil || cleaned.Deleted != 3 {
 		t.Fatalf("cleanup=%#v err=%v", cleaned, err)
 	}
-	if _, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", receipt.ID); err != nil || found {
+	if _, found, err := receipts.GetReportExportPrepareReceipt(t.Context(), "workspace-a", receipt.OperationID); err != nil || found {
 		t.Fatalf("expired report receipt found=%v err=%v", found, err)
 	}
 	var remaining int

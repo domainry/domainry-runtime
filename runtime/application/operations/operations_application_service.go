@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
-	"github.com/domainry/domainry-foundation/requestcontext"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
@@ -55,9 +55,6 @@ type OperationsApplicationService struct {
 func NewOperationsApplicationService(repository operationsrepository.OperationsRepository, legacy OperationsIdempotencyReceiptControl, now func() time.Time, newID func() string, selectedDefinitions ...[]operationsmodel.OperationsDefinition) *OperationsApplicationService {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
-	}
-	if newID == nil {
-		newID = requestcontext.NewRequestID
 	}
 	definitions := operationsprojection.OperationsDefinitions()
 	if len(selectedDefinitions) != 0 {
@@ -127,8 +124,12 @@ func (s *OperationsApplicationService) submit(ctx context.Context, request Opera
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, "backend.operations.payload_invalid", err, nil)
 	}
 	now := s.now().UTC()
+	operationID, err := s.nextEntityID("op")
+	if err != nil {
+		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindInternal, "backend.operations.id_generation_failed", err, nil)
+	}
 	command := operationsmodel.OperationsCommand{
-		ID: "operation_" + strings.TrimSpace(s.newID()), Owner: owner, Kind: request.Kind, ActionKey: strings.TrimSpace(actionKey), ParentID: parentID,
+		OperationID: operationID, Owner: owner, Kind: request.Kind, ActionKey: strings.TrimSpace(actionKey), ParentOperationID: parentID,
 		Scope:          scope,
 		IdempotencyKey: key, RequestFingerprint: fingerprint, RequestedBy: requestedBy, Reason: request.Reason,
 		Reference: request.Reference, Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
@@ -136,7 +137,7 @@ func (s *OperationsApplicationService) submit(ctx context.Context, request Opera
 	if err := operationspolicy.OperationsValidateCommand(command); err != nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindBadRequest, err.Error(), err, nil)
 	}
-	receipt := operationsmodel.OperationsReceipt{Command: operationspolicy.OperationsNormalizeCommand(command), StatusURL: "/operations/" + command.ID}
+	receipt := operationsmodel.OperationsReceipt{Command: operationspolicy.OperationsNormalizeCommand(command), StatusURL: "/operations/" + command.OperationID}
 	persisted, decision, err := s.repository.RegisterOperationsCommand(ctx, receipt)
 	if err != nil {
 		return operationsmodel.OperationsReceipt{}, "", apperror.New(apperror.KindInternal, "backend.operations.register_failed", err, nil)
@@ -145,6 +146,17 @@ func (s *OperationsApplicationService) submit(ctx context.Context, request Opera
 		return operationsmodel.OperationsReceipt{}, decision, apperror.New(apperror.KindConflict, idempotency.ErrorCodeKeyReused, nil, nil)
 	}
 	return persisted, decision, nil
+}
+
+func (s *OperationsApplicationService) nextEntityID(prefix string) (string, error) {
+	if s == nil || s.newID == nil {
+		return entityid.New(prefix)
+	}
+	candidate := strings.TrimSpace(s.newID())
+	if err := entityid.Validate(prefix, candidate); err == nil {
+		return candidate, nil
+	}
+	return entityid.Derive(prefix, "runtime.operations.injected-id", candidate)
 }
 
 func (s *OperationsApplicationService) Definitions() []operationsmodel.OperationsDefinition {
@@ -214,7 +226,7 @@ func (s *OperationsApplicationService) SearchReceipts(ctx context.Context, filte
 func normalizeOperationsReceiptFilter(filter operationsmodel.OperationsReceiptFilter) operationsmodel.OperationsReceiptFilter {
 	filter.Owner = strings.TrimSpace(filter.Owner)
 	filter.Kind = strings.TrimSpace(filter.Kind)
-	filter.ParentID = strings.TrimSpace(filter.ParentID)
+	filter.ParentOperationID = strings.TrimSpace(filter.ParentOperationID)
 	filter.ResourceType = strings.TrimSpace(filter.ResourceType)
 	filter.ResourceID = strings.TrimSpace(filter.ResourceID)
 	filter.RequestedBy = strings.TrimSpace(filter.RequestedBy)
@@ -297,7 +309,7 @@ func (s *OperationsApplicationService) Finish(ctx context.Context, receipt opera
 		receipt.RelatedIDs = []string{receipt.Command.Scope.ResourceID}
 	}
 	if strings.TrimSpace(receipt.Correlation) == "" {
-		receipt.Correlation = receipt.Command.ID
+		receipt.Correlation = receipt.Command.OperationID
 	}
 	if len(receipt.Evidence) == 0 {
 		receipt.Evidence = []string{receipt.StatusURL}

@@ -55,7 +55,7 @@ func (d *AutomationInstructionDispatchApplicationService) Execute(ctx context.Co
 		}
 		recordID := render.RenderString(instruction.Config["record_id"])
 		if recordID == "" && record != nil && rule.Trigger.Phase == "after" {
-			recordID = record.ID
+			recordID = record.RecordID
 		}
 		invocation, err := d.dependencies.InvokeAction(ctx, actionmodel.ActionInvocation{
 			ActionKey: actionKey, ObjectKey: objectKey, RecordID: recordID, Input: input, Principal: principal,

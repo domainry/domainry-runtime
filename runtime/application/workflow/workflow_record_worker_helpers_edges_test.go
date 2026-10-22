@@ -32,7 +32,7 @@ func (s workflowScheduledReaderEdgeStub) ListWorkflowRecords(_ context.Context, 
 func TestWorkflowRecordWorkerCASLookupAndNodeIDHelpers(t *testing.T) {
 	worker := &workflowCommittedIntentWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, updateWhereResult: true}
 	service := &WorkflowApplicationService{workerRepo: worker}
-	execution := workflowmodel.WorkflowExecution{ID: "execution", WorkspaceID: "workspace", LeaseOwner: "owner", LeaseExpiresAt: "expires", FencingToken: 2}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "execution", WorkspaceID: "workspace", LeaseOwner: "owner", LeaseExpiresAt: "expires", FencingToken: 2}
 	if err := service.commitClaimedWorkflowExecution(t.Context(), execution); err != nil || len(worker.whereUpdates) != 1 || worker.whereUpdates[0].LeaseOwner != "" {
 		t.Fatalf("updates=%v err=%v", worker.whereUpdates, err)
 	}
@@ -84,8 +84,8 @@ func TestProcessScheduledWorkflowExecutionsFilteringPagingConditionsLimitsAndFai
 	worker := &workflowCommittedIntentWorkerEdgeStub{workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}}, updateWhereResult: true}
 	registry := &workflowRegistryStub{items: map[string]definitionmodel.WorkflowSchema{scheduled.Key: scheduled, scheduledB.Key: scheduledB, disabled.Key: disabled, manual.Key: manual, noObject.Key: noObject}}
 	reader := workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{
-		1: {Items: []recordmodel.Record{{ID: "one", Data: map[string]any{"include": true}}, {ID: "two", Data: map[string]any{"include": true}}, {ID: "limit", Data: map[string]any{"include": true}}}, HasNext: true},
-		2: {Items: []recordmodel.Record{{ID: "three", Data: map[string]any{"include": true}}}},
+		1: {Items: []recordmodel.Record{{RecordID: "one", Data: map[string]any{"include": true}}, {RecordID: "two", Data: map[string]any{"include": true}}, {RecordID: "limit", Data: map[string]any{"include": true}}}, HasNext: true},
+		2: {Items: []recordmodel.Record{{RecordID: "three", Data: map[string]any{"include": true}}}},
 	}}
 	service := NewWorkflowApplicationService(WorkflowDependencies{
 		Processes: &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}},
@@ -132,7 +132,7 @@ func TestProcessScheduledWorkflowExecutionsFilteringPagingConditionsLimitsAndFai
 	conditioned := scheduled
 	conditioned.ConditionContract = &definitionmodel.WorkflowConditionContract{Type: "field_equals", Field: "include", Value: true}
 	registry.items = map[string]definitionmodel.WorkflowSchema{conditioned.Key: conditioned}
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "skip", Data: map[string]any{"include": false}}, {ID: "run", Data: map[string]any{"include": true}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "skip", Data: map[string]any{"include": false}}, {RecordID: "run", Data: map[string]any{"include": true}}}}}}
 	processed, err = service.processScheduledWorkflowExecutions(t.Context(), 5, principal, now)
 	if err != nil || len(processed) != 1 {
 		t.Fatalf("condition processed=%v err=%v", processed, err)
@@ -140,15 +140,15 @@ func TestProcessScheduledWorkflowExecutionsFilteringPagingConditionsLimitsAndFai
 	invalidScheduled := scheduled
 	invalidScheduled.Key, invalidScheduled.Graph, invalidScheduled.TriggerContract.ObjectKeys = "invalid", nil, nil
 	registry.items = map[string]definitionmodel.WorkflowSchema{invalidScheduled.Key: invalidScheduled}
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "record", Data: map[string]any{}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "record", Data: map[string]any{}}}}}}
 	if _, err := service.processScheduledWorkflowExecutions(t.Context(), 1, principal, now); err == nil {
 		t.Fatal("expected scheduled execution error")
 	}
 	duplicate := scheduled
 	duplicate.Key, duplicate.IdempotencyKeys, duplicate.TriggerContract.ObjectKeys = "duplicate", []string{"record_id"}, nil
 	registry.items = map[string]definitionmodel.WorkflowSchema{duplicate.Key: duplicate}
-	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "duplicate-execution"}}
-	worker.executions["duplicate-execution"] = workflowmodel.WorkflowExecution{ID: "duplicate-execution", Status: "duplicate"}
+	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "duplicate-execution"}}
+	worker.executions["duplicate-execution"] = workflowmodel.WorkflowExecution{ExecutionID: "duplicate-execution", Status: "duplicate"}
 	processed, err = service.processScheduledWorkflowExecutions(t.Context(), 1, principal, now)
 	if err != nil || len(processed) != 0 {
 		t.Fatalf("duplicate processed=%v err=%v", processed, err)
@@ -157,7 +157,7 @@ func TestProcessScheduledWorkflowExecutionsFilteringPagingConditionsLimitsAndFai
 	isolated := scheduled
 	isolated.Key, isolated.IdempotencyKeys, isolated.TriggerContract.ObjectKeys = "isolated", []string{"record_id", "scheduled_at"}, nil
 	registry.items = map[string]definitionmodel.WorkflowSchema{isolated.Key: isolated}
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "conflict", Data: map[string]any{}}, {ID: "fresh", Data: map[string]any{}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "conflict", Data: map[string]any{}}, {RecordID: "fresh", Data: map[string]any{}}}}}}
 	worker.claims = []workflowmodel.WorkflowExecutionClaimResult{
 		{Decision: idempotency.DecisionFingerprintConflict},
 		{Decision: idempotency.DecisionAcquired},
@@ -182,11 +182,11 @@ func TestScheduledWorkflowWindowMakesRetryReplayAndBusinessExecutionExactlyOnce(
 		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}},
 		updateWhereResult:           true,
 		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
-			ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+			OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 		}},
 	}
 	service := workflowRecordExecutionService(worker, workflow)
-	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{ID: "candidate-1", Data: map[string]any{"status": "approved"}}}}}}
+	service.recordReader = workflowScheduledReaderEdgeStub{pages: map[int]recordmodel.RecordPageResult{1: {Items: []recordmodel.Record{{RecordID: "candidate-1", Data: map[string]any{"status": "approved"}}}}}}
 	service.schemaMap = func(context.Context) map[string]definitionmodel.ObjectSchema {
 		return map[string]definitionmodel.ObjectSchema{"candidate": {Key: "candidate"}}
 	}
@@ -197,7 +197,7 @@ func TestScheduledWorkflowWindowMakesRetryReplayAndBusinessExecutionExactlyOnce(
 	}
 	firstExecution := first[0]
 	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{
-		ID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: firstExecution.ID,
+		OperationID: "receipt-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, ExecutionID: firstExecution.ExecutionID,
 	}}
 	replay, err := service.processScheduledWorkflowExecutionsForTargetWindow(t.Context(), "scheduled:activate", 1, principal, now, window)
 	if err != nil || len(replay) != 0 || len(worker.inserted) != 1 {
@@ -208,7 +208,7 @@ func TestScheduledWorkflowWindowMakesRetryReplayAndBusinessExecutionExactlyOnce(
 	}
 
 	worker.claim = workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
-		ID: "receipt-2", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+		OperationID: "receipt-2", WorkspaceID: principal.WorkspaceID, WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
 	}}
 	next, err := service.processScheduledWorkflowExecutionsForTargetWindow(t.Context(), "scheduled:activate", 1, principal, now, window.Add(time.Minute))
 	if err != nil || len(next) != 1 || len(worker.inserted) != 2 {
@@ -269,15 +269,15 @@ func TestProcessScheduledWorkflowExecutionsRunsGlobalActionWorkflowOnceAndReject
 			claim:                       workflowmodel.WorkflowExecutionClaimResult{Decision: decision},
 		}
 		claimService := workflowRecordExecutionService(claimWorker, idempotent)
-		if execution, completed, err := claimService.executeGlobalScheduledWorkflow(t.Context(), idempotent, principal, now); err != nil || completed || execution.ID != "" {
+		if execution, completed, err := claimService.executeGlobalScheduledWorkflow(t.Context(), idempotent, principal, now); err != nil || completed || execution.ExecutionID != "" {
 			t.Fatalf("global idempotency decision=%s execution=%+v completed=%v err=%v", decision, execution, completed, err)
 		}
 	}
 	replayWorker := &workflowCommittedIntentWorkerEdgeStub{
 		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{
-			"global-replay": {ID: "global-replay", Status: "duplicate"},
+			"global-replay": {ExecutionID: "global-replay", Status: "duplicate"},
 		}},
-		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{ID: "global-receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "global-replay"}},
+		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionReplay, Receipt: workflowmodel.WorkflowExecutionReceipt{OperationID: "global-receipt", WorkspaceID: principal.WorkspaceID, ExecutionID: "global-replay"}},
 	}
 	replayService := workflowRecordExecutionService(replayWorker, idempotent)
 	if replayed, err := replayService.processScheduledWorkflowExecutionsForTarget(t.Context(), idempotent.Key, 10, principal, now); err != nil || len(replayed) != 0 {

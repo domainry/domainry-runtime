@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
@@ -133,7 +134,7 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 				t.Fatalf("shared Lifecycle Audit rows=%d err=%v", auditRows, err)
 			}
 
-			archiveJob := lifecyclemodel.CleanupJob{ID: identity + "-archive-job", WorkspaceID: identity, RequestedBy: "dialect-test", UpdatedAt: time.Now().UTC()}
+			archiveJob := lifecyclemodel.CleanupJob{JobID: identity + "-archive-job", WorkspaceID: identity, RequestedBy: "dialect-test", UpdatedAt: time.Now().UTC()}
 			archived, err := binding.ArchiveStore().ArchivePayload(t.Context(), "record", archiveJob, createdPolicy, "records", "record-1", []byte(`{"id":"record-1"}`))
 			if err != nil || !archived {
 				t.Fatalf("archive created=%v err=%v", archived, err)
@@ -147,8 +148,12 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			artifactID, err := entityid.Derive("art", "runtime.lifecycle-real-dialect-upload", identity)
+			if err != nil {
+				t.Fatal(err)
+			}
 			upload := lifecyclecontract.UploadArtifact{
-				ID: identity + "-file", WorkspaceID: identity, ObjectKey: "document", FieldKey: "file", Filename: strings.Repeat("a", 64) + ".txt",
+				ArtifactID: artifactID, WorkspaceID: identity, ObjectKey: "document", FieldKey: "file", Filename: strings.Repeat("a", 64) + ".txt",
 				ContentType: "text/plain", SHA256: strings.Repeat("a", 64), Size: 12, CreatedAt: time.Now().UTC(),
 			}
 			if err := uploads.RegisterUpload(t.Context(), upload); err != nil {
@@ -159,7 +164,7 @@ func TestLifecyclePersistenceAcrossRealDialects(t *testing.T) {
 				t.Fatal("Lifecycle upload store omitted durable scan queue")
 			}
 			pending, err := pendingStore.PendingFileScans(t.Context(), lifecycleaccess.NewSystemScope(lifecycleaccess.SystemScopeGlobal, "verify shared upload Artifact"), 10)
-			if err != nil || len(pending) != 1 || pending[0].FileID != upload.ID {
+			if err != nil || len(pending) != 1 || pending[0].ArtifactID != upload.ArtifactID {
 				t.Fatalf("pending uploads=%#v err=%v", pending, err)
 			}
 			clean := pending[0]

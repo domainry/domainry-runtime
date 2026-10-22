@@ -188,7 +188,7 @@ func (r RuntimeStatusStore) deleteExpiredOperationBatch(ctx context.Context, spe
 	}
 	ids := make([]string, 0, len(records))
 	for _, record := range records {
-		ids = append(ids, record.ID)
+		ids = append(ids, record.OperationID)
 	}
 	deleted, err := r.operationStore().DeleteExpiredRecords(sharedoperation.WithExecutor(ctx, tx), filter, ids, now, string(idempotency.StatusProcessing))
 	if err != nil {
@@ -233,5 +233,5 @@ func cleanupLeaseGuard(store *sharedworkerscope.Store, owner string, fencingToke
 }
 
 func idempotencyCleanupIdentity() sharedworkerscope.Identity {
-	return sharedworkerscope.Identity{ID: idempotencyCleanupLeaseID, Owner: database.WorkerScopeOwnerIdempotencyCleanup, ScopeKey: "receipts"}
+	return sharedworkerscope.Identity{Owner: database.WorkerScopeOwnerIdempotencyCleanup, ScopeKey: "receipts"}
 }

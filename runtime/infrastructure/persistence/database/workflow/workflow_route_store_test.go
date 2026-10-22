@@ -21,8 +21,8 @@ func TestWorkflowRouteStoreInsertsListsAndCompareAndSets(t *testing.T) {
 	}
 	routes := workflowpersistence.NewWorkflowRouteStore(store)
 	steps := []workflowmodel.WorkflowRouteStep{
-		{ID: "step_1", ProcessID: "process_1", NodeID: "approval", StepNo: 1, StepKey: "s1", Title: "Review", Mode: "any", Status: "pending", AssigneeSnapshot: []workflowmodel.WorkflowRouteAssignee{{UserID: "user_a", DisplayName: "A", RoleKey: "approver"}}, CreatedAt: "t0", UpdatedAt: "t0"},
-		{ID: "step_2", ProcessID: "process_1", NodeID: "approval", StepNo: 2, StepKey: "s2", Mode: "quorum", RequiredApprovals: 2, Status: "configurable", CreatedAt: "t0", UpdatedAt: "t0"},
+		{RouteStepID: "step_1", ProcessID: "process_1", NodeID: "approval", StepNo: 1, StepKey: "s1", Title: "Review", Mode: "any", Status: "pending", AssigneeSnapshot: []workflowmodel.WorkflowRouteAssignee{{UserID: "user_a", DisplayName: "A", RoleKey: "approver"}}, CreatedAt: "t0", UpdatedAt: "t0"},
+		{RouteStepID: "step_2", ProcessID: "process_1", NodeID: "approval", StepNo: 2, StepKey: "s2", Mode: "quorum", RequiredApprovals: 2, Status: "configurable", CreatedAt: "t0", UpdatedAt: "t0"},
 	}
 	if err := routes.InsertRouteSteps(t.Context(), "workspace-primary", steps); err != nil {
 		t.Fatal(err)

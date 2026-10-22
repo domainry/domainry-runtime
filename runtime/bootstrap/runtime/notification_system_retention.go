@@ -23,7 +23,7 @@ func (r notificationSystemRetention) Preview(ctx context.Context, workspaceID st
 
 func (r notificationSystemRetention) ProcessBatch(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, holds []lifecyclemodel.LegalHold, limit int) (lifecyclemodel.CleanupBatchResult, error) {
 	request := contract.NotificationRetentionBatchRequest{
-		JobID: job.ID, WorkspaceID: job.WorkspaceID, Operation: string(job.Operation), DryRun: job.DryRun, Checkpoint: job.Checkpoint,
+		JobID: job.JobID, WorkspaceID: job.WorkspaceID, Operation: string(job.Operation), DryRun: job.DryRun, Checkpoint: job.Checkpoint,
 		Now: job.UpdatedAt, Policy: notificationRetentionPolicy(policy.Policy), Holds: make([]contract.NotificationRetentionHold, len(holds)), Limit: limit,
 	}
 	for index, hold := range holds {

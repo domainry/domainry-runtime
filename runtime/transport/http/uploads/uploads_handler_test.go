@@ -138,7 +138,7 @@ func (s *uploadFileScanStoreStub) RecordFileScan(_ context.Context, evidence lif
 	if s.byID == nil {
 		s.byID = map[string]lifecyclecontract.FileScanEvidence{}
 	}
-	s.byID[evidence.WorkspaceID+"\x00"+evidence.FileID] = evidence
+	s.byID[evidence.WorkspaceID+"\x00"+evidence.ArtifactID] = evidence
 	return s.err
 }
 
@@ -156,7 +156,7 @@ func uploadTestHandler(t *testing.T, principal principalmodel.Principal) *Upload
 	t.Helper()
 	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{ProjectKey: "uploads", SchemaVersion: "1", Objects: uploadTestObjects()})
 	return NewUploadsHandler(UploadsDependencies{
-		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, uploadTestRecordQuery{}), Subjects: uploadapplication.NewUploadSubjectRegistry(uploadSubjectTestMemory{}), Scans: uploadapplication.NewFileScanReceiptVerifier(&uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00asset.txt": {FileID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}, "workspace-a\x00file.txt": {FileID: "file.txt", WorkspaceID: "workspace-a", Filename: "file.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}}}, bytes.Repeat([]byte("k"), 32)), Blobs: newUploadBlobStoreStub(), Principal: func(*http.Request) principalmodel.Principal { return principal },
+		Access: uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, uploadTestRecordQuery{}), Subjects: uploadapplication.NewUploadSubjectRegistry(uploadSubjectTestMemory{}), Scans: uploadapplication.NewFileScanReceiptVerifier(&uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00asset.txt": {ArtifactID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}, "workspace-a\x00file.txt": {ArtifactID: "file.txt", WorkspaceID: "workspace-a", Filename: "file.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean}}}, bytes.Repeat([]byte("k"), 32)), Blobs: newUploadBlobStoreStub(), Principal: func(*http.Request) principalmodel.Principal { return principal },
 		WriteJSON: func(w http.ResponseWriter, status int, value any) {
 			w.WriteHeader(status)
 			_ = json.NewEncoder(w).Encode(value)
@@ -419,7 +419,7 @@ func TestRepeatedUploadGetsDistinctRegisteredFileIdentity(t *testing.T) {
 	if payloads[0].SHA256 != payloads[1].SHA256 || payloads[0].FileID == payloads[1].FileID || payloads[0].Filename == payloads[1].Filename {
 		t.Fatalf("repeated upload identities=%#v", payloads)
 	}
-	if len(registry.artifacts) != 2 || registry.artifacts[0].ID != payloads[0].FileID || registry.artifacts[1].ID != payloads[1].FileID || registry.artifacts[0].Filename != payloads[0].Filename || registry.artifacts[1].Filename != payloads[1].Filename {
+	if len(registry.artifacts) != 2 || registry.artifacts[0].ArtifactID != payloads[0].FileID || registry.artifacts[1].ArtifactID != payloads[1].FileID || registry.artifacts[0].Filename != payloads[0].Filename || registry.artifacts[1].Filename != payloads[1].Filename {
 		t.Fatalf("registered artifacts=%#v payloads=%#v", registry.artifacts, payloads)
 	}
 }
@@ -431,7 +431,7 @@ func TestUploadFileRegistersLifecycleEvidenceAndRemovesUnregisteredContent(t *te
 	handler.artifacts = registry
 	response := httptest.NewRecorder()
 	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "note.txt", []byte("registered upload")))
-	if response.Code != http.StatusCreated || registry.artifact.ID == "" || registry.artifact.WorkspaceID != "workspace-a" || registry.artifact.ObjectKey != "document" || registry.artifact.FieldKey != "file_url" || registry.artifact.Filename == "" || registry.artifact.SHA256 == "" {
+	if response.Code != http.StatusCreated || registry.artifact.ArtifactID == "" || registry.artifact.WorkspaceID != "workspace-a" || registry.artifact.ObjectKey != "document" || registry.artifact.FieldKey != "file_url" || registry.artifact.Filename == "" || registry.artifact.SHA256 == "" {
 		t.Fatalf("status=%d artifact=%#v", response.Code, registry.artifact)
 	}
 
@@ -451,7 +451,7 @@ func TestServeUploadedFileAndDownloadAuthorization(t *testing.T) {
 	handler := uploadTestHandler(t, principal)
 	info := putUploadBlob(t, handler, principal.WorkspaceID, "asset.txt", []byte("asset"))
 	handler.scans = uploadapplication.NewFileScanReceiptVerifier(&uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
-		"workspace-a\x00asset.txt": {FileID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "text/plain"},
+		"workspace-a\x00asset.txt": {ArtifactID: "asset.txt", WorkspaceID: "workspace-a", Filename: "asset.txt", ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "text/plain"},
 	}}, bytes.Repeat([]byte("k"), 32))
 	request := httptest.NewRequest(http.MethodGet, "/uploads/asset.txt?object_key=asset&field_key=file_url&record_id=asset.txt", nil)
 	request.SetPathValue("fileID", "asset.txt")
@@ -495,7 +495,7 @@ func TestServeUploadedFileResolvesOpaqueFileIdentityInsideWorkspace(t *testing.T
 	info := putUploadBlob(t, handler, principal.WorkspaceID, storageFilename, []byte("archive"))
 	store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
 		"workspace-a\x00derived-export": {
-			FileID: "derived-export", WorkspaceID: "workspace-a", Filename: storageFilename,
+			ArtifactID: "derived-export", WorkspaceID: "workspace-a", Filename: storageFilename,
 			ObjectKey: "asset", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "application/zip",
 		},
 	}}
@@ -526,7 +526,7 @@ func TestServeUploadedFileAcceptsExactActionDownloadTicketWithoutNativeRecordGra
 	info := putUploadBlob(t, handler, principal.WorkspaceID, storageFilename, []byte("authorized bytes"))
 	store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{
 		"workspace-a\x00opaque-document-file": {
-			FileID: "opaque-document-file", WorkspaceID: "workspace-a", Filename: storageFilename,
+			ArtifactID: "opaque-document-file", WorkspaceID: "workspace-a", Filename: storageFilename,
 			ObjectKey: "document_upload", FieldKey: "file_url", Status: lifecyclecontract.FileScanClean, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "application/pdf",
 		},
 	}}
@@ -615,7 +615,7 @@ func (handoffReviewAudit) AppendWithMetadata(context.Context, string, string, st
 type handoffReviewRecord struct{}
 
 func (handoffReviewRecord) GetRecord(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-	return recordmodel.Record{ID: "own-record", Data: map[string]any{"file_url": uploadRecordFileReference("review-file", "review.png")}}, nil
+	return recordmodel.Record{RecordID: "own-record", Data: map[string]any{"file_url": uploadRecordFileReference("review-file", "review.png")}}, nil
 }
 func TestServeUploadedFileRejectsNonCleanRecordBoundDownloads(t *testing.T) {
 	for _, status := range []string{"clean", "pending", "quarantined", "failed"} {
@@ -624,7 +624,7 @@ func TestServeUploadedFileRejectsNonCleanRecordBoundDownloads(t *testing.T) {
 			handler := uploadTestHandler(t, principal)
 			handler.access = uploadapplication.NewUploadAccessApplicationService(handoffReviewCatalog{}, handoffReviewAudit{}, handoffReviewRecord{})
 			info := putUploadBlob(t, handler, principal.WorkspaceID, "review.png", []byte("review bytes"))
-			store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00review-file": {FileID: "review-file", WorkspaceID: "workspace-a", Filename: "review.png", ObjectKey: "asset", FieldKey: "file_url", Status: status, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "image/png"}}}
+			store := &uploadFileScanStoreStub{byID: map[string]lifecyclecontract.FileScanEvidence{"workspace-a\x00review-file": {ArtifactID: "review-file", WorkspaceID: "workspace-a", Filename: "review.png", ObjectKey: "asset", FieldKey: "file_url", Status: status, SHA256: info.ContentSHA256, Size: info.Size, ContentType: "image/png"}}}
 			handler.scans = uploadapplication.NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32))
 			request := httptest.NewRequest(http.MethodGet, "/uploads/review-file?object_key=asset&field_key=file_url&record_id=own-record", nil)
 			request.SetPathValue("fileID", "review-file")
@@ -661,7 +661,7 @@ func (s uploadSubjectTestMemory) FindUploadSubject(_ context.Context, workspace,
 type uploadTestRecordQuery struct{}
 
 func (uploadTestRecordQuery) GetRecord(_ context.Context, object, id string, principal principalmodel.Principal) (recordmodel.Record, error) {
-	return recordmodel.Record{ID: id, OwnerUserID: principal.UserID, Data: map[string]any{"file_url": uploadRecordFileReference(id, id)}}, nil
+	return recordmodel.Record{RecordID: id, OwnerUserID: principal.UserID, Data: map[string]any{"file_url": uploadRecordFileReference(id, id)}}, nil
 }
 
 func uploadRecordFileReference(fileID, filename string) map[string]any {

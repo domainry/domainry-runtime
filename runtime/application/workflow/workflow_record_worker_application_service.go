@@ -254,7 +254,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 			}
 			continue
 		}
-		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, executionPrincipal, "worker:"+previous.ID, nextAttempt, true)
+		execution, err := s.executeWorkflowAttempt(workCtx, workflow, payload, executionPrincipal, "worker:"+previous.ExecutionID, nextAttempt, true)
 		if heartbeatErr := stopHeartbeat(); heartbeatErr != nil {
 			heartbeatFailure := internalError("workflow execution lease lost", heartbeatErr)
 			if err != nil {
@@ -269,7 +269,7 @@ func (s *WorkflowApplicationService) processDueWorkflowExecutions(ctx context.Co
 		claimed.Status = "skipped"
 		claimed.Message = "workflow.message.retryContinued"
 		claimed.UpdatedAt = s.worker.Clock.Now().Format(time.RFC3339)
-		claimed.Result["continued_execution_id"] = execution.ID
+		claimed.Result["continued_execution_id"] = execution.ExecutionID
 		claimed.Result["continued_status"] = execution.Status
 		if err := s.commitClaimedWorkflowExecution(ctx, claimed); err != nil {
 			return workflowmodel.WorkflowProcessResult{}, internalError("mark workflow retry continuation", err)
@@ -303,7 +303,7 @@ func (s *WorkflowApplicationService) workflowTriggerInitiatorPrincipal(ctx conte
 	}
 	principal.RequestID = strings.TrimSpace(workflowpolicy.WorkflowPayloadString(intent.Payload, "request_id"))
 	if principal.RequestID == "" {
-		principal.RequestID = intent.ID
+		principal.RequestID = intent.ExecutionID
 	}
 	return principal, nil
 }

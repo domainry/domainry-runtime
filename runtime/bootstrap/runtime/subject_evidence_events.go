@@ -27,9 +27,9 @@ func subjectEvidenceEvents(repository auditrepository.AuditRepository) subjectev
 					return nil, err
 				}
 				for _, event := range events {
-					if !seen[event.ID] {
-						ids = append(ids, event.ID)
-						seen[event.ID] = true
+					if !seen[event.AuditEventID] {
+						ids = append(ids, event.AuditEventID)
+						seen[event.AuditEventID] = true
 					}
 				}
 				if len(ids) > 10000 {

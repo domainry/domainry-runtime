@@ -64,7 +64,7 @@ func (s *FileScanReceiptVerifier) VerifyClean(ctx context.Context, workspaceID, 
 
 func (s *FileScanReceiptVerifier) sign(e lifecyclecontract.FileScanEvidence) string {
 	mac := hmac.New(sha256.New, s.key)
-	_, _ = mac.Write([]byte(strings.Join([]string{fileScanReceiptVersion, e.WorkspaceID, e.FileID, strings.ToLower(e.SHA256), strconv.FormatInt(e.Size, 10), strings.ToLower(strings.TrimSpace(e.ContentType)), e.Status, e.Provider, e.EvidenceRef, e.ScannedAt.UTC().Format(time.RFC3339Nano)}, "\x00")))
+	_, _ = mac.Write([]byte(strings.Join([]string{fileScanReceiptVersion, e.WorkspaceID, e.ArtifactID, strings.ToLower(e.SHA256), strconv.FormatInt(e.Size, 10), strings.ToLower(strings.TrimSpace(e.ContentType)), e.Status, e.Provider, e.EvidenceRef, e.ScannedAt.UTC().Format(time.RFC3339Nano)}, "\x00")))
 	return fileScanReceiptVersion + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 

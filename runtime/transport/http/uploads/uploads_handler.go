@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	requestcontext "github.com/domainry/domainry-foundation/requestcontext"
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
@@ -171,7 +171,11 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusServiceUnavailable, "backend.upload.storage_unavailable")
 		return
 	}
-	fileID := requestcontext.NewRequestID()
+	fileID, err := entityid.New("art")
+	if err != nil {
+		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.id_generation_failed")
+		return
+	}
 	staged, err := h.blobs.Stage(r.Context(), runtimefile.BlobStageRequest{
 		WorkspaceID: principal.WorkspaceID, StageID: fileID, Content: io.MultiReader(bytes.NewReader(prefix), file), MaxBytes: policy.MaxSizeBytes,
 	})
@@ -205,7 +209,7 @@ func (h *UploadsHandler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.upload.save_failed")
 		return
 	}
-	artifact := lifecyclecontract.UploadArtifact{ID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}
+	artifact := lifecyclecontract.UploadArtifact{ArtifactID: fileID, WorkspaceID: principal.WorkspaceID, ObjectKey: objectKey, FieldKey: fieldKey, Filename: filename, ContentType: contentType, SHA256: contentSHA256, Size: size, CreatedAt: time.Now().UTC()}
 	if err := h.subjects.Register(r.Context(), artifact, principal); err != nil {
 		_ = h.blobs.Delete(context.WithoutCancel(r.Context()), principal.WorkspaceID, filename)
 		h.writeServiceError(w, r, err)
@@ -252,7 +256,7 @@ func (h *UploadsHandler) fileScanStatus(w http.ResponseWriter, r *http.Request) 
 		h.writeServiceError(w, r, err)
 		return
 	}
-	if err := h.subjects.Authorize(r.Context(), principal.WorkspaceID, principal.UserID, evidence.FileID); err != nil {
+	if err := h.subjects.Authorize(r.Context(), principal.WorkspaceID, principal.UserID, evidence.ArtifactID); err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}

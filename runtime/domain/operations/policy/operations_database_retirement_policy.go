@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
 
@@ -26,7 +27,7 @@ func OperationsValidateDatabaseRetirementTransition(current, next operationsmode
 	if err := operationsValidateDatabaseRetirementIdentity(next); err != nil {
 		return err
 	}
-	if current.ID != next.ID || current.Object != next.Object || !next.UpdatedAt.Equal(now) {
+	if current.OperationID != next.OperationID || current.Object != next.Object || !next.UpdatedAt.Equal(now) {
 		return fmt.Errorf("operations.database_retirement_identity_or_time_changed")
 	}
 	if next.State == operationsmodel.DatabaseRetirementBlocked {
@@ -131,7 +132,7 @@ func OperationsValidateDatabaseDropEvidence(evidence operationsmodel.DatabaseRet
 }
 
 func OperationsValidateDatabaseDropPlan(plan operationsmodel.DatabaseDropPlan) error {
-	if strings.TrimSpace(plan.RetirementID) == "" || strings.TrimSpace(plan.Object.Engine) == "" || strings.TrimSpace(plan.Object.Kind) == "" || strings.TrimSpace(plan.Object.Name) == "" || len(plan.Statements) == 0 || plan.EstimatedLock <= 0 || plan.LockTimeout <= 0 || plan.EstimatedLock > plan.LockTimeout || plan.EstimatedReclaimBytes < 0 || strings.TrimSpace(plan.Rollback) == "" || strings.TrimSpace(plan.ApprovalID) == "" {
+	if strings.TrimSpace(plan.OperationID) == "" || strings.TrimSpace(plan.Object.Engine) == "" || strings.TrimSpace(plan.Object.Kind) == "" || strings.TrimSpace(plan.Object.Name) == "" || len(plan.Statements) == 0 || plan.EstimatedLock <= 0 || plan.LockTimeout <= 0 || plan.EstimatedLock > plan.LockTimeout || plan.EstimatedReclaimBytes < 0 || strings.TrimSpace(plan.Rollback) == "" || strings.TrimSpace(plan.ApprovalID) == "" {
 		return fmt.Errorf("operations.database_retirement_drop_plan_invalid")
 	}
 	for _, statement := range plan.Statements {
@@ -148,7 +149,7 @@ func OperationsValidateDatabaseDropPlan(plan operationsmodel.DatabaseDropPlan) e
 
 func operationsValidateDatabaseRetirementIdentity(retirement operationsmodel.DatabaseRetirement) error {
 	object := retirement.Object
-	if strings.TrimSpace(retirement.ID) == "" || strings.TrimSpace(object.Engine) == "" || strings.TrimSpace(object.Database) == "" || strings.TrimSpace(object.Kind) == "" || strings.TrimSpace(object.Name) == "" || strings.TrimSpace(retirement.Evidence.Owner) == "" || retirement.UpdatedAt.IsZero() {
+	if entityid.Validate("op", retirement.OperationID) != nil || strings.TrimSpace(object.Engine) == "" || strings.TrimSpace(object.Database) == "" || strings.TrimSpace(object.Kind) == "" || strings.TrimSpace(object.Name) == "" || strings.TrimSpace(retirement.Evidence.Owner) == "" || retirement.UpdatedAt.IsZero() {
 		return fmt.Errorf("operations.database_retirement_identity_required")
 	}
 	return nil

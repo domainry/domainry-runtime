@@ -279,7 +279,7 @@ func NewRecordApplicationService(dependencies RecordApplicationDependencies) *Re
 		},
 		ExecuteWorkflow: service.executeWorkflow,
 		PlanUpdateReference: func(ctx context.Context, reference recordservice.RecordDeleteReference, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-			return update.PlanUpdateMutation(ctx, reference.Object.Key, reference.Record.ID, map[string]any{reference.Field.Key: nil}, principal)
+			return update.PlanUpdateMutation(ctx, reference.Object.Key, reference.Record.RecordID, map[string]any{reference.Field.Key: nil}, principal)
 		},
 		BuildAudit:       dependencies.BuildAudit,
 		ExecutionRuntime: dependencies.RecordMutationExecution,
@@ -350,7 +350,7 @@ func (s *RecordApplicationService) auditFieldDenials(ctx context.Context, object
 		fields = append(fields, denial.FieldKey)
 		rules = append(rules, denial.RuleKey)
 	}
-	s.audit(ctx, "field_access_denied", object.Key, record.ID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
+	s.audit(ctx, "field_access_denied", object.Key, record.RecordID, principal, "Contextual field access denied", nil, nil, map[string]any{"action": action, "fields": fields, "policy_rules": rules, "result": "denied", "reason": "field_policy_denied"})
 }
 
 func (s *RecordApplicationService) auditScopeDenial(ctx context.Context, object definitionmodel.ObjectSchema, recordID string, principal principalmodel.Principal) {

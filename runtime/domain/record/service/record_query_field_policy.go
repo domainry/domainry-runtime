@@ -19,7 +19,7 @@ func recordAuthorizeReadQueryFields(principal principalmodel.Principal, object d
 	queryable := func(key string) bool {
 		key = strings.TrimSpace(key)
 		switch key {
-		case "id", "created_at", "updated_at":
+		case recordmodel.IDField, "record_id", "created_at", "updated_at":
 			return true // These fields belong to every readable record envelope.
 		}
 		return recordpolicy.RecordCanReadObjectFieldKeyForPrincipal(principal, object, key) &&

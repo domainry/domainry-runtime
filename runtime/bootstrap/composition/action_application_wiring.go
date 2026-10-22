@@ -149,7 +149,7 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				if err != nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, err
 				}
-				return commit, runtimeext.BusinessJobReceipt{JobID: commit.Record.ID}, nil
+				return commit, runtimeext.BusinessJobReceipt{JobID: commit.Record.RecordID}, nil
 			},
 			ObjectForKey: func(key string) (definitionmodel.ObjectSchema, bool) {
 				object, ok := records.schema[strings.TrimSpace(key)]
@@ -209,7 +209,7 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 					return "", err
 				}
 				query := records.RecordQueryPolicyDomainService.NormalizeListQueryForAction(object, recordmodel.RecordListQuery{
-					Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{strings.TrimSpace(invocation.RecordID)}},
+					Page: 1, PageSize: 1, Filters: map[string]any{"record_id__in": []any{strings.TrimSpace(invocation.RecordID)}},
 					LockIntent: recordmodel.RecordQueryLockForUpdate,
 				}, invocation.Principal, operation)
 				page, err := records.recordRepo.ListRecords(ctx, invocation.Principal.WorkspaceID, object, query)
@@ -326,8 +326,8 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 	return service
 }
 
-func compileActionNotification(records *runtimeAssembly) func(context.Context, string, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
-	return func(ctx context.Context, eventID string, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+func compileActionNotification(records *runtimeAssembly) func(context.Context, runtimeext.NotificationIntent, principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
+	return func(ctx context.Context, intent runtimeext.NotificationIntent, principal principalmodel.Principal) (notificationmodel.NotificationEvent, error) {
 		if records == nil || records.recordNotificationCompiler == nil || records.identityProjection == nil {
 			return notificationmodel.NotificationEvent{}, apperror.New(apperror.KindInternal, "backend.notification.action_compiler_required", nil, nil)
 		}
@@ -345,7 +345,7 @@ func compileActionNotification(records *runtimeAssembly) func(context.Context, s
 			variables[strings.TrimSpace(variable.Key)] = variable.Value()
 		}
 		return records.recordNotificationCompiler(notificationmodel.NotificationIntent{
-			ID: eventID, WorkspaceID: principal.WorkspaceID, SourceEventID: strings.TrimSpace(intent.SourceEventID), EventType: strings.TrimSpace(intent.EventType),
+			WorkspaceID: principal.WorkspaceID, SourceEventID: strings.TrimSpace(intent.SourceEventID), EventType: strings.TrimSpace(intent.EventType),
 			RecipientUserIDs: append([]string(nil), intent.RecipientUserIDs...), SubjectType: strings.TrimSpace(intent.SubjectObjectKey), SubjectID: strings.TrimSpace(intent.SubjectRecordID), SubjectVersion: strings.TrimSpace(intent.SubjectVersion),
 			DedupeKey: strings.TrimSpace(intent.DedupeKey), GroupKey: strings.TrimSpace(intent.GroupKey), ActionState: strings.ToLower(strings.TrimSpace(intent.ActionState)), AlertState: func() string {
 				if state := strings.ToLower(strings.TrimSpace(intent.AlertState)); state != "" {

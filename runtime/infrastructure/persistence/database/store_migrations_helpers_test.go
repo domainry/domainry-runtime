@@ -29,16 +29,16 @@ func TestMigrationHelpersCoverDialectAndFilesystemEdges(t *testing.T) {
 	}
 
 	mysqlStore := &RuntimeStore{engine: mysql.NewEngine()}
-	if sql := mysqlStore.schemaMigrationSQL(); !strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, "`applied_at` BIGINT") {
-		t.Fatalf("mysql ledger SQL=%q", sql)
+	if sql, err := mysqlStore.schemaMigrationSQL(); err != nil || !strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, "`applied_at` BIGINT") {
+		t.Fatalf("mysql ledger SQL=%q err=%v", sql, err)
 	}
 	sqliteStore := &RuntimeStore{engine: sqlite.NewEngine()}
-	if sql := sqliteStore.schemaMigrationSQL(); !strings.Contains(sql, `"applied_at" BIGINT`) {
-		t.Fatalf("sqlite ledger SQL=%q", sql)
+	if sql, err := sqliteStore.schemaMigrationSQL(); err != nil || !strings.Contains(sql, `"applied_at" BIGINT`) {
+		t.Fatalf("sqlite ledger SQL=%q err=%v", sql, err)
 	}
 	postgresStore := &RuntimeStore{engine: postgres.NewEngine(), databaseSchema: "runtime"}
-	if sql := postgresStore.schemaMigrationSQL(); strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, `"_schema_migrations"`) || !strings.Contains(sql, `"applied_at" BIGINT`) {
-		t.Fatalf("postgres ledger SQL=%q", sql)
+	if sql, err := postgresStore.schemaMigrationSQL(); err != nil || strings.Contains(sql, "VARCHAR(255)") || !strings.Contains(sql, `"_schema_migrations"`) || !strings.Contains(sql, `"applied_at" BIGINT`) {
+		t.Fatalf("postgres ledger SQL=%q err=%v", sql, err)
 	}
 
 	dir := t.TempDir()

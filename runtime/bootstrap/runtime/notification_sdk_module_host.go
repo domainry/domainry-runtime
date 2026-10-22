@@ -182,7 +182,7 @@ func (d notificationSDKRecipientResolver) FindRecipient(ctx context.Context, wor
 		return modulehost.Recipient{}, false, nil
 	}
 	user, found, err := d.projection.FindUser(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
-	return modulehost.Recipient{ID: string(user.ID), Email: user.Email, Locale: user.Locale, Timezone: user.Timezone}, found, err
+	return modulehost.Recipient{ID: user.UserID, Email: user.Email, Locale: user.Locale, Timezone: user.Timezone}, found, err
 }
 
 type notificationSDKWorkflowAudience struct{ lookup workflowTaskLookup }
@@ -368,7 +368,7 @@ func (g *notificationSDKDeliveryGateway) Dispatch(ctx context.Context, request m
 	if g.wakeup != nil {
 		g.wakeup(message)
 	}
-	return modulehost.DeliveryReceipt{MessageID: message.ID}, nil
+	return modulehost.DeliveryReceipt{MessageID: message.MessageID}, nil
 }
 
 func notificationSDKOutboxPayload(content contract.RenderedNotification, productName string) (map[string]any, error) {

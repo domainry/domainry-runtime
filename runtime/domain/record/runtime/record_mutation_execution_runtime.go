@@ -109,7 +109,7 @@ func (s *RecordMutationExecutionRuntime) Commit(ctx context.Context, claim recor
 	}
 	_, err := s.repository.CommitRecordMutationExecution(ctx, commit, recordmodel.RecordMutationCompletion{
 		WorkspaceID: claim.Execution.WorkspaceID,
-		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: commit.Record, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
 	})
 	if err != nil {
@@ -128,7 +128,7 @@ func (s *RecordMutationExecutionRuntime) CommitBatch(ctx context.Context, claim 
 	}
 	_, err := batchStore.CommitRecordMutationBatchExecution(ctx, commits, recordmodel.RecordMutationCompletion{
 		WorkspaceID: claim.Execution.WorkspaceID,
-		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
+		OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{"deleted": true}, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC(),
 	})
 	if err != nil {
@@ -196,7 +196,7 @@ func (s *RecordMutationExecutionRuntime) CompleteOperation(ctx context.Context, 
 	if s == nil || s.repository == nil {
 		return apperror.New(apperror.KindInternal, idempotency.ErrorCodeReceiptUnavailable, nil, nil)
 	}
-	_, err := s.repository.CompleteRecordMutationExecution(ctx, recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: result, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC()})
+	_, err := s.repository.CompleteRecordMutationExecution(ctx, recordmodel.RecordMutationCompletion{WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: result, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour), Now: time.Now().UTC()})
 	if err != nil {
 		return recordMutationRuntimeError("complete record operation", err)
 	}
@@ -210,12 +210,12 @@ func (s *RecordMutationExecutionRuntime) Fail(ctx context.Context, claim recordm
 	if failure == nil || mutation.IsTransactionCommitUnknown(failure) {
 		return nil
 	}
-	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.ID) == "" {
+	if s == nil || s.repository == nil || strings.TrimSpace(claim.Execution.OperationID) == "" {
 		return nil
 	}
 	kind := apperror.KindOf(failure)
 	_, err := s.repository.CompleteRecordMutationExecution(ctx, recordmodel.RecordMutationCompletion{
-		WorkspaceID: claim.Execution.WorkspaceID, ExecutionID: claim.Execution.ID,
+		WorkspaceID: claim.Execution.WorkspaceID, OperationID: claim.Execution.OperationID,
 		LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken,
 		Result: map[string]any{}, ResponseStatus: recordMutationFailureResponseStatus(kind),
 		ErrorCode: apperror.CodeOf(failure), Retryable: recordMutationFailureRetryable(kind),

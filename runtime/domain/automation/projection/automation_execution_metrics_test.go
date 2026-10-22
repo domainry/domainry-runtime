@@ -10,7 +10,7 @@ import (
 
 func TestBuildExecutionMetricsCorrelatesAutomationEvidence(t *testing.T) {
 	items := []automationmodel.AutomationRuleExecution{{Status: "succeeded", DurationMS: 20, EventID: "event-1", Trace: map[string]any{"actions": []any{map[string]any{"invocation_id": "invocation-1"}}}}}
-	invocations := []integrationsdk.Invocation{{ID: "invocation-1", Status: "succeeded", DurationMS: 8}, {ID: "unrelated", Status: "failed", DurationMS: 99}}
+	invocations := []integrationsdk.Invocation{{InvocationID: "invocation-1", Status: "succeeded", DurationMS: 8}, {InvocationID: "unrelated", Status: "failed", DurationMS: 99}}
 	outbox := []publicationmodel.Message{{EventID: "event-1", Status: "dead_letter", AttemptCount: 3}, {EventID: "unrelated", AttemptCount: 7}}
 
 	metrics := BuildAutomationExecutionMetrics(items, invocations, outbox)

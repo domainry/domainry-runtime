@@ -126,7 +126,7 @@ func NewRecordSystemOperationHandlers(dependencies RecordSystemOperationDependen
 			if err != nil {
 				return ActionExecutionResult{}, err
 			}
-			result := actionmodel.ActionObjectResult{ActionKey: action.Key, ObjectKey: action.ObjectKey, Status: "success", Message: "backend.action.executed", CreatedRecords: []actionmodel.ActionObjectRecordRef{{ObjectKey: action.ObjectKey, RecordID: record.ID}}}
+			result := actionmodel.ActionObjectResult{ActionKey: action.Key, ObjectKey: action.ObjectKey, Status: "success", Message: "backend.action.executed", CreatedRecords: []actionmodel.ActionObjectRecordRef{{ObjectKey: action.ObjectKey, RecordID: record.RecordID}}}
 			return ActionExecutionResult{Object: &result, Commits: []transactionmodel.RecordMutationCommit{plan.CanonicalCommit()}}, nil
 		},
 		Update: update,

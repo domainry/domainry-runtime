@@ -15,7 +15,7 @@ func TestUpdateWorkflowExecutionWherePreventsStaleRetryClaim(t *testing.T) {
 		t.Fatalf("ensure evidence schema: %v", err)
 	}
 	execution := workflowmodel.WorkflowExecution{
-		ID:             "exec_1",
+		ExecutionID:    "exec_1",
 		WorkflowKey:    "daily_task",
 		Name:           "Daily task",
 		Trigger:        "scheduled:daily_task",
@@ -76,7 +76,7 @@ func TestWorkflowExecutionLeaseFencesConcurrentAndStaleWorkers(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := NewWorkflowWorkerStore(store)
-	execution := workflowmodel.WorkflowExecution{ID: "exec_fencing", WorkflowKey: "daily_task", Name: "Daily task", Trigger: "scheduled", Status: "failed", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "system", Attempt: 1, MaxAttempts: 3, NextRunAt: "2026-07-19T00:00:00Z", Message: "retry", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
+	execution := workflowmodel.WorkflowExecution{ExecutionID: "exec_fencing", WorkflowKey: "daily_task", Name: "Daily task", Trigger: "scheduled", Status: "failed", Action: map[string]any{}, Payload: map[string]any{}, Result: map[string]any{}, ActorID: "system", Attempt: 1, MaxAttempts: 3, NextRunAt: "2026-07-19T00:00:00Z", Message: "retry", CreatedAt: "2026-07-19T00:00:00Z", UpdatedAt: "2026-07-19T00:00:00Z"}
 	if err := repository.InsertExecution(t.Context(), "workspace-primary", execution); err != nil {
 		t.Fatal(err)
 	}

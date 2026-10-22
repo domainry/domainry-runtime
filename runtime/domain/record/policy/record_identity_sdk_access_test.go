@@ -29,7 +29,7 @@ func TestRecordAuthorizationDelegatesHumanDecisionsToSDKBundle(t *testing.T) {
 			},
 		},
 	)
-	record := recordmodel.Record{ID: "case-1", Data: map[string]any{"id": "case-1", "owner": "other", "name": "Example", "email": "person@example.test"}}
+	record := recordmodel.Record{RecordID: "case-1", Data: map[string]any{"id": "case-1", "owner": "other", "name": "Example", "email": "person@example.test"}}
 
 	if !RecordAllowsObjectAction(principal, "case", "create") || !RecordAllowsObjectAction(principal, "case", "read") || !RecordAllowsObjectAction(principal, "case", "update") || RecordAllowsObjectAction(principal, "case", "delete") {
 		t.Fatal("SDK object decisions were not preserved")
@@ -152,7 +152,7 @@ func TestSensitiveFieldIsClosedUnlessAnExplicitFieldPolicyNamesIt(t *testing.T) 
 		{Key: "pin_fingerprint", Type: "text", Sensitive: true},
 	}}
 	fingerprint := object.Fields[1]
-	record := recordmodel.Record{ID: "staff-1", Data: map[string]any{"id": "staff-1", "display_name": "Doctor", "pin_fingerprint": "1bcd47"}}
+	record := recordmodel.Record{RecordID: "staff-1", Data: map[string]any{"id": "staff-1", "display_name": "Doctor", "pin_fingerprint": "1bcd47"}}
 	bundle := func(fieldPolicies ...accessfixture.FieldPolicyFixture) principalmodel.Principal {
 		return accessfixture.Attach(
 			principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "user-1", WorkspaceID: "workspace-a"}},

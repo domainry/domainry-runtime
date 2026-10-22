@@ -21,9 +21,9 @@ const (
 )
 
 type publication struct {
-	ID, WorkspaceID, IntentJSON, Status, LeaseOwner, LeaseExpiresAt string
-	AttemptCount                                                    int
-	FencingToken                                                    int64
+	MessageID, WorkspaceID, IntentJSON, Status, LeaseOwner, LeaseExpiresAt string
+	AttemptCount                                                           int
+	FencingToken                                                           int64
 }
 
 type Relay struct {
@@ -47,7 +47,7 @@ func (r *Relay) ProcessDue(ctx context.Context, limit int) (int, error) {
 	now := r.clock.Now().UTC().Format(time.RFC3339Nano)
 	s := r.store.runtime
 	due := query.And(query.Equal("publication_type", "notification.saas"), publicationDuePredicate(now))
-	queryValue, args, buildErr := query.NewSelectBuilder(s.SQLRenderer, "_publication_outbox").Columns("workspace_id", "id").Where(due).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
+	queryValue, args, buildErr := query.NewSelectBuilder(s.SQLRenderer, "_publication_outbox").Columns("workspace_id", "message_id").Where(due).OrderBy(query.Ascending("created_at"), query.Ascending("id")).Limit(limit).Build()
 	if buildErr != nil {
 		return 0, fmt.Errorf("build due Notification SaaS publication list: %w", buildErr)
 	}
@@ -92,7 +92,7 @@ func (r *Relay) Process(ctx context.Context, locator workerplatform.DurableTaskL
 	}
 	event, _, publishErr := r.publisher.PublishIntent(ctx, intent)
 	if publishErr == nil {
-		return true, r.complete(ctx, claimed, event.ID)
+		return true, r.complete(ctx, claimed, event.EventID)
 	}
 	code, retryable := publicationError(publishErr)
 	return true, r.fail(ctx, claimed, code, publishErr, retryable)
@@ -102,7 +102,7 @@ func (r *Relay) claim(ctx context.Context, locator workerplatform.DurableTaskLoc
 	s := r.store.runtime
 	now := r.clock.Now().UTC()
 	nowText, expires := now.Format(time.RFC3339Nano), now.Add(publicationLeaseTTL).Format(time.RFC3339Nano)
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Set("status", "sending").Set("last_attempt_at", timevalue.Millis(nowText)).Set("lease_owner", r.workerID).Set("lease_expires_at", timevalue.Millis(expires)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", timevalue.Millis(nowText)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", locator.TaskID), publicationDuePredicate(nowText))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Set("status", "sending").Set("last_attempt_at", timevalue.Millis(nowText)).Set("lease_owner", r.workerID).Set("lease_expires_at", timevalue.Millis(expires)).SetExpression("fencing_token", query.Add(query.Column("fencing_token"), query.Value(1))).Set("updated_at", timevalue.Millis(nowText)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("message_id", locator.TaskID), publicationDuePredicate(nowText))).Build()
 	if buildErr != nil {
 		return publication{}, false, fmt.Errorf("build Notification SaaS publication claim: %w", buildErr)
 	}
@@ -115,12 +115,12 @@ func (r *Relay) claim(ctx context.Context, locator workerplatform.DurableTaskLoc
 		return publication{}, false, err
 	}
 	var value publication
-	lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Columns("id", "workspace_id", "intent_json", "status", "attempt_count", "lease_owner", "lease_expires_at", "fencing_token").Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", locator.TaskID))).Build()
+	lookup, lookupArgs, buildErr := query.NewWorkspaceSelectBuilder(s.SQLRenderer, "_publication_outbox", locator.WorkspaceID).Columns("message_id", "workspace_id", "intent_json", "status", "attempt_count", "lease_owner", "lease_expires_at", "fencing_token").Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("message_id", locator.TaskID))).Build()
 	if buildErr != nil {
 		return publication{}, false, buildErr
 	}
 	var leaseExpiresAt int64
-	err = s.DB().QueryRowContext(ctx, lookup, lookupArgs...).Scan(&value.ID, &value.WorkspaceID, &value.IntentJSON, &value.Status, &value.AttemptCount, &value.LeaseOwner, &leaseExpiresAt, &value.FencingToken)
+	err = s.DB().QueryRowContext(ctx, lookup, lookupArgs...).Scan(&value.MessageID, &value.WorkspaceID, &value.IntentJSON, &value.Status, &value.AttemptCount, &value.LeaseOwner, &leaseExpiresAt, &value.FencingToken)
 	value.LeaseExpiresAt = timevalue.String(leaseExpiresAt)
 	return value, err == nil, err
 }
@@ -145,7 +145,7 @@ func (r *Relay) transition(ctx context.Context, value publication, status, next,
 	if terminal {
 		terminalAt = now
 	}
-	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", value.WorkspaceID).Set("status", status).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", timevalue.Millis(next)).Set("lease_owner", "").Set("lease_expires_at", int64(0)).Set("remote_event_id", remoteEventID).Set("last_error_code", code).Set("last_error", message).Set("terminal_at", timevalue.Millis(terminalAt)).Set("updated_at", timevalue.Millis(now)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("id", value.ID), query.Equal("status", "sending"), query.Equal("lease_owner", value.LeaseOwner), query.Equal("fencing_token", value.FencingToken))).Build()
+	queryValue, args, buildErr := query.NewWorkspaceUpdateBuilder(s.SQLRenderer, "_publication_outbox", value.WorkspaceID).Set("status", status).SetExpression("attempt_count", query.Add(query.Column("attempt_count"), query.Value(1))).Set("next_attempt_at", timevalue.Millis(next)).Set("lease_owner", "").Set("lease_expires_at", int64(0)).Set("remote_event_id", remoteEventID).Set("last_error_code", code).Set("last_error", message).Set("terminal_at", timevalue.Millis(terminalAt)).Set("updated_at", timevalue.Millis(now)).Where(query.And(query.Equal("publication_type", "notification.saas"), query.Equal("message_id", value.MessageID), query.Equal("status", "sending"), query.Equal("lease_owner", value.LeaseOwner), query.Equal("fencing_token", value.FencingToken))).Build()
 	if buildErr != nil {
 		return buildErr
 	}

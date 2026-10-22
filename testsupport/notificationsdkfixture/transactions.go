@@ -48,8 +48,8 @@ func (t transactions) InsertEvent(ctx context.Context, executor modulehost.Execu
 	if err != nil {
 		return err
 	}
-	columns := []string{"id", "workspace_id", "source", "source_event_id", "status", "payload_json", "attempt_count", "next_attempt_at", "last_error_code", "lease_owner", "lease_expires_at", "fencing_token", "occurred_at", "created_at", "updated_at"}
-	_, err = executor.ExecContext(ctx, t.store.InsertStatement("_notification_events", columns), event.ID, event.WorkspaceID, event.Source, event.SourceEventID, event.Status, string(raw), event.AttemptCount, event.NextAttemptAt, event.LastErrorCode, event.LeaseOwner, event.LeaseExpiresAt, event.FencingToken, event.OccurredAt, event.CreatedAt, event.UpdatedAt)
+	columns := []string{"event_id", "workspace_id", "source", "source_event_id", "status", "payload_json", "attempt_count", "next_attempt_at", "last_error_code", "lease_owner", "lease_expires_at", "fencing_token", "occurred_at", "created_at", "updated_at"}
+	_, err = executor.ExecContext(ctx, t.store.InsertStatement("_notification_events", columns), event.EventID, event.WorkspaceID, event.Source, event.SourceEventID, event.Status, string(raw), event.AttemptCount, event.NextAttemptAt, event.LastErrorCode, event.LeaseOwner, event.LeaseExpiresAt, event.FencingToken, event.OccurredAt, event.CreatedAt, event.UpdatedAt)
 	return err
 }
 

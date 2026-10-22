@@ -8,10 +8,10 @@ import (
 )
 
 func WriteOwnerReceiptHeaders(w http.ResponseWriter, result operationsapplication.OperationsOwnerExecutionResult) {
-	if strings.TrimSpace(result.Receipt.Command.ID) == "" {
+	if strings.TrimSpace(result.Receipt.Command.OperationID) == "" {
 		return
 	}
-	w.Header().Set("Operation-ID", result.Receipt.Command.ID)
+	w.Header().Set("Operation-ID", result.Receipt.Command.OperationID)
 	w.Header().Set("Operation-Location", result.Receipt.StatusURL)
 	w.Header().Set("Location", result.Receipt.StatusURL)
 	if result.Replayed {

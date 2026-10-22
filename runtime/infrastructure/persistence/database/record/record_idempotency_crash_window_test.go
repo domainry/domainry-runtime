@@ -12,6 +12,7 @@ import (
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/idempotency"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
@@ -112,7 +113,7 @@ func TestRecordIdempotencyCrashWindowBeforeAndAfterClaim(t *testing.T) {
 	}
 	defer restarted.Close()
 	resumed, err := NewRecordStore(restarted).TryBeginRecordMutation(t.Context(), request)
-	if err != nil || resumed.Decision != idempotency.DecisionInProgress || resumed.Execution.ID != claim.Execution.ID {
+	if err != nil || resumed.Decision != idempotency.DecisionInProgress || resumed.Execution.OperationID != claim.Execution.OperationID {
 		t.Fatalf("claim after restart=%+v err=%v", resumed, err)
 	}
 }
@@ -126,9 +127,7 @@ func TestRecordIdempotencyProcessRestartReplaysSuccessAndReclaimsExpiredProcessi
 	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().Exec(`CREATE TABLE restart_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "restart_record", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 22, 0, 0, 0, time.UTC)
 	successRequest := recordmodel.RecordMutationClaimRequest{
@@ -140,15 +139,15 @@ func TestRecordIdempotencyProcessRestartReplaysSuccessAndReclaimsExpiredProcessi
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "restart_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	record := recordmodel.Record{ID: "record-success", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "durable"}}
+	record := recordmodel.Record{RecordID: "record-success", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "durable"}}
 	if _, err := repository.CommitRecordMutationExecution(t.Context(), transactionmodel.RecordMutationCommit{Operation: "create", Object: object, Record: record}, recordmodel.RecordMutationCompletion{
 		WorkspaceID: successClaim.Execution.WorkspaceID,
-		ExecutionID: successClaim.Execution.ID, LeaseOwner: successClaim.Execution.LeaseOwner, FencingToken: successClaim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(time.Hour), Now: now,
+		OperationID: successClaim.Execution.OperationID, LeaseOwner: successClaim.Execution.LeaseOwner, FencingToken: successClaim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(time.Hour), Now: now,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	expiredRequest := recordmodel.RecordMutationClaimRequest{
-		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "update", ObjectKey: "restart_record", TargetID: record.ID, IdempotencyKey: "restart-expired"},
+		Execution:          recordmodel.RecordMutationExecution{WorkspaceID: "workspace-a", Operation: "update", ObjectKey: "restart_record", TargetID: record.RecordID, IdempotencyKey: "restart-expired"},
 		RequestFingerprint: "expired-request", LeaseOwner: "runtime-before-restart", LeaseTTL: time.Minute, Now: now,
 	}
 	expiredClaim, err := repository.TryBeginRecordMutation(t.Context(), expiredRequest)
@@ -166,7 +165,7 @@ func TestRecordIdempotencyProcessRestartReplaysSuccessAndReclaimsExpiredProcessi
 	defer restarted.Close()
 	restartedRepository := NewRecordStore(restarted)
 	replay, err := restartedRepository.TryBeginRecordMutation(t.Context(), successRequest)
-	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Result.ID != record.ID {
+	if err != nil || replay.Decision != idempotency.DecisionReplay || replay.Execution.Result.RecordID != record.RecordID {
 		t.Fatalf("restart replay=%+v err=%v", replay, err)
 	}
 	expiredRequest.LeaseOwner = "runtime-after-restart"
@@ -187,9 +186,7 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 		t.Fatal(err)
 	}
 	auditmodulefixture.Bind(t, t.Context(), store)
-	if _, err := store.DB().Exec(`CREATE TABLE crash_window_record (workspace_id TEXT NOT NULL, id TEXT PRIMARY KEY, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, name TEXT)`); err != nil {
-		t.Fatal(err)
-	}
+	createTestRecordTable(t, store, "crash_window_record", ormschema.Column("name", ormschema.Text()))
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 21, 0, 0, 0, time.UTC)
 	claim, err := repository.TryBeginRecordMutation(t.Context(), recordmodel.RecordMutationClaimRequest{
@@ -203,27 +200,31 @@ func TestRecordIdempotencyCrashWindowRollsBackBusinessWriteBeforeReceiptCompleti
 		t.Fatal(err)
 	}
 	object := definitionmodel.ObjectSchema{Key: "crash_window_record", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	record := recordmodel.Record{ID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
+	record := recordmodel.Record{RecordID: "record-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"name": "Acme"}}
 	commit := transactionmodel.RecordMutationCommit{
 		Operation: "create", Object: object, Record: record,
-		Audit:           &auditmodel.AuditEvent{ID: "crash-audit-1", Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.ID, CreatedAt: now.Format(time.RFC3339Nano)},
-		Outbox:          []publicationmodel.Message{{ID: "crash-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "crash-record-created"}},
-		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "crash-workflow-1", WorkflowKey: "crash-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.ID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
+		Audit:           &auditmodel.AuditEvent{AuditEventID: recordAuditTestID("crash-audit-1"), Family: auditmodel.EventFamilyBusinessRecord, Event: "record_created", ObjectKey: object.Key, RecordID: record.RecordID, CreatedAt: now.Format(time.RFC3339Nano)},
+		Outbox:          []publicationmodel.Message{{MessageID: "crash-outbox-1", WorkspaceID: "workspace-a", ConnectorKey: "webhook", Operation: "record.created", DedupKey: "crash-record-created"}},
+		WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "crash-workflow-1", WorkflowKey: "crash-created", Trigger: "record_created", Status: "pending", ObjectKey: object.Key, RecordID: record.RecordID, ActorID: "admin", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}},
 	}
 	if _, err := repository.CommitRecordMutationExecution(t.Context(), commit, recordmodel.RecordMutationCompletion{
 		WorkspaceID: claim.Execution.WorkspaceID,
-		ExecutionID: claim.Execution.ID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(time.Hour), Now: now,
+		OperationID: claim.Execution.OperationID, LeaseOwner: claim.Execution.LeaseOwner, FencingToken: claim.Execution.FencingToken, Result: record, ExpiresAt: now.Add(time.Hour), Now: now,
 	}); err == nil {
 		t.Fatal("expected injected receipt completion failure")
 	}
 	var businessCount int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM crash_window_record WHERE id = ?`, record.ID).Scan(&businessCount); err != nil || businessCount != 0 {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM crash_window_record WHERE crash_window_record_id = ?`, record.RecordID).Scan(&businessCount); err != nil || businessCount != 0 {
 		t.Fatalf("business write escaped failed transaction: count=%d err=%v", businessCount, err)
 	}
-	for table, id := range map[string]string{"_audit_events": "crash-audit-1", "_publication_outbox": "crash-outbox-1", "_workflow_executions": "crash-workflow-1"} {
+	for table, identity := range map[string]struct{ column, value string }{
+		"_audit_events":        {"audit_event_id", recordAuditTestID("crash-audit-1")},
+		"_publication_outbox":  {"message_id", "crash-outbox-1"},
+		"_workflow_executions": {"execution_id", "crash-workflow-1"},
+	} {
 		var count int
-		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier("id")+" = ?", id).Scan(&count); err != nil || count != 0 {
-			t.Fatalf("atomic side fact escaped failed transaction: %s/%s count=%d err=%v", table, id, count, err)
+		if err := store.DB().QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+store.Identifier(table)+" WHERE "+store.Identifier(identity.column)+" = ?", identity.value).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("atomic side fact escaped failed transaction: %s/%s count=%d err=%v", table, identity.value, count, err)
 		}
 	}
 	receipt, found, err := repository.findRecordMutationExecution(t.Context(), claim.Execution)

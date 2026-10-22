@@ -32,7 +32,7 @@ func TestActionInvocationNormalizationAndProjection(t *testing.T) {
 	if actionSourceValid("") || actionSourceValid("forged") {
 		t.Fatal("empty or unknown source accepted")
 	}
-	recordOutput := ActionRecordInvocationOutput(actionmodel.ActionResult{ActionKey: "approve", Record: recordmodel.Record{ID: "one"}, Output: map[string]any{"approved": true}})
+	recordOutput := ActionRecordInvocationOutput(actionmodel.ActionResult{ActionKey: "approve", Record: recordmodel.Record{RecordID: "one"}, Output: map[string]any{"approved": true}})
 	if recordOutput["action_key"] != "approve" || recordOutput["record"] == nil || recordOutput["data"].(map[string]any)["approved"] != true {
 		t.Fatalf("record output=%#v", recordOutput)
 	}
@@ -67,7 +67,7 @@ func TestEveryInvocationSourceUsesTheSameExactActionPermissionBoundary(t *testin
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, handlers), SystemOperations: executor,
 		UnitOfWork: newActionTestUnitOfWork().manager,
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "audit", Event: "action.executed", Family: auditmodel.EventFamilyBusinessEntity, WorkspaceID: "workspace-a", CreatedAt: "2026-09-02T00:00:00Z"}
+			return auditmodel.AuditEvent{AuditEventID: "audit", Event: "action.executed", Family: auditmodel.EventFamilyBusinessEntity, WorkspaceID: "workspace-a", CreatedAt: "2026-09-02T00:00:00Z"}
 		}},
 	})
 	sources := []actionmodel.ActionSource{ActionSourceHTTP, ActionSourceWorkflow, ActionSourceAutomation, actionmodel.ActionSourceRecordTimer, ActionSourceScheduler, ActionSourceIntegration, ActionSourceAgent, ActionSourceNested, ActionSourceBulk}

@@ -28,7 +28,7 @@ func (s *actionBulkExecutionStore) TryBeginExecution(_ context.Context, request 
 		return actionmodel.ActionExecutionClaimResult{}, s.beginErr
 	}
 	execution := request.Execution
-	execution.ID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
+	execution.OperationID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: execution}, nil
 }
 

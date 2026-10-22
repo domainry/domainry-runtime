@@ -39,9 +39,12 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 	delivery := &organizationUnitDeliveryStub{}
 	unitOfWork := newActionTestUnitOfWork()
 	executionID := "execution-department-sales"
-	wantID := stableOrganizationUnitID("workspace-a", executionID)
+	wantID, err := stableOrganizationUnitID("workspace-a", executionID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	delivery.createResult = organizationunit.DeliveryResult{DeliveryID: "delivery-department-sales", Organization: organizationunit.DeliveredOrganizationUnit{
-		ID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
+		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
 		Status: "active", ParentOrganizationID: "company-hq", SortOrder: 20, Version: 1,
 	}}
 	bundle := &identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion}
@@ -99,11 +102,14 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 		accessfixture.Bundle{Permissions: []string{action.Key}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{action.Key}, identitysdk.DataScopeAll)},
 	)
 	executionID := "execution-team-platform"
-	wantChildID := stableOrganizationUnitID("workspace-a", executionID)
+	wantChildID, err := stableOrganizationUnitID("workspace-a", executionID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	delivery := &organizationUnitDeliveryStub{createResult: organizationunit.DeliveryResult{
 		DeliveryID: "delivery-team-platform",
 		Organization: organizationunit.DeliveredOrganizationUnit{
-			ID: wantChildID, Code: "PLATFORM", Name: "Platform", NodeType: organizationunit.NodeTypeTeam,
+			OrganizationUnitID: wantChildID, Code: "PLATFORM", Name: "Platform", NodeType: organizationunit.NodeTypeTeam,
 			Status: "active", ParentOrganizationID: "department-engineering", SortOrder: 10, Version: 1,
 		},
 	}}
@@ -148,7 +154,7 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 	planForOwner := func(ownerID string) transactionmodel.MutationPlan {
 		plan, planErr := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{
 			Operation: "create", Object: definitionmodel.ObjectSchema{Key: "department_profile"},
-			Record: recordmodel.Record{ID: "record-" + ownerID, OwnerOrgID: ownerID},
+			Record: recordmodel.Record{RecordID: "record-" + ownerID, OwnerOrgID: ownerID},
 		}, nil)
 		if planErr != nil {
 			t.Fatal(planErr)
@@ -166,9 +172,12 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 
 func TestOrganizationUnitDeliveryRejectsTamperedCreateReceipt(t *testing.T) {
 	executionID := "execution-department-sales"
-	wantID := stableOrganizationUnitID("workspace-a", executionID)
+	wantID, err := stableOrganizationUnitID("workspace-a", executionID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := organizationunit.DeliveryResult{DeliveryID: "delivery-department-sales", Organization: organizationunit.DeliveredOrganizationUnit{
-		ID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
+		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
 		Status: "active", ParentOrganizationID: "company-hq", SortOrder: 20, Version: 1,
 	}}
 	for _, test := range []struct {
@@ -229,7 +238,7 @@ func TestOrganizationUnitDeliveryRejectsStoreAndCallerAuthorityFields(t *testing
 
 func TestOrganizationUnitDeliveryResolvesOnlyFixedTargetAndGrantedNodeType(t *testing.T) {
 	delivery := &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{
-		ID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active",
+		OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active",
 		ParentOrganizationID: "company-hq", Version: 1,
 	}}
 	execution := &businessActionExecution{
@@ -279,8 +288,8 @@ func TestOrganizationUnitDeliveryFailsClosedOnIdentityScopeAndResponseMismatch(t
 		wantCode string
 	}{
 		{name: "cross workspace or permission denied", delivery: &organizationUnitDeliveryStub{err: &identitysdk.Error{Code: "identity.organization_unit_delivery_application_scope_mismatch"}}, wantCode: "identity.organization_unit_delivery_application_scope_mismatch"},
-		{name: "response id mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{ID: "other", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 1}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
-		{name: "response version mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{ID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 2}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
+		{name: "response id mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "other", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 1}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
+		{name: "response version mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 2}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			execution := &businessActionExecution{

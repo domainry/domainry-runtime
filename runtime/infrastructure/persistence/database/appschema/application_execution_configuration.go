@@ -17,7 +17,7 @@ func (r ApplicationSchemaStore) ExecutionConfiguration(ctx context.Context, scop
 		return appschemamodel.ApplicationExecutionConfiguration{}, err
 	}
 	statement, args, err := query.NewSelectBuilder(r.store.SQLRenderer, "_project_model_state").
-		Columns("model_hash", "catalog_hash", "time_zone").Where(query.Equal("id", "current")).Build()
+		Columns("model_hash", "catalog_hash", "time_zone").Where(query.Equal("state_key", "current")).Build()
 	if err != nil {
 		return appschemamodel.ApplicationExecutionConfiguration{}, err
 	}

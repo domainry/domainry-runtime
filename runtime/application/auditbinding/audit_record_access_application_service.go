@@ -39,14 +39,14 @@ func (s *AuditRecordAccessApplicationService) ProjectAuditEvents(ctx context.Con
 			continue
 		}
 		if projected[index].Before != nil {
-			values, err := s.records.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{{ID: projected[index].RecordID, Data: projected[index].Before}}, "audit")
+			values, err := s.records.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{{RecordID: projected[index].RecordID, Data: projected[index].Before}}, "audit")
 			if err != nil {
 				return nil, err
 			}
 			projected[index].Before = values[0].Data
 		}
 		if projected[index].After != nil {
-			values, err := s.records.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{{ID: projected[index].RecordID, Data: projected[index].After}}, "audit")
+			values, err := s.records.ProjectRecordFields(ctx, principal, object, []recordmodel.Record{{RecordID: projected[index].RecordID, Data: projected[index].After}}, "audit")
 			if err != nil {
 				return nil, err
 			}

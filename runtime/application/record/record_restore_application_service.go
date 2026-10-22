@@ -165,17 +165,17 @@ func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objec
 		return recordRestorePlannedMutation{}, recordRestoreError(apperror.KindForbidden, "backend.record.owner_write_denied", nil)
 	}
 	if s.dependencies.ValidatePolicies != nil {
-		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, record.ID, "restore", principal); err != nil {
+		if err := s.dependencies.ValidatePolicies(ctx, object, beforeData, nextData, record.RecordID, "restore", principal); err != nil {
 			return recordRestorePlannedMutation{}, err
 		}
 	}
 	if s.dependencies.ValidateUnique != nil {
-		if err := s.dependencies.ValidateUnique(ctx, principal.WorkspaceID, objectKey, object, record.ID, nextData); err != nil {
+		if err := s.dependencies.ValidateUnique(ctx, principal.WorkspaceID, objectKey, object, record.RecordID, nextData); err != nil {
 			return recordRestorePlannedMutation{}, err
 		}
 	}
 	if s.dependencies.ValidateDuplicate != nil {
-		if err := s.dependencies.ValidateDuplicate(ctx, principal.WorkspaceID, object, record.ID, nextData); err != nil {
+		if err := s.dependencies.ValidateDuplicate(ctx, principal.WorkspaceID, object, record.RecordID, nextData); err != nil {
 			return recordRestorePlannedMutation{}, err
 		}
 	}
@@ -188,7 +188,7 @@ func (s *RecordRestoreApplicationService) planRestore(ctx context.Context, objec
 	}
 	commit := transactionmodel.RecordMutationCommit{Operation: "restore", Object: object, Record: record, Optimistic: transactionmodel.OptimisticPrecondition{ExpectedUpdatedAt: expectedUpdatedAt}, AuthorizationScope: authorizationScope}
 	if s.dependencies.BuildAudit != nil {
-		audit := s.dependencies.BuildAudit(ctx, "record_restored", objectKey, record.ID, principal, "Restored "+objectKey+" record", beforeData, record.Data, map[string]any{"soft_delete": true})
+		audit := s.dependencies.BuildAudit(ctx, "record_restored", objectKey, record.RecordID, principal, "Restored "+objectKey+" record", beforeData, record.Data, map[string]any{"soft_delete": true})
 		commit.Audit = &audit
 	}
 	if s.dependencies.UpdatedTriggers != nil && s.dependencies.PrepareWorkflow != nil {

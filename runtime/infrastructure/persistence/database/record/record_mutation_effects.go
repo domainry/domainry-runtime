@@ -29,7 +29,7 @@ import (
 )
 
 func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionExecutor, intent workflowmodel.WorkflowExecution) error {
-	if strings.TrimSpace(intent.ID) == "" {
+	if strings.TrimSpace(intent.ExecutionID) == "" {
 		return fmt.Errorf("mutation workflow intent requires deterministic id")
 	}
 	columns, values, err := workflowExecutionInsertValues(intent)
@@ -43,7 +43,7 @@ func (r RecordStore) insertWorkflowIntentTx(ctx context.Context, tx TransactionE
 		return buildErr
 	}
 	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return fmt.Errorf("insert mutation workflow intent: %w", database.MutationConstraintError(err, "workflow_execution", intent.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert mutation workflow intent: %w", database.MutationConstraintError(err, "workflow_execution", intent.ExecutionID, mutation.MutationConflictIdempotency))
 	}
 	if err := r.store.RegisterWorkerQueueScope(ctx, tx, database.WorkerScopeOwnerWorkflowContinuation, intent.WorkspaceID, intent.UpdatedAt); err != nil {
 		return fmt.Errorf("register mutation workflow continuation scope: %w", err)
@@ -64,18 +64,18 @@ func workflowExecutionInsertValues(execution workflowmodel.WorkflowExecution) ([
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode workflow result: %w", err)
 	}
-	columns := []string{"workspace_id", "id", "workflow_key", "name", "trigger", "status", "action_type", "action_json", "payload_json", "result_json", "process_id", "node_id", "object_key", "record_id", "actor_id", "run_as", "idempotency_key", "attempt", "max_attempts", "next_run_at", "last_error", "message", "created_at", "updated_at"}
-	values := []any{execution.WorkspaceID, execution.ID, execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(action), string(payload), string(result), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, timevalue.Millis(execution.NextRunAt), execution.LastError, execution.Message, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
+	columns := []string{"workspace_id", "execution_id", "workflow_key", "name", "trigger", "status", "action_type", "action_json", "payload_json", "result_json", "process_id", "node_id", "object_key", "record_id", "actor_id", "run_as", "idempotency_key", "attempt", "max_attempts", "next_run_at", "last_error", "message", "created_at", "updated_at"}
+	values := []any{execution.WorkspaceID, execution.ExecutionID, execution.WorkflowKey, execution.Name, execution.Trigger, execution.Status, execution.ActionType, string(action), string(payload), string(result), execution.ProcessID, execution.NodeID, execution.ObjectKey, execution.RecordID, execution.ActorID, execution.RunAs, execution.IdempotencyKey, execution.Attempt, execution.MaxAttempts, timevalue.Millis(execution.NextRunAt), execution.LastError, execution.Message, timevalue.Millis(execution.CreatedAt), timevalue.Millis(execution.UpdatedAt)}
 	return columns, values, nil
 }
 
 func (r RecordStore) insertAuditEventTx(ctx context.Context, tx TransactionExecutor, event auditmodel.AuditEvent) error {
-	if strings.TrimSpace(event.ID) == "" {
+	if strings.TrimSpace(event.AuditEventID) == "" {
 		return fmt.Errorf("mutation audit requires deterministic id")
 	}
 	err := r.store.AppendPreparedAuditWithin(ctx, runtimeauditmodule.NewTransaction(tx), event)
 	if err != nil {
-		return fmt.Errorf("insert mutation audit: %w", database.MutationConstraintError(err, "audit_event", event.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert mutation audit: %w", database.MutationConstraintError(err, "audit_event", event.AuditEventID, mutation.MutationConflictIdempotency))
 	}
 	return nil
 }
@@ -89,8 +89,12 @@ func (r RecordStore) insertPublicationHandoffTx(ctx context.Context, tx Transact
 	if message.DedupKey == "" {
 		return fmt.Errorf("mutation outbox requires stable dedup key")
 	}
-	if strings.TrimSpace(message.ID) == "" {
-		message.ID = publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
+	if strings.TrimSpace(message.MessageID) == "" {
+		generatedID, err := publicationhandoff.NewOutboxID()
+		if err != nil {
+			return fmt.Errorf("generate mutation outbox identity: %w", err)
+		}
+		message.MessageID = generatedID
 	}
 	if strings.TrimSpace(message.Status) == "" {
 		message.Status = "queued"
@@ -101,20 +105,20 @@ func (r RecordStore) insertPublicationHandoffTx(ctx context.Context, tx Transact
 	if err != nil {
 		return fmt.Errorf("encode mutation outbox payload: %w", err)
 	}
-	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("id", "publication_type", "intent_json", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "last_error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.ID, "integration.connector", "{}", message.OperationID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, "", message.AttemptCount, timevalue.Millis(message.NextAttemptAt), timevalue.Millis(message.LastAttemptAt), message.LeaseOwner, timevalue.Millis(message.LeaseExpiresAt), message.FencingToken, message.CreatedBy, timevalue.Millis(message.CreatedAt), timevalue.Millis(message.UpdatedAt)).Build()
+	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.SQLRenderer, "_publication_outbox", message.WorkspaceID).Columns("message_id", "publication_type", "intent_json", "operation_id", "connector_key", "connection_key", "operation", "status", "payload_json", "event_id", "request_ref", "dedup_key", "request_fingerprint", "response_ref", "error", "last_error", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "created_by", "created_at", "updated_at").Values(message.MessageID, "integration.connector", "{}", message.OperationID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.Status, string(payload), message.EventID, message.RequestRef, message.DedupKey, message.RequestFingerprint, message.ResponseRef, message.Error, "", message.AttemptCount, timevalue.Millis(message.NextAttemptAt), timevalue.Millis(message.LastAttemptAt), message.LeaseOwner, timevalue.Millis(message.LeaseExpiresAt), message.FencingToken, message.CreatedBy, timevalue.Millis(message.CreatedAt), timevalue.Millis(message.UpdatedAt)).Build()
 	if buildErr != nil {
 		return buildErr
 	}
 	if _, err := tx.ExecContext(ctx, queryValue, args...); err != nil {
-		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "runtime_publication_outbox", message.ID, mutation.MutationConflictIdempotency))
+		return fmt.Errorf("insert mutation outbox: %w", database.MutationConstraintError(err, "runtime_publication_outbox", message.MessageID, mutation.MutationConflictIdempotency))
 	}
 	if err := publicationhandoff.RegisterWorkerScope(ctx, r.store, tx, message.WorkspaceID, now); err != nil {
 		return err
 	}
 	if transactioncontract.ActiveTransaction(ctx) {
-		locator := workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID}
+		locator := workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.MessageID}
 		if err := transactioncontract.RegisterAfterCommit(ctx, transactioncontract.AfterCommitHook{
-			Name: "wake integration outbox " + message.ID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true,
+			Name: "wake integration outbox " + message.MessageID, Purpose: transactioncontract.AfterCommitDurableWorkWakeup, DurableRecovery: true,
 			Run: func(context.Context) error { r.store.WorkerWakeups().Publish(locator); return nil },
 		}); err != nil {
 			return err
@@ -147,8 +151,8 @@ func (r RecordStore) publishPublicationHandoffWakeup(workspaceID string, message
 		resolvedWorkspace = workspaceID
 	}
 	message.WorkspaceID = publicationhandoff.WorkspaceID(resolvedWorkspace)
-	if strings.TrimSpace(message.ID) == "" {
-		message.ID = publicationhandoff.OutboxDedupID(message.WorkspaceID, message.ConnectorKey, message.ConnectionKey, message.Operation, message.DedupKey)
+	if strings.TrimSpace(message.MessageID) == "" {
+		return
 	}
-	r.store.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.ID})
+	r.store.WorkerWakeups().Publish(workerplatform.DurableTaskLocator{QueueKind: "runtime_publication_outbox", WorkspaceID: message.WorkspaceID, TaskID: message.MessageID})
 }

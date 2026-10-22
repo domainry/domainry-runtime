@@ -213,7 +213,7 @@ func (e *projectEngine) ValidateTaskAssignee(ctx context.Context, userID string)
 	if !found || user.Status != identitysdk.UserStatusActive || user.AccountType != "human" {
 		return runtimeengine.TaskAssignee{}, runtimeengine.NewError(runtimeengine.ErrorBadRequest, "backend.task.assignee_inactive", nil, nil)
 	}
-	return runtimeengine.TaskAssignee{ID: user.ID, Name: user.Name}, nil
+	return runtimeengine.TaskAssignee{ID: user.UserID, Name: user.Name}, nil
 }
 
 func (e *projectEngine) ResolveTaskAssigneeNames(ctx context.Context, userIDs []string) (map[string]string, error) {
@@ -251,13 +251,13 @@ func (e *projectEngine) ListTaskAssignees(ctx context.Context, query runtimeengi
 	search := strings.ToLower(strings.TrimSpace(query.Search))
 	items := make([]runtimeengine.TaskAssignee, 0)
 	for _, user := range users {
-		if user.Status != identitysdk.UserStatusActive || user.AccountType != "human" || !taskAssigneeAllowed(principal, user.ID) {
+		if user.Status != identitysdk.UserStatusActive || user.AccountType != "human" || !taskAssigneeAllowed(principal, user.UserID) {
 			continue
 		}
 		if search != "" && !strings.Contains(strings.ToLower(user.Name), search) && !strings.Contains(strings.ToLower(user.Email), search) {
 			continue
 		}
-		items = append(items, runtimeengine.TaskAssignee{ID: user.ID, Name: user.Name})
+		items = append(items, runtimeengine.TaskAssignee{ID: user.UserID, Name: user.Name})
 	}
 	sort.Slice(items, func(left, right int) bool { return items[left].ID < items[right].ID })
 	start := sort.Search(len(items), func(index int) bool { return items[index].ID > strings.TrimSpace(query.AfterID) })
@@ -348,6 +348,9 @@ func (e *projectEngine) List(ctx context.Context, objectKey string, query runtim
 				selected[strings.TrimSpace(field)] = true
 			}
 			for _, sortRule := range sorts {
+				if sortRule.Field == recordmodel.IDField {
+					continue
+				}
 				if !selected[sortRule.Field] {
 					recordQuery.SelectFields = append(recordQuery.SelectFields, sortRule.Field)
 					selected[sortRule.Field] = true
@@ -581,7 +584,7 @@ func (e *projectEngine) DownloadRecordExport(ctx context.Context, jobID string) 
 		return runtimeengine.RecordExportArtifact{}, projectEngineError(serviceErr)
 	}
 	return runtimeengine.RecordExportArtifact{
-		ID: artifact.ID, Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256,
+		ID: artifact.ID, ArtifactID: artifact.ArtifactID, Filename: artifact.Filename, ContentType: artifact.ContentType, SHA256: artifact.SHA256,
 		Size: artifact.Size, ExpiresAt: artifact.ExpiresAt.Format("2006-01-02T15:04:05.999999999Z07:00"), Content: artifact.Content,
 	}, nil
 }
@@ -612,7 +615,7 @@ func projectEngineImportPreview(source recordmodel.RecordImportPreview) runtimee
 
 func projectEngineBatchJob(job recordmodel.RecordBatchJob) runtimeengine.RecordBatchJob {
 	return runtimeengine.RecordBatchJob{
-		ID: job.ID, WorkspaceID: job.WorkspaceID, Kind: job.Kind, ObjectKey: job.ObjectKey, Status: job.Status,
+		ID: job.ID, JobID: job.JobID, WorkspaceID: job.WorkspaceID, Kind: job.Kind, ObjectKey: job.ObjectKey, Status: job.Status,
 		Checkpoint: job.Checkpoint, Total: job.Total, ResultFilename: job.ResultFilename, ResultType: job.ResultType,
 		ResultArtifactID: job.ResultArtifactID, ErrorCode: job.ErrorCode, ActorID: job.ActorID, RoleKey: job.RoleKey,
 		CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt,
@@ -686,7 +689,7 @@ func (e *projectEngine) requestPrincipal(ctx context.Context) (principalmodel.Pr
 
 func projectEngineRecord(objectKey string, record recordmodel.Record) runtimeengine.Record {
 	return runtimeengine.Record{
-		ID: record.ID, ObjectKey: strings.TrimSpace(objectKey), Fields: cloneAnyMap(record.Data), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+		ID: record.RecordID, ObjectKey: strings.TrimSpace(objectKey), Fields: cloneAnyMap(record.Data), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 		OwnerUserID: record.OwnerUserID, OwnerUserName: record.OwnerUserName,
 	}
 }

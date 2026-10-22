@@ -76,7 +76,7 @@ func TestAuditExportUsesRuntimeSharedArtifactMetadataAndBlobContent(t *testing.T
 	if err := store.DB().QueryRowContext(ctx, `
 		SELECT owner, kind, storage_reference, content_sha256, size_bytes
 		FROM _artifacts
-		WHERE workspace_id = ? AND id = ?`, principal.WorkspaceID, prepared.ID,
+		WHERE workspace_id = ? AND artifact_id = ?`, principal.WorkspaceID, prepared.ArtifactID,
 	).Scan(&owner, &kind, &storageReference, &contentSHA256, &sizeBytes); err != nil {
 		t.Fatal(err)
 	}
@@ -89,20 +89,20 @@ func TestAuditExportUsesRuntimeSharedArtifactMetadataAndBlobContent(t *testing.T
 		FROM _artifact_bindings
 		WHERE workspace_id = ? AND artifact_id = ? AND owner = 'audit'
 		  AND kind = 'subject' AND resource_type = 'audit_export_requester'
-		  AND resource_id = ?`, principal.WorkspaceID, prepared.ID, principal.UserID,
+		  AND resource_id = ?`, principal.WorkspaceID, prepared.ArtifactID, principal.UserID,
 	).Scan(&requesterBindings); err != nil || requesterBindings != 1 {
 		t.Fatalf("requester bindings=%d err=%v", requesterBindings, err)
 	}
 	var operationID, operationStatus, operationResult string
 	if err := store.DB().QueryRowContext(ctx, `
-		SELECT id, status, result_json
+		SELECT operation_id, status, result_json
 		FROM _operations
 		WHERE workspace_id = ? AND owner = 'audit' AND kind = 'audit.export.prepare'
 		  AND idempotency_key = ?`, principal.WorkspaceID, "export-idempotency-1",
 	).Scan(&operationID, &operationStatus, &operationResult); err != nil {
 		t.Fatal(err)
 	}
-	if operationStatus != "succeeded" || !bytes.Contains([]byte(operationResult), []byte(prepared.ID)) {
+	if operationStatus != "succeeded" || !bytes.Contains([]byte(operationResult), []byte(prepared.ArtifactID)) {
 		t.Fatalf("prepare operation id=%q status=%q result=%s", operationID, operationStatus, operationResult)
 	}
 	var operationBindings int
@@ -111,7 +111,7 @@ func TestAuditExportUsesRuntimeSharedArtifactMetadataAndBlobContent(t *testing.T
 		FROM _artifact_bindings
 		WHERE workspace_id = ? AND artifact_id = ? AND owner = 'audit'
 		  AND kind = 'operation' AND resource_type = 'operation'
-		  AND resource_id = ?`, principal.WorkspaceID, prepared.ID, operationID,
+		  AND resource_id = ?`, principal.WorkspaceID, prepared.ArtifactID, operationID,
 	).Scan(&operationBindings); err != nil || operationBindings != 1 {
 		t.Fatalf("operation bindings=%d err=%v", operationBindings, err)
 	}

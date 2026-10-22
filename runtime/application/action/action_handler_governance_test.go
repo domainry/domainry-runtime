@@ -186,7 +186,7 @@ func (s *governedExecutionStoreProbe) TryBeginExecution(_ context.Context, reque
 		return actionmodel.ActionExecutionClaimResult{}, s.beginErr
 	}
 	execution := request.Execution
-	execution.ID = "execution-1"
+	execution.OperationID = "execution-1"
 	execution.LeaseOwner = request.LeaseOwner
 	execution.FencingToken = 1
 	execution.Result = s.result

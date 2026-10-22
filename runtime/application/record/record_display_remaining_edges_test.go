@@ -119,7 +119,7 @@ func TestRecordScopeAllowsActionRemainingBoundaries(t *testing.T) {
 		t.Fatalf("missing allowed=%v err=%v", allowed, err)
 	}
 	repository.found = true
-	repository.record = recordmodel.Record{ID: "record-1", Data: map[string]any{"name": "Acme"}}
+	repository.record = recordmodel.Record{RecordID: "record-1", Data: map[string]any{"name": "Acme"}}
 	if allowed, err := newService(repository).RecordScopeAllows(t.Context(), object.Key, "record-1", principal); err != nil || !allowed {
 		t.Fatalf("wrapper allowed=%v err=%v", allowed, err)
 	}
@@ -133,16 +133,16 @@ func TestRecordScopeAllowsActionRemainingBoundaries(t *testing.T) {
 	if _, err := service.GetRecordForUpdate(t.Context(), object.Key, "record-1", principalmodel.Principal{}); apperror.CodeOf(err) != "backend.workspace_scope_required" {
 		t.Fatalf("locking authorization err=%v", err)
 	}
-	if record, err := service.GetRecordForUpdate(t.Context(), object.Key, "record-1", principal); err != nil || record.ID != "record-1" {
+	if record, err := service.GetRecordForUpdate(t.Context(), object.Key, "record-1", principal); err != nil || record.RecordID != "record-1" {
 		t.Fatalf("locking record=%+v err=%v", record, err)
 	}
 	if page, err := service.ListRecordsForAction(t.Context(), object.Key, recordmodel.RecordListQuery{}, principal); err != nil || len(page.Items) != 1 {
 		t.Fatalf("action page=%+v err=%v", page, err)
 	}
-	if record, err := service.GetRecordForAction(t.Context(), object.Key, "record-1", principal); err != nil || record.ID != "record-1" {
+	if record, err := service.GetRecordForAction(t.Context(), object.Key, "record-1", principal); err != nil || record.RecordID != "record-1" {
 		t.Fatalf("action record=%+v err=%v", record, err)
 	}
-	if record, err := service.GetRecordForUpdateForAction(t.Context(), object.Key, "record-1", principal); err != nil || record.ID != "record-1" {
+	if record, err := service.GetRecordForUpdateForAction(t.Context(), object.Key, "record-1", principal); err != nil || record.RecordID != "record-1" {
 		t.Fatalf("action locking record=%+v err=%v", record, err)
 	}
 }
@@ -163,9 +163,9 @@ func TestRecordActionDisplayFacadesRejectUnknownPrincipal(t *testing.T) {
 func TestProjectRecordFieldsRemainingPolicyAndAuditEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}}
 	records := []recordmodel.Record{
-		{ID: "one", Data: map[string]any{"secret": "a"}},
-		{ID: "two", Data: map[string]any{"secret": "b"}},
-		{ID: "three", Data: map[string]any{}},
+		{RecordID: "one", Data: map[string]any{"secret": "a"}},
+		{RecordID: "two", Data: map[string]any{"secret": "b"}},
+		{RecordID: "three", Data: map[string]any{}},
 	}
 	service := &RecordApplicationService{}
 	projected, err := service.ProjectRecordFields(t.Context(), principalmodel.Principal{}, object, records, "read")

@@ -41,9 +41,11 @@ func (r *AuditStore) InsertAuditEvent(ctx context.Context, workspaceID string, e
 		return fmt.Errorf("audit event workspace %q does not match repository workspace %q", event.WorkspaceID, workspaceID)
 	}
 	if tx := persistence.ActionExecutionTransaction(ctx); tx != nil {
-		return r.binding.PreparedAppender().AppendPreparedWithin(ctx, transactionAdapter{tx}, event)
+		_, err := r.binding.PreparedAppender().AppendPreparedWithin(ctx, transactionAdapter{tx}, event)
+		return err
 	}
-	return r.binding.PreparedAppender().AppendPrepared(ctx, event)
+	_, err := r.binding.PreparedAppender().AppendPrepared(ctx, event)
+	return err
 }
 
 func (r *AuditStore) ListAuditEvents(ctx context.Context, workspaceID string, query auditmodel.AuditEventQuery) ([]auditmodel.AuditEvent, error) {

@@ -160,7 +160,7 @@ func (s *RecordReadDomainService) listRecords(ctx context.Context, objectKey str
 	}
 	if s.auditFieldDenials != nil {
 		for _, record := range visible {
-			if recordDenials := denials[record.ID]; len(recordDenials) > 0 {
+			if recordDenials := denials[record.RecordID]; len(recordDenials) > 0 {
 				s.auditFieldDenials(ctx, object, record, "read", recordDenials, principal)
 			}
 		}
@@ -194,7 +194,7 @@ func (s *RecordReadDomainService) getRecord(ctx context.Context, objectKey, reco
 	if err := s.policy.EnsureReportSnapshotAccess(object, "read", principal); err != nil {
 		return recordmodel.Record{}, err
 	}
-	query := s.policy.NormalizeListQuery(object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"id__in": []any{recordID}}, LockIntent: lockIntent}, principal)
+	query := s.policy.NormalizeListQuery(object, recordmodel.RecordListQuery{Page: 1, PageSize: 1, Filters: map[string]any{"record_id__in": []any{recordID}}, LockIntent: lockIntent}, principal)
 	page, err := s.repository.ListRecords(ctx, principal.WorkspaceID, object, query)
 	if err != nil {
 		return recordmodel.Record{}, recordInternalError("get record", err)

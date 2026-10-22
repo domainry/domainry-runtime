@@ -37,17 +37,17 @@ func (p *workflowTaskNotificationCommitProbe) CommitWorkflowTaskEscalationNotifi
 }
 
 func workflowNotificationCompiler(intent notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error) {
-	return notificationmodel.NotificationEvent{ID: intent.ID, ActionState: intent.ActionState}, nil
+	return notificationmodel.NotificationEvent{EventID: intent.SourceEventID, ActionState: intent.ActionState}, nil
 }
 
 func TestInsertApprovalTaskNotificationDependencyAndCompilerBoundaries(t *testing.T) {
 	store := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", WorkflowName: "Flow"}
-	pending := workflowmodel.WorkflowTask{ID: "pending", Status: "pending"}
+	pending := workflowmodel.WorkflowTask{TaskID: "pending", Status: "pending"}
 	if err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store}).ProcessEngine().insertApprovalTaskWithNotification(t.Context(), process, pending, ""); err != nil {
 		t.Fatal(err)
 	}
-	open := workflowmodel.WorkflowTask{ID: "open", Status: "open", AssigneeUserID: "user"}
+	open := workflowmodel.WorkflowTask{TaskID: "open", Status: "open", AssigneeUserID: "user"}
 	if err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store}).ProcessEngine().insertApprovalTaskWithNotification(t.Context(), process, open, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestInsertApprovalTaskNotificationDependencyAndCompilerBoundaries(t *testin
 
 func TestPrepareWorkflowDecisionNotificationsRemainingOutcomes(t *testing.T) {
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", WorkflowName: "Flow"}
-	task := workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "user", UpdatedAt: "now"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "user", UpdatedAt: "now"}
 	completed, err := compileWorkflowTaskLifecycleNotification(workflowNotificationCompiler, process, task, "completed", "completed", "", "now")
 	if err != nil || completed.ActionState != notificationmodel.NotificationActionCompleted {
 		t.Fatalf("completed=%+v err=%v", completed, err)
@@ -100,7 +100,7 @@ func TestPrepareWorkflowDecisionNotificationsRemainingOutcomes(t *testing.T) {
 		t.Fatal(err)
 	}
 	records.dependencies.CompileNotification = workflowNotificationCompiler
-	commit = &transactionmodel.WorkflowDecisionCommit{DecidedTask: task, UpdateTasks: []workflowmodel.WorkflowTask{{ID: "open", Status: "open"}, {ID: "ignored", Status: "pending"}}, InsertTasks: []workflowmodel.WorkflowTask{{ID: "cancelled", Status: "cancelled"}}}
+	commit = &transactionmodel.WorkflowDecisionCommit{DecidedTask: task, UpdateTasks: []workflowmodel.WorkflowTask{{TaskID: "open", Status: "open"}, {TaskID: "ignored", Status: "pending"}}, InsertTasks: []workflowmodel.WorkflowTask{{TaskID: "cancelled", Status: "cancelled"}}}
 	if err := prepareWorkflowDecisionNotifications(records, commit, process, "now"); err != nil || len(commit.NotificationEvents) != 3 {
 		t.Fatalf("events=%+v err=%v", commit.NotificationEvents, err)
 	}
@@ -113,7 +113,7 @@ func TestPrepareWorkflowDecisionNotificationsRemainingOutcomes(t *testing.T) {
 			}
 			return workflowNotificationCompiler(intent)
 		}
-		candidate := &transactionmodel.WorkflowDecisionCommit{DecidedTask: task, UpdateTasks: []workflowmodel.WorkflowTask{{ID: "open", Status: "open"}}, InsertTasks: []workflowmodel.WorkflowTask{{ID: "cancelled", Status: "cancelled"}}}
+		candidate := &transactionmodel.WorkflowDecisionCommit{DecidedTask: task, UpdateTasks: []workflowmodel.WorkflowTask{{TaskID: "open", Status: "open"}}, InsertTasks: []workflowmodel.WorkflowTask{{TaskID: "cancelled", Status: "cancelled"}}}
 		if err := prepareWorkflowDecisionNotifications(records, candidate, process, "now"); !errors.Is(err, compileErr) {
 			t.Fatalf("failAt=%d err=%v", failAt, err)
 		}
@@ -123,7 +123,7 @@ func TestPrepareWorkflowDecisionNotificationsRemainingOutcomes(t *testing.T) {
 func TestOpenSequentialApprovalTaskNotificationBoundaries(t *testing.T) {
 	store := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace", WorkflowName: "Flow"}
-	task := workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "user"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "user"}
 	if err := NewWorkflowProcessRuntime(WorkflowDependencies{Processes: store}).ProcessEngine().openSequentialApprovalTask(t.Context(), process, task); err != nil {
 		t.Fatal(err)
 	}
@@ -159,9 +159,9 @@ func TestWorkflowDeadlineNotificationTransactionBoundaries(t *testing.T) {
 	store := &workflowProcessStoreEdgeStub{workflowExecutionProcessStub: workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}}
 	worker := &workflowDeadlineWorkerEdgeStub{}
 	committer := &workflowTaskNotificationCommitProbe{}
-	process := workflowmodel.WorkflowProcessInstance{ID: "process", WorkspaceID: "workspace", WorkflowName: "Flow"}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", WorkflowName: "Flow"}
 	node := definitionmodel.WorkflowGraphNode{ID: "node"}
-	task := workflowmodel.WorkflowTask{ID: "task", AssigneeUserID: "new", UpdatedAt: "now"}
+	task := workflowmodel.WorkflowTask{TaskID: "task", AssigneeUserID: "new", UpdatedAt: "now"}
 	actor := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "actor"}}
 	newService := func(compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error), commit WorkflowTaskNotificationCommitter) *WorkflowApplicationService {
 		service := NewWorkflowApplicationService(WorkflowDependencies{Processes: store, CompileNotification: compiler, TaskNotificationCommit: commit, Worker: workerplatform.NewDependencies("workflow-notification-edges")})

@@ -2,7 +2,9 @@ package workflow
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,7 +84,7 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 			}
 			afterID := ""
 			for {
-				result, err := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 200, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}}, scanPrincipal)
+				result, err := s.recordReader.ListWorkflowRecords(ctx, scanPrincipal.WorkspaceID, object, recordmodel.RecordListQuery{Page: 1, PageSize: 200, SkipTotal: true, AfterID: afterID, Sort: []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}}, scanPrincipal)
 				if err != nil {
 					return processed, internalError("list records for scheduled workflow", err)
 				}
@@ -95,7 +97,7 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 					}
 					payload := workflowPayloadForRecord(objectKey, record)
 					payload["scheduled_at"] = scheduledFor.UTC().Format(time.RFC3339Nano)
-					key := scheduledWorkflowExecutionKey(workflow, payload, callbackIdempotencyKey, record.ID)
+					key := scheduledWorkflowExecutionKey(workflow, payload, callbackIdempotencyKey, record.RecordID)
 					execution, err := s.executeWorkflowAttemptWithIdempotencyKey(ctx, workflow, payload, principal, "scheduled:"+workflow.Key, key, 1, false)
 					if err != nil {
 						if code := apperror.CodeOf(err); code == idempotency.ErrorCodeKeyReused || code == idempotency.ErrorCodeInProgress {
@@ -110,7 +112,14 @@ func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget
 				if !result.HasNext {
 					break
 				}
-				afterID = result.Items[len(result.Items)-1].ID
+				if len(result.Items) == 0 {
+					return processed, internalError("list records for scheduled workflow", fmt.Errorf("record page returned has_next without records"))
+				}
+				last := result.Items[len(result.Items)-1]
+				if last.ID < 1 {
+					return processed, internalError("list records for scheduled workflow", fmt.Errorf("record page returned an invalid physical id"))
+				}
+				afterID = strconv.FormatInt(last.ID, 10)
 			}
 		}
 	}
@@ -186,7 +195,7 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 	if !ok {
 		return workflowmodel.WorkflowRunResult{}, notFound("backend.workflow.execution_not_found")
 	}
-	commandKey := workflowCommandKey("execution.retry", previous.ID, callerKey, map[string]any{"attempt": previous.Attempt + 1})
+	commandKey := workflowCommandKey("execution.retry", previous.ExecutionID, callerKey, map[string]any{"attempt": previous.Attempt + 1})
 	if previous.Status == "skipped" {
 		storedKey := workflowStringValue(previous.Result[workflowCommandResultField("execution.retry")])
 		if storedKey == "" || storedKey == commandKey {
@@ -228,7 +237,7 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 		return workflowmodel.WorkflowRunResult{}, badRequest("backend.workflow.max_attempts_reached")
 	}
 	payload := s.workflowRetryPayload(ctx, principal.WorkspaceID, previous, principal)
-	execution, err := s.executeWorkflowAttempt(ctx, workflow, payload, principal, "retry:"+previous.ID, nextAttempt, true)
+	execution, err := s.executeWorkflowAttempt(ctx, workflow, payload, principal, "retry:"+previous.ExecutionID, nextAttempt, true)
 	if err != nil {
 		return workflowmodel.WorkflowRunResult{}, err
 	}
@@ -238,7 +247,7 @@ func (s *WorkflowApplicationService) RetryWorkflowExecutionWithKey(ctx context.C
 	previous.Message = "workflow.message.retryContinued"
 	previous.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	previous.Result = workflowpolicy.WorkflowCloneMap(previous.Result)
-	previous.Result["manual_retry_execution_id"] = execution.ID
+	previous.Result["manual_retry_execution_id"] = execution.ExecutionID
 	previous.Result["manual_retry_requested_by"] = principal.UserID
 	previous.Result[workflowCommandResultField("execution.retry")] = commandKey
 	if err := s.workerRepo.UpdateExecution(ctx, principal.WorkspaceID, previous); err != nil {
@@ -296,7 +305,7 @@ func (s *WorkflowApplicationService) ResolveWorkflowExecution(ctx context.Contex
 	s.auditMetadata(ctx, "workflow_dead_letter_resolved", execution.ObjectKey, execution.RecordID, principal, execution.Message, nil, nil, map[string]any{
 		"workflow_key":       execution.WorkflowKey,
 		"workflow_name":      execution.Name,
-		"execution_id":       execution.ID,
+		"execution_id":       execution.ExecutionID,
 		"previous_status":    "dead_letter",
 		"status":             execution.Status,
 		"trigger":            execution.Trigger,

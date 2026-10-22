@@ -37,7 +37,7 @@ func (*idempotencyOperationsProbe) MigrationStatus(context.Context) (deploymentm
 }
 func (p *idempotencyOperationsProbe) ListIdempotencyReceipts(context.Context, string, string, int) ([]idempotency.ReceiptSummary, error) {
 	p.calls++
-	return []idempotency.ReceiptSummary{{Owner: "record", ID: "receipt-1"}}, nil
+	return []idempotency.ReceiptSummary{{Owner: "record", OperationID: "receipt-1"}}, nil
 }
 func (p *idempotencyOperationsProbe) RetryIdempotencyReceipt(context.Context, string, string, string) (bool, error) {
 	p.calls++

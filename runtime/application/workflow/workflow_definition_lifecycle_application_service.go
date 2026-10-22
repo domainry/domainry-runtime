@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -41,8 +42,16 @@ func (s *WorkflowApplicationService) InitializePublishedWorkflowDefinitions(ctx 
 				return fmt.Errorf("initialize workflow %s: validation failed: %#v", workflow.Key, report.Issues)
 			}
 			now := time.Now().UTC().Format(time.RFC3339Nano)
-			definition = workflowmodel.WorkflowDefinition{ID: workflowProjectionID(ctx, "workflow_definition"), Key: workflow.Key, Name: workflow.Name, Enabled: workflow.Enabled, CreatedAt: now, UpdatedAt: now}
-			version := workflowmodel.WorkflowDefinitionVersion{ID: workflowProjectionID(ctx, "workflow_version"), DefinitionID: definition.ID, Version: 1, Status: workflowmodel.WorkflowVersionDraft, Revision: 1, Workflow: cloneWorkflowSchema(workflow), ValidationReport: report, CreatedBy: "system", CreatedAt: now, UpdatedAt: now}
+			definitionID, err := entityid.New("wfdef")
+			if err != nil {
+				return fmt.Errorf("generate workflow definition ID: %w", err)
+			}
+			versionID, err := entityid.New("wfver")
+			if err != nil {
+				return fmt.Errorf("generate workflow version ID: %w", err)
+			}
+			definition = workflowmodel.WorkflowDefinition{ID: definitionID, Key: workflow.Key, Name: workflow.Name, Enabled: workflow.Enabled, CreatedAt: now, UpdatedAt: now}
+			version := workflowmodel.WorkflowDefinitionVersion{ID: versionID, DefinitionID: definition.ID, Version: 1, Status: workflowmodel.WorkflowVersionDraft, Revision: 1, Workflow: cloneWorkflowSchema(workflow), ValidationReport: report, CreatedBy: "system", CreatedAt: now, UpdatedAt: now}
 			definition.CurrentDraftVersionID = version.ID
 			if err := s.definitionRepo.InsertDefinition(ctx, definition, version); err != nil {
 				return fmt.Errorf("seed workflow projection %s: %w", workflow.Key, err)
@@ -158,8 +167,12 @@ func (s *WorkflowApplicationService) synchronizePublishedWorkflowDefinition(
 				nextVersion = existing.Version + 1
 			}
 		}
+		versionID, err := entityid.New("wfver")
+		if err != nil {
+			return fmt.Errorf("generate workflow version ID: %w", err)
+		}
 		version = workflowmodel.WorkflowDefinitionVersion{
-			ID:               workflowProjectionID(ctx, "workflow_version"),
+			ID:               versionID,
 			DefinitionID:     definition.ID,
 			Version:          nextVersion,
 			Status:           workflowmodel.WorkflowVersionDraft,
@@ -221,9 +234,4 @@ func cloneWorkflowSchema(workflow definitionmodel.WorkflowSchema) definitionmode
 	var cloned definitionmodel.WorkflowSchema
 	_ = json.Unmarshal(payload, &cloned)
 	return cloned
-}
-
-func workflowProjectionID(ctx context.Context, prefix string) string {
-	_ = ctx
-	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
 }

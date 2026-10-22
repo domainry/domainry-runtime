@@ -70,17 +70,17 @@ func (s *WorkflowApplicationService) ReadSharedAgentWorkflowReceipt(ctx context.
 		return AgentWorkflowReceipt{}, false, err
 	}
 	process := detail.Process
-	if process.ID != execution.ProcessID || process.WorkflowKey != workflow.Key || process.WorkspaceID != p.WorkspaceID {
+	if process.ProcessID != execution.ProcessID || process.WorkflowKey != workflow.Key || process.WorkspaceID != p.WorkspaceID {
 		return AgentWorkflowReceipt{}, false, forbidden("backend.workflow.receipt_read_denied")
 	}
 	key := workflowcontract.ReceiptReadActionKey(workflow.Key)
 	decision, err := evaluator.Evaluate(*p.AccessBundle, identitysdk.AccessRequest{ObjectKey: strings.TrimSuffix(key, ".read"), Action: "read"}, identitysdk.ResourceFacts{
 		"owner_user_id": execution.ActorID, "workspace_id": execution.WorkspaceID,
-		"workflow_key": workflow.Key, "process_id": process.ID,
+		"workflow_key": workflow.Key, "process_id": process.ProcessID,
 		"object_key": process.ObjectKey, "record_id": process.RecordID,
 	}, time.Now().UTC())
 	if err != nil || !decision.Allowed {
 		return AgentWorkflowReceipt{}, false, forbidden("backend.workflow.receipt_read_denied")
 	}
-	return AgentWorkflowReceipt{ExecutionID: execution.ID, ProcessID: process.ID, WorkflowKey: workflow.Key}, true, nil
+	return AgentWorkflowReceipt{ExecutionID: execution.ExecutionID, ProcessID: process.ProcessID, WorkflowKey: workflow.Key}, true, nil
 }

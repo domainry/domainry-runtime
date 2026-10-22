@@ -46,7 +46,7 @@ func prepareWorkflowWithdrawal(process workflowmodel.WorkflowProcessInstance, ca
 		return transactionmodel.WorkflowWithdrawalCommit{}, conflict("backend.workflow.withdrawal_revision_required")
 	}
 	commit := transactionmodel.WorkflowWithdrawalCommit{ExpectedUpdatedAt: process.UpdatedAt, ExpectedStatus: process.Status, ActorID: principal.UserID}
-	commit.CommandID = workflowCommandKey("process.cancel", process.ID, callerKey, map[string]any{"command": "cancel"})
+	commit.CommandID = workflowCommandKey("process.cancel", process.ProcessID, callerKey, map[string]any{"command": "cancel"})
 	process.Result = cloneWorkflowWithdrawalMap(process.Result)
 	process.Variables = cloneWorkflowWithdrawalMap(process.Variables)
 	now := time.Now().UTC().Format(time.RFC3339Nano)

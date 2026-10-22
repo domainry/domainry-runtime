@@ -66,7 +66,7 @@ func recordDeleteEdgeDependencies(repository recordrepository.RecordRepository, 
 
 func TestDeleteIdempotentVersionConflictCompletesAndReplaysTerminalReceipt(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Acme"}}}
+	repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", UpdatedAt: "current-version", Data: map[string]any{"name": "Acme"}}}
 	executions := &createExecutionProbe{}
 	dependencies := recordDeleteEdgeDependencies(repository, object)
 	dependencies.ExecutionRuntime = recordruntime.NewRecordMutationExecutionRuntime(executions)
@@ -89,7 +89,7 @@ func TestDeletePreconditionFailuresStopBeforeCommit(t *testing.T) {
 	for _, stage := range []string{"cancelled", "object", "repository", "not found", "outside scope", "before", "cancelled after before"} {
 		t.Run(stage, func(t *testing.T) {
 			failure := errors.New(stage + " failed")
-			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}
+			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}
 			dependencies := recordDeleteEdgeDependencies(repository, object)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -146,7 +146,7 @@ func TestSoftDeleteFailureEdges(t *testing.T) {
 	for _, stage := range []string{"already deleted", "write scope", "policy", "workflow", "commit", "cancelled after commit"} {
 		t.Run(stage, func(t *testing.T) {
 			failure := errors.New(stage + " failed")
-			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active", "deleted_at": "", "deleted_by": "", "version": "invalid"}}}
+			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active", "deleted_at": "", "deleted_by": "", "version": "invalid"}}}
 			dependencies := recordDeleteEdgeDependencies(repository, object)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -198,7 +198,7 @@ func TestHardDeletePolicyAndCommitFailures(t *testing.T) {
 	for _, stage := range []string{"policy", "commit"} {
 		t.Run(stage, func(t *testing.T) {
 			failure := errors.New(stage + " failed")
-			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"name": "Acme"}}}
+			repository := &deleteEdgeRepository{found: true, record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"name": "Acme"}}}
 			dependencies := recordDeleteEdgeDependencies(repository, object)
 			if stage == "policy" {
 				dependencies.ValidatePolicies = func(context.Context, definitionmodel.ObjectSchema, map[string]any, map[string]any, string, string, principalmodel.Principal) error {

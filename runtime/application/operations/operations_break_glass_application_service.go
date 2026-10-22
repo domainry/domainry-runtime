@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	auditcontract "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	operationscontract "github.com/domainry/domainry-runtime/runtime/domain/operations/contract"
@@ -68,21 +67,28 @@ func (s *OperationsApplicationService) EnableBreakGlass(ctx context.Context, com
 		if json.Unmarshal(resultJSON, &grant) != nil {
 			return OperationsBreakGlassResult{}, apperror.New(apperror.KindInternal, "backend.operations.break_glass_receipt_invalid", nil, nil)
 		}
-		grant, err = s.currentBreakGlassGrant(ctx, grant.ID, principal)
+		grant, err = s.currentBreakGlassGrant(ctx, grant.BreakGlassGrantID, principal)
 		if err != nil {
 			return OperationsBreakGlassResult{}, err
 		}
 		return OperationsBreakGlassResult{Grant: grant, Receipt: receipt}, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "enable time-limited break-glass access")
-	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsBreakGlassResult{}, err
 	}
 	now := s.now().UTC()
-	auditContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
-	auditKey := BreakGlassAuditIdempotencyKey("runtime_break_glass_enabled", receipt.Command.ID)
-	grant := operationsmodel.OperationsBreakGlassGrant{ID: "break_glass_" + strings.TrimSpace(s.newID()), WorkspaceID: principal.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ActorID: principal.UserID, ApproverIDs: append([]string(nil), command.ApproverIDs...), Reason: command.Reason, IncidentRef: command.IncidentRef, AlertTarget: command.AlertTarget, AuditEventID: auditcontract.IdempotentEventID(principal.WorkspaceID, auditKey), ExpiresAt: now.Add(time.Duration(command.DurationSeconds) * time.Second), Revision: 1, CreatedAt: now, UpdatedAt: now}
+	auditContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.OperationID)
+	grantID, generationErr := s.nextEntityID("brkgrant")
+	if generationErr != nil {
+		return s.failBreakGlass(ctx, receipt, scope, "backend.operations.id_generation_failed", generationErr)
+	}
+	auditEventID, generationErr := s.nextEntityID("audevt")
+	if generationErr != nil {
+		return s.failBreakGlass(ctx, receipt, scope, "backend.operations.id_generation_failed", generationErr)
+	}
+	grant := operationsmodel.OperationsBreakGlassGrant{BreakGlassGrantID: grantID, WorkspaceID: principal.WorkspaceID, State: operationsmodel.OperationsBreakGlassActive, ActorID: principal.UserID, ApproverIDs: append([]string(nil), command.ApproverIDs...), Reason: command.Reason, IncidentRef: command.IncidentRef, AlertTarget: command.AlertTarget, AuditEventID: auditEventID, ExpiresAt: now.Add(time.Duration(command.DurationSeconds) * time.Second), Revision: 1, CreatedAt: now, UpdatedAt: now}
 	if validationErr := operationspolicy.OperationsValidateBreakGlass(operationsmodel.BreakGlassGrant{ExpiresAt: grant.ExpiresAt, ApproverIDs: grant.ApproverIDs, AuditEventID: grant.AuditEventID}, grant.ActorID, now); validationErr != nil {
 		return s.failBreakGlass(ctx, receipt, scope, "backend.operations.break_glass_approval_invalid", validationErr)
 	}
@@ -127,7 +133,7 @@ func (s *OperationsApplicationService) DisableBreakGlass(ctx context.Context, gr
 		return OperationsBreakGlassResult{Grant: grant, Receipt: receipt}, nil
 	}
 	scope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "revoke break-glass access")
-	receipt, err = s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, scope)
+	receipt, err = s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, scope)
 	if err != nil {
 		return OperationsBreakGlassResult{}, err
 	}
@@ -139,8 +145,11 @@ func (s *OperationsApplicationService) DisableBreakGlass(ctx context.Context, gr
 		return s.finishBreakGlass(ctx, receipt, scope, grant, "break-glass is already revoked; verify downstream access has ended")
 	}
 	now := s.now().UTC()
-	auditContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
-	grant.AuditEventID = auditcontract.IdempotentEventID(principal.WorkspaceID, BreakGlassAuditIdempotencyKey("runtime_break_glass_disabled", receipt.Command.ID))
+	auditContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.OperationID)
+	grant.AuditEventID, err = s.nextEntityID("audevt")
+	if err != nil {
+		return s.failBreakGlass(ctx, receipt, scope, "backend.operations.id_generation_failed", err)
+	}
 	grant.State, grant.Revision, grant.UpdatedAt, grant.RevokedAt, grant.RevokedBy, grant.RevocationNote = operationsmodel.OperationsBreakGlassRevoked, command.ExpectedRevision+1, now, &now, principal.UserID, command.Reason
 	changed, revokeErr := s.breakGlass.RevokeOperationsBreakGlass(ctx, grant, command.ExpectedRevision)
 	if revokeErr != nil || !changed {
@@ -189,7 +198,7 @@ func (s *OperationsApplicationService) currentBreakGlassGrant(ctx context.Contex
 func (s *OperationsApplicationService) finishBreakGlass(ctx context.Context, receipt operationsmodel.OperationsReceipt, scope principalmodel.SystemScope, grant operationsmodel.OperationsBreakGlassGrant, next string) (OperationsBreakGlassResult, error) {
 	encoded, _ := json.Marshal(grant)
 	receipt.Command.Status, receipt.Result, receipt.NextAction = operationsmodel.OperationsStatusSucceeded, encoded, next
-	receipt.RelatedIDs, receipt.Correlation, receipt.Evidence = []string{grant.ID, grant.IncidentRef, grant.AuditEventID}, grant.IncidentRef, []string{grant.AuditEventID, grant.AlertTarget}
+	receipt.RelatedIDs, receipt.Correlation, receipt.Evidence = []string{grant.BreakGlassGrantID, grant.IncidentRef, grant.AuditEventID}, grant.IncidentRef, []string{grant.AuditEventID, grant.AlertTarget}
 	finished, err := s.Finish(ctx, receipt, scope)
 	return OperationsBreakGlassResult{Grant: grant, Receipt: finished}, err
 }

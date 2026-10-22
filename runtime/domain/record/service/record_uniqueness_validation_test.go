@@ -46,14 +46,14 @@ func TestUniquenessValidatorRejectsUniqueFieldAndComposite(t *testing.T) {
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.field", map[string]string{"field": "email"})
 
 	repository.uniqueExists = false
-	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-2"}}}
+	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-2"}}}
 	err = validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"})
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.unique.combination", map[string]string{"validation": "customer_country"})
 	if !reflect.DeepEqual(repository.lastFilters, map[string]any{"email": "ada@example.com", "country": "CN"}) {
 		t.Fatalf("composite filters = %#v", repository.lastFilters)
 	}
 
-	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-1"}}}
+	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "customer-1"}}}
 	if err := validator.ValidateUnique(t.Context(), "workspace-primary", object.Key, object, "customer-1", map[string]any{"email": "ada@example.com", "country": "CN"}); err != nil {
 		t.Fatalf("current record rejected by composite validation: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestUniquenessValidatorChecksEveryConditionalStateAndAllowsInactiveHistory(
 		t.Fatalf("inactive history reached uniqueness query: %#v", repository.lastFilters)
 	}
 
-	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "existing"}}}
+	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "existing"}}}
 	active := map[string]any{"class_id": "class-1", "member_id": "member-1", "status": "booked"}
 	err := validator.ValidateUnique(t.Context(), "workspace", object.Key, object, "candidate", active)
 	assertRecordAppError(t, err, apperror.KindBadRequest, "gym.duplicate_active_booking", map[string]string{"validation": "one_active_booking"})

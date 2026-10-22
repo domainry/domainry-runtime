@@ -91,12 +91,31 @@ func (r WorkflowWorkerStore) GetExecution(ctx context.Context, workspaceID, exec
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, err
 	}
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).Where(query.Equal("id", executionID)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).Columns(workflowExecutionColumns()...).Where(query.Equal("execution_id", executionID)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowExecution{}, false, fmt.Errorf("build workflow execution lookup: %w", err)
 	}
 	row := r.database().QueryRowContext(ctx, queryValue, args...)
 	execution, err := scanWorkflowExecution(row)
+	if err == sql.ErrNoRows {
+		return workflowmodel.WorkflowExecution{}, false, nil
+	}
+	return execution, err == nil, err
+}
+
+func (r WorkflowWorkerStore) GetExecutionByProcessID(ctx context.Context, workspaceID, processID string) (workflowmodel.WorkflowExecution, bool, error) {
+	workspaceID, err := requireWorkflowWorkspaceID(workspaceID)
+	if err != nil {
+		return workflowmodel.WorkflowExecution{}, false, err
+	}
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_executions", workspaceID).
+		Columns(workflowExecutionColumns()...).
+		Where(query.Equal("process_id", strings.TrimSpace(processID))).
+		OrderBy(query.Descending("id")).Limit(1).Build()
+	if err != nil {
+		return workflowmodel.WorkflowExecution{}, false, fmt.Errorf("build workflow process execution lookup: %w", err)
+	}
+	execution, err := scanWorkflowExecution(r.database().QueryRowContext(ctx, queryValue, args...))
 	if err == sql.ErrNoRows {
 		return workflowmodel.WorkflowExecution{}, false, nil
 	}
@@ -165,7 +184,7 @@ func (r WorkflowWorkerStore) UpdateExecutionWhere(ctx context.Context, workspace
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	predicates := []query.Predicate{query.Equal("id", execution.ID), r.store.SubjectEvidenceWriteAllowed(workspaceID, "_workflow_executions", execution.ID)}
+	predicates := []query.Predicate{query.Equal("execution_id", execution.ExecutionID), r.store.SubjectEvidenceWriteAllowed(workspaceID, "_workflow_executions", execution.ExecutionID)}
 	if execution.Status != "cancelled" {
 		predicates = append(predicates, query.NotEqual("status", "cancelled"))
 	}
@@ -207,7 +226,7 @@ func (r WorkflowWorkerStore) ListTasks(ctx context.Context, workspaceID, process
 			predicates = append(predicates, query.Equal(filter.column, strings.TrimSpace(filter.value)))
 		}
 	}
-	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskColumns()...).OrderBy(query.Descending("created_at")).Limit(limit)
+	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).Columns(workflowTaskSelectColumns()...).OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
 		builder.Where(query.And(predicates...))
 	}
@@ -237,7 +256,7 @@ func (r WorkflowWorkerStore) GetProcess(ctx context.Context, workspaceID, proces
 		return workflowmodel.WorkflowProcessInstance{}, false, err
 	}
 	columns := workflowProcessColumns
-	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Where(query.Equal("id", processID)).Build()
+	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns(columns...).Where(query.Equal("process_id", processID)).Build()
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, false, fmt.Errorf("build workflow process lookup: %w", err)
 	}
@@ -257,7 +276,7 @@ func (r WorkflowWorkerStore) ListProcessEvents(ctx context.Context, workspaceID,
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	columns := workflowEventColumns
+	columns := workflowEventSelectColumns()
 	queryValue, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_events", workspaceID).Columns(columns...).Where(query.Equal("process_id", processID)).OrderBy(query.Ascending("created_at")).Limit(limit).Build()
 	if err != nil {
 		return nil, fmt.Errorf("build workflow process event list: %w", err)
@@ -273,7 +292,7 @@ func (r WorkflowWorkerStore) ListProcessEvents(ctx context.Context, workspaceID,
 		var metadata string
 		var nodeID, taskID sql.NullString
 		var createdAt int64
-		if err := rows.Scan(&event.WorkspaceID, &event.ID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
+		if err := rows.Scan(&event.ID, &event.WorkspaceID, &event.EventID, &event.ProcessID, &nodeID, &taskID, &event.Event, &event.ActorID, &event.Summary, &metadata, &createdAt); err != nil {
 			return nil, err
 		}
 		event.NodeID = nodeID.String
@@ -293,7 +312,7 @@ func (r WorkflowWorkerStore) UpdateTask(ctx context.Context, workspaceID string,
 	evidence, _ := database.MarshalTimeJSON(task.AssigneeEvidence)
 	columns := []string{"assignee_user_id", "assignee_name", "assignee_role_key", "assignee_resolver_key", "assignee_evidence_json", "status", "decision", "comment", "due_at", "completed_by", "completed_at", "updated_at"}
 	values := []any{task.AssigneeUserID, task.AssigneeName, task.AssigneeRoleKey, task.AssigneeResolverKey, string(evidence), task.Status, task.Decision, task.Comment, timevalue.Millis(task.DueAt), task.CompletedBy, timevalue.Millis(task.CompletedAt), timevalue.Millis(task.UpdatedAt)}
-	return r.updateRow(ctx, "_workflow_tasks", workspaceID, task.ID, columns, values)
+	return r.updateRow(ctx, "_workflow_tasks", workspaceID, task.TaskID, columns, values)
 }
 
 func (r WorkflowWorkerStore) InsertProcessEvent(ctx context.Context, workspaceID string, event workflowmodel.WorkflowProcessEvent) error {
@@ -304,7 +323,7 @@ func (r WorkflowWorkerStore) InsertProcessEvent(ctx context.Context, workspaceID
 	event.WorkspaceID = workspaceID
 	metadata, _ := database.MarshalTimeJSON(database.NonNilMap(event.Metadata))
 	columns := workflowEventColumns
-	values := []any{event.WorkspaceID, event.ID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
+	values := []any{event.WorkspaceID, event.EventID, event.ProcessID, event.NodeID, event.TaskID, event.Event, event.ActorID, event.Summary, string(metadata), timevalue.Millis(event.CreatedAt)}
 	_, scopedColumns, scopedValues, err := workflowScopedInsert(columns, values)
 	if err != nil {
 		return err
@@ -330,7 +349,7 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 	for i, column := range columns {
 		builder.Set(column, values[i])
 	}
-	predicates := []query.Predicate{query.Equal("id", id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
+	predicates := []query.Predicate{query.Equal(workflowEntityIDColumn(table), id), r.store.SubjectEvidenceWriteAllowed(workspaceID, table, id)}
 	for i, column := range columns {
 		if column == "status" && values[i] != "cancelled" {
 			predicates = append(predicates, query.NotEqual("status", "cancelled"))
@@ -358,14 +377,14 @@ func (r WorkflowWorkerStore) updateRow(ctx context.Context, table, workspaceID, 
 // process-then-execution lock order as withdrawal. Missing process IDs remain
 // valid for execution intents that have not created a process yet.
 func (r WorkflowWorkerStore) guardExecutionProcessTx(ctx context.Context, tx *sql.Tx, workspaceID, processID string) error {
-	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).SetExpression("updated_at", query.Column("updated_at")).Where(query.Equal("id", processID)).Build()
+	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).SetExpression("updated_at", query.Column("updated_at")).Where(query.Equal("process_id", processID)).Build()
 	if err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, statement, args...); err != nil {
 		return err
 	}
-	statement, args, err = query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns("status").Where(query.Equal("id", processID)).Build()
+	statement, args, err = query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Columns("status").Where(query.Equal("process_id", processID)).Build()
 	if err != nil {
 		return err
 	}

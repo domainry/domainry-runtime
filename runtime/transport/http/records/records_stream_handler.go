@@ -96,7 +96,7 @@ func (h *RecordsHandler) businessRecordSyncState(r *http.Request) (businessRecor
 		UpdatedAt string `json:"updated_at"`
 	}{}
 	if len(events) > 0 {
-		identity.ID, identity.UpdatedAt = events[0].ID, events[0].CreatedAt
+		identity.ID, identity.UpdatedAt = events[0].AuditEventID, events[0].CreatedAt
 	}
 	raw, _ := json.Marshal(identity)
 	return businessRecordSync{

@@ -17,7 +17,7 @@ func (r RecordStore) conditionalUpdateManyCoverageDBValues(commit transactionmod
 	}
 	fieldKey := strings.TrimSpace(commit.SetExactCoverageField)
 	field, ok := fieldCatalog[fieldKey]
-	if !ok || fieldKey == "" || fieldKey != "id" && recordFieldIsSystemOwned(fieldKey) {
+	if !ok || fieldKey == "" || fieldKey != "id" && recordFieldIsSystemOwned(commit.Object.Key, fieldKey) {
 		return "", nil, fmt.Errorf("conditional update-many exact coverage field is invalid")
 	}
 	values := make([]any, len(commit.SetExactCoverageValues))
@@ -37,6 +37,9 @@ func (r RecordStore) conditionalUpdateManyCoverageDBValues(commit transactionmod
 		}
 		seen[identity] = true
 		values[index] = dbFieldValue(r.store.RuntimeEngine, field, normalized)
+	}
+	if fieldKey == "id" {
+		fieldKey = recordBusinessIDColumn(commit.Object.Key)
 	}
 	return fieldKey, values, nil
 }

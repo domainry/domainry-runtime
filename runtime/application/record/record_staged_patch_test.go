@@ -16,7 +16,7 @@ import (
 
 func TestConditionalUpdateOfStagedParentRetainsAuthorizationAndVersion(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "parent", Fields: []definitionmodel.FieldSchema{{Key: "name", Type: "text"}}}
-	parent := recordmodel.Record{ID: "parent-1", UpdatedAt: "2026-09-11T00:00:00Z", Data: map[string]any{"name": "before"}}
+	parent := recordmodel.Record{RecordID: "parent-1", UpdatedAt: "2026-09-11T00:00:00Z", Data: map[string]any{"name": "before"}}
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
 	for _, tc := range []struct {
 		name, expected, code  string
@@ -45,9 +45,9 @@ func TestConditionalUpdateOfStagedParentRetainsAuthorizationAndVersion(t *testin
 			})
 			ctx := t.Context()
 			if tc.staged {
-				ctx = recordservice.RecordWithPlannedRelations(ctx, map[string]map[string]recordmodel.Record{object.Key: {parent.ID: parent}})
+				ctx = recordservice.RecordWithPlannedRelations(ctx, map[string]map[string]recordmodel.Record{object.Key: {parent.RecordID: parent}})
 			}
-			plan, row, err := service.PlanConditionalUpdateMutation(ctx, object.Key, parent.ID, transactionmodel.ConditionalUpdateInput{
+			plan, row, err := service.PlanConditionalUpdateMutation(ctx, object.Key, parent.RecordID, transactionmodel.ConditionalUpdateInput{
 				Patch:      map[string]any{"name": "after"},
 				Predicates: []transactionmodel.MutationPredicate{{Field: "updated_at", Operator: "eq", Value: tc.expected, ErrorCode: "backend.record.version_conflict"}},
 			}, principal)
@@ -69,7 +69,7 @@ func TestPaymentTextPatchPreservesEmptyNullAndOmittedValues(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "payment_setting", Fields: []definitionmodel.FieldSchema{
 		{Key: "bank_name", Type: "text"}, {Key: "account_number", Type: "text"}, {Key: "branch_name", Type: "text"}, {Key: "client_code", Type: "text"},
 	}}
-	before := recordmodel.Record{ID: "setting-1", UpdatedAt: "2026-09-11T00:00:00Z", Data: map[string]any{"bank_name": nil, "account_number": nil, "branch_name": "branch", "client_code": "keep"}}
+	before := recordmodel.Record{RecordID: "setting-1", UpdatedAt: "2026-09-11T00:00:00Z", Data: map[string]any{"bank_name": nil, "account_number": nil, "branch_name": "branch", "client_code": "keep"}}
 	service := NewRecordUpdateApplicationService(RecordUpdateDependencies{
 		Repository: &updateRepositoryProbe{found: true, record: before},
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
@@ -79,7 +79,7 @@ func TestPaymentTextPatchPreservesEmptyNullAndOmittedValues(t *testing.T) {
 		CanWrite:  func(principalmodel.Principal, definitionmodel.ObjectSchema, map[string]any) bool { return true },
 	})
 	principal := recordFullAccessPrincipal(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}})
-	plan, row, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, before.ID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"bank_name": "", "account_number": "", "branch_name": nil}}, principal)
+	plan, row, err := service.PlanConditionalUpdateMutation(t.Context(), object.Key, before.RecordID, transactionmodel.ConditionalUpdateInput{Patch: map[string]any{"bank_name": "", "account_number": "", "branch_name": nil}}, principal)
 	if err != nil {
 		t.Fatal(err)
 	}

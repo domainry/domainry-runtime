@@ -179,7 +179,7 @@ func apiKeyPrincipalResolution() identitysdk.PrincipalResolution {
 			UserID:                "service-a",
 			RoleKey:               "sales",
 			AuthorizationRevision: "identity-revision",
-			User:                  identitysdk.User{ID: "service-a", AccountType: "service", Status: "active"},
+			User:                  identitysdk.User{UserID: "service-a", AccountType: "service", Status: "active"},
 		},
 		AccessBundle: bundle,
 	}

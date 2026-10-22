@@ -28,14 +28,14 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
-	intent := notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
+	intent := notificationmodel.NotificationIntent{WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z", Variables: map[string]any{"name": "A"}}
 	publication := NewPublicationOutboxStore(store)
 
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	if _, err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Rollback(); err != nil {
@@ -47,7 +47,8 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -55,7 +56,7 @@ func TestInsertIntentParticipatesInCallerTransaction(t *testing.T) {
 	}
 	assertPublicationCount(t, store, 1)
 	var workspace, application, source, payload, fingerprint, status string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM _publication_outbox WHERE id=?", intent.ID).Scan(&workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT workspace_id,application_key,source_event_id,intent_json,request_fingerprint,status FROM _publication_outbox WHERE message_id=?", messageID).Scan(&workspace, &application, &source, &payload, &fingerprint, &status); err != nil {
 		t.Fatal(err)
 	}
 	if workspace != intent.WorkspaceID || application != "runtime-a" || source != intent.SourceEventID || fingerprint == "" || status != "queued" || payload == "" {
@@ -83,14 +84,14 @@ func (p *blockingPublisher) PublishIntent(ctx context.Context, intent sdkcontrac
 	close(p.entered)
 	select {
 	case <-p.release:
-		return sdkcontract.NotificationEvent{ID: "remote-" + intent.ID}, true, nil
+		return sdkcontract.NotificationEvent{EventID: "remote-" + intent.SourceEventID}, true, nil
 	case <-ctx.Done():
 		return sdkcontract.NotificationEvent{}, false, ctx.Err()
 	}
 }
 
 func (p *publisherStub) PublishIntent(_ context.Context, intent sdkcontract.NotificationIntent) (sdkcontract.NotificationEvent, bool, error) {
-	p.calls = append(p.calls, intent.ID)
+	p.calls = append(p.calls, intent.SourceEventID)
 	if len(p.errs) > 0 {
 		err := p.errs[0]
 		p.errs = p.errs[1:]
@@ -98,7 +99,7 @@ func (p *publisherStub) PublishIntent(_ context.Context, intent sdkcontract.Noti
 			return sdkcontract.NotificationEvent{}, false, err
 		}
 	}
-	return sdkcontract.NotificationEvent{ID: "remote-" + intent.ID}, true, nil
+	return sdkcontract.NotificationEvent{EventID: "remote-" + intent.SourceEventID}, true, nil
 }
 
 func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
@@ -107,7 +108,8 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -119,13 +121,13 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	locator := workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}
+	locator := workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: intent.WorkspaceID, TaskID: messageID}
 	if worked, err := relay.Process(t.Context(), locator); err != nil || !worked {
 		t.Fatalf("first relay worked=%v err=%v", worked, err)
 	}
 	var status, next string
 	var attempts int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,next_attempt_at,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &next, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,next_attempt_at,attempt_count FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &next, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if status != "queued" || next == "" || attempts != 1 {
@@ -136,10 +138,10 @@ func TestRelayRetriesUnknownOutcomeWithStableIntentIdentity(t *testing.T) {
 		t.Fatalf("second relay worked=%v err=%v", worked, err)
 	}
 	var remote string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,remote_event_id,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &remote, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,remote_event_id,attempt_count FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &remote, &attempts); err != nil {
 		t.Fatal(err)
 	}
-	if status != "delivered" || remote != "remote-"+intent.ID || attempts != 2 || len(publisher.calls) != 2 || publisher.calls[0] != intent.ID || publisher.calls[1] != intent.ID {
+	if status != "delivered" || remote != "remote-"+intent.SourceEventID || attempts != 2 || len(publisher.calls) != 2 || publisher.calls[0] != intent.SourceEventID || publisher.calls[1] != intent.SourceEventID {
 		t.Fatalf("delivery state=%q remote=%q attempts=%d calls=%v", status, remote, attempts, publisher.calls)
 	}
 }
@@ -150,7 +152,8 @@ func TestRelaySchedulesTimeoutAsUnknownOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -161,11 +164,11 @@ func TestRelaySchedulesTimeoutAsUnknownOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}); err != nil || !worked {
+	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: messageID}); err != nil || !worked {
 		t.Fatalf("timeout worked=%v err=%v", worked, err)
 	}
 	var status, code, next string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,next_attempt_at FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &next); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,next_attempt_at FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &code, &next); err != nil {
 		t.Fatal(err)
 	}
 	if status != "queued" || code != "notification.remote_outcome_unknown" || next == "" {
@@ -179,7 +182,8 @@ func TestRelayFencesConcurrentDuplicateWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -189,7 +193,7 @@ func TestRelayFencesConcurrentDuplicateWorkers(t *testing.T) {
 	publisher := &blockingPublisher{entered: make(chan struct{}), release: make(chan struct{})}
 	first, _ := NewRelay(publication, publisher, "runtime-a", clock)
 	second, _ := NewRelay(publication, publisher, "runtime-b", clock)
-	locator := workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}
+	locator := workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: messageID}
 	firstResult := make(chan error, 1)
 	go func() {
 		worked, processErr := first.Process(t.Context(), locator)
@@ -217,7 +221,8 @@ func TestRelayRejectsLateCompletionFromExpiredLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -225,7 +230,7 @@ func TestRelayRejectsLateCompletionFromExpiredLease(t *testing.T) {
 	}
 	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
 	first, _ := NewRelay(publication, &publisherStub{}, "runtime-old", clock)
-	locator := workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}
+	locator := workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: messageID}
 	stale, ok, err := first.claim(t.Context(), locator)
 	if err != nil || !ok {
 		t.Fatalf("old claim ok=%v err=%v", ok, err)
@@ -240,10 +245,10 @@ func TestRelayRejectsLateCompletionFromExpiredLease(t *testing.T) {
 	}
 	var remote string
 	var fencing int64
-	if err := publication.runtime.DB().QueryRowContext(t.Context(), "SELECT remote_event_id,fencing_token FROM _publication_outbox WHERE id=?", intent.ID).Scan(&remote, &fencing); err != nil {
+	if err := publication.runtime.DB().QueryRowContext(t.Context(), "SELECT remote_event_id,fencing_token FROM _publication_outbox WHERE message_id=?", messageID).Scan(&remote, &fencing); err != nil {
 		t.Fatal(err)
 	}
-	if remote != "remote-"+intent.ID || fencing != stale.FencingToken+1 {
+	if remote != "remote-"+intent.SourceEventID || fencing != stale.FencingToken+1 {
 		t.Fatalf("winning completion remote=%q fencing=%d stale=%d", remote, fencing, stale.FencingToken)
 	}
 }
@@ -251,7 +256,8 @@ func TestRelayRejectsLateCompletionFromExpiredLease(t *testing.T) {
 func TestRelayDeadLettersNonRetryableRemoteRejection(t *testing.T) {
 	store, publication, intent := openPublicationStore(t)
 	tx, _ := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -260,11 +266,11 @@ func TestRelayDeadLettersNonRetryableRemoteRejection(t *testing.T) {
 	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
 	publisher := &publisherStub{errs: []error{&notificationsdk.Error{Code: "notification.intent_invalid", Retryable: false}}}
 	relay, _ := NewRelay(publication, publisher, "runtime-a", clock)
-	if _, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}); err != nil {
+	if _, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: messageID}); err != nil {
 		t.Fatal(err)
 	}
 	var status, code, terminal string
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &code, &terminal); err != nil {
 		t.Fatal(err)
 	}
 	if status != "dead_letter" || code != "notification.intent_invalid" || terminal == "" {
@@ -291,13 +297,14 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	}
 
 	store := open()
-	intent := notificationmodel.NotificationIntent{ID: "restart-request", WorkspaceID: "workspace-a", SourceEventID: "record-restart:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
+	intent := notificationmodel.NotificationIntent{WorkspaceID: "workspace-a", SourceEventID: "record-restart:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
 	publication := NewPublicationOutboxStore(store)
 	tx, err := store.DB().BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -308,7 +315,7 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	locator := workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}
+	locator := workerplatform.DurableTaskLocator{QueueKind: "notification_publication", WorkspaceID: intent.WorkspaceID, TaskID: messageID}
 	claimed, ok, err := first.claim(t.Context(), locator)
 	if err != nil || !ok || claimed.FencingToken != 1 {
 		t.Fatalf("initial claim=%+v ok=%v err=%v", claimed, ok, err)
@@ -330,10 +337,10 @@ func TestRelayRecoversExpiredLeaseAfterProcessRestart(t *testing.T) {
 	}
 	var status, owner, remote string
 	var fencing int64
-	if err := restarted.DB().QueryRowContext(t.Context(), "SELECT status,lease_owner,remote_event_id,fencing_token FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &owner, &remote, &fencing); err != nil {
+	if err := restarted.DB().QueryRowContext(t.Context(), "SELECT status,lease_owner,remote_event_id,fencing_token FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &owner, &remote, &fencing); err != nil {
 		t.Fatal(err)
 	}
-	if status != "delivered" || owner != "" || remote != "remote-"+intent.ID || fencing != 2 || len(publisher.calls) != 1 {
+	if status != "delivered" || owner != "" || remote != "remote-"+intent.SourceEventID || fencing != 2 || len(publisher.calls) != 1 {
 		t.Fatalf("restart state=%q owner=%q remote=%q fencing=%d calls=%v", status, owner, remote, fencing, publisher.calls)
 	}
 }
@@ -344,13 +351,14 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publication.InsertIntentTx(t.Context(), tx, intent); err != nil {
+	messageID, err := publication.InsertIntentTx(t.Context(), tx, intent)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _publication_outbox SET attempt_count=?,next_attempt_at=0 WHERE id=?", publicationMaxAttempt-1, intent.ID); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), "UPDATE _publication_outbox SET attempt_count=?,next_attempt_at=0 WHERE message_id=?", publicationMaxAttempt-1, messageID); err != nil {
 		t.Fatal(err)
 	}
 	clock := &relayClock{now: time.Date(2026, 8, 28, 1, 0, 0, 0, time.UTC)}
@@ -358,13 +366,13 @@ func TestRelayDeadLettersAfterBoundedUnknownOutcomeRetries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: intent.ID}); err != nil || !worked {
+	if worked, err := relay.Process(t.Context(), workerplatform.DurableTaskLocator{WorkspaceID: intent.WorkspaceID, TaskID: messageID}); err != nil || !worked {
 		t.Fatalf("last retry worked=%v err=%v", worked, err)
 	}
 	var status, code string
 	var terminal int64
 	var attempts int
-	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at,attempt_count FROM _publication_outbox WHERE id=?", intent.ID).Scan(&status, &code, &terminal, &attempts); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), "SELECT status,last_error_code,terminal_at,attempt_count FROM _publication_outbox WHERE message_id=?", messageID).Scan(&status, &code, &terminal, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if status != "dead_letter" || code != "notification.remote_outcome_unknown" || terminal == 0 || attempts != publicationMaxAttempt {
@@ -385,7 +393,7 @@ func openPublicationStore(t *testing.T) (*database.RuntimeStore, PublicationOutb
 	if err := store.BindNotificationSaaSPublications(database.NotificationSaaSPublicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime-a"}); err != nil {
 		t.Fatal(err)
 	}
-	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{ID: "request-a", WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
+	return store, NewPublicationOutboxStore(store), notificationmodel.NotificationIntent{WorkspaceID: "workspace-a", SourceEventID: "record-a:created", EventType: "record.created", OccurredAt: "2026-08-28T00:00:00Z"}
 }
 
 func assertPublicationCount(t *testing.T, store *database.RuntimeStore, want int) {

@@ -38,14 +38,14 @@ func (s *WorkflowApplicationService) workflowRouteSnapshot(ctx context.Context, 
 	if s.routes == nil {
 		return process, nil, nil, nil
 	}
-	steps, err := s.routes.ListRouteSteps(ctx, principal.WorkspaceID, process.ID)
+	steps, err := s.routes.ListRouteSteps(ctx, principal.WorkspaceID, process.ProcessID)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, nil, nil, internalError("list workflow route steps", err)
 	}
 	if len(steps) == 0 {
 		return process, nil, nil, nil
 	}
-	tasks, err := s.processRepo.ListTasks(ctx, principal.WorkspaceID, process.ID, "", "", 500)
+	tasks, err := s.processRepo.ListTasks(ctx, principal.WorkspaceID, process.ProcessID, "", "", 500)
 	if err != nil {
 		return workflowmodel.WorkflowProcessInstance{}, nil, nil, internalError("list workflow process tasks", err)
 	}
@@ -58,7 +58,7 @@ func (s *WorkflowApplicationService) workflowProcessRouteView(ctx context.Contex
 	if s.routes == nil {
 		return nil
 	}
-	steps, err := s.routes.ListRouteSteps(ctx, principal.WorkspaceID, process.ID)
+	steps, err := s.routes.ListRouteSteps(ctx, principal.WorkspaceID, process.ProcessID)
 	if err != nil || len(steps) == 0 || !workflowprojection.WorkflowRouteVisibleTo(process, steps, principal.UserID) {
 		return nil
 	}

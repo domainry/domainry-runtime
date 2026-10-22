@@ -2,12 +2,11 @@ package action
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"reflect"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
@@ -55,7 +54,10 @@ func (e *businessActionExecution) CreateOrganizationUnit(ctx context.Context, re
 	if err != nil {
 		return runtimeext.OrganizationUnitDeliveryResult{}, err
 	}
-	organizationID := stableOrganizationUnitID(e.workspace.ID, e.identity.ExecutionID)
+	organizationID, err := stableOrganizationUnitID(e.workspace.ID, e.identity.ExecutionID)
+	if err != nil {
+		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindInternal, "identity.organization_unit_delivery.identity_invalid", err, nil)
+	}
 	delivered, err := delivery.CreateOrganizationUnit(txCtx, organizationunit.DeliveryRequest{
 		ContractVersion: organizationunit.DeliveryContractVersionV1,
 		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
@@ -70,7 +72,7 @@ func (e *businessActionExecution) CreateOrganizationUnit(ctx context.Context, re
 		return runtimeext.OrganizationUnitDeliveryResult{}, normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery.create_failed")
 	}
 	organization := delivered.Organization
-	if strings.TrimSpace(delivered.DeliveryID) == "" || strings.TrimSpace(organization.ID) != organizationID || strings.TrimSpace(organization.ParentOrganizationID) != parentID ||
+	if strings.TrimSpace(delivered.DeliveryID) == "" || strings.TrimSpace(organization.OrganizationUnitID) != organizationID || strings.TrimSpace(organization.ParentOrganizationID) != parentID ||
 		strings.TrimSpace(string(organization.NodeType)) != string(request.NodeType) || strings.TrimSpace(organization.Code) != request.Code ||
 		strings.TrimSpace(organization.Name) != request.Name || organization.SortOrder != request.SortOrder ||
 		!strings.EqualFold(strings.TrimSpace(organization.Status), "active") || organization.Version != 1 {
@@ -119,7 +121,7 @@ func (e *businessActionExecution) ResolveOrganizationUnit(ctx context.Context, r
 	if err != nil {
 		return runtimeext.OrganizationUnitDeliveryResult{}, normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery.resolve_failed")
 	}
-	if strings.TrimSpace(organization.ID) != targetID || strings.TrimSpace(string(organization.NodeType)) != string(request.NodeType) ||
+	if strings.TrimSpace(organization.OrganizationUnitID) != targetID || strings.TrimSpace(string(organization.NodeType)) != string(request.NodeType) ||
 		strings.TrimSpace(organization.ParentOrganizationID) == "" || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") || organization.Version != 1 {
 		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindInternal, "backend.action.organization_unit_delivery_identity_mismatch", nil, nil)
 	}
@@ -154,7 +156,6 @@ func (e *businessActionExecution) organizationUnitParentID(ctx context.Context) 
 	}
 }
 
-func stableOrganizationUnitID(workspaceID, executionID string) string {
-	digest := sha256.Sum256([]byte("runtime-action-organization-unit-v1\x00" + strings.TrimSpace(workspaceID) + "\x00" + strings.TrimSpace(executionID)))
-	return "org_" + hex.EncodeToString(digest[:16])
+func stableOrganizationUnitID(workspaceID, executionID string) (string, error) {
+	return entityid.Derive("org", "runtime.action.organization-unit", workspaceID, executionID)
 }

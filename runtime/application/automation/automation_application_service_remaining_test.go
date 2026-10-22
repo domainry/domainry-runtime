@@ -30,7 +30,7 @@ func TestAutomationRunBeforePersistsExecutionAndAfterRuleStoresResult(t *testing
 		ExecutionRepository: repository,
 		WorkerStore: instructionRepositoryStub{
 			claim: func(_ context.Context, execution automationmodel.AutomationInstructionExecution, _, _ string) (automationmodel.AutomationInstructionExecution, bool, error) {
-				execution.ID, execution.LeaseOwner, execution.FencingToken = "instruction-1", "worker", 1
+				execution.RunID, execution.LeaseOwner, execution.FencingToken = "instruction-1", "worker", 1
 				return execution, true, nil
 			},
 			complete: func(context.Context, string, string, string, int64, string, map[string]any, string) (automationmodel.AutomationInstructionExecution, error) {
@@ -82,7 +82,7 @@ func TestAutomationOutboxRejectsRevalidatedRoleMismatch(t *testing.T) {
 	})
 	event := automationmodel.AutomationLifecycleEvent{
 		RuleKey: "after", Rule: rule, ActorUserID: "operator", ActorRoleKey: "original-role",
-		Record: recordmodel.Record{ID: "order-1"},
+		Record: recordmodel.Record{RecordID: "order-1"},
 	}
 	message := publicationmodel.Message{
 		WorkspaceID: "workspace-1",

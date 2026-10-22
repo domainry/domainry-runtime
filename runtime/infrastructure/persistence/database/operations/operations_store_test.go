@@ -22,29 +22,29 @@ func TestOperationsStorePersistsReplayConflictAndWorkspaceIsolation(t *testing.T
 	store := NewOperationsStore(runtimeStore)
 	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
 	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-		ID: "operation-1", Owner: "persistence", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
+		OperationID: "operation-1", Owner: "persistence", Kind: "backup.create", ActionKey: "runtime.operations.create_backup",
 		Scope:          operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"},
 		IdempotencyKey: "backup-1", RequestFingerprint: "fingerprint-a", RequestedBy: "operator-a", Reason: "release", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now,
 	}, StatusURL: "/operations/operation-1"}
 
 	persisted, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
-	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || persisted.Command.ID != receipt.Command.ID || persisted.Command.Owner != "persistence" {
+	if err != nil || decision != operationsmodel.OperationsSubmissionAccepted || persisted.Command.OperationID != receipt.Command.OperationID || persisted.Command.Owner != "persistence" {
 		t.Fatalf("persisted=%#v decision=%s err=%v", persisted, decision, err)
 	}
 	replayed, decision, err := store.RegisterOperationsCommand(t.Context(), receipt)
-	if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replayed.Command.ID != receipt.Command.ID {
+	if err != nil || decision != operationsmodel.OperationsSubmissionReplay || replayed.Command.OperationID != receipt.Command.OperationID {
 		t.Fatalf("replayed=%#v decision=%s err=%v", replayed, decision, err)
 	}
 	changed := receipt
-	changed.Command.ID, changed.Command.RequestFingerprint = "operation-2", "fingerprint-b"
+	changed.Command.OperationID, changed.Command.RequestFingerprint = "operation-2", "fingerprint-b"
 	if _, decision, err := store.RegisterOperationsCommand(t.Context(), changed); err != nil || decision != operationsmodel.OperationsSubmissionConflict {
 		t.Fatalf("conflict decision=%s err=%v", decision, err)
 	}
-	if _, found, err := store.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: "workspace-b"}, receipt.Command.ID); err != nil || found {
+	if _, found, err := store.GetOperationsReceipt(t.Context(), operationsmodel.OperationsScope{WorkspaceID: "workspace-b"}, receipt.Command.OperationID); err != nil || found {
 		t.Fatalf("cross-workspace found=%v err=%v", found, err)
 	}
 	listed, err := store.ListOperationsReceipts(t.Context(), operationsmodel.OperationsScope{WorkspaceID: "workspace-a"}, operationsmodel.OperationsStatusCreated, 10)
-	if err != nil || len(listed) != 1 || listed[0].Command.ID != receipt.Command.ID {
+	if err != nil || len(listed) != 1 || listed[0].Command.OperationID != receipt.Command.OperationID {
 		t.Fatalf("listed=%#v err=%v", listed, err)
 	}
 }
@@ -60,7 +60,7 @@ func TestOperationsStoreFencesLifecycleTransitionByExpectedStatus(t *testing.T) 
 	}
 	store := NewOperationsStore(runtimeStore)
 	now := time.Now().UTC()
-	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{ID: "operation-transition", Owner: "persistence", Kind: "restore.run", ActionKey: "runtime.operations.restore_backup", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"}, IdempotencyKey: "restore-1", RequestFingerprint: "same", RequestedBy: "operator", Reason: "drill", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-transition"}
+	receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{OperationID: "operation-transition", Owner: "persistence", Kind: "restore.run", ActionKey: "runtime.operations.restore_backup", Scope: operationsmodel.OperationsScope{WorkspaceID: "workspace-a", ResourceType: "database"}, IdempotencyKey: "restore-1", RequestFingerprint: "same", RequestedBy: "operator", Reason: "drill", Status: operationsmodel.OperationsStatusCreated, CreatedAt: now, UpdatedAt: now}, StatusURL: "/operations/operation-transition"}
 	if _, _, err := store.RegisterOperationsCommand(t.Context(), receipt); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestOperationsStoreSearchFiltersAndSummarizesBeforeLimit(t *testing.T) {
 		t.Helper()
 		current := base.Add(offset)
 		receipt := operationsmodel.OperationsReceipt{Command: operationsmodel.OperationsCommand{
-			ID: id, Owner: "workflow", Kind: "workflow.process.retry", ActionKey: "runtime.workflows.retry_ops_workflow_process",
+			OperationID: id, Owner: "workflow", Kind: "workflow.process.retry", ActionKey: "runtime.workflows.retry_ops_workflow_process",
 			Scope:          operationsmodel.OperationsScope{WorkspaceID: workspaceID, ResourceType: "workflow_process", ResourceID: "process-1"},
 			IdempotencyKey: id, RequestFingerprint: id, RequestedBy: requestedBy, Reason: reason,
 			Status: operationsmodel.OperationsStatusCreated, CreatedAt: current, UpdatedAt: current,
@@ -127,7 +127,7 @@ func TestOperationsStoreSearchFiltersAndSummarizesBeforeLimit(t *testing.T) {
 	if page.Count != 2 || len(page.Items) != 1 || page.Summary.Failed != 2 || page.Summary.ManualIntervention != 1 {
 		t.Fatalf("page=%#v", page)
 	}
-	if page.Items[0].Command.ID != "operation-failed-2" {
+	if page.Items[0].Command.OperationID != "operation-failed-2" {
 		t.Fatalf("newest item=%#v", page.Items[0])
 	}
 }

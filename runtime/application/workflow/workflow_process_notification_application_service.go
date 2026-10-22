@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"crypto/sha256"
 	"fmt"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -40,27 +39,34 @@ func (e *WorkflowProcessEngine) insertApprovalTaskWithNotification(ctx context.C
 	return committer.CommitWorkflowTaskNotification(ctx, process.WorkspaceID, task, event)
 }
 
-func (e *WorkflowProcessEngine) compileTaskAssignedNotification(process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, locale string, compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)) (notificationmodel.NotificationEvent, error) {
+func (e *WorkflowProcessEngine) compileTaskAssignedNotification(process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, locale string, compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error), sourceEventIDs ...string) (notificationmodel.NotificationEvent, error) {
+	sourceEventID := task.TaskID + ":assigned:" + task.UpdatedAt
+	if len(sourceEventIDs) > 0 && strings.TrimSpace(sourceEventIDs[0]) != "" {
+		sourceEventID = strings.TrimSpace(sourceEventIDs[0])
+	}
 	return compiler(notificationmodel.NotificationIntent{
-		ID: "notification_" + task.ID + "_assigned", WorkspaceID: process.WorkspaceID,
-		SourceEventID: task.ID + ":assigned:" + task.UpdatedAt, EventType: "workflow.task.assigned",
-		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.ID),
+		WorkspaceID:   process.WorkspaceID,
+		SourceEventID: sourceEventID, EventType: "workflow.task.assigned",
+		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.TaskID, SubjectVersion: task.UpdatedAt, GroupKey: workflowTaskNotificationGroupKey(task.TaskID),
 		OccurredAt: task.CreatedAt, ExpiresAt: task.DueAt, Locale: locale,
 		Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "due_at": task.DueAt},
 	})
 }
 
-func compileWorkflowTaskLifecycleNotification(compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error), process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, eventType, lifecycle, locale, occurredAt string) (notificationmodel.NotificationEvent, error) {
+func compileWorkflowTaskLifecycleNotification(compiler func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error), process workflowmodel.WorkflowProcessInstance, task workflowmodel.WorkflowTask, eventType, lifecycle, locale, occurredAt string, sourceEventIDs ...string) (notificationmodel.NotificationEvent, error) {
 	actionState := notificationmodel.NotificationActionCompleted
 	if lifecycle == "cancelled" {
 		actionState = notificationmodel.NotificationActionCancelled
 	}
-	eventRevision := fmt.Sprintf("%x", sha256.Sum256([]byte(task.ID+":"+lifecycle+":"+task.UpdatedAt)))[:16]
+	sourceEventID := task.TaskID + ":" + lifecycle + ":" + task.UpdatedAt
+	if len(sourceEventIDs) > 0 && strings.TrimSpace(sourceEventIDs[0]) != "" {
+		sourceEventID = strings.TrimSpace(sourceEventIDs[0])
+	}
 	return compiler(notificationmodel.NotificationIntent{
-		ID: "notification_" + task.ID + "_" + lifecycle + "_" + eventRevision, WorkspaceID: process.WorkspaceID,
-		SourceEventID: task.ID + ":" + lifecycle + ":" + task.UpdatedAt, EventType: eventType,
-		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.ID, SubjectVersion: task.UpdatedAt,
-		GroupKey: workflowTaskNotificationGroupKey(task.ID), ActionState: actionState, OccurredAt: occurredAt, Locale: locale,
+		WorkspaceID:   process.WorkspaceID,
+		SourceEventID: sourceEventID, EventType: eventType,
+		RecipientUserIDs: []string{task.AssigneeUserID}, SubjectType: "workflow_task", SubjectID: task.TaskID, SubjectVersion: task.UpdatedAt,
+		GroupKey: workflowTaskNotificationGroupKey(task.TaskID), ActionState: actionState, OccurredAt: occurredAt, Locale: locale,
 		Variables: map[string]any{"task_title": task.Title, "workflow_name": process.WorkflowName, "decision": task.Decision},
 	})
 }
@@ -138,7 +144,7 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 	if len(recipients) == 0 {
 		return nil, badRequest("backend.workflow.cc_recipient_not_found", "node", node.ID)
 	}
-	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(process, process.ID+":"+node.ID))
+	actionPrincipal, err := NewWorkflowPrincipalResolver(e.runtime.dependencies.Principals, e.runtime.dependencies.WorkloadReleases).ResolveWorkflowPrincipalForExecution(ctx, process.DefinitionSnapshot, principal, workflowPrincipalExecutionForProcess(process, process.ProcessID+":"+node.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -147,17 +153,17 @@ func (e *WorkflowProcessEngine) executeCCNode(ctx context.Context, process workf
 		input[key] = value
 	}
 	input["recipients"] = recipients
-	input["workflow_process_id"] = process.ID
+	input["workflow_process_id"] = process.ProcessID
 	input["workflow_node_id"] = node.ID
 	invocation, err := e.runtime.dependencies.InvokeAction(ctx, WorkflowBusinessActionInvocation{
 		ActionKey: contract.NotificationActionKey, ObjectKey: process.ObjectKey, RecordID: process.RecordID,
-		Input: input, Principal: actionPrincipal, Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ID, NodeID: node.ID,
-		IdempotencyKey: process.ID + ":" + node.ID + ":cc-notification",
+		Input: input, Principal: actionPrincipal, Source: WorkflowBusinessActionSourceWorkflow, ProcessID: process.ProcessID, NodeID: node.ID,
+		IdempotencyKey: process.ProcessID + ":" + node.ID + ":cc-notification",
 	})
 	if err != nil {
 		return nil, err
 	}
-	e.appendEvent(ctx, process.WorkspaceID, process.ID, node.ID, "", "cc_notified", "system", node.Name, map[string]any{
+	e.appendEvent(ctx, process.WorkspaceID, process.ProcessID, node.ID, "", "cc_notified", "system", node.Name, map[string]any{
 		"recipients": recipients, "resolved_assignees": assignees, "action_key": contract.NotificationActionKey, "invocation_id": invocation.InvocationID,
 	})
 	return map[string]any{

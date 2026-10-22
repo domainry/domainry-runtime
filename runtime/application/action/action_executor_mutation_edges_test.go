@@ -27,7 +27,7 @@ func actionMutationEdgePlan(t *testing.T, operation, objectKey, recordID string)
 	}
 	plan, err := transactionmodel.NewMutationPlan(mutationContext, transactionmodel.RecordMutationCommit{
 		Operation: operation, Object: definitionmodel.ObjectSchema{Key: objectKey},
-		Record: recordmodel.Record{ID: recordID}, RecordID: recordID,
+		Record: recordmodel.Record{RecordID: recordID}, RecordID: recordID,
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestBusinessActionPlannedRelationsAndConcurrencyEdges(t *testing.T) {
 	_ = execution.withPlannedRelationRecords(ctx)
 	for _, commit := range []transactionmodel.RecordMutationCommit{
 		{Object: definitionmodel.ObjectSchema{Key: "booking"}},
-		{Record: recordmodel.Record{ID: "record-1"}},
+		{Record: recordmodel.Record{RecordID: "record-1"}},
 	} {
 		if _, _, valid := plannedRelationRecordIdentity(commit); valid {
 			t.Fatalf("invalid planned relation identity accepted: %+v", commit)
@@ -178,7 +178,7 @@ func TestBusinessActionPlannedRelationsAndConcurrencyEdges(t *testing.T) {
 	if withUnit.isDeclaredConcurrentRecordChange(declared) {
 		t.Fatal("missing observed record reported concurrent change")
 	}
-	withUnit.observedRecords = map[string]recordmodel.Record{"booking\x00booking-1": {ID: "booking-1", UpdatedAt: "invalid"}}
+	withUnit.observedRecords = map[string]recordmodel.Record{"booking\x00booking-1": {RecordID: "booking-1", UpdatedAt: "invalid"}}
 	if withUnit.isDeclaredConcurrentRecordChange(declared) {
 		t.Fatal("invalid record time reported concurrent change")
 	}

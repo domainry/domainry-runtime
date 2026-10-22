@@ -64,7 +64,7 @@ func (s *OperationsLeaseApplicationService) ForceRelease(ctx context.Context, co
 		return OperationsLeaseReleaseReceipt{Release: release, Receipt: receipt}, nil
 	}
 	systemScope := principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "force release verified Runtime lease")
-	receipt, err = s.operations.Start(ctx, receipt.Command.ID, receipt.Command.Scope, systemScope)
+	receipt, err = s.operations.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, systemScope)
 	if err != nil {
 		return OperationsLeaseReleaseReceipt{}, err
 	}

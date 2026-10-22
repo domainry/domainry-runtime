@@ -23,20 +23,20 @@ func TestRecordDataExchangeExportUsesStableIDCursor(t *testing.T) {
 			return recordmodel.RecordPageResult{Total: 201}, nil
 		}
 		calls++
-		if query.Page != 1 || query.PageSize != recordExportBatchSize || !query.SkipTotal || len(query.Sort) != 1 || query.Sort[0].Field != "id" || query.Sort[0].Direction != "asc" {
+		if query.Page != 1 || query.PageSize != recordExportBatchSize || !query.SkipTotal || len(query.Sort) != 1 || query.Sort[0].Field != recordmodel.IDField || query.Sort[0].Direction != "asc" {
 			t.Fatalf("query=%#v", query)
 		}
 		if query.AfterID == "" {
 			items := make([]recordmodel.Record, recordExportBatchSize)
 			for index := range items {
-				items[index] = recordmodel.Record{ID: fmt.Sprintf("customer-%03d", index+1), Data: map[string]any{"name": "Acme"}}
+				items[index] = recordmodel.Record{ID: int64(index + 1), RecordID: fmt.Sprintf("customer-%03d", index+1), Data: map[string]any{"name": "Acme"}}
 			}
 			return recordmodel.RecordPageResult{Items: items, HasNext: true}, nil
 		}
-		if query.AfterID != "customer-200" {
+		if query.AfterID != "200" {
 			t.Fatalf("after id=%q", query.AfterID)
 		}
-		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "customer-201", Data: map[string]any{"name": "Last"}}}}, nil
+		return recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: 201, RecordID: "customer-201", Data: map[string]any{"name": "Last"}}}}, nil
 	}}
 	exporter := recordExportEdgeService(object, repository)
 	providers := NewDataExchangeProviders(func(context.Context, string, string) principalmodel.Principal {
@@ -81,7 +81,7 @@ func TestRecordDataExchangeCompletionPublishesDownloadNotification(t *testing.T)
 	expiresAt := occurredAt.Add(time.Hour)
 	if err := completion.CompleteExport(t.Context(), dataexchange.ExportCompletion{
 		Scope: dataexchange.Scope{WorkspaceID: "workspace", ActorID: "actor"}, ObjectKey: "customer", JobID: "job-1", Rows: 1200,
-		Artifact: dataexchange.Artifact{ID: "artifact-1", Filename: "customer.csv", SHA256: "digest", ExpiresAt: expiresAt},
+		Artifact: dataexchange.Artifact{ArtifactID: "artifact-1", Filename: "customer.csv", SHA256: "digest", ExpiresAt: expiresAt},
 	}); err != nil {
 		t.Fatal(err)
 	}

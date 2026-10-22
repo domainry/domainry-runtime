@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
@@ -17,6 +18,16 @@ func NewApplicationSchemaStorageProfile() ApplicationSchemaStorageProfile {
 	return ApplicationSchemaStorageProfile{}
 }
 func (ApplicationSchemaStorageProfile) IDColumnType() string { return "TEXT" }
+func (ApplicationSchemaStorageProfile) FieldType(field definitionmodel.FieldSchema, _ bool) ormschema.ColumnType {
+	switch strings.TrimSpace(field.Type) {
+	case "integer", "boolean", "datetime":
+		return ormschema.Integer()
+	case "number":
+		return ormschema.Real()
+	default:
+		return ormschema.Text()
+	}
+}
 func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.FieldSchema, _ bool) string {
 	switch strings.TrimSpace(field.Type) {
 	case "integer", "boolean", "datetime":

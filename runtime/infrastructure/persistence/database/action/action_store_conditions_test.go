@@ -128,7 +128,7 @@ func TestActionExecutionAtomicCommitStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected atomic action failure")
 	now := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
-	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1, ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, OperationID: "execution", LeaseOwner: "owner", FencingToken: 1, ExpiresAt: now.Add(time.Hour)}
 	row := actionExecutionRow(now, string(idempotency.StatusSucceeded), "fingerprint")
 
 	tests := []struct {
@@ -184,7 +184,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	defer base.Close()
 	wantErr := errors.New("injected action completion failure")
 	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, ExecutionID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
+	completion := actionmodel.ActionExecutionCompletion{Execution: actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"}, OperationID: "execution", LeaseOwner: " owner ", FencingToken: 1, ResponseStatus: 500, ErrorCode: " failed ", ExpiresAt: now.Add(time.Hour)}
 	if _, err := NewActionBusinessExecutionStore(base).CompleteExecution(t.Context(), actionmodel.ActionExecutionCompletion{Result: map[string]any{"bad": make(chan int)}}); err == nil {
 		t.Fatal("unencodable completion result accepted")
 	}
@@ -221,7 +221,7 @@ func TestActionExecutionCompletionLeaseAndLookupStages(t *testing.T) {
 	if integrationWorkspaceID(" ") != "" || integrationWorkspaceID(" workspace ") != "workspace" || nonNilMap(nil) == nil || nonNilMap(map[string]any{"ok": true})["ok"] != true {
 		t.Fatal("normalization helpers failed")
 	}
-	projection := actionmodel.ActionBusinessExecution{ID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem", RequestFingerprint: "fingerprint", Status: string(idempotency.StatusSucceeded), CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}
+	projection := actionmodel.ActionBusinessExecution{OperationID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem", RequestFingerprint: "fingerprint", Status: string(idempotency.StatusSucceeded), CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano)}
 	record := actionExecutionRecord(projection, json.RawMessage(`{`))
 	value, err := actionBusinessExecution(record)
 	if err != nil || value.Result == nil {
@@ -322,7 +322,7 @@ func TestActionExecutionTransactionRollbackCommitAndResultEdges(t *testing.T) {
 	now := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
 	completion := actionmodel.ActionExecutionCompletion{
 		Execution:   actionmodel.ActionBusinessExecution{WorkspaceID: "workspace-primary"},
-		ExecutionID: "execution", LeaseOwner: "owner", FencingToken: 1,
+		OperationID: "execution", LeaseOwner: "owner", FencingToken: 1,
 		ErrorCode: "retryable", Retryable: true, ExpiresAt: now.Add(time.Hour), Now: now,
 	}
 
@@ -433,7 +433,7 @@ func scriptedActionStore(runtimeStore *database.RuntimeStore, state *actionDBSta
 
 func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Value {
 	value := actionmodel.ActionBusinessExecution{
-		ID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem",
+		OperationID: "execution", WorkspaceID: "workspace-primary", ObjectKey: "object", RecordID: "record", ActionKey: "action", IdempotencyKey: "idem",
 		RequestFingerprint: fingerprint, Status: status, LeaseOwner: "owner", LeaseExpiresAt: now.Add(time.Minute).Format(time.RFC3339Nano), FencingToken: 1,
 		ResponseStatus: 200, ExpiresAt: now.Add(time.Hour).Format(time.RFC3339Nano), ActorID: "actor", RoleKey: "role", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano),
 	}
@@ -446,13 +446,13 @@ func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Valu
 }
 
 func actionExecutionColumns() []string {
-	return []string{"id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON string) []any {
 	record := actionExecutionRecord(value, json.RawMessage(resultJSON))
 	return []any{
-		record.ID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentID,
+		record.ID, record.OperationID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentOperationID,
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
 		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-orm/query"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordvalidation "github.com/domainry/domainry-runtime/runtime/domain/record/validation"
 	appschemastorage "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/appschema/storage"
@@ -18,6 +19,25 @@ func NewApplicationSchemaStorageProfile() ApplicationSchemaStorageProfile {
 	return ApplicationSchemaStorageProfile{}
 }
 func (ApplicationSchemaStorageProfile) IDColumnType() string { return "TEXT" }
+func (ApplicationSchemaStorageProfile) FieldType(field definitionmodel.FieldSchema, _ bool) ormschema.ColumnType {
+	switch strings.TrimSpace(field.Type) {
+	case "integer", "datetime":
+		return ormschema.BigInt()
+	case "currency", "percent":
+		config := appschemastorage.DecimalConfig(field)
+		return ormschema.Numeric(config.Precision, int(config.Scale))
+	case "number":
+		return ormschema.Double()
+	case "boolean":
+		return ormschema.Boolean()
+	case "json":
+		return ormschema.JSON()
+	case "file", "file_list":
+		return ormschema.JSONText()
+	default:
+		return ormschema.Text()
+	}
+}
 func (ApplicationSchemaStorageProfile) FieldColumnType(field definitionmodel.FieldSchema, _ bool) string {
 	switch strings.TrimSpace(field.Type) {
 	case "integer", "datetime":

@@ -192,7 +192,7 @@ func identityDeliveryTestExecution(t *testing.T, delivery identitysdk.HandlerDel
 	principal := workspaceAggregatePrincipal("employee.create")
 	principal.UserID = "actor-1"
 	unitOfWork := newActionTestUnitOfWork()
-	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution-identity-1", LeaseOwner: "test", FencingToken: 1}}
+	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution-identity-1", LeaseOwner: "test", FencingToken: 1}}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{
 			BindIdentityHandlerDelivery: func(ctx context.Context) (identitysdk.HandlerDelivery, error) {
@@ -231,14 +231,20 @@ func TestIdentityDeliveryAtomicallyInjectsRequiredRelationIntoStagedProfileCreat
 		if !ok || len(invocation.ProfileBindingAuthorities) != 1 || invocation.ProfileBindingAuthorities[0].ProfileID != recordID || invocation.TargetOrganizationID != "store-north" {
 			t.Fatalf("trusted profile create authority=%#v", invocation)
 		}
-		record := recordmodel.Record{ID: recordID, OwnerOrgID: "store-north", Data: recordvalidation.RecordCloneData(fields), UpdatedAt: "2026-09-06T00:00:00Z"}
+		record := recordmodel.Record{RecordID: recordID, OwnerOrgID: "store-north", Data: recordvalidation.RecordCloneData(fields), UpdatedAt: "2026-09-06T00:00:00Z"}
 		plan, err := transactionmodel.NewMutationPlan(identityDeliveryMutationContext(t), transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: objectKey}, Record: record}, nil)
 		return plan, record, err
 	}
-	profileID := stableIdentityProfileID("workspace-a", "execution-identity-1", "employee_profile")
-	userID := stableIdentityUserID("workspace-a", "execution-identity-1")
+	profileID, err := stableIdentityProfileID("workspace-a", "execution-identity-1", "employee_profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := stableIdentityUserID("workspace-a", "execution-identity-1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	delivery.result = identitysdk.HandlerDeliveryResult{
-		DeliveryID: "delivery-1", User: identitysdk.User{ID: userID, Name: "Employee", OrgID: "store-north"},
+		DeliveryID: "delivery-1", User: identitysdk.User{UserID: userID, Name: "Employee", OrgID: "store-north"},
 		ProfileBinding: &identitysdk.HandlerProfileBinding{BindingKey: "employee", ObjectKey: "employee_profile", ProfileID: profileID, IdentityUserID: userID, Status: "active", Version: 1},
 	}
 	result, err := execution.DeliverIdentity(t.Context(), runtimeext.IdentityHandlerDeliveryRequest{
@@ -263,7 +269,7 @@ func TestIdentityDeliveryAtomicallyInjectsRequiredRelationIntoStagedProfileCreat
 func TestIdentityDeliveryRejectsProjectOwnedIdentityFieldsAndProjectRelationField(t *testing.T) {
 	delivery := &identityHandlerDeliveryStub{}
 	execution := identityDeliveryTestExecution(t, delivery)
-	request := runtimeext.IdentityHandlerDeliveryRequest{User: runtimeext.IdentityHandlerUserMutation{Operation: runtimeext.IdentityHandlerCreate, User: runtimeext.IdentityUser{ID: "identity-user-1", OrgID: "store-sibling"}, LoginMode: runtimeext.IdentityHandlerLoginNone}}
+	request := runtimeext.IdentityHandlerDeliveryRequest{User: runtimeext.IdentityHandlerUserMutation{Operation: runtimeext.IdentityHandlerCreate, User: runtimeext.IdentityUser{UserID: "identity-user-1", OrgID: "store-sibling"}, LoginMode: runtimeext.IdentityHandlerLoginNone}}
 	if _, err := execution.DeliverIdentity(t.Context(), request); apperror.CodeOf(err) != "identity.handler_delivery_runtime_owned_identity_fields" || delivery.calls != 0 {
 		t.Fatalf("project-owned Identity fields calls=%d err=%v", delivery.calls, err)
 	}
@@ -284,12 +290,12 @@ func TestIdentityDeliveryRejectsProjectOwnedIdentityFieldsAndProjectRelationFiel
 
 func TestIdentityDeliveryExistingProfileRelationIsVerifiedWithoutRedundantWrite(t *testing.T) {
 	delivery := &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{
-		DeliveryID: "delivery-update", User: identitysdk.User{ID: "identity-user-1", OrgID: "store-north", Version: 4},
+		DeliveryID: "delivery-update", User: identitysdk.User{UserID: "identity-user-1", OrgID: "store-north", Version: 4},
 		ProfileBinding: &identitysdk.HandlerProfileBinding{BindingKey: "employee", ObjectKey: "employee_profile", ProfileID: "employee-profile-1", IdentityUserID: "identity-user-1", Status: "active", Version: 2},
 	}}
 	execution := identityDeliveryTestExecution(t, delivery)
 	execution.dependencies.GetRecordForUpdate = func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-		return recordmodel.Record{ID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T00:00:00Z", Data: map[string]any{"identity_user_id": "identity-user-1"}}, nil
+		return recordmodel.Record{RecordID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T00:00:00Z", Data: map[string]any{"identity_user_id": "identity-user-1"}}, nil
 	}
 	execution.dependencies.PlanConditionalUpdate = func(context.Context, string, string, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 		t.Fatal("an already-consistent profile relation must not be rewritten")
@@ -333,7 +339,7 @@ func TestIdentityDeliveryAndBusinessProfileCASUseOneCanonicalTargetMutation(t *t
 				if _, rewritesRelation := input.Patch["identity_user_id"]; rewritesRelation {
 					t.Fatalf("business mutation unexpectedly rewrote the verified relation: %#v", input.Patch)
 				}
-				record := recordmodel.Record{ID: recordID, OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T01:00:00Z", Data: map[string]any{
+				record := recordmodel.Record{RecordID: recordID, OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T01:00:00Z", Data: map[string]any{
 					"identity_user_id": "identity-user-1", businessField: businessValue,
 				}}
 				object := definitionmodel.ObjectSchema{Key: objectKey, Fields: []definitionmodel.FieldSchema{{Key: "rank"}, {Key: "employment_status"}}}
@@ -419,7 +425,7 @@ func TestIdentityDeliveryAndBusinessProfileCASFailuresHaveZeroCommittedEffects(t
 func identityDeliveryTestUnitOfWork(store *actionUnitOfWorkStoreProbe) *actionUnitOfWork {
 	return &actionUnitOfWork{
 		manager: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)), phases: newActionExecutionPhaseMachine(),
-		claim: actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution-identity-1", LeaseOwner: "test", FencingToken: 1}},
+		claim: actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution-identity-1", LeaseOwner: "test", FencingToken: 1}},
 	}
 }
 
@@ -441,7 +447,7 @@ func successfulExistingProfileDelivery(operation runtimeext.IdentityHandlerOpera
 		status = "disabled"
 	}
 	return &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{
-		DeliveryID: "delivery-" + string(operation), User: identitysdk.User{ID: "identity-user-1", OrgID: "store-north", Version: 4},
+		DeliveryID: "delivery-" + string(operation), User: identitysdk.User{UserID: "identity-user-1", OrgID: "store-north", Version: 4},
 		ProfileBinding: &identitysdk.HandlerProfileBinding{BindingKey: "employee", ObjectKey: "employee_profile", ProfileID: "employee-profile-1", IdentityUserID: "identity-user-1", Status: status, Version: 2},
 	}}
 }
@@ -457,7 +463,7 @@ func existingProfileDeliveryRequest(operation runtimeext.IdentityHandlerOperatio
 
 func lockedIdentityProfile(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
 	return recordmodel.Record{
-		ID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T00:00:00Z",
+		RecordID: "employee-profile-1", OwnerOrgID: "store-north", UpdatedAt: "2026-09-06T00:00:00Z",
 		Data: map[string]any{"identity_user_id": "identity-user-1", "rank": "junior", "employment_status": "active"},
 	}, nil
 }

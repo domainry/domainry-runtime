@@ -91,7 +91,7 @@ func (s *OperationsApplicationService) executeOwnerReceipt(ctx context.Context, 
 		return result, apperror.New(apperror.KindConflict, "backend.operations.in_progress", nil, nil)
 	}
 	if receipt.Command.Status == operationsmodel.OperationsStatusCreated {
-		started, err := s.Start(ctx, receipt.Command.ID, receipt.Command.Scope, operationsOwnerSystemScope())
+		started, err := s.Start(ctx, receipt.Command.OperationID, receipt.Command.Scope, operationsOwnerSystemScope())
 		if err != nil {
 			return OperationsOwnerExecutionResult{}, err
 		}
@@ -101,7 +101,7 @@ func (s *OperationsApplicationService) executeOwnerReceipt(ctx context.Context, 
 	if receipt.Command.Status != operationsmodel.OperationsStatusStarted {
 		return OperationsOwnerExecutionResult{}, apperror.New(apperror.KindConflict, "backend.operations.receipt_status_invalid", nil, nil)
 	}
-	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.ID)
+	ownerContext := requestcontext.WithOwnerExecutionID(ctx, receipt.Command.OperationID)
 	value, ownerErr := execute(ownerContext)
 	resultJSON, marshalErr := json.Marshal(value)
 	if marshalErr != nil {

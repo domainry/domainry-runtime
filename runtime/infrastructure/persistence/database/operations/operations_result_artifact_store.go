@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	foundationartifact "github.com/domainry/domainry-foundation/artifact"
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	operationspolicy "github.com/domainry/domainry-runtime/runtime/domain/operations/policy"
@@ -42,9 +43,11 @@ func (s OperationsResultArtifactStore) PutOperationsResult(ctx context.Context, 
 	}
 	digest := sha256.Sum256(value.Content)
 	digestText := hex.EncodeToString(digest[:])
-	identityDigest := sha256.Sum256([]byte(value.WorkspaceID + "\x00" + value.OperationID))
-	identity := hex.EncodeToString(identityDigest[:16])
-	artifactID := "operation_result_" + identity
+	artifactID, err := entityid.Derive("art", "runtime.operations-result", value.WorkspaceID, value.OperationID)
+	if err != nil {
+		return operationsrepository.OperationsResultArtifactReference{}, fmt.Errorf("derive operations result artifact id: %w", err)
+	}
+	identity := strings.TrimPrefix(artifactID, "art_")
 	blobKey := "operations-result-" + identity + "-" + digestText + ".json"
 	stage, err := s.blobs.Stage(ctx, runtimefile.BlobStageRequest{
 		WorkspaceID: value.WorkspaceID,
@@ -67,7 +70,7 @@ func (s OperationsResultArtifactStore) PutOperationsResult(ctx context.Context, 
 	}
 	metadata := json.RawMessage(`{"schema":"operations.result-artifact.v1","redacted_in_operation":true}`)
 	registration := foundationartifact.Artifact{
-		ID: artifactID, WorkspaceID: value.WorkspaceID, Owner: operationsResultArtifactOwner, Kind: operationsResultArtifactKind,
+		ArtifactID: artifactID, WorkspaceID: value.WorkspaceID, Owner: operationsResultArtifactOwner, Kind: operationsResultArtifactKind,
 		IdempotencyKey: value.OperationID, CreatedBy: value.CreatedBy, Filename: value.OperationID + "-result.json",
 		MediaType: "application/json", ContentSHA256: committed.ContentSHA256, SizeBytes: committed.Size,
 		StorageReference: committed.BlobKey, Status: foundationartifact.StatusAvailable, ScanStatus: foundationartifact.ScanNotRequired,
@@ -83,20 +86,18 @@ func (s OperationsResultArtifactStore) PutOperationsResult(ctx context.Context, 
 			return operationsrepository.OperationsResultArtifactReference{}, errors.Join(err, readErr, cleanupErr)
 		}
 	}
-	bindingDigest := sha256.Sum256([]byte(value.WorkspaceID + "\x00" + artifact.ID + "\x00" + value.OperationID))
 	_, _, err = s.artifacts.Bind(ctx, foundationartifact.Binding{
-		ID: "operation_result_binding_" + hex.EncodeToString(bindingDigest[:16]), WorkspaceID: value.WorkspaceID,
-		ArtifactID: artifact.ID, Owner: operationsResultArtifactOwner, Kind: foundationartifact.BindingOperation,
+		WorkspaceID: value.WorkspaceID, ArtifactID: artifact.ArtifactID, Owner: operationsResultArtifactOwner, Kind: foundationartifact.BindingOperation,
 		ResourceType: "operation", ResourceID: value.OperationID, Metadata: json.RawMessage(`{"purpose":"result_replay"}`), CreatedAt: value.CreatedAt.UTC(),
 	})
 	if err != nil {
 		return operationsrepository.OperationsResultArtifactReference{}, err
 	}
-	return operationsrepository.OperationsResultArtifactReference{ID: artifact.ID, ContentSHA256: artifact.ContentSHA256, SizeBytes: artifact.SizeBytes}, nil
+	return operationsrepository.OperationsResultArtifactReference{ArtifactID: artifact.ArtifactID, ContentSHA256: artifact.ContentSHA256, SizeBytes: artifact.SizeBytes}, nil
 }
 
 func sameOperationsResultArtifact(left, right foundationartifact.Artifact) bool {
-	return left.ID == right.ID && left.WorkspaceID == right.WorkspaceID && left.Owner == right.Owner && left.Kind == right.Kind &&
+	return left.ArtifactID == right.ArtifactID && left.WorkspaceID == right.WorkspaceID && left.Owner == right.Owner && left.Kind == right.Kind &&
 		left.IdempotencyKey == right.IdempotencyKey && left.CreatedBy == right.CreatedBy && left.Filename == right.Filename &&
 		left.MediaType == right.MediaType && left.ContentSHA256 == right.ContentSHA256 && left.SizeBytes == right.SizeBytes &&
 		left.StorageReference == right.StorageReference && left.Status == right.Status && left.ScanStatus == right.ScanStatus &&
@@ -118,7 +119,7 @@ func (s OperationsResultArtifactStore) GetOperationsResult(ctx context.Context, 
 	if artifact.Owner != operationsResultArtifactOwner || artifact.Kind != operationsResultArtifactKind || artifact.Status != foundationartifact.StatusAvailable || artifact.SizeBytes > operationspolicy.OperationsMaximumArtifactResultBytes {
 		return nil, operationsrepository.OperationsResultArtifactReference{}, fmt.Errorf("operations result artifact is not available")
 	}
-	bindings, err := s.artifacts.Bindings(ctx, workspaceID, artifact.ID)
+	bindings, err := s.artifacts.Bindings(ctx, workspaceID, artifact.ArtifactID)
 	if err != nil {
 		return nil, operationsrepository.OperationsResultArtifactReference{}, err
 	}
@@ -148,7 +149,7 @@ func (s OperationsResultArtifactStore) GetOperationsResult(ctx context.Context, 
 	if hex.EncodeToString(digest[:]) != artifact.ContentSHA256 {
 		return nil, operationsrepository.OperationsResultArtifactReference{}, fmt.Errorf("operations result artifact checksum mismatch")
 	}
-	return content, operationsrepository.OperationsResultArtifactReference{ID: artifact.ID, ContentSHA256: artifact.ContentSHA256, SizeBytes: artifact.SizeBytes}, nil
+	return content, operationsrepository.OperationsResultArtifactReference{ArtifactID: artifact.ArtifactID, ContentSHA256: artifact.ContentSHA256, SizeBytes: artifact.SizeBytes}, nil
 }
 
 var _ operationsrepository.OperationsResultArtifactRepository = OperationsResultArtifactStore{}

@@ -41,7 +41,7 @@ func (*publicationRepositoryProbe) ScheduleOutboxRetry(context.Context, string, 
 	return publicationmodel.Message{}, nil
 }
 func (p *publicationRepositoryProbe) GetOutbox(context.Context, string, string) (publicationmodel.Message, bool, error) {
-	return p.inserted, p.inserted.ID != "", nil
+	return p.inserted, p.inserted.MessageID != "", nil
 }
 
 type publicationWorkerProbe struct {
@@ -113,7 +113,7 @@ func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
 	producerSpan.End()
 
 	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{
-		ID: "message-linked", DedupKey: "dedup-linked", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: payload, Status: "queued",
+		MessageID: "message-linked", DedupKey: "dedup-linked", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: payload, Status: "queued",
 	}}}
 	delivery := &deliveryProbe{}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
@@ -167,7 +167,7 @@ func TestDurableIntentValidationStopsAtRuntimeEnvelope(t *testing.T) {
 }
 
 func TestWorkerHandsStableIdentityToIntegrationOwner(t *testing.T) {
-	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{ID: "message-1", DedupKey: "dedup-1", WorkspaceID: "workspace-primary", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}}}
+	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{MessageID: "message-1", DedupKey: "dedup-1", WorkspaceID: "workspace-primary", ConnectorKey: "email", ConnectionKey: "primary", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}}}
 	delivery := &deliveryProbe{}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: delivery})
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-1"}); err != nil {
@@ -188,10 +188,10 @@ func (c publicationClock) Now() time.Time { return c.now }
 func TestPublicationWorkerMetricsUseOwnerIdentity(t *testing.T) {
 	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
 	repository := &publicationWorkerProbe{
-		publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{ID: "message-metrics", DedupKey: "dedup-metrics", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}},
+		publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{MessageID: "message-metrics", DedupKey: "dedup-metrics", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: map[string]any{"subject": "hello"}, Status: "queued"}},
 		due: []publicationmodel.Message{
-			{ID: "message-metrics", WorkspaceID: "workspace-primary", CreatedAt: now.Add(-30 * time.Second).Format(time.RFC3339Nano)},
-			{ID: "message-newer", WorkspaceID: "workspace-primary", CreatedAt: now.Add(-5 * time.Second).Format(time.RFC3339Nano)},
+			{MessageID: "message-metrics", WorkspaceID: "workspace-primary", CreatedAt: now.Add(-30 * time.Second).Format(time.RFC3339Nano)},
+			{MessageID: "message-newer", WorkspaceID: "workspace-primary", CreatedAt: now.Add(-5 * time.Second).Format(time.RFC3339Nano)},
 		},
 	}
 	service := NewPublicationHandoffApplicationService(Dependencies{
@@ -225,7 +225,7 @@ func TestPublicationWorkerRecordsRetryAttemptByOwner(t *testing.T) {
 	previous := zap.L()
 	zap.ReplaceGlobals(zap.New(core))
 	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
-	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{ID: "message-retry-metrics", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: map[string]any{}, Status: "queued"}}}
+	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{MessageID: "message-retry-metrics", WorkspaceID: "workspace-primary", ConnectorKey: "email", Operation: "send", Payload: map[string]any{}, Status: "queued"}}}
 	service := NewPublicationHandoffApplicationService(Dependencies{Repository: &repository.publicationRepositoryProbe, WorkerRepository: repository, Delivery: &deliveryProbe{err: errors.New("provider unavailable")}})
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-retry-metrics"}); err == nil {
 		t.Fatal("retry attempt unexpectedly succeeded")
@@ -249,7 +249,7 @@ func TestPublicationWorkerMovesTenthFailureToDeadLetter(t *testing.T) {
 	zap.ReplaceGlobals(zap.New(core))
 	t.Cleanup(func() { zap.ReplaceGlobals(previous) })
 	repository := &publicationWorkerProbe{publicationRepositoryProbe: publicationRepositoryProbe{inserted: publicationmodel.Message{
-		ID: "message-dead-letter", WorkspaceID: "workspace-primary", ConnectorKey: "__automation__", Operation: "rule",
+		MessageID: "message-dead-letter", WorkspaceID: "workspace-primary", ConnectorKey: "__automation__", Operation: "rule",
 		Payload: map[string]any{}, Status: "queued", AttemptCount: maxHandoffAttempts,
 	}}}
 	service := NewPublicationHandoffApplicationService(Dependencies{

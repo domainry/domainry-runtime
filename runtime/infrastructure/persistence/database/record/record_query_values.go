@@ -83,11 +83,11 @@ func recordFieldQueryValueNeedsEncoding(profile persistencedriver.EngineProfile,
 	return strings.TrimSpace(field.Type) == "datetime" || recordmodel.RecordIsStructuredFieldType(field.Type) || profile.OrderedDecimalTextStorage() && (field.Type == "currency" || field.Type == "percent")
 }
 
-func recordListProjections(selectFields []string) []query.Projection {
+func recordListProjections(objectKey string, selectFields []string) []query.Projection {
 	if len(selectFields) == 0 {
 		return []query.Projection{query.Project(query.Star())}
 	}
-	fields := recordschema.SystemColumnNames()
+	fields := recordschema.SystemColumnNames(objectKey)
 	seen := make(map[string]bool, len(fields)+len(selectFields))
 	projections := make([]query.Projection, 0, len(fields)+len(selectFields))
 	for _, field := range fields {

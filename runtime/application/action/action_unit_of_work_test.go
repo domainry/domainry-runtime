@@ -73,7 +73,7 @@ func (s *actionUnitOfWorkStoreProbe) BeginExecutionTransaction(ctx context.Conte
 
 func (*actionUnitOfWorkStoreProbe) TryBeginExecution(_ context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
 	execution := request.Execution
-	execution.ID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
+	execution.OperationID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: execution}, nil
 }
 
@@ -215,7 +215,7 @@ func (h bookClassUnitOfWorkHandler) Invoke(ctx context.Context, execution runtim
 
 func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *testing.T) {
 	newPlan := func(actionKey, objectKey, operation string, fields map[string]any, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-		record := recordmodel.Record{ID: objectKey + "-1", Data: fields}
+		record := recordmodel.Record{RecordID: objectKey + "-1", Data: fields}
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 			WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: actionKey, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1",
 		})
@@ -293,7 +293,7 @@ func TestBusinessActionRelationValidationSeesEarlierPlannedCreate(t *testing.T) 
 			return parent, key == parent.Key
 		},
 		CanAccessPersistedRecord: func(_ context.Context, _ principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) (bool, error) {
-			return object.Key == parent.Key && record.ID == "parent-1", nil
+			return object.Key == parent.Key && record.RecordID == "parent-1", nil
 		},
 	})
 	newCreatePlan := func(object definitionmodel.ObjectSchema, record recordmodel.Record) (transactionmodel.MutationPlan, error) {
@@ -313,14 +313,14 @@ func TestBusinessActionRelationValidationSeesEarlierPlannedCreate(t *testing.T) 
 			PlanCreateMutation: func(ctx context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				switch objectKey {
 				case parent.Key:
-					record := recordmodel.Record{ID: "parent-1", Data: fields}
+					record := recordmodel.Record{RecordID: "parent-1", Data: fields}
 					plan, err := newCreatePlan(parent, record)
 					return plan, record, err
 				case child.Key:
 					if err := validator.Validate(ctx, child, fields, principal); err != nil {
 						return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 					}
-					record := recordmodel.Record{ID: "child-1", Data: fields}
+					record := recordmodel.Record{RecordID: "child-1", Data: fields}
 					plan, err := newCreatePlan(child, record)
 					return plan, record, err
 				default:
@@ -360,7 +360,7 @@ func TestActionUnitOfWorkFailsClosedWhenMutationStoreIsMissing(t *testing.T) {
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 		}
-		record := recordmodel.Record{ID: "order-1", Data: fields}
+		record := recordmodel.Record{RecordID: "order-1", Data: fields}
 		plan, err := transactionmodel.NewMutationPlan(context, transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: objectKey}, Record: record}, nil)
 		return plan, record, err
 	}})
@@ -398,7 +398,7 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 		return NewActionApplication(ActionApplicationDependencies{
 			Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 			BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{PlanCreateMutation: func(_ context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-				record := recordmodel.Record{ID: "booking-1", Data: fields}
+				record := recordmodel.Record{RecordID: "booking-1", Data: fields}
 				mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
 				if err != nil {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
@@ -585,13 +585,13 @@ func TestActionUnitOfWorkOpensLazilyForGetForUpdate(t *testing.T) {
 				if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); active {
 					t.Fatal("ordinary prewrite read unexpectedly entered Action transaction")
 				}
-				return recordmodel.Record{ID: "booking-1"}, nil
+				return recordmodel.Record{RecordID: "booking-1"}, nil
 			},
 			GetRecordForUpdate: func(ctx context.Context, _, _ string, _ principalmodel.Principal) (recordmodel.Record, error) {
 				if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); !active {
 					t.Fatal("GetForUpdate did not receive Action transaction context")
 				}
-				return recordmodel.Record{ID: "booking-1"}, nil
+				return recordmodel.Record{RecordID: "booking-1"}, nil
 			},
 		}),
 		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
@@ -620,7 +620,7 @@ func TestActionScopeDenialAfterLockingReadRollsBackBeforeAtomicFailureAudit(t *t
 		Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{
 			GetRecord: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
-				return recordmodel.Record{ID: "booking-1"}, nil
+				return recordmodel.Record{RecordID: "booking-1"}, nil
 			},
 			GetRecordForUpdate: func(ctx context.Context, objectKey, recordID string, _ principalmodel.Principal) (recordmodel.Record, error) {
 				if active, _ := ctx.Value(actionUnitOfWorkTransactionContextKey{}).(bool); !active {
@@ -675,7 +675,7 @@ func TestSynchronousConnectorCallLeaseExcludesActionTransactionAndLocks(t *testi
 	store := &actionUnitOfWorkStoreProbe{}
 	unitOfWork := &actionUnitOfWork{
 		manager: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
-		claim:   actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "execution-lease"}},
+		claim:   actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "execution-lease"}},
 		phases:  newActionExecutionPhaseMachine(),
 	}
 	lease, err := unitOfWork.acquireSynchronousConnectorCall()
@@ -804,15 +804,15 @@ func TestBusinessActionExecutionEnforcesConnectorLeaseAtEveryWriteBoundary(t *te
 				dependencies: BusinessHandlerExecutionDependencies{
 					PlanCreateMutation: func(context.Context, string, map[string]any, string, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 						dependencyCalls++
-						return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "booking-1"}, nil
+						return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "booking-1"}, nil
 					},
 					PlanConditionalUpdate: func(context.Context, string, string, transactionmodel.ConditionalUpdateInput, principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 						dependencyCalls++
-						return transactionmodel.MutationPlan{}, recordmodel.Record{ID: "booking-1"}, nil
+						return transactionmodel.MutationPlan{}, recordmodel.Record{RecordID: "booking-1"}, nil
 					},
 					GetRecordForUpdate: func(context.Context, string, string, principalmodel.Principal) (recordmodel.Record, error) {
 						dependencyCalls++
-						return recordmodel.Record{ID: "booking-1"}, nil
+						return recordmodel.Record{RecordID: "booking-1"}, nil
 					},
 				},
 			}
@@ -859,14 +859,14 @@ func TestActionSuccessAuditAndReceiptShareTransactionWithoutBusinessMutation(t *
 		BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{}),
 		UnitOfWork:       NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "action-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "booking.previewed", CreatedAt: "2026-07-22T00:00:00Z"}
+			return auditmodel.AuditEvent{AuditEventID: "action-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "booking.previewed", CreatedAt: "2026-07-22T00:00:00Z"}
 		}},
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-preview-1", Principal: actionTestPrincipal("booking.preview")})
 	if err != nil || result.Status != "success" || store.beginTransactionCalls != 1 || store.completeCalls != 0 || len(store.completions) != 1 {
 		t.Fatalf("result=%+v begins=%d complete=%d completions=%+v error=%v", result, store.beginTransactionCalls, store.completeCalls, store.completions, err)
 	}
-	if audits := store.completions[0].AuditEvents; len(audits) != 1 || audits[0].ID != "action-audit-1" {
+	if audits := store.completions[0].AuditEvents; len(audits) != 1 || audits[0].AuditEventID != "action-audit-1" {
 		t.Fatalf("transactional Action audits=%+v", audits)
 	}
 }
@@ -888,7 +888,7 @@ func TestMutationOnlyAuditPolicySuppressesSuccessfulPollingNoop(t *testing.T) {
 		UnitOfWork:       NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
 			auditBuilds++
-			return auditmodel.AuditEvent{ID: "unexpected"}
+			return auditmodel.AuditEvent{AuditEventID: "unexpected"}
 		}},
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceScheduler, actionmodel.ActionInvocation{ActionKey: action.Key, ObjectKey: action.ObjectKey, IdempotencyKey: "booking-poll-1", Principal: actionTestPrincipal("booking.poll")})
@@ -956,13 +956,13 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 				if objectKey != groupClass.Key || recordID != "class-1" {
 					return recordmodel.Record{}, errors.New("unexpected class lock")
 				}
-				return recordmodel.Record{ID: recordID, Data: map[string]any{"remaining_capacity": int64(1)}}, nil
+				return recordmodel.Record{RecordID: recordID, Data: map[string]any{"remaining_capacity": int64(1)}}, nil
 			},
 			PlanConditionalUpdate: func(_ context.Context, objectKey, recordID string, input transactionmodel.ConditionalUpdateInput, _ principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				if objectKey != groupClass.Key || recordID != "class-1" || len(input.Predicates) != 1 || len(input.Arithmetic) != 1 {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, errors.New("unexpected class reservation plan")
 				}
-				record := recordmodel.Record{ID: recordID, Data: map[string]any{"remaining_capacity": int64(0)}}
+				record := recordmodel.Record{RecordID: recordID, Data: map[string]any{"remaining_capacity": int64(0)}}
 				plan, err := newPlan("update", groupClass, record, input.Predicates)
 				return plan, record, err
 			},
@@ -970,7 +970,7 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 				if objectKey != classBooking.Key || fields["class_id"] != "class-1" || fields["member_id"] != "member-1" || fields["status"] != "booked" {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, errors.New("unexpected booking plan")
 				}
-				record := recordmodel.Record{ID: "booking-1", Data: fields}
+				record := recordmodel.Record{RecordID: "booking-1", Data: fields}
 				plan, err := newPlan("create", classBooking, record, nil)
 				return plan, record, err
 			},
@@ -984,7 +984,7 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 		}),
 		UnitOfWork: NewActionUnitOfWorkManager(actionruntime.NewActionExecutionRuntime(store)),
 		Audit: ActionAudit{BuildSuccess: func(context.Context, definitionmodel.ActionSchema, actionmodel.ActionInvocation, actionmodel.ActionInvocationResult) auditmodel.AuditEvent {
-			return auditmodel.AuditEvent{ID: "book-class-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked", CreatedAt: "2026-07-23T00:00:00Z"}
+			return auditmodel.AuditEvent{AuditEventID: "book-class-audit-1", WorkspaceID: "workspace-a", Family: auditmodel.EventFamilyBusinessEntity, Event: "gym.class_booked", CreatedAt: "2026-07-23T00:00:00Z"}
 		}},
 	})
 	result, err := service.Invoke(t.Context(), actionmodel.ActionSourceHTTP, actionmodel.ActionInvocation{
@@ -1005,10 +1005,10 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 	}
 	intent := commits[1].Outbox[0]
 	completion := store.completions[0]
-	if durableReceipt.ID != "durable_intent:execution-1:0" || intent.ID != durableReceipt.ID ||
+	if durableReceipt.ID != "durable_intent:execution-1:0" || intent.MessageID != durableReceipt.ID ||
 		intent.ConnectorKey != "member_center" || intent.Operation != "send_notice" ||
-		completion.ExecutionID != "execution-1" || len(completion.AuditEvents) != 1 ||
-		completion.AuditEvents[0].ID != "book-class-audit-1" {
+		completion.OperationID != "execution-1" || len(completion.AuditEvents) != 1 ||
+		completion.AuditEvents[0].AuditEventID != "book-class-audit-1" {
 		t.Fatalf("receipt=%+v intent=%+v completion=%+v", durableReceipt, intent, completion)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainry/domainry-orm/recordschema"
+	ormschema "github.com/domainry/domainry-orm/schema"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
@@ -44,18 +46,16 @@ func TestRecordTimerLeaseContractAcrossDialects(t *testing.T) {
 
 func assertRecordTimerLeaseContract(t *testing.T, store *database.RuntimeStore, table string) {
 	t.Helper()
-	columns := []string{
-		store.Identifier("workspace_id") + " VARCHAR(191) NOT NULL",
-		store.Identifier("id") + " VARCHAR(191) NOT NULL",
-		store.Identifier("created_at") + " BIGINT NOT NULL",
-		store.Identifier("updated_at") + " BIGINT NOT NULL",
-		store.Identifier("status") + " VARCHAR(32)",
-		store.Identifier("lease_owner") + " VARCHAR(191)",
-		store.Identifier("lease_expires_at") + " BIGINT",
-		store.Identifier("fencing_token") + " BIGINT",
-		"PRIMARY KEY (" + store.Identifier("workspace_id") + ", " + store.Identifier("id") + ")",
+	statement, args, err := recordschema.NewTable(store.RuntimeRenderer(), table).Columns(
+		ormschema.Column("status", ormschema.TextKey(32)),
+		ormschema.Column("lease_owner", ormschema.TextKey(191)),
+		ormschema.Column("lease_expires_at", ormschema.BigInt()),
+		ormschema.Column("fencing_token", ormschema.BigInt()),
+	).Build()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), "CREATE TABLE "+store.Identifier(table)+" ("+joinRecordTimerDDL(columns)+")"); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), statement, args...); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = store.DB().ExecContext(t.Context(), "DROP TABLE "+store.Identifier(table)) })
@@ -64,7 +64,7 @@ func assertRecordTimerLeaseContract(t *testing.T, store *database.RuntimeStore, 
 	}}
 	repository := NewRecordStore(store)
 	now := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)
-	original := recordmodel.Record{ID: "timer-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "scheduled", "lease_owner": "", "lease_expires_at": "", "fencing_token": 0}}
+	original := recordmodel.Record{RecordID: "timer-1", CreatedAt: now.Format(time.RFC3339Nano), UpdatedAt: now.Format(time.RFC3339Nano), Data: map[string]any{"status": "scheduled", "lease_owner": "", "lease_expires_at": "", "fencing_token": 0}}
 	if err := repository.InsertRecord(t.Context(), "workspace-a", object, original); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func assertRecordTimerLeaseContract(t *testing.T, store *database.RuntimeStore, 
 		go func() {
 			defer group.Done()
 			<-start
-			candidate := recordmodel.Record{ID: original.ID, CreatedAt: original.CreatedAt, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano), Data: map[string]any{"status": "leased", "lease_owner": fmt.Sprintf("instance-%d", index), "lease_expires_at": now.Add(time.Minute).Format(time.RFC3339Nano), "fencing_token": 1}}
+			candidate := recordmodel.Record{RecordID: original.RecordID, CreatedAt: original.CreatedAt, UpdatedAt: now.Add(time.Second).Format(time.RFC3339Nano), Data: map[string]any{"status": "leased", "lease_owner": fmt.Sprintf("instance-%d", index), "lease_expires_at": now.Add(time.Minute).Format(time.RFC3339Nano), "fencing_token": 1}}
 			won, err := repository.UpdateRecordWhere(t.Context(), "workspace-a", object, candidate, map[string]any{"status": "scheduled", "fencing_token": 0})
 			if err != nil {
 				errorsFound <- err
@@ -102,7 +102,7 @@ func assertRecordTimerLeaseContract(t *testing.T, store *database.RuntimeStore, 
 	if count != 1 {
 		t.Fatalf("record timer lease winners=%d", count)
 	}
-	reclaimed := recordmodel.Record{ID: original.ID, CreatedAt: original.CreatedAt, UpdatedAt: now.Add(2 * time.Minute).Format(time.RFC3339Nano), Data: map[string]any{"status": "leased", "lease_owner": "instance-restarted", "lease_expires_at": now.Add(3 * time.Minute).Format(time.RFC3339Nano), "fencing_token": 2}}
+	reclaimed := recordmodel.Record{RecordID: original.RecordID, CreatedAt: original.CreatedAt, UpdatedAt: now.Add(2 * time.Minute).Format(time.RFC3339Nano), Data: map[string]any{"status": "leased", "lease_owner": "instance-restarted", "lease_expires_at": now.Add(3 * time.Minute).Format(time.RFC3339Nano), "fencing_token": 2}}
 	conditions := map[string]any{"status": "leased", "lease_owner": first.Data["lease_owner"], "fencing_token": 1}
 	if won, err := repository.UpdateRecordWhere(t.Context(), "workspace-a", object, reclaimed, conditions); err != nil || !won {
 		t.Fatalf("record timer reclaim won=%v err=%v", won, err)
@@ -112,15 +112,4 @@ func assertRecordTimerLeaseContract(t *testing.T, store *database.RuntimeStore, 
 	if won, err := repository.UpdateRecordWhere(t.Context(), "workspace-a", object, stale, conditions); err != nil || won {
 		t.Fatalf("stale record timer terminal write won=%v err=%v", won, err)
 	}
-}
-
-func joinRecordTimerDDL(columns []string) string {
-	result := ""
-	for index, column := range columns {
-		if index > 0 {
-			result += ", "
-		}
-		result += column
-	}
-	return result
 }

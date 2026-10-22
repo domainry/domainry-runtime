@@ -32,15 +32,15 @@ func (s *UploadSubjectRegistry) Register(ctx context.Context, artifact lifecycle
 	if err := s.validateBindingPrincipal(artifact, principal); err != nil {
 		return err
 	}
-	return s.store.InsertUploadSubject(ctx, UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256})
+	return s.store.InsertUploadSubject(ctx, UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ArtifactID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256})
 }
 
 func (s *UploadSubjectRegistry) Ensure(ctx context.Context, artifact lifecyclecontract.UploadArtifact, principal principalmodel.Principal) error {
 	if err := s.validateBindingPrincipal(artifact, principal); err != nil {
 		return err
 	}
-	expected := UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256}
-	existing, err := s.store.FindUploadSubject(ctx, artifact.WorkspaceID, artifact.ID)
+	expected := UploadSubjectBinding{WorkspaceID: artifact.WorkspaceID, FileID: artifact.ArtifactID, Filename: artifact.Filename, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, UserID: principal.UserID, SHA256: artifact.SHA256}
+	existing, err := s.store.FindUploadSubject(ctx, artifact.WorkspaceID, artifact.ArtifactID)
 	if err == nil {
 		if existing != expected {
 			return uploadAccessError(apperror.KindForbidden, "backend.upload.subject_binding_denied")

@@ -26,15 +26,15 @@ func (p *operationsResultArtifactProbe) PutOperationsResult(_ context.Context, v
 		p.values = map[string]operationsrepository.OperationsResultArtifact{}
 	}
 	digest := sha256.Sum256(value.Content)
-	reference := operationsrepository.OperationsResultArtifactReference{ID: "artifact-" + value.OperationID, ContentSHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(value.Content))}
-	p.values[reference.ID] = value
+	reference := operationsrepository.OperationsResultArtifactReference{ArtifactID: "artifact-" + value.OperationID, ContentSHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(value.Content))}
+	p.values[reference.ArtifactID] = value
 	return reference, nil
 }
 
 func (p *operationsResultArtifactProbe) GetOperationsResult(_ context.Context, workspaceID, operationID, artifactID string) ([]byte, operationsrepository.OperationsResultArtifactReference, error) {
 	value := p.values[artifactID]
 	digest := sha256.Sum256(value.Content)
-	return append([]byte(nil), value.Content...), operationsrepository.OperationsResultArtifactReference{ID: artifactID, ContentSHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(value.Content))}, nil
+	return append([]byte(nil), value.Content...), operationsrepository.OperationsResultArtifactReference{ArtifactID: artifactID, ContentSHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(value.Content))}, nil
 }
 
 func TestOperationsLargeResultUsesArtifactAndReplaysIntegrityCheckedContent(t *testing.T) {

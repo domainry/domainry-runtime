@@ -75,7 +75,7 @@ type recordsActionExecutionTransaction struct{}
 
 func (recordsActionExecutionStore) TryBeginExecution(_ context.Context, request actionmodel.ActionExecutionClaimRequest) (actionmodel.ActionExecutionClaimResult, error) {
 	execution := request.Execution
-	execution.ID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
+	execution.OperationID, execution.LeaseOwner, execution.FencingToken = "execution-1", request.LeaseOwner, 1
 	return actionmodel.ActionExecutionClaimResult{Decision: idempotency.DecisionAcquired, Execution: execution}, nil
 }
 
@@ -301,7 +301,7 @@ func TestEffectivePermissionsAppliesRecordRLSOnceForEveryRecordAction(t *testing
 		{name: "other owner", owner: "coach-b", wantRecord: false, wantReason: "data_scope_denied"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			repository := &recordsHTTPRepository{record: recordmodel.Record{ID: "customer-1", OwnerUserID: test.owner}, found: true}
+			repository := &recordsHTTPRepository{record: recordmodel.Record{RecordID: "customer-1", OwnerUserID: test.owner}, found: true}
 			handler, serviceErr := recordsHandlerForTest(principal)
 			handler.UseQueries(recordsHTTPApplication(repository))
 			handler.permissions = appschemaapplication.NewApplicationSchemaQueryApplicationService(recordsSchemaProvider{snapshot: appschemamodel.ApplicationSchemaSnapshot{
@@ -431,7 +431,7 @@ func TestEffectivePermissionsRecordDecisionEdgePaths(t *testing.T) {
 			{Key: "customer.create", ObjectKey: "customer", Kind: "object_create"},
 		})
 		handler.UseQueries(recordsHTTPApplication(&recordsHTTPRepository{
-			record: recordmodel.Record{ID: "one", OwnerUserID: "someone-else"},
+			record: recordmodel.Record{RecordID: "one", OwnerUserID: "someone-else"},
 			found:  true,
 		}))
 		w := httptest.NewRecorder()

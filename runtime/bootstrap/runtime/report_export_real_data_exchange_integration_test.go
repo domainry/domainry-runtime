@@ -55,7 +55,7 @@ func TestReportExportDeliveryMaterializesSmallResultWithBusinessTTL(t *testing.T
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	records := &realBindingReportRecords{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	records := &realBindingReportRecords{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	owner := &realBindingReportExports{definition: reportmodel.ReportExportDefinition{Report: reportDefinition, Control: control}}
@@ -96,7 +96,7 @@ func TestReportExportDeliveryMaterializesSmallResultWithBusinessTTL(t *testing.T
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_jobs WHERE workspace_id = ? AND provider = ? AND operation = ?`, principal.WorkspaceID, "reports", "export").Scan(&jobCount); err != nil || jobCount != 1 {
 		t.Fatalf("data exchange jobs=%d err=%v", jobCount, err)
 	}
-	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, result.Job.ID)
+	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, result.Job.JobID)
 }
 
 func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.T) {
@@ -149,7 +149,7 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 		SQL: "SELECT c.id AS id FROM customer c ORDER BY c.id LIMIT 2000", SourceObjects: []string{"customer"},
 		ResultSchema: []reportmodel.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}},
 	}}
-	records := &realBindingReportRecords{audit: recordmodel.Record{ID: "audit-1", Data: map[string]any{
+	records := &realBindingReportRecords{audit: recordmodel.Record{RecordID: "audit-1", Data: map[string]any{
 		"report_key": "revenue", "requested_by_identity_user_id": principal.UserID, "status": "approved",
 	}}}
 	owner := &realBindingReportExports{definition: reportmodel.ReportExportDefinition{Report: reportDefinition, Control: control}}
@@ -177,7 +177,7 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 	queuedOwner := &realBindingReportExports{definition: owner.definition, sourceVersion: "version-after-service-rebuild"}
 	service = newService(queuedOwner)
 	queuedReplay, err := service.PrepareResolvedExport(requestContext, request, reportDefinition, control, principal)
-	if err != nil || queuedReplay.ID != prepared.ID || queuedReplay.Status != prepared.Status || queuedReplay.Status == "completed" {
+	if err != nil || queuedReplay.JobID != prepared.JobID || queuedReplay.Status != prepared.Status || queuedReplay.Status == "completed" {
 		t.Fatalf("queued replay=%+v prepared=%+v err=%v", queuedReplay, prepared, err)
 	}
 	if resolveCalls, readCalls, versionCalls := queuedOwner.calls(); resolveCalls != 0 || readCalls != 0 || versionCalls != 0 {
@@ -187,7 +187,7 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 	queuedOwner.sourceVersion = "version-1"
 	queuedOwner.mu.Unlock()
 	done = binding.Start(t.Context(), dataexchange.WorkerConfig{Enabled: true, PollInterval: time.Millisecond, BatchSize: 2, LeaseTTL: time.Second})
-	completed := waitRealBindingReportJob(t, requestContext, binding, principal, prepared.ID)
+	completed := waitRealBindingReportJob(t, requestContext, binding, principal, prepared.JobID)
 	if completed.Status != "completed" || completed.ArtifactID == "" || completed.Checkpoint != 1 {
 		t.Fatalf("completed=%+v", completed)
 	}
@@ -196,7 +196,7 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 	completedOwner := &realBindingReportExports{definition: owner.definition, sourceVersion: "version-after-completion"}
 	service = newService(completedOwner)
 	replayed, err := service.PrepareResolvedExport(requestContext, request, reportDefinition, control, principal)
-	if err != nil || replayed.ID != prepared.ID || replayed.Status != "completed" {
+	if err != nil || replayed.JobID != prepared.JobID || replayed.Status != "completed" {
 		t.Fatalf("replayed=%+v prepared=%+v err=%v", replayed, prepared, err)
 	}
 	if resolveCalls, readCalls, versionCalls := completedOwner.calls(); resolveCalls != 0 || readCalls != 0 || versionCalls != 0 {
@@ -209,7 +209,7 @@ func TestReportExportDurableReceiptWithRealSQLiteDataExchangeBinding(t *testing.
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM _data_exchange_jobs WHERE workspace_id = ? AND provider = ? AND operation = ?`, principal.WorkspaceID, "reports", "export").Scan(&jobCount); err != nil || jobCount != 1 {
 		t.Fatalf("data exchange jobs=%d err=%v", jobCount, err)
 	}
-	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, completed.ID)
+	assertDataExchangeSharedArtifact(t, store, principal.WorkspaceID, completed.JobID)
 	var ledgerTables int
 	if err = store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name LIKE '%schema_migrations%'`).Scan(&ledgerTables); err != nil || ledgerTables != 1 {
 		t.Fatalf("migration ledger tables=%d err=%v", ledgerTables, err)
@@ -221,7 +221,7 @@ func assertDataExchangeSharedArtifact(t *testing.T, store *persistence.RuntimeSt
 	var artifacts, retiredTables int
 	err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*)
 FROM _artifacts a
-JOIN _artifact_bindings b ON b.workspace_id=a.workspace_id AND b.artifact_id=a.id
+JOIN _artifact_bindings b ON b.workspace_id=a.workspace_id AND b.artifact_id=a.artifact_id
 WHERE a.workspace_id=? AND a.owner='data_exchange' AND a.kind='output' AND a.status='available'
 AND b.owner='data_exchange' AND b.kind='job' AND b.resource_type='data_exchange_job' AND b.resource_id=?`, workspaceID, jobID).Scan(&artifacts)
 	if err != nil || artifacts != 1 {
@@ -279,10 +279,10 @@ type realBindingReportRecords struct {
 func (r *realBindingReportRecords) GetReportRecord(_ context.Context, objectKey, recordID string, _ principalmodel.Principal) (recordmodel.Record, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if objectKey == "report_export_audit" && recordID == r.audit.ID {
+	if objectKey == "report_export_audit" && recordID == r.audit.RecordID {
 		return cloneRealBindingReportRecord(r.audit), nil
 	}
-	if objectKey == "report_export_download" && recordID == r.download.ID {
+	if objectKey == "report_export_download" && recordID == r.download.RecordID {
 		return cloneRealBindingReportRecord(r.download), nil
 	}
 	return recordmodel.Record{}, fmt.Errorf("report record not found")
@@ -290,8 +290,8 @@ func (r *realBindingReportRecords) GetReportRecord(_ context.Context, objectKey,
 func (r *realBindingReportRecords) CreateReportRecord(_ context.Context, _ string, data map[string]any, _ string, _ principalmodel.Principal) (recordmodel.Record, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.download.ID == "" {
-		r.download = recordmodel.Record{ID: "download-1", Data: cloneRealBindingReportData(data)}
+	if r.download.RecordID == "" {
+		r.download = recordmodel.Record{RecordID: "download-1", Data: cloneRealBindingReportData(data)}
 	}
 	return cloneRealBindingReportRecord(r.download), nil
 }
@@ -314,7 +314,7 @@ func (r *realBindingReportRecords) TransitionReportExportAuditStatus(_ context.C
 func (r *realBindingReportRecords) TransitionReportExportAudit(_ context.Context, _, _, recordID, statusField, fromStatus string, patch map[string]any) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.audit.ID != recordID || fmt.Sprint(r.audit.Data[statusField]) != fromStatus {
+	if r.audit.RecordID != recordID || fmt.Sprint(r.audit.Data[statusField]) != fromStatus {
 		return false, nil
 	}
 	for key, value := range patch {

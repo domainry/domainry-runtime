@@ -89,7 +89,7 @@ func (r managementExecutionRepository) ListExecutions(context.Context, string, a
 func TestManagementServiceOwnsSortedRulesCapabilitiesAndHistory(t *testing.T) {
 	rules := managementRuleRegistry{rules: []automationmodel.AutomationRuleSchema{{Key: "z"}, {Key: "a"}}}
 	service := NewAutomationManagementApplicationService(AutomationManagementDependencies{
-		Rules: rules, Executions: managementExecutionRepository{items: []automationmodel.AutomationRuleExecution{{ID: "execution-1"}}},
+		Rules: rules, Executions: managementExecutionRepository{items: []automationmodel.AutomationRuleExecution{{RunID: "execution-1"}}},
 		ListInvocations: func(context.Context, string, automationmodel.AutomationExecutionFilter) ([]integrationsdk.Invocation, error) {
 			return []integrationsdk.Invocation{}, nil
 		},

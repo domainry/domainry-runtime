@@ -40,7 +40,7 @@ func TestRecordCreateAuthorizationSchedulerNilPayloadAndWritableEdges(t *testing
 		ObjectForAction: func(principalmodel.Principal, string, string) (definitionmodel.ObjectSchema, error) {
 			return definitionmodel.ObjectSchema{Key: "empty"}, nil
 		},
-		NewRecordID: func(string) string { return "empty-1" },
+		NewRecordID: func(string) (string, error) { return "empty-1", nil },
 	}
 	if created, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "empty", nil, principal); err != nil || created.Data == nil {
 		t.Fatalf("nil payload create=%#v err=%v", created, err)
@@ -84,13 +84,13 @@ func TestRecordCreateSecondNormalizationValidationAndReplayAuditNilEdges(t *test
 		t.Fatalf("record validation error = %v", err)
 	}
 
-	replay := recordmodel.Record{ID: "existing", Data: map[string]any{"name": "Acme"}}
+	replay := recordmodel.Record{RecordID: "existing", Data: map[string]any{"name": "Acme"}}
 	dependencies = recordCreateEdgeDependencies(repository)
 	dependencies.FindReplay = func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) (recordmodel.Record, bool, error) {
 		return replay, true, nil
 	}
 	dependencies.Audit = nil
-	if created, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "customer", map[string]any{"name": "Acme"}, principal); err != nil || created.ID != replay.ID {
+	if created, err := NewRecordCreateApplicationService(dependencies).Create(t.Context(), "customer", map[string]any{"name": "Acme"}, principal); err != nil || created.RecordID != replay.RecordID {
 		t.Fatalf("unaudited replay=%#v err=%v", created, err)
 	}
 }
@@ -117,7 +117,7 @@ func TestRecordCreateIdempotencyBeginCommitAndPostCommitFailureEdges(t *testing.
 	repository = &createRepositoryProbe{onCommit: cancel}
 	dependencies = recordCreateEdgeDependencies(repository)
 	created, err := NewRecordCreateApplicationService(dependencies).Create(ctx, "customer", map[string]any{"name": "Acme"}, principal)
-	if !errors.Is(err, context.Canceled) || created.ID != "customer-1" {
+	if !errors.Is(err, context.Canceled) || created.RecordID != "customer-1" {
 		t.Fatalf("post-commit create=%#v err=%v", created, err)
 	}
 

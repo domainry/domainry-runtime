@@ -35,7 +35,7 @@ func (p *resultReadScopeAccess) AuthorizeReportObjectSQLField(context.Context, p
 func TestReportResultReadScopeIncludesHiddenPredicatesButNotExecutionRevision(t *testing.T) {
 	p := &resultReadScopeAccess{objectSQLSourceAccessProbe: objectSQLSourceAccessProbe{objects: map[string]definition.ObjectSchema{"sale": {Key: "sale"}}}, mode: record.RecordQueryAuthorizationUnrestricted}
 	host := NewReportModuleQueryHost(ReportModuleQueryHostDependencies{Access: p})
-	r := model.ReportSchema{ObjectSQLV1: &model.ReportObjectSQLSchema{SQL: `SELECT s.id AS id FROM sale s LIMIT 10`, ResultSchema: []model.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
+	r := model.ReportSchema{ObjectSQLV1: &model.ReportObjectSQLSchema{SQL: `SELECT s.record_id AS id FROM sale s LIMIT 10`, ResultSchema: []model.ReportResultColumnSchema{{Key: "id", Type: "text", Kind: "dimension"}}}}
 	var subject model.ReportSubject
 	subject.Principal.WorkspaceID = "workspace"
 	subject.Principal.UserID = "user"

@@ -1,29 +1,32 @@
 package automationmodel
 
 type AutomationRuleExecution struct {
-	ID            string         `json:"id"`
-	WorkspaceID   string         `json:"workspace_id"`
-	RuleKey       string         `json:"rule_key"`
-	ObjectKey     string         `json:"object_key"`
-	RecordID      string         `json:"record_id,omitempty"`
-	Phase         string         `json:"phase"`
-	Operation     string         `json:"operation"`
-	Status        string         `json:"status"`
-	ActorID       string         `json:"actor_id,omitempty"`
-	RoleKey       string         `json:"role_key,omitempty"`
-	RequestID     string         `json:"request_id,omitempty"`
-	CorrelationID string         `json:"correlation_id,omitempty"`
-	EventID       string         `json:"event_id,omitempty"`
-	DurationMS    int64          `json:"duration_ms"`
-	ErrorCode     string         `json:"error_code,omitempty"`
-	Candidate     map[string]any `json:"candidate,omitempty"`
-	Trace         map[string]any `json:"trace"`
-	CreatedAt     string         `json:"created_at"`
-	UpdatedAt     string         `json:"updated_at"`
+	ID             int64          `json:"id"`
+	RunID          string         `json:"run_id"`
+	IdempotencyKey string         `json:"idempotency_key"`
+	WorkspaceID    string         `json:"workspace_id"`
+	RuleKey        string         `json:"rule_key"`
+	ObjectKey      string         `json:"object_key"`
+	RecordID       string         `json:"record_id,omitempty"`
+	Phase          string         `json:"phase"`
+	Operation      string         `json:"operation"`
+	Status         string         `json:"status"`
+	ActorID        string         `json:"actor_id,omitempty"`
+	RoleKey        string         `json:"role_key,omitempty"`
+	RequestID      string         `json:"request_id,omitempty"`
+	CorrelationID  string         `json:"correlation_id,omitempty"`
+	EventID        string         `json:"event_id,omitempty"`
+	DurationMS     int64          `json:"duration_ms"`
+	ErrorCode      string         `json:"error_code,omitempty"`
+	Candidate      map[string]any `json:"candidate,omitempty"`
+	Trace          map[string]any `json:"trace"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
 }
 
 type AutomationInstructionExecution struct {
-	ID             string         `json:"id"`
+	ID             int64          `json:"id"`
+	RunID          string         `json:"run_id"`
 	WorkspaceID    string         `json:"workspace_id"`
 	IdempotencyKey string         `json:"idempotency_key"`
 	RuleKey        string         `json:"rule_key"`

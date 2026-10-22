@@ -30,15 +30,15 @@ func TestPipelineApplicationServiceDelegatesRulesAndNilBoundaries(t *testing.T) 
 		t.Fatalf("dependencies=%+v", dependencies)
 	}
 	stage, err := service.GetStage(t.Context(), "workspace-1", "stage-old")
-	if err != nil || stage.ID != "stage-old" {
+	if err != nil || stage.RecordID != "stage-old" {
 		t.Fatalf("stage=%+v err=%v", stage, err)
 	}
 	first, err := service.FirstStage(t.Context(), "workspace-1", "pipeline-1")
-	if err != nil || first.ID != "stage-old" {
+	if err != nil || first.RecordID != "stage-old" {
 		t.Fatalf("first=%+v err=%v", first, err)
 	}
 	next, err := service.NextStage(t.Context(), "workspace-1", "pipeline-1", first)
-	if err != nil || next.ID != "stage-new" {
+	if err != nil || next.RecordID != "stage-new" {
 		t.Fatalf("next=%+v err=%v", next, err)
 	}
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1"}}

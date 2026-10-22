@@ -64,7 +64,7 @@ func TestPipelineTransitionPlansItemAndHistoryThroughCanonicalMutationKernel(t *
 func TestPipelineTransitionPlanDoesNotOwnCommit(t *testing.T) {
 	service, object, record, commits := pipelineTransitionFixture(t, nil)
 	result, plans, err := service.PlanPersist(t.Context(), object, record, record.Data, definitionmodel.ActionSchema{Key: "pipeline_item.advance"}, nil, "stage-old", "stage-new", principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-1", UserID: "user-1"}})
-	if err != nil || result.RecordID != record.ID || len(plans) != 2 || len(*commits) != 0 {
+	if err != nil || result.RecordID != record.RecordID || len(plans) != 2 || len(*commits) != 0 {
 		t.Fatalf("result=%+v plans=%d committed=%d error=%v", result, len(plans), len(*commits), err)
 	}
 }
@@ -86,10 +86,10 @@ func pipelineTransitionFixture(t *testing.T, commitErr error) (*PipelineTransiti
 	itemObject := definitionmodel.ObjectSchema{Key: "pipeline_item", Fields: []definitionmodel.FieldSchema{text("pipeline"), text("current_stage"), {Key: "version", Type: "number"}, text("status"), {Key: "last_transition_at", Type: "datetime"}, {Key: "due_at", Type: "datetime"}, {Key: "completed_at", Type: "datetime"}, text("failure_reason")}}
 	historyObject := definitionmodel.ObjectSchema{Key: "pipeline_item_history", Fields: []definitionmodel.FieldSchema{text("pipeline_item"), text("from_stage"), text("to_stage"), text("actor"), text("owner"), text("note"), text("reason"), text("field_changes"), {Key: "transitioned_at", Type: "datetime"}}}
 	stageObject := definitionmodel.ObjectSchema{Key: "pipeline_stage", Fields: []definitionmodel.FieldSchema{text("pipeline"), {Key: "sort_order", Type: "number"}, {Key: "sla_hours", Type: "number"}}}
-	record := recordmodel.Record{ID: "item-1", UpdatedAt: "before", Data: map[string]any{"pipeline": "pipeline-1", "current_stage": "stage-old", "version": 1.0, "status": "open"}}
+	record := recordmodel.Record{RecordID: "item-1", UpdatedAt: "before", Data: map[string]any{"pipeline": "pipeline-1", "current_stage": "stage-old", "version": 1.0, "status": "open"}}
 	repository := &pipelineTransitionRepositoryProbe{records: map[string]map[string]recordmodel.Record{"pipeline_stage": {
-		"stage-old": {ID: "stage-old", Data: map[string]any{"pipeline": "pipeline-1", "sort_order": 10.0}},
-		"stage-new": {ID: "stage-new", Data: map[string]any{"pipeline": "pipeline-1", "sort_order": 20.0}},
+		"stage-old": {RecordID: "stage-old", Data: map[string]any{"pipeline": "pipeline-1", "sort_order": 10.0}},
+		"stage-new": {RecordID: "stage-new", Data: map[string]any{"pipeline": "pipeline-1", "sort_order": 20.0}},
 	}}}
 	objects := map[string]definitionmodel.ObjectSchema{"pipeline_item": itemObject, "pipeline_item_history": historyObject, "pipeline_stage": stageObject}
 	pipeline := NewPipelineApplicationService(PipelineDependencies{Repository: repository, Object: func(_ context.Context, key string) (definitionmodel.ObjectSchema, bool) {
@@ -112,14 +112,14 @@ func pipelineTransitionFixture(t *testing.T, commitErr error) (*PipelineTransiti
 			for key, value := range patch {
 				planned.Data[key] = value
 			}
-			audit := auditmodel.AuditEvent{ID: "update-audit"}
-			commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: objects[objectKey], Record: planned, Audit: &audit, WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "after-transition", Status: "pending"}}}
+			audit := auditmodel.AuditEvent{AuditEventID: "update-audit"}
+			commit := transactionmodel.RecordMutationCommit{Operation: "update", Object: objects[objectKey], Record: planned, Audit: &audit, WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1", WorkflowKey: "after-transition", Status: "pending"}}}
 			plan, err := newPlan(principal, commit, record.Data)
 			return plan, planned, err
 		},
 		PlanCreate: func(_ context.Context, objectKey string, data map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-			created := recordmodel.Record{ID: "history-1", Data: clonePipelineTestData(data)}
-			audit := auditmodel.AuditEvent{ID: "create-audit"}
+			created := recordmodel.Record{RecordID: "history-1", Data: clonePipelineTestData(data)}
+			audit := auditmodel.AuditEvent{AuditEventID: "create-audit"}
 			plan, err := newPlan(principal, transactionmodel.RecordMutationCommit{Operation: "create", Object: objects[objectKey], Record: created, Audit: &audit}, nil)
 			return plan, created, err
 		},

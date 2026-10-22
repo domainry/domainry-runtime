@@ -90,7 +90,7 @@ func (h *ConversationBusinessHost) queryBusinessRecords(ctx context.Context, q a
 			query.SelectFields = append(query.SelectFields, rule.Field)
 		}
 	}
-	query.Sort = append(query.Sort, recordmodel.RecordSortRule{Field: "id", Direction: "asc"})
+	query.Sort = append(query.Sort, recordmodel.RecordSortRule{Field: recordmodel.IDField, Direction: "asc"})
 	if q.Cursor != "" {
 		cursor, err := h.decodeCursor(q, a, query.Sort, relationScope)
 		if err != nil {

@@ -36,11 +36,22 @@ func (s *workflowExecutionWorkerStub) GetExecution(_ context.Context, _, id stri
 	execution, found := s.executions[id]
 	return execution, found, nil
 }
+func (s *workflowExecutionWorkerStub) GetExecutionByProcessID(_ context.Context, _, processID string) (workflowmodel.WorkflowExecution, bool, error) {
+	if s.getErr != nil {
+		return workflowmodel.WorkflowExecution{}, false, s.getErr
+	}
+	for _, execution := range s.executions {
+		if execution.ProcessID == processID {
+			return execution, true, nil
+		}
+	}
+	return workflowmodel.WorkflowExecution{}, false, nil
+}
 func (s *workflowExecutionWorkerStub) UpdateExecution(_ context.Context, _ string, execution workflowmodel.WorkflowExecution) error {
 	if s.updateErr != nil {
 		return s.updateErr
 	}
-	s.executions[execution.ID] = execution
+	s.executions[execution.ExecutionID] = execution
 	s.updated = append(s.updated, execution)
 	return nil
 }
@@ -48,7 +59,7 @@ func (s *workflowExecutionWorkerStub) InsertExecution(_ context.Context, _ strin
 	if s.insertErr != nil {
 		return s.insertErr
 	}
-	s.executions[execution.ID] = execution
+	s.executions[execution.ExecutionID] = execution
 	s.inserted = append(s.inserted, execution)
 	return nil
 }
@@ -67,11 +78,11 @@ type workflowExecutionProcessStub struct {
 }
 
 func (s *workflowExecutionProcessStub) InsertProcess(_ context.Context, _ string, process workflowmodel.WorkflowProcessInstance) error {
-	s.processes[process.ID] = process
+	s.processes[process.ProcessID] = process
 	return nil
 }
 func (s *workflowExecutionProcessStub) UpdateProcess(_ context.Context, _ string, process workflowmodel.WorkflowProcessInstance) error {
-	s.processes[process.ID] = process
+	s.processes[process.ProcessID] = process
 	return nil
 }
 func (s *workflowExecutionProcessStub) GetProcess(_ context.Context, _, id string) (workflowmodel.WorkflowProcessInstance, bool, error) {

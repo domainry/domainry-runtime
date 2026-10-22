@@ -73,7 +73,7 @@ func TestReadServicePropagatesPolicyRepositoryAndReferenceErrors(t *testing.T) {
 
 func TestReadServiceContextualPolicyAuditAndErrorEdges(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "customer", Fields: []definitionmodel.FieldSchema{{Key: "secret", Type: "text"}}}
-	record := recordmodel.Record{ID: "customer-1", Data: map[string]any{"secret": "classified"}}
+	record := recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"secret": "classified"}}
 	repository := &readRepositoryProbe{page: recordmodel.RecordPageResult{Items: []recordmodel.Record{record}, Total: 1}}
 	denialRule := accessfixture.FieldRuleFixture{Key: "deny-secret", Actions: []string{"read"}, Effect: "deny", AuditDenial: true}
 	principal := accessfixture.Attach(principalmodel.Principal{}, accessfixture.Bundle{FieldPolicies: []accessfixture.FieldPolicyFixture{{ObjectKey: object.Key, FieldKey: "secret", Read: true, Policies: []accessfixture.FieldRuleFixture{denialRule}}}})

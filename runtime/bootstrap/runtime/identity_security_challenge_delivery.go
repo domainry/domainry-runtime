@@ -53,7 +53,7 @@ func (delivery runtimeIdentitySecurityChallengeDelivery) DeliverSecurityChalleng
 	}
 	responseRef := strings.TrimSpace(result.Invocation.ResponseRef)
 	if responseRef == "" {
-		responseRef = strings.TrimSpace(result.Invocation.ID)
+		responseRef = strings.TrimSpace(result.Invocation.InvocationID)
 	}
 	return identitymodulehost.SecurityChallengeDeliveryReceipt{Status: result.Invocation.Status, ResponseRef: responseRef}, nil
 }

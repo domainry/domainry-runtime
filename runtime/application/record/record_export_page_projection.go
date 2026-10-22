@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -26,7 +27,7 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 	queryOptions.SkipTotal, queryOptions.AfterID = true, strings.TrimSpace(cursor)
 	// Export iteration has one canonical order. This makes the cursor stable and
 	// prevents deep OFFSET pagination while preserving all filter/search scope.
-	queryOptions.Sort = []recordmodel.RecordSortRule{{Field: "id", Direction: "asc"}}
+	queryOptions.Sort = []recordmodel.RecordSortRule{{Field: recordmodel.IDField, Direction: "asc"}}
 	query := queryOptions
 	if s.dependencies.NormalizeQuery != nil {
 		query = s.dependencies.NormalizeQuery(prepared.object, queryOptions, prepared.principal)
@@ -43,7 +44,7 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 			return recordExportProjectedPage{}, projectErr
 		}
 		for _, projected := range projectedRecords {
-			projectedByID[projected.ID] = projected
+			projectedByID[projected.RecordID] = projected
 		}
 	}
 	rows := make([][]string, 0, len(page.Items))
@@ -53,9 +54,9 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 		}
 		projected := record
 		if s.dependencies.ProjectRecords != nil {
-			projected = projectedByID[record.ID]
+			projected = projectedByID[record.RecordID]
 		}
-		row := []string{record.ID, record.CreatedAt, record.UpdatedAt}
+		row := []string{record.RecordID, record.CreatedAt, record.UpdatedAt}
 		for _, field := range prepared.fields {
 			value := ""
 			if s.dependencies.ProjectRecords != nil {
@@ -80,8 +81,11 @@ func (s *RecordExportApplicationService) projectExportPage(ctx context.Context, 
 		rows = append(rows, row)
 	}
 	next := ""
-	if page.HasNext && len(page.Items) > 0 {
-		next = page.Items[len(page.Items)-1].ID
+	if page.HasNext {
+		if len(page.Items) == 0 || page.Items[len(page.Items)-1].ID < 1 {
+			return recordExportProjectedPage{}, recordExportInternalError("advance export cursor", fmt.Errorf("record page returned an invalid physical id"))
+		}
+		next = strconv.FormatInt(page.Items[len(page.Items)-1].ID, 10)
 	}
 	return recordExportProjectedPage{columns: recordExportHeader(prepared.fields), rows: rows, hasNext: page.HasNext, next: next}, nil
 }

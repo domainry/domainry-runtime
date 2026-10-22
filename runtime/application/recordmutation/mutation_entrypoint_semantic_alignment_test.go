@@ -20,11 +20,11 @@ func TestMutationEntrypointSourcesPreserveCanonicalCommitSemantics(t *testing.T)
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "revision-1", nil })
 	principal := principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-1", UserID: "user-1"}, RequestID: "request-1"}
 	object := definitionmodel.ObjectSchema{Key: "customer", Config: map[string]any{"write_policy": "direct_crud"}}
-	audit := auditmodel.AuditEvent{ID: "audit-1", Event: "record_updated", Before: map[string]any{"status": "draft"}, After: map[string]any{"status": "active"}}
+	audit := auditmodel.AuditEvent{AuditEventID: "audit-1", Event: "record_updated", Before: map[string]any{"status": "draft"}, After: map[string]any{"status": "active"}}
 	base := transactionmodel.RecordMutationCommit{
-		Object: object, Record: recordmodel.Record{ID: "customer-1", Data: map[string]any{"status": "active"}}, Audit: &audit,
-		Outbox:          []publicationmodel.Message{{ID: "outbox-1", Payload: map[string]any{"status": "active"}}},
-		WorkflowIntents: []workflowmodel.WorkflowExecution{{ID: "workflow-1", WorkflowKey: "customer.after_update", Status: "pending"}},
+		Object: object, Record: recordmodel.Record{RecordID: "customer-1", Data: map[string]any{"status": "active"}}, Audit: &audit,
+		Outbox:          []publicationmodel.Message{{MessageID: "outbox-1", Payload: map[string]any{"status": "active"}}},
+		WorkflowIntents: []workflowmodel.WorkflowExecution{{ExecutionID: "workflow-1", WorkflowKey: "customer.after_update", Status: "pending"}},
 	}
 	before := map[string]any{"status": "draft"}
 	sources := []MutationInvocation{

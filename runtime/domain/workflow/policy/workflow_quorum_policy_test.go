@@ -39,10 +39,10 @@ func TestWorkflowQuorumCountsOnlyCurrentNodeInstance(t *testing.T) {
 	node := definitionmodel.WorkflowGraphNode{ID: "approval", Type: "approval", Contract: &definitionmodel.WorkflowNodeContract{Approval: &definitionmodel.WorkflowApprovalNodeContract{Mode: "quorum", RequiredApprovals: 2}}}
 	process := workflowmodel.WorkflowProcessInstance{DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Nodes: []definitionmodel.WorkflowGraphNode{node}}}}
 	tasks := []workflowmodel.WorkflowTask{
-		{ID: "old", NodeID: node.ID, NodeInstanceID: "previous", Status: "approved"},
-		{ID: "a", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
-		{ID: "b", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
-		{ID: "c", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
+		{TaskID: "old", NodeID: node.ID, NodeInstanceID: "previous", Status: "approved"},
+		{TaskID: "a", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
+		{TaskID: "b", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
+		{TaskID: "c", NodeID: node.ID, NodeInstanceID: "current", Status: "open"},
 	}
 	first := tasks[1]
 	first.Status, first.Decision = "approved", "approved"

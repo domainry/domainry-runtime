@@ -84,7 +84,7 @@ func workspaceIdentityUsageTestExecution(t *testing.T, usage identitysdk.Workspa
 	principal.UserID = "billing-operator"
 	principal.AuthorizationRevision = "authz-1"
 	unitOfWork := newActionTestUnitOfWork()
-	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{ID: "usage-execution-1", LeaseOwner: "test", FencingToken: 1}}
+	unitOfWork.claim = actionmodel.ActionExecutionClaimResult{Execution: actionmodel.ActionBusinessExecution{OperationID: "usage-execution-1", LeaseOwner: "test", FencingToken: 1}}
 	cursorCodec, err := NewWorkspaceIdentityUsageCursorCodec([]byte("test-workspace-usage-cursor-key"), "installation-a", func() time.Time {
 		return time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC)
 	})
@@ -184,7 +184,7 @@ func TestWorkspaceIdentityUsageExactResolveRejectsStaleRevisionBeforeCounting(t 
 	execution.unitOfWork.rollBack(t.Context())
 }
 
-func TestWorkspaceIdentityUsageMapsPhysicalIDsToCanonicalCodesInSameActionUoW(t *testing.T) {
+func TestWorkspaceIdentityUsageMapsIDsToCanonicalCodesInSameActionUoW(t *testing.T) {
 	usage := &workspaceIdentityUsageStub{page: identitysdk.WorkspaceIdentityUsagePage{
 		Items: []identitysdk.WorkspaceIdentityUsage{
 			{WorkspaceID: "workspace-physical-a", Accounts: identitysdk.WorkspaceIdentityAccountCounts{ActiveHumanAccounts: 7, ActiveHumanAccountsWithActiveRole: 5, DisabledHumanAccounts: 2, ServiceAccounts: 1}},

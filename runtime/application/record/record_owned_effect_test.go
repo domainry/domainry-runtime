@@ -25,7 +25,7 @@ func TestOwnedEffectUsesAuthorizedParentPlanWithoutCopyingSourceACL(t *testing.T
 	principal.AccessBundle.DataPolicies = []identitysdk.DataPolicy{{Key: "deal.advance.own", Resource: "deal", Action: "advance", Effect: identitysdk.EffectAllow, Predicate: identitysdk.Predicate{Fact: "owner", Operator: identitysdk.OperatorEqual, Value: "$subject.id"}}}
 	original := *principal.AccessBundle
 	invocation := recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionKey: "deal.advance", ActionResource: "deal", ActionOperation: "advance", EffectAuthority: map[string][]string{"stage_event": {"deal", "stage"}}}
-	owner := recordmodel.Record{WorkspaceID: "workspace-a", ID: "deal-a", Data: map[string]any{"owner": "seller"}}
+	owner := recordmodel.Record{WorkspaceID: "workspace-a", RecordID: "deal-a", Data: map[string]any{"owner": "seller"}}
 	contextFor := func(invocation recordmutation.MutationInvocation, owner recordmodel.Record) context.Context {
 		ctx := recordmutation.WithMutationInvocation(t.Context(), invocation)
 		return recordservice.RecordWithPlannedRelations(ctx, map[string]map[string]recordmodel.Record{"deal": {"deal-a": owner}})
@@ -42,7 +42,7 @@ func TestOwnedEffectUsesAuthorizedParentPlanWithoutCopyingSourceACL(t *testing.T
 	service := NewRecordCreateApplicationService(dependencies)
 	ctx := contextFor(invocation, owner)
 	plan, record, err := service.PlanCreateMutation(ctx, child.Key, map[string]any{"deal": "deal-a", "stage": "proposal"}, "event-a", principal)
-	if err != nil || record.ID != "event-a" || plan.CanonicalCommit().Record.WorkspaceID != "workspace-a" {
+	if err != nil || record.RecordID != "event-a" || plan.CanonicalCommit().Record.WorkspaceID != "workspace-a" {
 		t.Fatalf("owned event failed: record=%+v err=%v", record, err)
 	}
 	authorized, err := recordOwnedEffectAuthorizationPrincipal(ctx, principal, child)
@@ -64,9 +64,9 @@ func TestOwnedEffectUsesAuthorizedParentPlanWithoutCopyingSourceACL(t *testing.T
 		invocation recordmutation.MutationInvocation
 	}{
 		{"wrong parent", owner, "deal-b", invocation},
-		{"other workspace", recordmodel.Record{WorkspaceID: "workspace-b", ID: "deal-a"}, "deal-a", invocation},
-		{"missing workspace", recordmodel.Record{ID: "deal-a"}, "deal-a", invocation},
-		{"deleted parent", recordmodel.Record{WorkspaceID: "workspace-a", ID: "deal-a", Deleted: true}, "deal-a", invocation},
+		{"other workspace", recordmodel.Record{WorkspaceID: "workspace-b", RecordID: "deal-a"}, "deal-a", invocation},
+		{"missing workspace", recordmodel.Record{RecordID: "deal-a"}, "deal-a", invocation},
+		{"deleted parent", recordmodel.Record{WorkspaceID: "workspace-a", RecordID: "deal-a", Deleted: true}, "deal-a", invocation},
 		{"no parent plan", recordmodel.Record{}, "deal-a", invocation},
 		{"not Action", owner, "deal-a", recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceWorkflow}},
 		{"undeclared effect", owner, "deal-a", recordmutation.MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionResource: "deal", ActionOperation: "advance"}},

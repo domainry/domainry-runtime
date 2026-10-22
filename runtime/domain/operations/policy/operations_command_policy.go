@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	operationsmodel "github.com/domainry/domainry-runtime/runtime/domain/operations/model"
 )
 
 // OperationsNormalizeCommand removes representation-only whitespace before a
 // command is authorized, fingerprinted or persisted.
 func OperationsNormalizeCommand(command operationsmodel.OperationsCommand) operationsmodel.OperationsCommand {
-	command.ID = strings.TrimSpace(command.ID)
+	command.OperationID = strings.TrimSpace(command.OperationID)
 	command.Owner = strings.TrimSpace(command.Owner)
 	command.Kind = strings.TrimSpace(command.Kind)
 	command.ActionKey = strings.TrimSpace(command.ActionKey)
-	command.ParentID = strings.TrimSpace(command.ParentID)
+	command.ParentOperationID = strings.TrimSpace(command.ParentOperationID)
 	command.Scope.WorkspaceID = strings.TrimSpace(command.Scope.WorkspaceID)
 	command.Scope.SystemPurpose = strings.TrimSpace(command.Scope.SystemPurpose)
 	command.Scope.ResourceType = strings.TrimSpace(command.Scope.ResourceType)
@@ -32,7 +33,7 @@ func OperationsNormalizeCommand(command operationsmodel.OperationsCommand) opera
 // decision before the command is registered.
 func OperationsValidateCommand(command operationsmodel.OperationsCommand) error {
 	command = OperationsNormalizeCommand(command)
-	if command.ID == "" || command.Owner == "" || command.Kind == "" || command.ActionKey == "" {
+	if entityid.Validate("op", command.OperationID) != nil || command.Owner == "" || command.Kind == "" || command.ActionKey == "" {
 		return fmt.Errorf("operations.command_identity_required")
 	}
 	if command.IdempotencyKey == "" || command.RequestFingerprint == "" {
@@ -52,7 +53,7 @@ func OperationsValidateCommand(command operationsmodel.OperationsCommand) error 
 	if command.Status != operationsmodel.OperationsStatusCreated {
 		return fmt.Errorf("operations.initial_status_invalid")
 	}
-	if command.ParentID != "" && command.ParentID == command.ID {
+	if command.ParentOperationID != "" && command.ParentOperationID == command.OperationID {
 		return fmt.Errorf("operations.parent_operation_invalid")
 	}
 	if command.CreatedAt.IsZero() || command.UpdatedAt.IsZero() || !command.UpdatedAt.Equal(command.CreatedAt) || command.StartedAt != nil || command.FinishedAt != nil {

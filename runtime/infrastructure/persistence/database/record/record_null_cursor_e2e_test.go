@@ -20,23 +20,15 @@ func TestRecordCursorPreservesNullDatetimeBoundaryAcrossPages(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "task", Fields: []definitionmodel.FieldSchema{
 		{Key: "due_at", Type: "datetime"}, {Key: "status", Type: "select"},
 	}}
-	columns := []ormschema.ColumnDefinition{
-		ormschema.Column("workspace_id", ormschema.Text()), ormschema.Column("id", ormschema.Text()),
-		ormschema.Column("created_at", ormschema.BigInt()), ormschema.Column("updated_at", ormschema.BigInt()),
-		ormschema.Column("due_at", ormschema.BigInt()), ormschema.Column("status", ormschema.Text()),
-	}
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), object.Key).Columns(columns...).PrimaryKey("workspace_id", "id").Build()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, args...); err != nil {
-		t.Fatal(err)
-	}
+	createGeneratedRecordTable(t, store, object.Key,
+		ormschema.Column("due_at", ormschema.BigInt()),
+		ormschema.Column("status", ormschema.Text()),
+	)
 	repository := recordStore(store)
 	now := time.Date(2026, 9, 29, 8, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
 	for _, id := range []string{"task-1", "task-2", "task-3", "task-4", "task-5"} {
 		if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{
-			ID: id, CreatedAt: now, UpdatedAt: now, Data: map[string]any{"status": "open"},
+			RecordID: id, CreatedAt: now, UpdatedAt: now, Data: map[string]any{"status": "open"},
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -74,7 +66,7 @@ func TestRecordCursorPreservesNullDatetimeBoundaryAcrossPages(t *testing.T) {
 func recordIDs(records []recordmodel.Record) []string {
 	ids := make([]string, 0, len(records))
 	for _, record := range records {
-		ids = append(ids, record.ID)
+		ids = append(ids, record.RecordID)
 	}
 	return ids
 }

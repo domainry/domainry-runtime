@@ -59,7 +59,7 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportAuditAndWriteAligned(t *tes
 		Repository: repository, Policy: policy, ContextualFieldPolicy: fieldPolicy,
 		AuditFieldDenials: func(_ context.Context, _ definitionmodel.ObjectSchema, record recordmodel.Record, _ string, decisions []recordservice.RecordFieldPolicyDecision, _ principalmodel.Principal) {
 			for _, decision := range decisions {
-				auditDenials = append(auditDenials, record.ID+":"+decision.FieldKey+":"+decision.RuleKey)
+				auditDenials = append(auditDenials, record.RecordID+":"+decision.FieldKey+":"+decision.RuleKey)
 			}
 		},
 	})
@@ -76,10 +76,10 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportAuditAndWriteAligned(t *tes
 	if !containsText(auditDenials, "member-2:health_note:other-hide") {
 		t.Fatalf("missing policy-driven CLS security audit: %#v", auditDenials)
 	}
-	if err := fieldPolicy.ValidateWrite(t.Context(), principal, member, recordmodel.Record{ID: "member-1", Data: map[string]any{"health_note": "allergy-a"}}, map[string]any{"health_note": "updated-a"}); err != nil {
+	if err := fieldPolicy.ValidateWrite(t.Context(), principal, member, recordmodel.Record{RecordID: "member-1", Data: map[string]any{"health_note": "allergy-a"}}, map[string]any{"health_note": "updated-a"}); err != nil {
 		t.Fatalf("related coach contextual write denied: %v", err)
 	}
-	if err := fieldPolicy.ValidateWrite(t.Context(), principal, member, recordmodel.Record{ID: "member-2", Data: map[string]any{"health_note": "allergy-b"}}, map[string]any{"health_note": "updated-b"}); err == nil {
+	if err := fieldPolicy.ValidateWrite(t.Context(), principal, member, recordmodel.Record{RecordID: "member-2", Data: map[string]any{"health_note": "allergy-b"}}, map[string]any{"health_note": "updated-b"}); err == nil {
 		t.Fatal("unrelated coach contextual write should be denied")
 	}
 
@@ -97,8 +97,8 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportAuditAndWriteAligned(t *tes
 	}
 
 	auditProjection, _, err := fieldPolicy.ApplyReadPage(t.Context(), principal, member, []recordmodel.Record{
-		{ID: "member-1", Data: map[string]any{"phone": "10000000004", "health_note": "allergy-a"}},
-		{ID: "member-2", Data: map[string]any{"phone": "10000000005", "health_note": "allergy-b"}},
+		{RecordID: "member-1", Data: map[string]any{"phone": "10000000004", "health_note": "allergy-a"}},
+		{RecordID: "member-2", Data: map[string]any{"phone": "10000000005", "health_note": "allergy-b"}},
 	}, "audit")
 	if err != nil || auditProjection[0].Data["health_note"] != "allergy-a" || auditProjection[1].Data["health_note"] != nil || auditProjection[1].Data["phone"] == "10000000005" {
 		t.Fatalf("audit presentation CLS mismatch: %#v err=%v", auditProjection, err)
@@ -119,8 +119,8 @@ func TestContextualFieldPolicyEndToEndKeepsReadExportAuditAndWriteAligned(t *tes
 			scopeDenials = append(scopeDenials, object.Key+":"+recordID)
 		},
 	})
-	selfPage, err := memberReader.ListRecords(t.Context(), "member", recordmodel.RecordListQuery{Page: 1, PageSize: 20, Filters: map[string]any{"id__in": []any{"member-1", "member-2"}}}, memberPrincipal)
-	if err != nil || selfPage.Total != 1 || len(selfPage.Items) != 1 || selfPage.Items[0].ID != "member-1" || selfPage.Items[0].Data["phone"] != "10000000004" || selfPage.Items[0].Data["health_note"] != "allergy-a" {
+	selfPage, err := memberReader.ListRecords(t.Context(), "member", recordmodel.RecordListQuery{Page: 1, PageSize: 20, Filters: map[string]any{"record_id__in": []any{"member-1", "member-2"}}}, memberPrincipal)
+	if err != nil || selfPage.Total != 1 || len(selfPage.Items) != 1 || selfPage.Items[0].RecordID != "member-1" || selfPage.Items[0].Data["phone"] != "10000000004" || selfPage.Items[0].Data["health_note"] != "allergy-a" {
 		t.Fatalf("member self RLS/CLS mismatch: page=%#v err=%v", selfPage, err)
 	}
 	if _, err := memberReader.GetRecord(t.Context(), "member", "member-2", memberPrincipal); err == nil {

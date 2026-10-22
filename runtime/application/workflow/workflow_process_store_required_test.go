@@ -45,7 +45,7 @@ func TestSyncWorkflowExecutionAllowsMissingWorkerStore(t *testing.T) {
 		"nil store":   {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := service.syncWorkflowExecutionWithProcess(t.Context(), workflowmodel.WorkflowProcessInstance{ID: "process"}, nil); err != nil {
+			if err := service.syncWorkflowExecutionWithProcess(t.Context(), workflowmodel.WorkflowProcessInstance{ProcessID: "process"}, nil); err != nil {
 				t.Fatalf("syncWorkflowExecutionWithProcess() error = %v, want nil", err)
 			}
 		})

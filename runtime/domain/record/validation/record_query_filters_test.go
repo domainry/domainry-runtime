@@ -11,20 +11,20 @@ import (
 
 func TestRecordNormalizeListQueryIdentityEqualityFilter(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "lead", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
-	query := RecordNormalizeListQuery(object, recordmodel.RecordListQuery{Filters: map[string]any{"id": " lead_1 "}})
-	values, ok := query.Filters["id__in"].([]any)
+	query := RecordNormalizeListQuery(object, recordmodel.RecordListQuery{Filters: map[string]any{"record_id": " lead_1 "}})
+	values, ok := query.Filters["record_id__in"].([]any)
 	if !ok || len(values) != 1 || values[0] != "lead_1" {
-		t.Fatalf("id equality must normalize to id__in: %v", query.Filters)
+		t.Fatalf("record_id equality must normalize to record_id__in: %v", query.Filters)
 	}
-	if _, present := query.Filters["id"]; present {
-		t.Fatalf("raw id key must not survive normalization: %v", query.Filters)
+	if _, present := query.Filters["record_id"]; present {
+		t.Fatalf("raw record_id key must not survive normalization: %v", query.Filters)
 	}
 }
 
 func TestRecordValidateListFiltersRefusesUnknownKeys(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "lead", Fields: []definitionmodel.FieldSchema{{Key: "status", Type: "text"}}}
 	for _, accepted := range []map[string]any{
-		{"id": "lead_1"}, {"id__in": []any{"lead_1"}}, {"status": "open"}, {"status__in": []any{"open"}}, {"workspace_id": "ws"}, {"": "x"}, nil,
+		{"id": 1}, {"record_id": "lead_1"}, {"record_id__in": []any{"lead_1"}}, {"status": "open"}, {"status__in": []any{"open"}}, {"workspace_id": "ws"}, {"": "x"}, nil,
 	} {
 		if err := RecordValidateListFilters(object, accepted); err != nil {
 			t.Fatalf("filters %v must be accepted: %v", accepted, err)

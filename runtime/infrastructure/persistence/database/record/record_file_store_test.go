@@ -16,20 +16,10 @@ func TestRecordStoreRoundTripsCanonicalFileAndFileListValues(t *testing.T) {
 		{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"scan_required": false}},
 		{Key: "attachments", Type: recordmodel.RecordFileListFieldType, Config: map[string]any{"scan_required": false}},
 	}}
-	statement, args, err := ormschema.NewTable(store.RuntimeRenderer(), object.Key).Columns(
-		ormschema.Column("workspace_id", ormschema.Text()).NotNull(),
-		ormschema.Column("id", ormschema.Text()).NotNull(),
-		ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
-		ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),
+	createTestRecordTable(t, store, object.Key,
 		ormschema.Column("attachment", ormschema.Text()),
 		ormschema.Column("attachments", ormschema.Text()),
-	).PrimaryKey("workspace_id", "id").Build()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().ExecContext(t.Context(), statement, args...); err != nil {
-		t.Fatal(err)
-	}
+	)
 	reference := func(id string) map[string]any {
 		return map[string]any{
 			"file_id": id, "filename": id + ".pdf", "content_type": "application/pdf", "size": int64(7),
@@ -38,7 +28,7 @@ func TestRecordStoreRoundTripsCanonicalFileAndFileListValues(t *testing.T) {
 	}
 	want := map[string]any{"attachment": reference("file-1"), "attachments": []any{reference("file-2"), reference("file-3")}}
 	repository := NewRecordStore(store)
-	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{ID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}); err != nil {
+	if err := repository.InsertRecord(t.Context(), "workspace-a", object, recordmodel.Record{RecordID: "record-1", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z", Data: want}); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := repository.GetRecord(t.Context(), "workspace-a", object, "record-1")

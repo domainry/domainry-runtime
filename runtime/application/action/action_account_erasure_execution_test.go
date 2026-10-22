@@ -18,7 +18,7 @@ import (
 
 func accountErasureTestExecution(t *testing.T) (*businessActionExecution, *identityHandlerDeliveryStub, map[string]recordmodel.Record, *lifecyclecontract.AccountErasureApproval) {
 	t.Helper()
-	delivery := &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{User: identitysdk.User{ID: "subject-1", OrgID: "store-north", Status: "disabled"}},
+	delivery := &identityHandlerDeliveryStub{result: identitysdk.HandlerDeliveryResult{User: identitysdk.User{UserID: "subject-1", OrgID: "store-north", Status: "disabled"}},
 		resolveResult: identitysdk.HandlerBoundIdentity{UserID: "subject-1", OrganizationID: "store-north", Active: true, Version: 4,
 			ProfileBinding: &identitysdk.HandlerProfileBinding{BindingKey: "employee", ObjectKey: "employee_profile", ProfileID: "profile-1", IdentityUserID: "subject-1", Status: "active", Version: 7}}}
 	e := identityDeliveryTestExecution(t, delivery)
@@ -28,8 +28,8 @@ func accountErasureTestExecution(t *testing.T) (*businessActionExecution, *ident
 	e.accountErasureGrant = &runtimeext.AccountErasureCapability{Operations: []runtimeext.AccountErasureOperation{runtimeext.AccountErasureStage, runtimeext.AccountErasureGet},
 		ProfileBinding: runtimeext.IdentityProfileBindingCapability{BindingKey: "employee", ObjectKey: "employee_profile"}, RequestObjectKey: "erase_request", RequestProfileField: "profile_id", RequestRequesterField: "requested_by"}
 	records := map[string]recordmodel.Record{
-		"employee_profile": {ID: "profile-1", OwnerOrgID: "store-north", UpdatedAt: "now", Data: map[string]any{"identity_user_id": "subject-1"}},
-		"erase_request":    {ID: "approval-1", OwnerOrgID: "store-north", UpdatedAt: "now", Data: map[string]any{"profile_id": "profile-1", "requested_by": "subject-1"}},
+		"employee_profile": {RecordID: "profile-1", OwnerOrgID: "store-north", UpdatedAt: "now", Data: map[string]any{"identity_user_id": "subject-1"}},
+		"erase_request":    {RecordID: "approval-1", OwnerOrgID: "store-north", UpdatedAt: "now", Data: map[string]any{"profile_id": "profile-1", "requested_by": "subject-1"}},
 	}
 	e.dependencies.GetRecordForUpdate = func(ctx context.Context, object, id string, _ principalmodel.Principal) (recordmodel.Record, error) {
 		if ctx.Value(actionUnitOfWorkTransactionContextKey{}) != true {
@@ -43,7 +43,7 @@ func accountErasureTestExecution(t *testing.T) (*businessActionExecution, *ident
 			t.Fatal("queue was outside Action transaction")
 		}
 		*approval = trusted
-		return lifecyclemodel.SubjectRequest{ID: trusted.RequestID, WorkspaceID: trusted.WorkspaceID, Status: lifecyclemodel.SubjectRequestApproved, UpdatedAt: time.Now()}, nil
+		return lifecyclemodel.SubjectRequest{RequestID: trusted.RequestID, WorkspaceID: trusted.WorkspaceID, Status: lifecyclemodel.SubjectRequestApproved, UpdatedAt: time.Now()}, nil
 	}
 	t.Cleanup(func() { e.unitOfWork.rollBack(t.Context()) })
 	return e, delivery, records, approval
@@ -62,7 +62,7 @@ func TestAccountErasureStagesTrustedSubjectAndDisablesInSameActionTransaction(t 
 	if approval.SubjectID != "subject-1" || approval.RequestedBy != "subject-1" || approval.ApprovedBy != "actor-1" || approval.WorkspaceID != "workspace-a" || approval.OwnerOrgID != "store-north" || approval.ApprovalID != "approval-1" {
 		t.Fatalf("untrusted provenance=%+v", approval)
 	}
-	if delivery.calls != 1 || delivery.request.User.Operation != identitysdk.HandlerUserDisable || delivery.request.User.User.ID != "subject-1" || delivery.request.AccessToken != "trusted-token" || delivery.request.ProfileBinding.ExpectedVersion != 7 {
+	if delivery.calls != 1 || delivery.request.User.Operation != identitysdk.HandlerUserDisable || delivery.request.User.User.UserID != "subject-1" || delivery.request.AccessToken != "trusted-token" || delivery.request.ProfileBinding.ExpectedVersion != 7 {
 		t.Fatalf("disable request=%+v", delivery.request)
 	}
 	if err := e.validateCapabilityCompletion(nil); err != nil {
@@ -145,7 +145,7 @@ func TestAccountErasureReceiptUsesExactProfileProvenanceAfterRelationCleared(t *
 				if reference.WorkspaceID != "workspace-a" || reference.OwnerOrgID != "store-north" || reference.ProfileID != "profile-1" || reference.BindingKey != "employee" || reference.ObjectKey != "employee_profile" {
 					t.Fatalf("reference=%+v", reference)
 				}
-				return lifecyclemodel.SubjectRequest{ID: reference.RequestID, WorkspaceID: reference.WorkspaceID, Status: status, BackupPending: true}, nil
+				return lifecyclemodel.SubjectRequest{RequestID: reference.RequestID, WorkspaceID: reference.WorkspaceID, Status: status, BackupPending: true}, nil
 			}
 			receipt, err := e.GetAccountErasure(t.Context(), runtimeext.AccountErasureGetRequest{RequestID: "queued-1", ProfileID: "profile-1"})
 			if err != nil || receipt.Completed != (status == lifecyclemodel.SubjectRequestSucceeded) || !receipt.BackupPending {

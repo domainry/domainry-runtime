@@ -87,7 +87,7 @@ func subjectLifecycleFile(fileID, filename string) map[string]any {
 
 func TestRecordSubjectOwnerAndPreviewCountsDeduplicatedRecordsAndFiles(t *testing.T) {
 	object := subjectLifecycleObject()
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "document-1", Data: map[string]any{
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{RecordID: "document-1", Data: map[string]any{
 		"employee": "user-1", "owner": "user-1", "attachments": []any{subjectLifecycleFile("file-a", "file-a"), subjectLifecycleFile("file-b", "file-b")},
 	}}}}
 	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
@@ -116,7 +116,7 @@ func TestRecordSubjectLifecycleDiscoversProfileExtensionRelation(t *testing.T) {
 		{Key: "email", Type: "email", Config: map[string]any{"lifecycle_erase": "anonymize"}},
 	}}
 	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{
-		ID: "member-1", Data: map[string]any{"identity_user": "user-1", "email": "member@example.com"},
+		RecordID: "member-1", Data: map[string]any{"identity_user": "user-1", "email": "member@example.com"},
 	}}}
 	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{profile}, nil, []profilebindingmodel.Binding{
 		{ObjectKey: "member_profile", IdentityRelationField: "identity_user"},
@@ -149,7 +149,7 @@ func TestRecordSubjectRepositoryAndFileExportFailures(t *testing.T) {
 		t.Fatalf("list err=%v", err)
 	}
 
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "document-1", Data: map[string]any{"employee": "user-1", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{RecordID: "document-1", Data: map[string]any{"employee": "user-1", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
 	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
 	if _, err := service.ExportSubject(t.Context(), "workspace-a", "user-1"); err == nil || !strings.Contains(err.Error(), "file store unavailable") {
 		t.Fatalf("missing file store err=%v", err)
@@ -181,18 +181,21 @@ func TestRecordSubjectEmptyObjectsPaginationAndEraseValueEdges(t *testing.T) {
 		{Key: "file_token", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"lifecycle_subject_file": true, "lifecycle_erase": "delete", "scan_required": false}},
 		{Key: "delete_value", Type: "text", Config: map[string]any{"lifecycle_erase": "delete"}},
 	}}
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "profile-1", Data: map[string]any{
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: 41, RecordID: "profile-1", Data: map[string]any{
 		"employee": "user-1", "nil_value": nil, "empty_value": " ", "file_token": subjectLifecycleFile("file-a", "file-a"), "delete_value": "secret",
 	}}}, hasNext: true}
 	service = NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{object}, nil)
 	if _, err := service.PreviewSubject(t.Context(), "workspace-a", "user-1"); err != nil || repository.pages != 2 {
 		t.Fatalf("paginated preview pages=%d err=%v", repository.pages, err)
 	}
+	if len(repository.queries) != 2 || repository.queries[1].AfterID != "41" {
+		t.Fatalf("subject scan must use physical id cursor, queries=%+v", repository.queries)
+	}
 
 }
 
 func TestRecordSubjectUnpreparedErasureNeverMutatesRecordsOrFiles(t *testing.T) {
-	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{ID: "one", Data: map[string]any{"employee": "user-one", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
+	repository := &subjectLifecycleRepository{records: []recordmodel.Record{{RecordID: "one", Data: map[string]any{"employee": "user-one", "attachments": []any{subjectLifecycleFile("file-a", "file-a")}}}}}
 	files := &subjectLifecycleFileStore{}
 	service := NewRecordSubjectLifecycleApplicationService(repository, []definitionmodel.ObjectSchema{subjectLifecycleObject()}, files)
 	if _, err := service.EraseSubject(t.Context(), "workspace-one", "user-one", nil); err == nil {

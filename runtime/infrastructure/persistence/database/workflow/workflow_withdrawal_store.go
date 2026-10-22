@@ -33,7 +33,7 @@ func (r WorkflowProcessStore) ClaimWorkflowTimer(ctx context.Context, workspaceI
 	if err != nil {
 		return false, err
 	}
-	if process.ID == "" || process.UpdatedAt == expectedUpdatedAt || expectedUpdatedAt == "" || process.Status != "running" || node.ProcessID != process.ID || node.Status != "success" {
+	if process.ProcessID == "" || process.UpdatedAt == expectedUpdatedAt || expectedUpdatedAt == "" || process.Status != "running" || node.ProcessID != process.ProcessID || node.Status != "success" {
 		return false, fmt.Errorf("invalid workflow timer revision claim")
 	}
 	tx, err := r.database().BeginTx(ctx, recordMutationTxOptions())
@@ -41,7 +41,7 @@ func (r WorkflowProcessStore) ClaimWorkflowTimer(ctx context.Context, workspaceI
 		return false, err
 	}
 	defer tx.Rollback()
-	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Set("status", process.Status).Set("updated_at", timevalue.Millis(process.UpdatedAt)).Where(query.And(query.Equal("id", process.ID), query.Equal("status", "waiting"), query.Equal("updated_at", timevalue.Millis(expectedUpdatedAt)))).Build()
+	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", workspaceID).Set("status", process.Status).Set("updated_at", timevalue.Millis(process.UpdatedAt)).Where(query.And(query.Equal("process_id", process.ProcessID), query.Equal("status", "waiting"), query.Equal("updated_at", timevalue.Millis(expectedUpdatedAt)))).Build()
 	if err != nil {
 		return false, err
 	}

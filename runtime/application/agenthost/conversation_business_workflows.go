@@ -94,7 +94,7 @@ func (h *ConversationBusinessHost) AuthorizeWorkflowStart(ctx context.Context, s
 }
 
 func workflowStartReceipt(start agentsdk.ConversationWorkflowStart, key string, execution workflowmodel.WorkflowExecution) agentsdk.ConversationWorkflowReceipt {
-	return agentsdk.ConversationWorkflowReceipt{Status: "accepted", InvocationID: key, WorkflowKey: start.WorkflowKey, ExecutionID: execution.ID, ProcessID: execution.ProcessID}
+	return agentsdk.ConversationWorkflowReceipt{Status: "accepted", InvocationID: key, WorkflowKey: start.WorkflowKey, ExecutionID: execution.ExecutionID, ProcessID: execution.ProcessID}
 }
 
 func (h *ConversationBusinessHost) startBusinessWorkflow(ctx context.Context, request agentsdk.ConversationWorkflowStartRequest, reconcile bool) (agentsdk.ConversationWorkflowReceipt, error) {
@@ -153,10 +153,10 @@ func (h *ConversationBusinessHost) GetBusinessWorkflow(ctx context.Context, q ag
 		return state, conversationBusinessReadError(err)
 	}
 	process := detail.Process
-	if process.ID != q.ProcessID || process.WorkflowKey != q.WorkflowKey || process.WorkspaceID != a.WorkspaceID {
+	if process.ProcessID != q.ProcessID || process.WorkflowKey != q.WorkflowKey || process.WorkspaceID != a.WorkspaceID {
 		return state, conversationBusinessError("forbidden")
 	}
-	state = agentsdk.ConversationWorkflowState{WorkflowKey: process.WorkflowKey, ProcessID: process.ID, Name: process.WorkflowName, Status: process.Status, CurrentSteps: []string{}, CurrentStepCount: len(process.CurrentNodeIDs), UpdatedAt: process.UpdatedAt, CompletedAt: process.CompletedAt}
+	state = agentsdk.ConversationWorkflowState{WorkflowKey: process.WorkflowKey, ProcessID: process.ProcessID, Name: process.WorkflowName, Status: process.Status, CurrentSteps: []string{}, CurrentStepCount: len(process.CurrentNodeIDs), UpdatedAt: process.UpdatedAt, CompletedAt: process.CompletedAt}
 	switch process.Status {
 	case "success", "completed", "approved", "rejected", "cancelled", "failed", "configuration_error", "terminated":
 		state.Terminal = true

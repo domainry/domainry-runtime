@@ -23,8 +23,8 @@ func (r WorkflowProcessStore) ListApprovalTasks(ctx context.Context, workspaceID
 		return nil, fmt.Errorf("workflow approval process and node instance are required")
 	}
 	statement, args, err := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, "_workflow_tasks", workspaceID).
-		Columns(workflowTaskColumns()...).Where(query.And(query.Equal("process_id", processID), query.Equal("node_instance_id", nodeInstanceID))).
-		OrderBy(query.Ascending("sequence"), query.Ascending("id")).Build()
+		Columns(workflowTaskSelectColumns()...).Where(query.And(query.Equal("process_id", processID), query.Equal("node_instance_id", nodeInstanceID))).
+		OrderBy(query.Ascending("sequence_no"), query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -51,12 +51,12 @@ func (r WorkflowDecisionStore) guardApprovalSnapshotTx(ctx context.Context, tx *
 		return nil
 	}
 	process := commit.Process
-	if process == nil || process.ID != commit.DecidedTask.ProcessID || process.UpdatedAt == commit.ExpectedProcessUpdatedAt {
+	if process == nil || process.ProcessID != commit.DecidedTask.ProcessID || process.UpdatedAt == commit.ExpectedProcessUpdatedAt {
 		return fmt.Errorf("workflow decision requires an advanced process snapshot")
 	}
 	statement, args, err := query.NewWorkspaceUpdateBuilder(r.store.SQLRenderer, "_workflow_process_instances", commit.WorkspaceID).
 		Set("updated_at", timevalue.Millis(process.UpdatedAt)).
-		Where(query.And(query.Equal("id", process.ID), query.Equal("updated_at", timevalue.Millis(commit.ExpectedProcessUpdatedAt)), query.Equal("status", "waiting"))).Build()
+		Where(query.And(query.Equal("process_id", process.ProcessID), query.Equal("updated_at", timevalue.Millis(commit.ExpectedProcessUpdatedAt)), query.Equal("status", "waiting"))).Build()
 	if err != nil {
 		return err
 	}

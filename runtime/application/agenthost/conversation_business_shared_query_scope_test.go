@@ -65,7 +65,7 @@ func TestSharedBusinessExactQueryFiltersLimitOriginalPageScope(t *testing.T) {
 			if tc.setup == "literal substring" {
 				third["name"] = nil
 			}
-			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{ID: "own-3", OwnerUserID: producer.UserID, Data: third}); err != nil {
+			if err := reads.repository.InsertRecord(t.Context(), producer.WorkspaceID, reads.object, recordmodel.Record{RecordID: "own-3", OwnerUserID: producer.UserID, Data: third}); err != nil {
 				t.Fatal(err)
 			}
 			for _, id := range []string{"own-1", "own-2"} {

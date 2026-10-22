@@ -45,13 +45,13 @@ func assertAutomationLeaseRestartAndReclaim(t *testing.T, store *database.Runtim
 	t.Helper()
 	ruleID := "automation-rule-history"
 	if _, err := NewAutomationExecutionStore(store).InsertExecution(t.Context(), workspace, automationmodel.AutomationRuleExecution{
-		ID: ruleID, RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", Phase: "after", Operation: "update", Status: "succeeded",
+		RunID: ruleID, RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", Phase: "after", Operation: "update", Status: "succeeded",
 		Candidate: map[string]any{"status": "ready"}, Trace: map[string]any{"matched": true},
 	}); err != nil {
 		t.Fatalf("insert rule history: %v", err)
 	}
 	rules, err := NewAutomationExecutionStore(store).ListExecutions(t.Context(), workspace, automationmodel.AutomationExecutionFilter{Limit: 10})
-	if err != nil || len(rules) != 1 || rules[0].ID != ruleID {
+	if err != nil || len(rules) != 1 || rules[0].RunID != ruleID {
 		t.Fatalf("list rule history: rules=%#v err=%v", rules, err)
 	}
 	request := automationmodel.AutomationInstructionExecution{WorkspaceID: workspace, IdempotencyKey: "restart-reclaim", RuleKey: "rule", ObjectKey: "customer", RecordID: "customer_1", RecordVersion: "v1", Operation: "update", InstructionKey: "notify"}

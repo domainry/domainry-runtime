@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-foundation/idempotency"
 	actioncontract "github.com/domainry/domainry-runtime/runtime/domain/action/contract"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
@@ -26,13 +27,14 @@ type ActionAssuranceDomainService struct {
 	store  actioncontract.ActionAssuranceStore
 	now    func() time.Time
 	random func([]byte) (int, error)
+	newID  func(string) (string, error)
 }
 
 func NewActionAssuranceDomainService(store actioncontract.ActionAssuranceStore, now func() time.Time) *ActionAssuranceDomainService {
 	if now == nil {
 		now = time.Now
 	}
-	return &ActionAssuranceDomainService{store: store, now: now, random: rand.Read}
+	return &ActionAssuranceDomainService{store: store, now: now, random: rand.Read, newID: entityid.New}
 }
 
 // IssueVerifiedGrant is an internal boundary. Its methods must already have
@@ -62,8 +64,12 @@ func (s *ActionAssuranceDomainService) IssueVerifiedGrant(ctx context.Context, r
 	}
 	now := s.now().UTC()
 	secretText := hex.EncodeToString(secret)
+	grantID, err := s.newID("assure")
+	if err != nil {
+		return "", actionmodel.ActionAssuranceGrant{}, actionAssuranceError("backend.action.assurance_token_unavailable")
+	}
 	grant := actionmodel.ActionAssuranceGrant{
-		ID: "assurance_" + secretText[:24], TokenHash: actionAssuranceTokenHash(secretText), WorkspaceID: request.WorkspaceID, UserID: request.UserID,
+		ID: grantID, TokenHash: actionAssuranceTokenHash(secretText), WorkspaceID: request.WorkspaceID, UserID: request.UserID,
 		ActionKey: request.ActionKey, ObjectKey: request.ObjectKey, RecordID: request.RecordID, PayloadDigest: digest, Methods: methods,
 		ApprovalVersion: strings.TrimSpace(request.ApprovalVersion), ApprovalHash: strings.TrimSpace(request.ApprovalHash), IssuedAt: now.Format(time.RFC3339Nano), ExpiresAt: now.Add(ttl).Format(time.RFC3339Nano),
 	}
@@ -81,7 +87,7 @@ func (s *ActionAssuranceDomainService) ValidateAndConsume(ctx context.Context, a
 		return actionmodel.ActionAssuranceEvidence{}, actionAssuranceError("backend.action.assurance_store_unavailable")
 	}
 	parts := strings.Split(strings.TrimSpace(token), ".")
-	if len(parts) != 2 || !strings.HasPrefix(parts[0], "assurance_") || parts[1] == "" {
+	if len(parts) != 2 || !strings.HasPrefix(parts[0], "assure_") || parts[1] == "" {
 		return actionmodel.ActionAssuranceEvidence{}, actionAssuranceError("backend.action.assurance_token_invalid")
 	}
 	grant, found, err := s.store.GetActionAssuranceGrant(ctx, parts[0])

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	notificationmodel "github.com/domainry/domainry-notification-sdk/contract"
 	"github.com/domainry/domainry-notification-sdk/modulehost"
 	"github.com/domainry/domainry-orm/query"
@@ -21,48 +22,52 @@ func NewPublicationOutboxStore(store *database.RuntimeStore) PublicationOutboxSt
 	return PublicationOutboxStore{runtime: store}
 }
 
-func (s PublicationOutboxStore) InsertIntentTx(ctx context.Context, executor modulehost.Executor, intent notificationmodel.NotificationIntent) error {
+func (s PublicationOutboxStore) InsertIntentTx(ctx context.Context, executor modulehost.Executor, intent notificationmodel.NotificationIntent) (string, error) {
 	if s.runtime == nil || executor == nil {
-		return fmt.Errorf("Notification SaaS publication store is required")
+		return "", fmt.Errorf("Notification SaaS publication store is required")
 	}
 	scope, ok := s.runtime.NotificationSaaSPublications()
 	if !ok {
-		return fmt.Errorf("Notification SaaS publication boundary is not bound")
+		return "", fmt.Errorf("Notification SaaS publication boundary is not bound")
 	}
-	if strings.TrimSpace(intent.ID) == "" || strings.TrimSpace(intent.WorkspaceID) == "" || strings.TrimSpace(intent.SourceEventID) == "" {
-		return fmt.Errorf("Notification SaaS publication identity is required")
+	if strings.TrimSpace(intent.WorkspaceID) == "" || strings.TrimSpace(intent.SourceEventID) == "" {
+		return "", fmt.Errorf("Notification SaaS publication identity is required")
 	}
 	if intent.WorkspaceID != scope.WorkspaceID {
-		return fmt.Errorf("Notification SaaS publication workspace %q does not match bound workspace %q", intent.WorkspaceID, scope.WorkspaceID)
+		return "", fmt.Errorf("Notification SaaS publication workspace %q does not match bound workspace %q", intent.WorkspaceID, scope.WorkspaceID)
+	}
+	messageID, err := entityid.New("pubmsg")
+	if err != nil {
+		return "", fmt.Errorf("generate Notification SaaS publication identity: %w", err)
 	}
 	queryer, ok := executor.(interface {
 		QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	})
 	if !ok {
-		return fmt.Errorf("Notification publication executor cannot check account erasure fences")
+		return "", fmt.Errorf("Notification publication executor cannot check account erasure fences")
 	}
 	for _, subject := range intent.RecipientUserIDs {
-		if err := s.runtime.GuardSubjectEvidenceWrite(ctx, queryer, scope.WorkspaceID, "_publication_outbox", []string{"id", "user_id"}, []any{intent.ID, subject}); err != nil {
-			return err
+		if err := s.runtime.GuardSubjectEvidenceWrite(ctx, queryer, scope.WorkspaceID, "_publication_outbox", []string{"message_id", "user_id"}, []any{messageID, subject}); err != nil {
+			return "", err
 		}
 	}
-	if err := s.runtime.GuardSubjectEvidenceWrite(ctx, queryer, scope.WorkspaceID, "_publication_outbox", []string{"id", "object_key", "record_id"}, []any{intent.ID, intent.SubjectType, intent.SubjectID}); err != nil {
-		return err
+	if err := s.runtime.GuardSubjectEvidenceWrite(ctx, queryer, scope.WorkspaceID, "_publication_outbox", []string{"message_id", "object_key", "record_id"}, []any{messageID, intent.SubjectType, intent.SubjectID}); err != nil {
+		return "", err
 	}
 	payload, err := database.MarshalTimeJSON(intent)
 	if err != nil {
-		return fmt.Errorf("encode Notification SaaS publication intent: %w", err)
+		return "", fmt.Errorf("encode Notification SaaS publication intent: %w", err)
 	}
 	digest := sha256.Sum256(payload)
 	now := time.Now().UTC()
 	queryValue, args, buildErr := query.NewWorkspaceInsertBuilder(s.runtime.SQLRenderer, "_publication_outbox", scope.WorkspaceID).
-		Columns("id", "publication_type", "application_key", "source_event_id", "event_type", "intent_json", "connector_key", "operation", "payload_json", "dedup_key", "request_fingerprint", "status", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "remote_event_id", "last_error_code", "last_error", "terminal_at", "created_at", "updated_at").
-		Values(intent.ID, "notification.saas", scope.ApplicationKey, intent.SourceEventID, intent.EventType, string(payload), "notification", "publish_intent", string(payload), intent.SourceEventID, hex.EncodeToString(digest[:]), "queued", 0, int64(0), int64(0), "", int64(0), 0, "", "", "", int64(0), now.UnixMilli(), now.UnixMilli()).Build()
+		Columns("message_id", "publication_type", "application_key", "source_event_id", "event_type", "intent_json", "connector_key", "operation", "payload_json", "dedup_key", "request_fingerprint", "status", "attempt_count", "next_attempt_at", "last_attempt_at", "lease_owner", "lease_expires_at", "fencing_token", "remote_event_id", "last_error_code", "last_error", "terminal_at", "created_at", "updated_at").
+		Values(messageID, "notification.saas", scope.ApplicationKey, intent.SourceEventID, intent.EventType, string(payload), "notification", "publish_intent", string(payload), intent.SourceEventID, hex.EncodeToString(digest[:]), "queued", 0, int64(0), int64(0), "", int64(0), 0, "", "", "", int64(0), now.UnixMilli(), now.UnixMilli()).Build()
 	if buildErr != nil {
-		return fmt.Errorf("build Notification SaaS publication outbox insert: %w", buildErr)
+		return "", fmt.Errorf("build Notification SaaS publication outbox insert: %w", buildErr)
 	}
 	if _, err := executor.ExecContext(ctx, queryValue, args...); err != nil {
-		return fmt.Errorf("insert Notification SaaS publication outbox: %w", err)
+		return "", fmt.Errorf("insert Notification SaaS publication outbox: %w", err)
 	}
-	return nil
+	return messageID, nil
 }

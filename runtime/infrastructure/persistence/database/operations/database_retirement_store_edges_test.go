@@ -32,10 +32,10 @@ func TestDatabaseRetirementStoreSQLStages(t *testing.T) {
 		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 	corrupt := retirementQueryStep(retirement)
-	corrupt.rows[0][16] = "{"
+	corrupt.rows[0][17] = "{"
 	for _, step := range []operationsSQLQueryStep{{err: errOperationsSQL}, corrupt} {
 		store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{step}})
-		if _, _, err := store.GetDatabaseRetirement(t.Context(), retirement.ID); err == nil {
+		if _, _, err := store.GetDatabaseRetirement(t.Context(), retirement.OperationID); err == nil {
 			t.Fatal("invalid get stage accepted")
 		}
 	}
@@ -67,7 +67,7 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 	retirement := executableDatabaseRetirement(now, operationsmodel.DatabaseObjectIdentity{Engine: "sqlite", Database: "runtime", Kind: "table", Name: "legacy"})
 	retirement.Evidence.Observation.SourceCounts = nil
 	corrupt := retirementQueryStep(retirement)
-	corrupt.rows[0][16] = "{"
+	corrupt.rows[0][17] = "{"
 	for _, test := range []struct {
 		name       string
 		state      operationsSQLState
@@ -102,7 +102,7 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := scriptedOperationsStore(t, &test.state)
-			err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "read", "runtime", now)
+			err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.OperationID, "read", "runtime", now)
 			if err == nil || test.wantSQLErr && !errors.Is(err, errOperationsSQL) {
 				t.Fatalf("error=%v wantSQLErr=%v", err, test.wantSQLErr)
 			}
@@ -114,17 +114,17 @@ func TestDatabaseRetirementAccessSQLStages(t *testing.T) {
 		source    string
 		at        time.Time
 	}{{"delete", "runtime", now}, {"read", "unknown", now}, {"write", "runtime", time.Time{}}} {
-		if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, input.operation, input.source, input.at); err == nil {
+		if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.OperationID, input.operation, input.source, input.at); err == nil {
 			t.Fatalf("invalid access accepted: %+v", input)
 		}
 	}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{retirementQueryStep(retirement)}})
-	if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "write", "worker", now); err != nil {
+	if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.OperationID, "write", "worker", now); err != nil {
 		t.Fatalf("write access rejected: %v", err)
 	}
 	retirement.Evidence.Observation.SourceCounts = map[string]uint64{"runtime": 1}
 	store = scriptedOperationsStore(t, &operationsSQLState{querySteps: []operationsSQLQueryStep{retirementQueryStep(retirement)}})
-	if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.ID, "read", "runtime", now); err != nil {
+	if err := store.RecordDatabaseRetirementAccess(t.Context(), retirement.OperationID, "read", "runtime", now); err != nil {
 		t.Fatalf("existing source counts rejected: %v", err)
 	}
 }

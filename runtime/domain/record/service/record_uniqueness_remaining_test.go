@@ -59,11 +59,11 @@ func TestUniquenessValidatorConditionalRemainingEdges(t *testing.T) {
 	}
 
 	repository.listErr = nil
-	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "candidate"}}}
+	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "candidate"}}}
 	if err := validator.ValidateUnique(t.Context(), "workspace", base.Key, base, "candidate", map[string]any{"member": "member-1", "status": "active"}); err != nil {
 		t.Fatalf("current conditional record rejected: %v", err)
 	}
-	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{ID: "other"}}}
+	repository.page = recordmodel.RecordPageResult{Items: []recordmodel.Record{{RecordID: "other"}}}
 	if err := validator.ValidateUnique(t.Context(), "workspace", base.Key, base, "candidate", map[string]any{"member": "member-1", "status": "active"}); err == nil {
 		t.Fatal("default conditional duplicate accepted")
 	}

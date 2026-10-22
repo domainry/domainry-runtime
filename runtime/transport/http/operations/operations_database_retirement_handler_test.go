@@ -75,7 +75,7 @@ func TestDatabaseRetirementHTTPRejectsEarlyExecutionAndNeverAcceptsSQL(t *testin
 		"owner":  "record",
 		"sql":    "DROP TABLE old_http_table",
 	}, http.StatusCreated)
-	id := discovered["id"].(string)
+	id := discovered["operation_id"].(string)
 	listed := operationsRequest(t, mux, http.MethodGet, "/operations/database-retirements?state=discovered&limit=5", "", nil, http.StatusOK)
 	if listed["count"].(float64) != 1 {
 		t.Fatalf("listed=%#v", listed)

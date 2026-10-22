@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
@@ -51,7 +52,7 @@ func TestProjectEngineKnowledgeSearchUsesCurrentPrincipalAndNormalizedCitations(
 	if result.LibraryID != "library-a" || result.Query != "部署风险" || len(result.Citations) != 1 || result.Citations[0].DocumentID != "document-a" {
 		t.Fatalf("result=%#v", result)
 	}
-	if probe.library != "library-a" || probe.query != "部署风险" || probe.searchAuthority.RuntimeID != "aurora-runtime" || probe.searchAuthority.WorkspaceID != "workspace-a" || probe.searchAuthority.UserID != "user-a" || probe.searchAuthority.RoleKey != "sales_rep" || probe.revalidateAuthority != probe.searchAuthority {
+	if probe.library != "library-a" || probe.query != "部署风险" || probe.searchAuthority.RuntimeID != "aurora-runtime" || probe.searchAuthority.WorkspaceID != "workspace-a" || probe.searchAuthority.UserID != "user-a" || probe.searchAuthority.RoleKey != "sales_rep" || !reflect.DeepEqual(probe.revalidateAuthority, probe.searchAuthority) {
 		t.Fatalf("probe=%#v", probe)
 	}
 }
