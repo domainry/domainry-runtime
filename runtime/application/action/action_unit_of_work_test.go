@@ -43,6 +43,7 @@ type actionUnitOfWorkStoreProbe struct {
 	beginTransactionCalls int
 	rollbackCalls         int
 	commitErr             error
+	commitErrs            []error
 	completeErr           error
 	onCommit              func()
 }
@@ -93,6 +94,13 @@ func (s *actionUnitOfWorkStoreProbe) CompleteExecution(_ context.Context, comple
 func (s *actionUnitOfWorkStoreProbe) commitTransaction(_ context.Context, commits []transactionmodel.RecordMutationCommit, completion actionmodel.ActionExecutionCompletion) (actionmodel.ActionBusinessExecution, error) {
 	if s.onCommit != nil {
 		s.onCommit()
+	}
+	if len(s.commitErrs) > 0 {
+		err := s.commitErrs[0]
+		s.commitErrs = s.commitErrs[1:]
+		if err != nil {
+			return actionmodel.ActionBusinessExecution{}, err
+		}
 	}
 	if s.commitErr != nil {
 		return actionmodel.ActionBusinessExecution{}, s.commitErr
@@ -528,6 +536,20 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 		result, err := newService(t, store, handler).Invoke(t.Context(), actionmodel.ActionSourceHTTP, invocation)
 		if apperror.CodeOf(err) != "backend.transaction.deadlock" || !mutation.IsTransactionTransient(err, mutation.TransactionTransientDeadlock) || !result.Retryable || handler.execution.Phase() != runtimeext.ExecutionPhaseRolledBack {
 			t.Fatalf("result=%+v phase=%q error=%v", result, handler.execution.Phase(), err)
+		}
+	})
+
+	t.Run("deferred create retries a known transient commit rollback", func(t *testing.T) {
+		handler := newHandler()
+		store := &actionUnitOfWorkStoreProbe{commitErrs: []error{
+			mutation.TransactionTransient("booking", "booking-1", mutation.TransactionTransientSerializationFailure, errors.New("could not serialize access")),
+		}}
+		result, err := newService(t, store, handler).Invoke(t.Context(), actionmodel.ActionSourceAgent, invocation)
+		if err != nil || result.Status != "success" || handler.execution.Phase() != runtimeext.ExecutionPhaseCommitted {
+			t.Fatalf("result=%+v phase=%q error=%v", result, handler.execution.Phase(), err)
+		}
+		if store.beginTransactionCalls != 2 || store.rollbackCalls != 1 || len(store.commits) != 1 {
+			t.Fatalf("begin calls=%d rollback calls=%d commits=%d", store.beginTransactionCalls, store.rollbackCalls, len(store.commits))
 		}
 	})
 

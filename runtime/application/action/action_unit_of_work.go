@@ -2,9 +2,11 @@ package action
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	auditmodel "github.com/domainry/domainry-audit-sdk/contract"
 	"github.com/domainry/domainry-foundation/apperror"
@@ -16,6 +18,8 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
+
+const actionDeferredCommitMaxAttempts = 3
 
 // ActionUnitOfWorkManager creates the Runtime-owned commit boundary shared by
 // System Operations and Business Handlers. Executors may only describe
@@ -116,6 +120,7 @@ func (u *actionUnitOfWork) commit(ctx context.Context, result any, commits []tra
 	if u == nil || u.manager == nil {
 		return nil
 	}
+	openedForCommit := u.transaction == nil
 	if u.transaction == nil {
 		if _, err := u.beginWriting(ctx); err != nil {
 			return err
@@ -126,14 +131,41 @@ func (u *actionUnitOfWork) commit(ctx context.Context, result any, commits []tra
 	if u.activeSynchronousConnectorCalls > 0 {
 		return apperror.New(apperror.KindConflict, runtimeext.ActionWriteDuringConnectorCallErrorCode, nil, nil)
 	}
-	err := u.manager.executions.CommitTransaction(ctx, u.transaction, u.claim, result, commits, audits)
-	if err != nil {
-		if !mutation.IsTransactionCommitUnknown(err) {
-			_ = u.phases.rollBack()
+	for attempt := 1; ; attempt++ {
+		err := u.manager.executions.CommitTransaction(ctx, u.transaction, u.claim, result, commits, audits)
+		if err == nil {
+			return u.phases.commit()
 		}
-		return err
+		if !openedForCommit ||
+			attempt == actionDeferredCommitMaxAttempts ||
+			!mutation.IsTransactionTransient(err, "") ||
+			mutation.IsTransactionCommitUnknown(err) {
+			if !mutation.IsTransactionCommitUnknown(err) {
+				_ = u.phases.rollBack()
+			}
+			return err
+		}
+		// A create-only Business Handler defers opening the physical transaction
+		// until this commit. Its canonical mutations and receipt update are fully
+		// transactional, so a known PostgreSQL serialization/deadlock rollback can
+		// be retried without rerunning the Handler or repeating external effects.
+		_ = u.transaction.RollBack(context.WithoutCancel(ctx))
+		delay := time.Duration(1<<(attempt-1)) * 5 * time.Millisecond
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			_ = u.phases.rollBack()
+			return errors.Join(err, ctx.Err())
+		case <-timer.C:
+		}
+		transaction, beginErr := u.manager.executions.BeginTransaction(ctx)
+		if beginErr != nil {
+			_ = u.phases.rollBack()
+			return errors.Join(err, beginErr)
+		}
+		u.transaction = transaction
 	}
-	return u.phases.commit()
 }
 
 func (u *actionUnitOfWork) beginWriting(ctx context.Context) (context.Context, error) {

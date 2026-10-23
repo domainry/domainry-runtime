@@ -218,14 +218,16 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 		physicalField := recordPhysicalField(object.Key, rule.Field)
 		direction := strings.ToUpper(strings.TrimSpace(rule.Direction))
 		if strings.TrimSpace(queryValue.Locale) == "" || !localizedSet[rule.Field] {
-			if queryValue.StableNullsLast {
-				orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNull(physicalField), 1).Else(0)))
-			}
+			var order query.Order
 			if direction == "DESC" {
-				orders = append(orders, query.Descending(physicalField))
+				order = query.Descending(physicalField)
 			} else {
-				orders = append(orders, query.Ascending(physicalField))
+				order = query.Ascending(physicalField)
 			}
+			if queryValue.StableNullsLast {
+				order = order.NullsLast()
+			}
+			orders = append(orders, order)
 			continue
 		}
 		values := []query.Expression{}
@@ -238,14 +240,16 @@ func recordLocalizedOrders(workspaceID string, object definitionmodel.ObjectSche
 		}
 		values = append(values, query.Column(rule.Field))
 		expression := query.Coalesce(values...)
-		if queryValue.StableNullsLast {
-			orders = append(orders, query.AscendingExpression(query.CaseWhen(query.IsNullExpression(expression), 1).Else(0)))
-		}
+		var order query.Order
 		if direction == "DESC" {
-			orders = append(orders, query.DescendingExpression(expression))
+			order = query.DescendingExpression(expression)
 		} else {
-			orders = append(orders, query.AscendingExpression(expression))
+			order = query.AscendingExpression(expression)
 		}
+		if queryValue.StableNullsLast {
+			order = order.NullsLast()
+		}
+		orders = append(orders, order)
 	}
 	if len(orders) == 0 {
 		orders = append(orders, query.Ascending("id"))
