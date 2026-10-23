@@ -47,7 +47,7 @@ func TestConditionalUpdateManyIsOneSetCallWithoutPerRecordLookupOrMutation(t *te
 				updated.UpdatedAt = "v2"
 				updated.UpdateBy = "manager"
 				updated.Data = map[string]any{"staff_id": before.Data["staff_id"], "status": input.Patch["status"], "clock_out": input.Patch["clock_out"]}
-				mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "shift.bulk_clock_out", CorrelationID: "correlation", ApplicationSchemaRevision: "schema"})
+				mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "shift.bulk_clock_out", ApplicationSchemaRevision: "schema"})
 				if err != nil {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 				}

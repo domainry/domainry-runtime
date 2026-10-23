@@ -257,7 +257,7 @@ func TestSQLUnitOfWorkRetriesTheCompleteTransactionOnlyWhenDeclaredSafe(t *testi
 	})
 	attempts := 0
 	identities := make([]transactioncontract.TransactionRetryIdentity, 0, 2)
-	ctx := requestcontext.WithCorrelationID(t.Context(), "correlation-1")
+	ctx := requestcontext.WithRequestID(t.Context(), "correlation-1")
 	err := unit.WithinTransaction(ctx, func(ctx context.Context, ports testTransactionPorts) error {
 		attempts++
 		identity, ok := transactioncontract.TransactionRetryIdentityFromContext(ctx)
@@ -276,7 +276,7 @@ func TestSQLUnitOfWorkRetriesTheCompleteTransactionOnlyWhenDeclaredSafe(t *testi
 	if err != nil || attempts != 2 {
 		t.Fatalf("retry result: attempts=%d err=%v", attempts, err)
 	}
-	if len(identities) != 2 || identities[0] != identities[1] || identities[0].IdempotencyScope != testTransactionRetryScope() || identities[0].CorrelationID != "correlation-1" {
+	if len(identities) != 2 || identities[0] != identities[1] || identities[0].IdempotencyScope != testTransactionRetryScope() {
 		t.Fatalf("retry identity changed across attempts: %#v", identities)
 	}
 	if count := unitOfWorkRowCount(t, database); count != 1 {
@@ -315,7 +315,7 @@ func TestSQLUnitOfWorkDoesNotRetryNonTransientFailure(t *testing.T) {
 	})
 	attempts := 0
 	want := errors.New("business validation failed")
-	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		attempts++
 		return want
 	})
@@ -344,7 +344,7 @@ func TestSQLUnitOfWorkEnforcesAttemptsBackoffDeadlineAndBudget(t *testing.T) {
 		return nil
 	}
 	attempts := 0
-	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		attempts++
 		return mutation.TransactionTransient("probe", "attempt", mutation.TransactionTransientDeadlock, nil)
 	})
@@ -361,7 +361,7 @@ func TestSQLUnitOfWorkEnforcesAttemptsBackoffDeadlineAndBudget(t *testing.T) {
 	budgetUnit.now = func() time.Time { return now }
 	budgetUnit.wait = func(_ context.Context, delay time.Duration) error { now = now.Add(delay); return nil }
 	attempts = 0
-	err = budgetUnit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err = budgetUnit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		attempts++
 		return mutation.TransactionTransient("probe", "attempt", mutation.TransactionTransientLockTimeout, nil)
 	})
@@ -378,7 +378,7 @@ func TestSQLUnitOfWorkEnforcesAttemptsBackoffDeadlineAndBudget(t *testing.T) {
 	deadlineUnit.now = func() time.Time { return now }
 	deadlineUnit.wait = func(_ context.Context, delay time.Duration) error { now = now.Add(delay); return nil }
 	attempts = 0
-	err = deadlineUnit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err = deadlineUnit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		attempts++
 		return mutation.TransactionTransient("probe", "attempt", mutation.TransactionTransientSerializationFailure, nil)
 	})
@@ -400,7 +400,7 @@ func TestSQLUnitOfWorkRecordsDurationConflictsRollbacksAndRetries(t *testing.T) 
 	unit.now = func() time.Time { return now }
 	unit.wait = func(_ context.Context, delay time.Duration) error { now = now.Add(delay); return nil }
 	attempts := 0
-	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(ctx context.Context, ports testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(ctx context.Context, ports testTransactionPorts) error {
 		attempts++
 		now = now.Add(5 * time.Millisecond)
 		if err := ports.Insert(ctx, "metric"); err != nil {
@@ -421,7 +421,7 @@ func TestSQLUnitOfWorkRecordsDurationConflictsRollbacksAndRetries(t *testing.T) 
 	if unit.TransactionMetricsSnapshot() != snapshot {
 		t.Fatalf("unit metrics snapshot mismatch: %#v", unit.TransactionMetricsSnapshot())
 	}
-	err = unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-2"), func(ctx context.Context, ports testTransactionPorts) error {
+	err = unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-2"), func(ctx context.Context, ports testTransactionPorts) error {
 		now = now.Add(2 * time.Millisecond)
 		if err := ports.Insert(ctx, "conflict"); err != nil {
 			return err

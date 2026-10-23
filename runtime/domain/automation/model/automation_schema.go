@@ -80,8 +80,6 @@ type AutomationLifecycleEvent struct {
 	Record          recordmodel.Record   `json:"record"`
 	ActorUserID     string               `json:"actor_user_id,omitempty"`
 	ActorRoleKey    string               `json:"actor_role_key,omitempty"`
-	RequestID       string               `json:"request_id,omitempty"`
-	CorrelationID   string               `json:"correlation_id"`
 	CausationID     string               `json:"causation_id"`
 	IdentityPolicy  string               `json:"identity_policy"`
 	AutomationDepth int                  `json:"automation_depth,omitempty"`

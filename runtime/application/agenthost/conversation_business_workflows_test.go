@@ -92,7 +92,7 @@ func TestConversationWorkflowHostConfirmsReconcilesAndRevalidatesChangingState(t
 		}
 	}
 	receipt, err := host.StartBusinessWorkflow(t.Context(), request)
-	if err != nil || receipt.Status != "uncertain" || port.starts != 1 || port.lastPrincipal.CorrelationID != request.RunID {
+	if err != nil || receipt.Status != "uncertain" || port.starts != 1 {
 		t.Fatal(receipt, err)
 	}
 	receipt, err = host.ReconcileBusinessWorkflow(t.Context(), request)

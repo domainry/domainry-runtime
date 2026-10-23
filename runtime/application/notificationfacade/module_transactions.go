@@ -38,7 +38,7 @@ func (SaaSCompiler) CompileInboxIntent(value runtimemodel.NotificationIntent, sc
 		SubjectType:          value.SubjectType, SubjectID: value.SubjectID, SubjectVersion: value.SubjectVersion,
 		GroupKey: value.GroupKey, DedupeKey: value.DedupeKey, ActionState: value.ActionState,
 		AlertState: value.AlertState, ExpiresAt: value.ExpiresAt, OccurredAt: value.OccurredAt,
-		CorrelationID: value.CorrelationID, TraceID: value.TraceID, PublicationIntent: &intent,
+		PublicationIntent: &intent,
 	}, nil
 }
 

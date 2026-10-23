@@ -446,7 +446,7 @@ func actionExecutionRow(now time.Time, status, fingerprint string) []driver.Valu
 }
 
 func actionExecutionColumns() []string {
-	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON string) []any {
@@ -455,7 +455,7 @@ func actionExecutionValues(value actionmodel.ActionBusinessExecution, resultJSON
 		record.ID, record.OperationID, record.WorkspaceID, record.SystemPurpose, record.Owner, record.Kind, record.ActionKey, record.ParentOperationID,
 		record.ResourceType, record.ResourceID, record.IdempotencyKey, record.RequestFingerprint, record.RequestedBy,
 		record.Reason, record.Reference, record.Status, record.StatusURL, string(record.ResultJSON), string(record.MetadataJSON),
-		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON), record.Correlation,
+		record.ErrorCode, record.FailureClass, record.NextAction, string(record.RelatedIDsJSON),
 		string(record.EvidenceJSON), record.LeaseOwner, timevalue.Millis(record.LeaseExpiresAt), record.FencingToken, timevalue.Millis(record.ExpiresAt),
 		timevalue.Millis(record.CreatedAt), timevalue.Millis(record.StartedAt), timevalue.Millis(record.FinishedAt), timevalue.Millis(record.UpdatedAt),
 	}

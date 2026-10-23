@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -57,11 +58,13 @@ func TestSchedulerBusinessActionUsesManagedRoleAndStableWindowIdempotency(t *tes
 		ExecutionID: "run-1", DefinitionKey: "expire-orders", IdempotencyKey: "expire-orders:window:2026-09-20T02:00:00Z",
 		Operation: "order.expire", ObjectKey: "order", RunAsRole: "order_automation", Payload: []byte(`{"status":"expired","sequence":9007199254740993}`),
 	}
-	first, err := runtime.ExecuteBusinessActionTarget(t.Context(), request)
+	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	ctx := requestcontext.WithRequestID(t.Context(), traceID)
+	first, err := runtime.ExecuteBusinessActionTarget(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := runtime.ExecuteBusinessActionTarget(t.Context(), request)
+	second, err := runtime.ExecuteBusinessActionTarget(ctx, request)
 	if err != nil || first != second || actions.calls != 2 || actions.effects != 1 {
 		t.Fatalf("first=%+v second=%+v calls=%d effects=%d err=%v", first, second, actions.calls, actions.effects, err)
 	}
@@ -71,6 +74,9 @@ func TestSchedulerBusinessActionUsesManagedRoleAndStableWindowIdempotency(t *tes
 	}
 	if actions.source != actionmodel.ActionSourceScheduler || actions.invocation.Principal.UserID != principal.UserID || actions.invocation.ActionKey != "order.expire" || actions.invocation.ObjectKey != "order" || actions.invocation.Input["status"] != "expired" || actions.invocation.Input["sequence"] != json.Number("9007199254740993") || actions.invocation.IdempotencyKey != request.IdempotencyKey || !actions.invocation.PreventExecutionReclaim {
 		t.Fatalf("source=%q invocation=%+v", actions.source, actions.invocation)
+	}
+	if actions.invocation.RequestID != traceID || actions.invocation.RequestID == actions.invocation.IdempotencyKey {
+		t.Fatalf("request/trace=%q idempotency=%q", actions.invocation.RequestID, actions.invocation.IdempotencyKey)
 	}
 
 	pausedVersion := schedulerBusinessActionAuthorizationVersion("expire-orders", "order.expire", "order", "order_automation")

@@ -91,7 +91,7 @@ func identityDeliveryMutationContext(t *testing.T) transactionmodel.MutationCont
 	t.Helper()
 	value, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "employee.create",
-		CorrelationID: "correlation-1", ApplicationSchemaRevision: "schema-1", EffectAuthority: map[string][]string{"employee_profile": {"*"}},
+		ApplicationSchemaRevision: "schema-1", EffectAuthority: map[string][]string{"employee_profile": {"*"}},
 	})
 	if err != nil {
 		t.Fatal(err)

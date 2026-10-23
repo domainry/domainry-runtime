@@ -32,7 +32,7 @@ type AfterCommitFailure struct {
 	Name            string
 	Purpose         AfterCommitPurpose
 	DurableRecovery bool
-	CorrelationID   string
+	RequestID       string
 	Cause           error
 }
 

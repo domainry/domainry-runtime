@@ -40,14 +40,13 @@ func newRuntimeAuditApplicationHost(records *recordapplication.RecordApplication
 
 func (h runtimeAuditApplicationHost) ResolveAuditPrincipal(ctx context.Context, request auditmodulehost.AuditPrincipalRequest) (auditmodulehost.AuditPrincipal, error) {
 	principal := principalmodel.NewPrincipalFromIdentity(request.Identity, strings.TrimSpace(request.RequestID))
-	principal.CorrelationID = strings.TrimSpace(request.CorrelationID)
 	resolved, err := h.principals.ResolveBusinessPrincipal(ctx, principal, request.BusinessProfileKey, request.BusinessProfileID)
 	if err != nil {
 		return auditmodulehost.AuditPrincipal{}, err
 	}
 	return auditmodulehost.AuditPrincipal{
 		Identity: request.Identity, BusinessProfileKey: strings.TrimSpace(request.BusinessProfileKey), BusinessProfileID: strings.TrimSpace(request.BusinessProfileID),
-		RequestID: strings.TrimSpace(request.RequestID), CorrelationID: strings.TrimSpace(request.CorrelationID), AuthorizationRevision: resolved.AuthorizationRevision,
+		RequestID: strings.TrimSpace(request.RequestID), AuthorizationRevision: resolved.AuthorizationRevision,
 	}, nil
 }
 
@@ -73,7 +72,6 @@ func (h runtimeAuditApplicationHost) AuditExportTokenKey() []byte {
 
 func (h runtimeAuditApplicationHost) runtimePrincipal(ctx context.Context, principal auditmodulehost.AuditPrincipal) (principalmodel.Principal, error) {
 	base := principalmodel.NewPrincipalFromIdentity(principal.Identity, principal.RequestID)
-	base.CorrelationID = principal.CorrelationID
 	return h.principals.ResolveBusinessPrincipal(ctx, base, principal.BusinessProfileKey, principal.BusinessProfileID)
 }
 

@@ -40,7 +40,6 @@ type Principal struct {
 	identitysdk.Principal
 	SystemScope           SystemScope
 	RequestID             string
-	CorrelationID         string
 	CausationID           string
 	BusinessProfiles      []profilebindingmodel.Reference
 	ActiveBusinessProfile *profilebindingmodel.Reference

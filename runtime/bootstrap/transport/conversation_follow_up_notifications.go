@@ -69,7 +69,6 @@ func (p agentFollowUpNotificationPublisher) PublishConversationFollowUp(ctx cont
 			"goal": strings.TrimSpace(event.Goal), "summary": strings.TrimSpace(event.Summary), "question": strings.TrimSpace(event.Question),
 			"error_code": strings.TrimSpace(event.ErrorCode), "occurrence": event.Occurrence,
 		},
-		CorrelationID: event.RunID,
 	})
 	return err
 }

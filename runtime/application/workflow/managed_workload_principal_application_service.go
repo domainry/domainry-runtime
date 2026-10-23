@@ -47,14 +47,10 @@ func (s *WorkflowApplicationService) ResolveManagedWorkloadPrincipal(ctx context
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workload.execution_principal_denied", err, map[string]string{"workload": key, "role": roleKey})
 	}
 	resolution.Principal.AccessBundle = &resolution.AccessBundle
-	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, strings.TrimSpace(execution.IdempotencyKey))
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, requestcontext.RequestIDOrNew(ctx))
 	expectedSubject := string(identitysdk.WorkflowWorkloadSubjectID(key))
 	if !principal.Known || principal.WorkspaceID != string(application.WorkspaceID) || principal.UserID != expectedSubject || principal.RoleKey != roleKey || principal.Workload == nil || principal.Workload.WorkflowKey != key || principal.Workload.DefinitionVersionID != binding.DefinitionVersionID || principal.Workload.DefinitionVersion != binding.DefinitionVersion || principal.Workload.ReleaseID != binding.ReleaseID || principal.Workload.ReleaseDigest != binding.ReleaseDigest || principal.Workload.TaskID != workload.TaskID || principal.Workload.SourceEventID != workload.SourceEventID || !principal.HasAllPermissions(binding.ActionKeys) {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workload.execution_principal_mismatch", nil, map[string]string{"workload": key, "role": roleKey})
-	}
-	principal.RequestID = strings.TrimSpace(execution.IdempotencyKey)
-	if principal.RequestID == "" {
-		principal.RequestID = strings.TrimSpace(execution.ExecutionID)
 	}
 	return principal, nil
 }

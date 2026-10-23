@@ -19,7 +19,7 @@ func TestAgentTaskDispatchPreparesAuthorizedSDKRequest(t *testing.T) {
 		TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: agentsdk.AgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit},
 		Input: map[string]any{"record_id": "customer-1"}, AllowedObjects: []string{"customer"},
 		AllowedActions: []string{"customer.update"}, AllowedOutcomes: []string{"success"},
-		TimeoutSeconds: 30, MaxAttempts: 3, Initiator: initiator, CorrelationID: "correlation-1",
+		TimeoutSeconds: 30, MaxAttempts: 3, Initiator: initiator,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -27,8 +27,8 @@ func TestAgentTaskDispatchPreparesAuthorizedSDKRequest(t *testing.T) {
 	if request.TaskRunID != "agent_task_nonce" || request.IdempotencyKey != "process-1:review:2" || request.MaxAttempts != 3 {
 		t.Fatalf("SDK request contract = %#v", request)
 	}
-	if request.ProcessID != "process-1" || request.NodeInstanceID != "node-instance-1" || request.WorkspaceID != "workspace-1" || request.CorrelationID != "correlation-1" {
-		t.Fatalf("workflow correlation = %#v", request)
+	if request.ProcessID != "process-1" || request.NodeInstanceID != "node-instance-1" || request.WorkspaceID != "workspace-1" {
+		t.Fatalf("workflow task identity = %#v", request)
 	}
 	if request.Identity.Initiator.AuthorizationRevision != "operator-rev-1" || request.Identity.Execution.AuthorizationRevision != "operator-rev-2" {
 		t.Fatalf("identity = %#v", request.Identity)

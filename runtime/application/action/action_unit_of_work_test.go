@@ -225,7 +225,7 @@ func TestActionUnitOfWorkCommitsSystemAndBusinessOwnersThroughOneBoundary(t *tes
 	newPlan := func(actionKey, objectKey, operation string, fields map[string]any, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 		record := recordmodel.Record{RecordID: objectKey + "-1", Data: fields}
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
-			WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: actionKey, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1",
+			WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: actionKey, ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
@@ -307,7 +307,7 @@ func TestBusinessActionRelationValidationSeesEarlierPlannedCreate(t *testing.T) 
 	newCreatePlan := func(object definitionmodel.ObjectSchema, record recordmodel.Record) (transactionmodel.MutationPlan, error) {
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 			WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction,
-			ActionKey: "child.create_pair", CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1",
+			ActionKey: "child.create_pair", ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, err
@@ -364,7 +364,7 @@ func TestActionUnitOfWorkFailsClosedWhenMutationStoreIsMissing(t *testing.T) {
 	action := definitionmodel.ActionSchema{Key: "order.create", ObjectKey: "order", Kind: definitionmodel.ActionKindObjectCreate}
 	system := NewSystemOperationCatalog(SystemOperationDescriptor{Key: SystemOperationCreate, Kind: definitionmodel.ActionKindObjectCreate, WriteOperation: "create"})
 	handlers := NewRecordSystemOperationHandlers(RecordSystemOperationDependencies{PlanCreateMutation: func(_ context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-		context, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
+		context, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, ApplicationSchemaRevision: "snapshot-1"})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 		}
@@ -407,7 +407,7 @@ func TestActionExecutionPhaseFollowsRuntimeOwnedUnitOfWork(t *testing.T) {
 			Catalog: NewActionCatalog([]definitionmodel.ActionSchema{action}, system, registry), SystemOperations: NewSystemOperationExecutor(system),
 			BusinessHandlers: newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{PlanCreateMutation: func(_ context.Context, objectKey string, fields map[string]any, _ string, principal principalmodel.Principal) (transactionmodel.MutationPlan, recordmodel.Record, error) {
 				record := recordmodel.Record{RecordID: "booking-1", Data: fields}
-				mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
+				mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceAction, ActionKey: action.Key, ApplicationSchemaRevision: "snapshot-1"})
 				if err != nil {
 					return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 				}
@@ -924,7 +924,7 @@ func TestBookClassCommitsClassBookingAuditOutboxAndReceiptThroughOneUnitOfWork(t
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 			WorkspaceID: "workspace-a", ActorID: "member-1", RoleKey: "member",
 			Source: transactionmodel.MutationSourceAction, ActionKey: "group_class.book_class",
-			CorrelationID: "book-class-1", ApplicationSchemaRevision: "snapshot-1",
+			ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, err

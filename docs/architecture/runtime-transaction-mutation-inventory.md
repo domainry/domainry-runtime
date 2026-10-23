@@ -139,7 +139,7 @@ The shared SQL Unit of Work contract runs the same four-window failure matrix fo
 | first local write | the write fails and no new chain fact is visible |
 | arbitrary middle local write | all earlier writes in the attempt roll back |
 | after the final write, before commit | every write rolls back and the original error is preserved |
-| after commit, in recoverable local coordination | all local facts remain committed; hook failure is recorded with correlation identity and must not reinterpret the commit as rollback |
+| after commit, in recoverable local coordination | all local facts remain committed; hook failure is recorded with the request/trace identity and must not reinterpret the commit as rollback |
 
 The executable matrix is `TestCriticalTransactionChainsCoverEveryFailureWindow` in `infrastructure/persistence/database/transaction/unit_of_work_test.go`. Owner-specific P2 tests prove that each chain routes its indivisible local facts through its atomic commit adapter; this matrix proves the common transaction failure semantics applied by those adapters.
 

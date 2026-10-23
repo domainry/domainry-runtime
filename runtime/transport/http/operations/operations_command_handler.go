@@ -34,7 +34,6 @@ func (h *OperationsHandler) listOperations(w http.ResponseWriter, r *http.Reques
 		ResourceType:      values.Get("resource_type"),
 		ResourceID:        values.Get("resource_id"),
 		RequestedBy:       values.Get("requested_by"),
-		Correlation:       values.Get("correlation"),
 		CreatedFrom:       values.Get("created_from"),
 		CreatedTo:         values.Get("created_to"),
 		Search:            values.Get("search"),

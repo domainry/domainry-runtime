@@ -230,7 +230,6 @@ func normalizeOperationsReceiptFilter(filter operationsmodel.OperationsReceiptFi
 	filter.ResourceType = strings.TrimSpace(filter.ResourceType)
 	filter.ResourceID = strings.TrimSpace(filter.ResourceID)
 	filter.RequestedBy = strings.TrimSpace(filter.RequestedBy)
-	filter.Correlation = strings.TrimSpace(filter.Correlation)
 	filter.CreatedFrom = strings.TrimSpace(filter.CreatedFrom)
 	filter.CreatedTo = strings.TrimSpace(filter.CreatedTo)
 	if parsed, err := time.Parse(time.RFC3339, filter.CreatedFrom); err == nil {
@@ -307,9 +306,6 @@ func (s *OperationsApplicationService) Finish(ctx context.Context, receipt opera
 	}
 	if len(receipt.RelatedIDs) == 0 && strings.TrimSpace(receipt.Command.Scope.ResourceID) != "" {
 		receipt.RelatedIDs = []string{receipt.Command.Scope.ResourceID}
-	}
-	if strings.TrimSpace(receipt.Correlation) == "" {
-		receipt.Correlation = receipt.Command.OperationID
 	}
 	if len(receipt.Evidence) == 0 {
 		receipt.Evidence = []string{receipt.StatusURL}

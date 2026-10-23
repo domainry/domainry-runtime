@@ -296,7 +296,7 @@ func (h runtimeAgentTaskHost) AuthorizeTask(ctx context.Context, request agentmo
 	initiator := principalmodel.Principal{Principal: identitysdk.Principal{
 		Known: true, WorkspaceID: request.Identity.Initiator.WorkspaceID, UserID: request.Identity.Initiator.UserID,
 		RoleKey: request.Identity.Initiator.RoleKey, AuthorizationRevision: request.Identity.Initiator.AuthorizationRevision,
-	}, CorrelationID: request.CorrelationID}
+	}}
 	objects, actions, outcomes := []string(nil), []string(nil), []string(nil)
 	if count := len(request.PreviousEvidence); count > 0 {
 		previous := request.PreviousEvidence[count-1]
@@ -626,7 +626,7 @@ func (h runtimeAgentInteractiveHost) WakeAgentTask(context.Context, string, stri
 func runtimeAgentPrincipal(value agentmodulehost.Principal) principalmodel.Principal {
 	return principalmodel.Principal{
 		Principal: identitysdk.Principal{Known: value.Known, WorkspaceID: strings.TrimSpace(value.WorkspaceID), UserID: strings.TrimSpace(value.UserID), RoleKey: strings.TrimSpace(value.RoleKey), AuthorizationRevision: strings.TrimSpace(value.AuthorizationRevision)},
-		RequestID: strings.TrimSpace(value.RequestID), CorrelationID: strings.TrimSpace(value.CorrelationID), CausationID: strings.TrimSpace(value.CausationID),
+		RequestID: strings.TrimSpace(value.RequestID), CausationID: strings.TrimSpace(value.CausationID),
 	}
 }
 
@@ -634,7 +634,7 @@ func runtimeAgentHostPrincipal(value principalmodel.Principal) agentmodulehost.P
 	return agentmodulehost.Principal{
 		Known: value.Known, WorkspaceID: value.WorkspaceID, UserID: value.UserID, RoleKey: value.RoleKey,
 		AuthorizationRevision: value.AuthorizationRevision, RequestID: value.RequestID,
-		CorrelationID: value.CorrelationID, CausationID: value.CausationID,
+		CausationID: value.CausationID,
 	}
 }
 

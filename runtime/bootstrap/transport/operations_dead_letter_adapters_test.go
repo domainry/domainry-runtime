@@ -125,7 +125,7 @@ func TestWorkflowDeadLetterOwnerAllActionsAndFailures(t *testing.T) {
 	owner := workflowDeadLetterOwner{service: service}
 	principal := deadLetterPrincipal()
 	item, err := owner.Inspect(t.Context(), "execution", principal)
-	if err != nil || item.BusinessKey != "order:record" || item.CorrelationID != "process" {
+	if err != nil || item.BusinessKey != "order:record" || len(item.RelatedIDs) != 1 || item.RelatedIDs[0] != "process" {
 		t.Fatalf("item=%#v err=%v", item, err)
 	}
 	service.execution.ObjectKey, service.execution.RecordID = "", ""

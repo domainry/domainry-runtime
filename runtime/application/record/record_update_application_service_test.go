@@ -247,7 +247,7 @@ func TestUpdateIdempotentCommitsThroughReceiptAndReplaysWithoutSecondMutation(t 
 		executions.commit.Audit.Metadata["idempotency_status"] != "succeeded" ||
 		!strings.HasPrefix(fmt.Sprint(executions.commit.Audit.Metadata["idempotency_key_hash"]), "sha256:") ||
 		strings.Contains(fmt.Sprint(executions.commit.Audit.Metadata), "blacklist-1") {
-		t.Fatalf("update audit lacks safe receipt correlation: %#v", executions.commit.Audit)
+		t.Fatalf("update audit lacks safe receipt lineage: %#v", executions.commit.Audit)
 	}
 	if patch["expected_updated_at"] != "version-1" {
 		t.Fatalf("caller patch mutated: %#v", patch)

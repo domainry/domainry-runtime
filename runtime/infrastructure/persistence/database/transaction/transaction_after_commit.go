@@ -20,7 +20,7 @@ func (store *afterCommitFailureStore) append(ctx context.Context, hook transacti
 	defer store.mu.Unlock()
 	store.failures = append(store.failures, transactioncontract.AfterCommitFailure{
 		Name: hook.Name, Purpose: hook.Purpose, DurableRecovery: hook.DurableRecovery,
-		CorrelationID: requestcontext.CorrelationID(ctx), Cause: cause,
+		RequestID: requestcontext.RequestID(ctx), Cause: cause,
 	})
 }
 

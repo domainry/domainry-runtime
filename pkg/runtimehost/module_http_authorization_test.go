@@ -189,7 +189,8 @@ func TestModuleHTTPPermissionDenialUsesSourceOwnedAuditRecorder(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/identity/users/target-1/role-assignments", strings.NewReader(`{"role_id":"private-role"}`))
 	request.Header.Set("Authorization", "Bearer known-token")
 	request.SetPathValue("userID", "target-1")
-	request = request.WithContext(requestcontext.WithCorrelationID(requestcontext.WithRequestID(request.Context(), "request-1"), "correlation-1"))
+	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	request = request.WithContext(requestcontext.WithRequestID(request.Context(), traceID))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || len(recorder.events) != 1 {
@@ -199,7 +200,7 @@ func TestModuleHTTPPermissionDenialUsesSourceOwnedAuditRecorder(t *testing.T) {
 	if event.Event != "auth_api_denied" || event.ObjectKey != "identity.user_role_assignments" || event.RecordID != "target-1" || event.WorkspaceID != "workspace-a" || event.ActorID != "coach-1" || event.RoleKey != "coach" {
 		t.Fatalf("denial audit=%#v", event)
 	}
-	if event.Metadata["result"] != "denied" || event.Metadata["reason"] != "permission_denied" || event.Metadata["error_code"] != "auth.permission_denied" || event.Metadata["request_id"] != "request-1" || event.Metadata["correlation_id"] != "correlation-1" {
+	if event.Metadata["result"] != "denied" || event.Metadata["reason"] != "permission_denied" || event.Metadata["error_code"] != "auth.permission_denied" || event.Metadata["request_id"] != traceID || event.Metadata["correlation_id"] != nil {
 		t.Fatalf("denial metadata=%#v", event.Metadata)
 	}
 	encoded, _ := json.Marshal(event)

@@ -190,7 +190,7 @@ func workflowReceiptRecord(value workflowmodel.WorkflowExecutionReceipt) sharedo
 		ActionKey: "workflow.execute", ResourceType: "workflow", ResourceID: value.WorkflowKey,
 		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, Reference: value.IdempotencyKey,
 		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: json.RawMessage(workflowReceiptResultJSON(value.ExecutionID)),
-		MetadataJSON: json.RawMessage(`{}`), RelatedIDsJSON: relatedIDs, Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
+		MetadataJSON: json.RawMessage(`{}`), RelatedIDsJSON: relatedIDs, EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -212,7 +212,7 @@ func workflowReceipt(record sharedoperation.Record) (workflowmodel.WorkflowExecu
 		LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken, ExpiresAt: record.ExpiresAt,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != workflowReceiptOwner || record.Kind != workflowReceiptKind || record.ActionKey != "workflow.execute" || record.ResourceType != "workflow" || record.IdempotencyKey != value.OperationID || record.Correlation != value.OperationID {
+	if record.Owner != workflowReceiptOwner || record.Kind != workflowReceiptKind || record.ActionKey != "workflow.execute" || record.ResourceType != "workflow" || record.IdempotencyKey != value.OperationID {
 		return workflowmodel.WorkflowExecutionReceipt{}, fmt.Errorf("workflow receipt operation identity is invalid")
 	}
 	var result workflowReceiptOperationResult

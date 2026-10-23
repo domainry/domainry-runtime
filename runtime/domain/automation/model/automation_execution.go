@@ -14,7 +14,6 @@ type AutomationRuleExecution struct {
 	ActorID        string         `json:"actor_id,omitempty"`
 	RoleKey        string         `json:"role_key,omitempty"`
 	RequestID      string         `json:"request_id,omitempty"`
-	CorrelationID  string         `json:"correlation_id,omitempty"`
 	EventID        string         `json:"event_id,omitempty"`
 	DurationMS     int64          `json:"duration_ms"`
 	ErrorCode      string         `json:"error_code,omitempty"`

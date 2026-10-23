@@ -111,7 +111,6 @@ func EnsureEvidenceSchemaFor(ctx context.Context, s Store, capabilities Evidence
 			"actor_id " + text + " NOT NULL DEFAULT ''",
 			"role_key " + text + " NOT NULL DEFAULT ''",
 			"request_id " + text + " NOT NULL DEFAULT ''",
-			"correlation_id " + text + " NOT NULL DEFAULT ''",
 			"event_id " + text + " NOT NULL DEFAULT ''",
 			"duration_ms INTEGER NOT NULL DEFAULT 0",
 			"error_code " + text + " NOT NULL DEFAULT ''",

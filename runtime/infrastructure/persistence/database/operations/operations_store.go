@@ -171,7 +171,7 @@ func (s OperationsStore) SearchOperationsReceipts(ctx context.Context, scope ope
 	recordFilter.FailureClass = string(filter.FailureClass)
 	recordFilter.Owner, recordFilter.Kind, recordFilter.ParentOperationID = filter.Owner, filter.Kind, filter.ParentOperationID
 	recordFilter.ResourceType, recordFilter.ResourceID = filter.ResourceType, filter.ResourceID
-	recordFilter.RequestedBy, recordFilter.Correlation = filter.RequestedBy, filter.Correlation
+	recordFilter.RequestedBy = filter.RequestedBy
 	recordFilter.CreatedFrom, recordFilter.CreatedTo, recordFilter.Search, recordFilter.Limit = filter.CreatedFrom, filter.CreatedTo, filter.Search, filter.Limit
 	page, err := ledger.SearchRecords(ctx, recordFilter, true)
 	if err != nil {
@@ -275,7 +275,7 @@ func operationsRecord(receipt operationsmodel.OperationsReceipt) sharedoperation
 		RequestedBy: receipt.Command.RequestedBy, Reason: receipt.Command.Reason, Reference: receipt.Command.Reference,
 		Status: string(receipt.Command.Status), StatusURL: receipt.StatusURL, ResultJSON: resultJSON, MetadataJSON: metadataJSON,
 		ErrorCode: receipt.ErrorCode, FailureClass: string(receipt.FailureClass), NextAction: receipt.NextAction,
-		RelatedIDsJSON: relatedJSON, Correlation: receipt.Correlation, EvidenceJSON: evidenceJSON,
+		RelatedIDsJSON: relatedJSON, EvidenceJSON: evidenceJSON,
 		LeaseOwner: receipt.LeaseOwner, LeaseExpiresAt: receipt.LeaseExpires, FencingToken: receipt.FencingToken, ExpiresAt: receipt.ExpiresAt,
 		CreatedAt: receipt.Command.CreatedAt.UTC().Format(time.RFC3339Nano), StartedAt: startedAt, FinishedAt: finishedAt,
 		UpdatedAt: receipt.Command.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -292,7 +292,7 @@ func operationsReceipt(record sharedoperation.Record) (operationsmodel.Operation
 		},
 		StatusURL: record.StatusURL, Result: append(json.RawMessage(nil), record.ResultJSON...), Metadata: append(json.RawMessage(nil), record.MetadataJSON...),
 		ErrorCode: record.ErrorCode, FailureClass: operationsmodel.OperationsFailureClass(record.FailureClass), NextAction: record.NextAction,
-		Correlation: record.Correlation, LeaseOwner: record.LeaseOwner, LeaseExpires: record.LeaseExpiresAt,
+		LeaseOwner: record.LeaseOwner, LeaseExpires: record.LeaseExpiresAt,
 		FencingToken: record.FencingToken, ExpiresAt: record.ExpiresAt,
 	}
 	if err := json.Unmarshal(record.RelatedIDsJSON, &receipt.RelatedIDs); err != nil {

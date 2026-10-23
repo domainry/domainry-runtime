@@ -198,7 +198,7 @@ func (s *OperationsApplicationService) currentBreakGlassGrant(ctx context.Contex
 func (s *OperationsApplicationService) finishBreakGlass(ctx context.Context, receipt operationsmodel.OperationsReceipt, scope principalmodel.SystemScope, grant operationsmodel.OperationsBreakGlassGrant, next string) (OperationsBreakGlassResult, error) {
 	encoded, _ := json.Marshal(grant)
 	receipt.Command.Status, receipt.Result, receipt.NextAction = operationsmodel.OperationsStatusSucceeded, encoded, next
-	receipt.RelatedIDs, receipt.Correlation, receipt.Evidence = []string{grant.BreakGlassGrantID, grant.IncidentRef, grant.AuditEventID}, grant.IncidentRef, []string{grant.AuditEventID, grant.AlertTarget}
+	receipt.RelatedIDs, receipt.Evidence = []string{grant.BreakGlassGrantID, grant.IncidentRef, grant.AuditEventID}, []string{grant.AuditEventID, grant.AlertTarget}
 	finished, err := s.Finish(ctx, receipt, scope)
 	return OperationsBreakGlassResult{Grant: grant, Receipt: finished}, err
 }

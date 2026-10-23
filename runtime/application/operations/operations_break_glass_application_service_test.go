@@ -109,7 +109,7 @@ func TestOperationsBreakGlassIsTimeLimitedDualApprovedAuditedAndRevisionFenced(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !enabled.Grant.Active(now) || enabled.Grant.ExpiresAt.Sub(now) != 15*time.Minute || len(alerts.events) != 1 || alerts.operationIDs[0] == "" || enabled.Grant.AuditEventID != alerts.grants[0].AuditEventID || enabled.Receipt.Correlation != "INC-42" || len(enabled.Receipt.Evidence) != 2 {
+	if !enabled.Grant.Active(now) || enabled.Grant.ExpiresAt.Sub(now) != 15*time.Minute || len(alerts.events) != 1 || alerts.operationIDs[0] == "" || enabled.Grant.AuditEventID != alerts.grants[0].AuditEventID || len(enabled.Receipt.Evidence) != 2 {
 		t.Fatalf("enabled=%#v alerts=%#v", enabled, alerts.events)
 	}
 	replay, err := service.EnableBreakGlass(t.Context(), command, "enable-key", principal)

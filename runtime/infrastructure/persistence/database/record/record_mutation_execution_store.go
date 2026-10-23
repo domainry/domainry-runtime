@@ -311,7 +311,7 @@ func recordMutationRecord(value recordmodel.RecordMutationExecution, resultJSON 
 		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
 		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: resultJSON,
 		MetadataJSON: json.RawMessage(recordMutationMetadataJSON(value.ResponseStatus)), ErrorCode: value.ErrorCode,
-		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
+		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -333,7 +333,7 @@ func recordMutationExecution(record sharedoperation.Record) (recordmodel.RecordM
 		ErrorCode: record.ErrorCode, LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != recordMutationOwner || record.Kind != recordMutationKind || record.IdempotencyKey != value.OperationID || record.Correlation != value.OperationID {
+	if record.Owner != recordMutationOwner || record.Kind != recordMutationKind || record.IdempotencyKey != value.OperationID {
 		return recordmodel.RecordMutationExecution{}, fmt.Errorf("record mutation operation identity is invalid")
 	}
 	var metadata recordMutationOperationMetadata

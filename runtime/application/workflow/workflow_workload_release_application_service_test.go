@@ -94,20 +94,23 @@ func TestWorkflowWorkloadReleaseSynchronizesAndCarriesExecutionLineage(t *testin
 	if got, want := workload.requests[0].Bindings[0].ActionKeys, []string{"payment.notify", "payment.remind", "payment.settle"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("action keys=%v want=%v", got, want)
 	}
-	initiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-7"}, RequestID: "request-1", CorrelationID: "correlation-1"}
+	const initiatorTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	initiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "user-7"}, RequestID: initiatorTraceID}
 	resolved, err := NewWorkflowPrincipalResolver(principals, state).ResolveWorkflowPrincipalForExecution(t.Context(), workflow, initiator, WorkflowPrincipalExecutionContext{TaskID: "task-9", SourceEventID: "event-3"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved.Workload == nil || resolved.Workload.TaskID != "task-9" || resolved.Workload.SourceEventID != "event-3" || resolved.Workload.InitiatorSubjectID != "user-7" || resolved.RequestID != "request-1" || resolved.CorrelationID != "correlation-1" {
+	if resolved.Workload == nil || resolved.Workload.TaskID != "task-9" || resolved.Workload.SourceEventID != "event-3" || resolved.Workload.InitiatorSubjectID != "user-7" || resolved.RequestID != initiatorTraceID {
 		t.Fatalf("resolved lineage=%+v", resolved)
 	}
 	workerInitiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "runtime-target-executor"}}
-	workerResolved, err := NewWorkflowPrincipalResolver(principals, state).ResolveWorkflowPrincipalForExecution(t.Context(), workflow, workerInitiator, WorkflowPrincipalExecutionContext{TaskID: "process-4:settle", SourceEventID: "scheduler-run-4"})
+	const workerTraceID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	workerContext := requestcontext.WithRequestID(t.Context(), workerTraceID)
+	workerResolved, err := NewWorkflowPrincipalResolver(principals, state).ResolveWorkflowPrincipalForExecution(workerContext, workflow, workerInitiator, WorkflowPrincipalExecutionContext{TaskID: "process-4:settle", SourceEventID: "scheduler-run-4"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workerResolved.RequestID != "process-4:settle" || workerResolved.Workload == nil || workerResolved.Workload.InitiatorSubjectID != "runtime-target-executor" {
+	if workerResolved.RequestID != workerTraceID || workerResolved.Workload == nil || workerResolved.Workload.InitiatorSubjectID != "runtime-target-executor" {
 		t.Fatalf("durable worker invocation identity=%+v", workerResolved)
 	}
 
@@ -147,11 +150,12 @@ func TestManagedWorkloadSharesAtomicReleaseAndResolvesExactAuthorizationVersion(
 	if len(workload.requests) != 1 || len(workload.requests[0].Bindings) != 1 || workload.requests[0].Bindings[0].WorkflowKey != "scheduler:expire-orders" {
 		t.Fatalf("release requests=%+v", workload.requests)
 	}
-	principal, err := service.ResolveManagedWorkloadPrincipal(t.Context(), ManagedWorkloadExecution{
+	const traceID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	principal, err := service.ResolveManagedWorkloadPrincipal(requestcontext.WithRequestID(t.Context(), traceID), ManagedWorkloadExecution{
 		WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("a", 64), DefinitionVersion: 1, RoleKey: "order_automation",
 		ExecutionID: "run-7", SourceEventID: "run-7", IdempotencyKey: "window-7",
 	})
-	if err != nil || principal.UserID != "workflow:scheduler:expire-orders" || principal.RoleKey != "order_automation" || principal.RequestID != "window-7" || principal.Workload == nil || principal.Workload.TaskID != "run-7" {
+	if err != nil || principal.UserID != "workflow:scheduler:expire-orders" || principal.RoleKey != "order_automation" || principal.RequestID != traceID || principal.Workload == nil || principal.Workload.TaskID != "run-7" {
 		t.Fatalf("principal=%+v err=%v", principal, err)
 	}
 	if _, err := service.ResolveManagedWorkloadPrincipal(t.Context(), ManagedWorkloadExecution{WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("b", 64), DefinitionVersion: 1, RoleKey: "order_automation"}); apperror.CodeOf(err) != "backend.workload.release_not_active" {

@@ -147,7 +147,7 @@ func conversationToolsActionRequest(ctx context.Context, source conversationBusi
 	}
 	return agentsdk.ConversationBusinessActionRequest{
 		Authority: request.Authority, Action: resolved, ToolActionKey: request.ToolActionKey, ToolVersion: request.ToolVersion,
-		ConversationID: request.ConversationID, RunID: request.RunID, CorrelationID: request.CorrelationID,
+		ConversationID: request.ConversationID, RunID: request.RunID,
 		Step: request.Step, CallID: request.CallID, IdempotencyKey: request.IdempotencyKey,
 		Confirmation: request.Confirmation, Arguments: request.Arguments,
 	}, nil

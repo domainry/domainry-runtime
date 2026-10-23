@@ -6,7 +6,7 @@ Owner：Agent/Skill/Task 定义、会话与 proposal、interactive/task 执行�
 
 ## 所有权边界
 
-`domainry-agent` 拥有 Agent 产品用例和状态，包括 session/dialog、proposal 决策、interactive run、task run、approval lifecycle、provider correlation、claim/lease/fencing、tool-call ledger、重试和诊断。Agent/Skill/Task/Context/Routing/Runner 公共合同只在 `domainry-agent-sdk` 声明。
+`domainry-agent` 拥有 Agent 产品用例和状态，包括 session/dialog、proposal 决策、interactive run、task run、approval lifecycle、provider run identity、claim/lease/fencing、tool-call ledger、重试和诊断。Agent/Skill/Task/Context/Routing/Runner 公共合同只在 `domainry-agent-sdk` 声明。
 
 Runtime 不再拥有 `agent_dialog` Handler、Agent Application Service、Agent Domain Model 或 Agent Repository。Runtime 只保留：
 
@@ -25,10 +25,10 @@ Workflow Agent 节点按以下时序执行：
 
 1. Runtime 为 `process_id + node_id + iteration` 生成确定性的 `node_instance_id` 和 `agent_task_run_id`。
 2. Runtime 调用 `TaskRunner.Start`。Agent 只需持久化 task 并返回 `accepted`。
-3. Runtime 提交 Workflow node 的 `waiting` 状态、相关事件和 Agent task correlation；Runtime 事务不写 Agent 表。
+3. Runtime 提交 Workflow node 的 `waiting` 状态、相关事件和 Agent task identity；Runtime 事务不写 Agent 表。
 4. Agent worker 在自己的调用栈中 claim/lease、调用 provider，并按需通过 `TaskHost` 请求 Runtime 的当前授权、凭据或具体 business tool effect。
 5. Agent 先提交自身 terminal 状态，再以 `TaskHost.CompleteWorkflowTask` 异步通知 Runtime。
-6. Runtime 校验 workspace/process/node/task-run correlation，只提交 Workflow 状态并唤醒 continuation；它不会在该回调中再次调用 Agent。
+6. Runtime 校验 workspace/process/node/task-run identity linkage，只提交 Workflow 状态并唤醒 continuation；它不会在该回调中再次调用 Agent。
 7. Runtime 接收成功后，Agent 标记 workflow completion 已送达；失败则由 Agent reconcile 重试同一个幂等回调。
 
 因此模块间存在两条业务依赖边，但不存在同步循环：Workflow dispatch 的 Runtime→Agent 调用在 `accepted` 处结束；Agent→Runtime Host 调用只发生在后续 Agent worker 或独立 HTTP 请求中。禁止恢复 Runtime→Agent→Runtime 的同栈重入，也禁止用跨 owner 数据库事务模拟原子性。
@@ -38,7 +38,7 @@ Workflow Agent 节点按以下时序执行：
 - SDK：`domainry-agent-sdk/sdk.go`
 - Host Ports：`domainry-agent-sdk/modulehost/application.go`
 - Agent 定义校验：`domainry-agent/definition/validation.go`
-- 协议：`domainry-agent-protocol-v1`
+- 协议：`domainry-agent-protocol-v2`
 - 执行能力：`task.start`、`task.poll`、`task.cancel`、`interactive.run`、`dialog.state`、`execution.state`、`structured_output`、`usage`、`tool_callback`
 - Agent 产品 HTTP Adapter：统一位于 `/agent/*`，覆盖 run、stream、session、proposal、task-run、task-tool、analysis、diagnostics 和 task operator mutation。
 - Agent Adapter 自己声明全部 typed route metadata；Agent 当前 SDK 源码和契约测试定义精确接口。Runtime 不声明 Agent 路径或 `agent_*` 文档 schema。

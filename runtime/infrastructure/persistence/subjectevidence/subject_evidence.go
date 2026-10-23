@@ -392,7 +392,7 @@ func operationRecordExport(record sharedoperation.Record) map[string]any {
 		"requested_by": record.RequestedBy, "reason": record.Reason, "reference": record.Reference, "status": record.Status,
 		"status_url": record.StatusURL, "result_json": string(record.ResultJSON), "metadata_json": string(record.MetadataJSON),
 		"error_code": record.ErrorCode, "failure_class": record.FailureClass, "next_action": record.NextAction,
-		"related_ids_json": string(record.RelatedIDsJSON), "correlation": record.Correlation, "evidence_json": string(record.EvidenceJSON),
+		"related_ids_json": string(record.RelatedIDsJSON), "evidence_json": string(record.EvidenceJSON),
 		"lease_owner": record.LeaseOwner, "lease_expires_at": record.LeaseExpiresAt, "fencing_token": record.FencingToken,
 		"expires_at": record.ExpiresAt, "created_at": record.CreatedAt, "started_at": record.StartedAt,
 		"finished_at": record.FinishedAt, "updated_at": record.UpdatedAt,

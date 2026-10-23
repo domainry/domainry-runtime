@@ -541,7 +541,7 @@ func (store *WorkspaceProvisionStore) insertConfigurationAndReceipt(ctx context.
 			ActionKey: workspaceProvisioningAction, ResourceType: "workspace", ResourceID: result.WorkspaceID, IdempotencyKey: request.RequestID,
 			RequestFingerprint: fingerprint, RequestedBy: result.InitialAdminUserID, Reason: request.WorkspaceName, Reference: result.CanonicalCode,
 			Status: "succeeded", StatusURL: "/operations/" + operationID, ResultJSON: json.RawMessage(resultJSON), MetadataJSON: json.RawMessage(metadataJSON),
-			RelatedIDsJSON: json.RawMessage(relatedIDsJSON), Correlation: identityReceipt.ReceiptID, EvidenceJSON: json.RawMessage(evidenceJSON),
+			RelatedIDsJSON: json.RawMessage(relatedIDsJSON), EvidenceJSON: json.RawMessage(evidenceJSON),
 			CreatedAt: now, StartedAt: now, FinishedAt: now, UpdatedAt: now,
 		},
 	)

@@ -525,7 +525,7 @@ func reportExportPrepareRecord(value reportmodel.ReportExportPrepareReceipt) sha
 		RequestFingerprint: value.RequestFingerprint, RequestedBy: value.RequesterUserID, Reason: value.ObjectKey, Reference: value.AuditID,
 		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: json.RawMessage(reportExportPrepareResultJSON(value)),
 		MetadataJSON: json.RawMessage(reportExportPrepareMetadataJSON(value)), ErrorCode: value.TerminalErrorCode, FailureClass: failureClass,
-		RelatedIDsJSON: relatedIDs, Correlation: value.OperationID, EvidenceJSON: evidence,
+		RelatedIDsJSON: relatedIDs, EvidenceJSON: evidence,
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -580,7 +580,7 @@ func reportExportPrepareReceipt(record sharedoperation.Record) (reportmodel.Repo
 		LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.SystemPurpose != "" || record.Owner != reportExportPrepareOwner || record.Kind != reportExportPrepareKind || record.ResourceType != "report" || record.Correlation != value.OperationID {
+	if record.SystemPurpose != "" || record.Owner != reportExportPrepareOwner || record.Kind != reportExportPrepareKind || record.ResourceType != "report" {
 		return value, fmt.Errorf("report export prepare operation identity is invalid")
 	}
 	var metadata reportExportPrepareMetadata

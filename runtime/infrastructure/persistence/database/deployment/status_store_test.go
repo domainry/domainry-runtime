@@ -45,12 +45,12 @@ func insertRecordOperationFixture(t *testing.T, store *database.RuntimeStore, va
 	}
 	statement := store.InsertStatement("_operations", []string{
 		"operation_id", "workspace_id", "owner", "kind", "action_key", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference",
-		"status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json",
+		"status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "evidence_json",
 		"lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at",
 	})
 	if _, err := store.DB().ExecContext(t.Context(), statement,
 		value.id, value.workspace, "record", "record.mutation", "create", "customer", "", value.id, value.fingerprint, "admin", "", value.key,
-		value.status, "/operations/"+value.id, "{}", `{"response_status":409}`, value.errorCode, "", "", "[]", value.id, "[]",
+		value.status, "/operations/"+value.id, "{}", `{"response_status":409}`, value.errorCode, "", "", "[]", "[]",
 		value.leaseOwner, timevalue.Millis(value.leaseExpires), value.fencingToken, timevalue.Millis(value.expiresAt), timevalue.Millis(value.createdAt), timevalue.Millis(value.createdAt), int64(0), timevalue.Millis(value.updatedAt),
 	); err != nil {
 		t.Fatal(err)

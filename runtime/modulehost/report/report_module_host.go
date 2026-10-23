@@ -238,7 +238,7 @@ func reportObjectSQLHostError(err error) error {
 
 func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash string) reportmodel.ReportSubject {
 	subject := reportmodel.ReportSubject{
-		Principal: principal.Principal, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID,
+		Principal: principal.Principal, RequestID: principal.RequestID,
 		CausationID: principal.CausationID, AccessScopeHash: accessHash,
 		BusinessAuthorizationRevision: principal.BusinessAuthorizationRevision,
 		TrustedProcess:                principal.SystemScope.Valid(), ProcessCapabilities: append([]string(nil), principal.SystemCapabilities...),
@@ -255,7 +255,7 @@ func reportSubjectFromPrincipal(principal principalmodel.Principal, accessHash s
 }
 
 func RuntimePrincipalFromReportSubject(subject reportmodel.ReportSubject) principalmodel.Principal {
-	principal := principalmodel.Principal{Principal: subject.Principal, RequestID: subject.RequestID, CorrelationID: subject.CorrelationID, CausationID: subject.CausationID}
+	principal := principalmodel.Principal{Principal: subject.Principal, RequestID: subject.RequestID, CausationID: subject.CausationID}
 	principal.BusinessAuthorizationRevision = subject.BusinessAuthorizationRevision
 	if subject.TrustedProcess {
 		principal.SystemScope = principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "embedded report execution")

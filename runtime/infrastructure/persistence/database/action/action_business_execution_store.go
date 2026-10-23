@@ -372,7 +372,7 @@ func actionExecutionRecord(value actionmodel.ActionBusinessExecution, resultJSON
 		IdempotencyKey: value.OperationID, RequestFingerprint: value.RequestFingerprint, RequestedBy: value.ActorID, Reference: value.IdempotencyKey,
 		Status: value.Status, StatusURL: "/operations/" + value.OperationID, ResultJSON: resultJSON,
 		MetadataJSON: json.RawMessage(actionExecutionMetadataJSON(value.ResponseStatus, value.RoleKey)), ErrorCode: value.ErrorCode,
-		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: value.OperationID, EvidenceJSON: json.RawMessage(`[]`),
+		FailureClass: failureClass, RelatedIDsJSON: json.RawMessage(`[]`), EvidenceJSON: json.RawMessage(`[]`),
 		LeaseOwner: value.LeaseOwner, LeaseExpiresAt: value.LeaseExpiresAt, FencingToken: value.FencingToken, ExpiresAt: value.ExpiresAt,
 		CreatedAt: value.CreatedAt, StartedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
@@ -413,7 +413,7 @@ func actionBusinessExecution(record sharedoperation.Record) (actionmodel.ActionB
 		ErrorCode: record.ErrorCode, LeaseOwner: record.LeaseOwner, LeaseExpiresAt: record.LeaseExpiresAt, FencingToken: record.FencingToken,
 		ExpiresAt: record.ExpiresAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
-	if record.Owner != actionExecutionOwner || record.Kind != actionExecutionKind || record.IdempotencyKey != execution.OperationID || record.Correlation != execution.OperationID {
+	if record.Owner != actionExecutionOwner || record.Kind != actionExecutionKind || record.IdempotencyKey != execution.OperationID {
 		return actionmodel.ActionBusinessExecution{}, fmt.Errorf("action execution operation identity is invalid")
 	}
 	var metadata actionExecutionOperationMetadata

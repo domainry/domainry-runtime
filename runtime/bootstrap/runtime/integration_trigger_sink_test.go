@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -69,13 +70,17 @@ func TestRuntimeIntegrationTriggerSinkExecutesOnlyRuntimeOwnedTargets(t *testing
 		Principal: integrationsdk.TriggerPrincipal{OwnerUserID: "connection-owner"},
 		Target:    integrationsdk.TriggerTarget{Type: "action", ObjectKey: "contact", RecordID: "contact-1", ActionKey: "sync", Input: map[string]any{"name": "Ada"}},
 	}
-	receipt, err := sink.Trigger(t.Context(), actionRequest)
+	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	receipt, err := sink.Trigger(requestcontext.WithRequestID(t.Context(), traceID), actionRequest)
 	if err != nil || receipt.ExecutionID != "action-1" || actions.source != actionmodel.ActionSourceIntegration {
 		t.Fatalf("receipt=%#v source=%q err=%v", receipt, actions.source, err)
 	}
 	if actions.invocation.IdempotencyKey != actionRequest.IdempotencyKey || actions.invocation.Principal.WorkspaceID != "workspace-a" || actions.invocation.Principal.UserID != "connection-owner" || actions.invocation.Principal.OrgID != "sales-org" || actions.invocation.Principal.AccessBundle != nil || !actions.invocation.Principal.SystemScope.Valid() ||
 		!actions.invocation.Principal.HasExactPermission("sync") || actions.invocation.Principal.HasPermission("anything.execute") || len(actions.invocation.Actor.SystemCapabilities) != 0 {
 		t.Fatalf("action invocation=%#v", actions.invocation)
+	}
+	if actions.invocation.RequestID != traceID || actions.invocation.RequestID == actionRequest.EventID || actions.invocation.RequestID == actionRequest.IdempotencyKey {
+		t.Fatalf("request/trace=%q event=%q idempotency=%q", actions.invocation.RequestID, actionRequest.EventID, actionRequest.IdempotencyKey)
 	}
 
 	workflowRequest := actionRequest

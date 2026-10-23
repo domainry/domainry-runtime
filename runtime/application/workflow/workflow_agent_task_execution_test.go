@@ -11,6 +11,7 @@ import (
 	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/entityid"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -34,7 +35,7 @@ func (s *workflowAgentTaskStateStub) CommitWorkflowState(_ context.Context, comm
 	return s.err
 }
 
-func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *testing.T) {
+func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingIdentity(t *testing.T) {
 	principal := workflowProcessQueryPrincipal()
 	state := &workflowAgentTaskStateStub{}
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{}}
@@ -43,7 +44,7 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *te
 		Processes: processes, Decisions: state,
 		StartAgentTask: func(_ context.Context, request WorkflowAgentTaskPreparation) (agentsdk.TaskResult, error) {
 			if len(state.commits) != 1 || len(state.commits[0].InsertNodes) != 1 || state.commits[0].InsertNodes[0].Status != "waiting" || state.commits[0].InsertNodes[0].Input["agent_task_run_id"] != request.RunID {
-				t.Fatalf("Agent task became runnable before its correlation was durable: commits=%#v request=%#v", state.commits, request)
+				t.Fatalf("Agent task became runnable before its identity was durable: commits=%#v request=%#v", state.commits, request)
 			}
 			prepared = request
 			return agentsdk.TaskResult{ExternalRunID: request.WorkspaceID + "/" + request.RunID, Status: agentsdk.ProviderRunAccepted}, nil
@@ -62,13 +63,13 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingCorrelation(t *te
 	if waitingNode.Status != "waiting" || waitingNode.Input["agent_task_run_id"] != prepared.RunID {
 		t.Fatalf("prepared=%#v node=%#v", prepared, waitingNode)
 	}
-	_, runID := workflowAgentTaskCorrelation(process.ProcessID, node.ID, 1)
+	_, runID := workflowAgentTaskIdentity(process.ProcessID, node.ID, 1)
 	if entityid.Validate("wfnode", prepared.NodeInstanceID) != nil || prepared.RunID != runID || waitingNode.NodeInstanceID != prepared.NodeInstanceID {
-		t.Fatalf("durable correlation prepared=%#v node=%#v", prepared, waitingNode)
+		t.Fatalf("durable identity prepared=%#v node=%#v", prepared, waitingNode)
 	}
-	otherNodeInstanceID, otherRunID := workflowAgentTaskCorrelation(process.ProcessID, node.ID, 2)
+	otherNodeInstanceID, otherRunID := workflowAgentTaskIdentity(process.ProcessID, node.ID, 2)
 	if otherNodeInstanceID == prepared.NodeInstanceID || otherRunID == runID {
-		t.Fatal("Agent task correlation did not advance with node iteration")
+		t.Fatal("Agent task identity did not advance with node iteration")
 	}
 	if process.Variables["agent_task:agent:output_variable"] != "review" {
 		t.Fatalf("output binding=%#v", process.Variables)
@@ -88,7 +89,7 @@ func TestAgentCapabilityCompletionAtomicallyUpdatesNodeProcessAndResumeIntent(t 
 	completion := WorkflowAgentTaskCompletion{TaskRunID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ProcessID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: "succeeded", Outcome: "success", Output: map[string]any{"score": 90}, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}}
 	mismatched := completion
 	mismatched.TaskRunID = "other-run"
-	if err := service.CompleteAgentTask(t.Context(), mismatched); apperror.CodeOf(err) != "backend.workflow.agent_task_correlation_mismatch" {
+	if err := service.CompleteAgentTask(t.Context(), mismatched); apperror.CodeOf(err) != "backend.workflow.agent_task_identity_mismatch" {
 		t.Fatalf("mismatched completion error=%v", err)
 	}
 	state.err = errors.New("commit failed")
@@ -165,7 +166,7 @@ func TestAgentCapabilityStatusesMapToDeclaredWorkflowOutcomes(t *testing.T) {
 
 func TestAgentTaskContinuationReauthorizesDurableExecutionIdentity(t *testing.T) {
 	worker := workflowExecutionPrincipal()
-	worker.UserID, worker.RoleKey, worker.RequestID, worker.CorrelationID, worker.CausationID = "system-worker", "system", "request", "correlation", "causation"
+	worker.UserID, worker.RoleKey, worker.RequestID, worker.CausationID = "system-worker", "system", "4bf92f3577b34da6a3ce929d0e0e4736", "causation"
 	execution := workflowmodel.WorkflowExecution{Result: map[string]any{"agent_task_run_id": "run-1", "execution_user_id": "service-user", "execution_role_key": "agent-service"}}
 	process := workflowmodel.WorkflowProcessInstance{WorkspaceID: "workspace-1"}
 	resolved := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-1", UserID: "service-user"}}, accessfixture.Bundle{Key: "agent-service"})
@@ -176,7 +177,7 @@ func TestAgentTaskContinuationReauthorizesDurableExecutionIdentity(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolver.request.SubjectID != "service-user" || resolver.request.RoleKey != "agent-service" || principal.UserID == worker.UserID || principal.RequestID != worker.RequestID || principal.CorrelationID != worker.CorrelationID || principal.CausationID != worker.CausationID {
+	if resolver.request.SubjectID != "service-user" || resolver.request.RoleKey != "agent-service" || principal.UserID == worker.UserID || principal.RequestID != worker.RequestID || principal.CausationID != worker.CausationID {
 		t.Fatalf("resolution request=%#v principal=%#v", resolver.request, principal)
 	}
 }
@@ -188,12 +189,14 @@ func TestWorkflowRecoveryReauthorizesTriggerInitiatorBeforeInheritedTask(t *test
 	resolver := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(actor)}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Principals: resolver})
 	intent := workflowmodel.WorkflowExecution{ExecutionID: "intent-1", ActorID: "sales-user", Payload: map[string]any{"initiating_user_id": "sales-user", "initiating_role_key": "sales"}}
-	principal, err := service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker)
-	if err != nil || principal.UserID != "sales-user" || principal.RoleKey != "sales" || principal.RequestID != "intent-1" || resolver.request.SubjectID != "sales-user" || resolver.request.RoleKey != "sales" {
+	const traceID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	ctx := requestcontext.WithRequestID(t.Context(), traceID)
+	principal, err := service.workflowTriggerInitiatorPrincipal(ctx, intent, worker)
+	if err != nil || principal.UserID != "sales-user" || principal.RoleKey != "sales" || principal.RequestID != traceID || resolver.request.SubjectID != "sales-user" || resolver.request.RoleKey != "sales" {
 		t.Fatalf("recovered trigger principal=%+v request=%+v err=%v", principal, resolver.request, err)
 	}
 	delete(intent.Payload, "initiating_role_key")
-	principal, err = service.workflowTriggerInitiatorPrincipal(t.Context(), intent, worker)
+	principal, err = service.workflowTriggerInitiatorPrincipal(ctx, intent, worker)
 	if err != nil || principal.UserID != "sales-user" || principal.RoleKey != "sales" || resolver.request.SubjectID != "sales-user" || resolver.request.RoleKey != "" {
 		t.Fatalf("connection-owner default role resolution=%+v request=%+v err=%v", principal, resolver.request, err)
 	}

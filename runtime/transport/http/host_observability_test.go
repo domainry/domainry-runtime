@@ -47,13 +47,12 @@ func TestHostObservabilityCoversRuntimeAndProjectRoutesOnce(t *testing.T) {
 	handler := (&HTTPRouter{}).HostObservabilityMiddleware(ListenerRouteGroupPublic, routes)
 
 	for _, test := range []struct {
-		method, target, correlation string
+		method, target string
 	}{
-		{stdhttp.MethodGet, "/runtime/items/one?secret=hidden", "corr-runtime"},
-		{stdhttp.MethodPost, "/api/crm/opportunities/one/win?secret=hidden", "corr-project"},
+		{stdhttp.MethodGet, "/runtime/items/one?secret=hidden"},
+		{stdhttp.MethodPost, "/api/crm/opportunities/one/win?secret=hidden"},
 	} {
 		request := httptest.NewRequest(test.method, test.target, nil)
-		request.Header.Set(telemetry.CorrelationIDHeader, test.correlation)
 		handler.ServeHTTP(httptest.NewRecorder(), request)
 	}
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(stdhttp.MethodGet, "/live?token=hidden", nil))
@@ -65,7 +64,7 @@ func TestHostObservabilityCoversRuntimeAndProjectRoutesOnce(t *testing.T) {
 	wantRoutes := []string{"/runtime/items/{id}", "/api/crm/opportunities/{id}/win"}
 	for index, entry := range entries {
 		fields := entry.ContextMap()
-		if fields["route"] != wantRoutes[index] || fields["listener_group"] != "public" || fields["request_id"] == "" || fields["correlation_id"] == "" || fields["trace_id"] == "" || fields["span_id"] == "" {
+		if fields["route"] != wantRoutes[index] || fields["listener_group"] != "public" || fields["request_id"] != nil || fields["correlation_id"] != nil || fields["trace_id"] == "" || fields["span_id"] == "" {
 			t.Fatalf("entry %d fields=%#v", index, fields)
 		}
 		if text := fmt.Sprint(fields); strings.Contains(text, "hidden") || strings.Contains(text, "secret") {
@@ -91,16 +90,11 @@ func TestProjectRequestPropagatesParentTraceToIndependentSaaS(t *testing.T) {
 		otel.SetTextMapPropagator(previousPropagator)
 	})
 
-	type identity struct {
-		requestID, correlationID, traceID, spanID string
-	}
+	type identity struct{ requestID, traceID, spanID string }
 	var runtimeIdentity, saasIdentity identity
 	saasRoutes := stdhttp.NewServeMux()
 	saasRoutes.HandleFunc("GET /todo/v1/discovery", func(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
-		saasIdentity = identity{
-			requestID: requestcontext.RequestID(request.Context()), correlationID: requestcontext.CorrelationID(request.Context()),
-			traceID: requestcontext.TraceID(request.Context()), spanID: requestcontext.SpanID(request.Context()),
-		}
+		saasIdentity = identity{requestID: requestcontext.RequestID(request.Context()), traceID: requestcontext.TraceID(request.Context()), spanID: requestcontext.SpanID(request.Context())}
 		writer.WriteHeader(stdhttp.StatusNoContent)
 	})
 	saas := httptest.NewServer(telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{
@@ -111,10 +105,7 @@ func TestProjectRequestPropagatesParentTraceToIndependentSaaS(t *testing.T) {
 
 	project := stdhttp.NewServeMux()
 	project.HandleFunc("POST /api/project/sync", func(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
-		runtimeIdentity = identity{
-			requestID: requestcontext.RequestID(request.Context()), correlationID: requestcontext.CorrelationID(request.Context()),
-			traceID: requestcontext.TraceID(request.Context()), spanID: requestcontext.SpanID(request.Context()),
-		}
+		runtimeIdentity = identity{requestID: requestcontext.RequestID(request.Context()), traceID: requestcontext.TraceID(request.Context()), spanID: requestcontext.SpanID(request.Context())}
 		ctx := telemetry.WithHTTPClientOperation(request.Context(), "todo.discovery")
 		outbound, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodGet, saas.URL+"/todo/v1/discovery?token=must-not-leak", nil)
 		if err != nil {
@@ -137,8 +128,8 @@ func TestProjectRequestPropagatesParentTraceToIndependentSaaS(t *testing.T) {
 	runtimeHandler := (&HTTPRouter{}).HostObservabilityMiddleware(ListenerRouteGroupPublic, routes)
 
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/project/sync?authorization=must-not-leak", nil)
-	request.Header.Set(telemetry.CorrelationIDHeader, "corr-generated-to-saas")
-	request.Header.Set(telemetry.RequestIDHeader, "upstream-request-must-not-survive")
+	request.Header.Set("X-Correlation-ID", "untrusted-business-correlation")
+	request.Header.Set(telemetry.RequestIDHeader, "4bf92f3577b34da6a3ce929d0e0e4736")
 	response := httptest.NewRecorder()
 	runtimeHandler.ServeHTTP(response, request)
 	if response.Code != stdhttp.StatusNoContent {
@@ -150,10 +141,7 @@ func TestProjectRequestPropagatesParentTraceToIndependentSaaS(t *testing.T) {
 	if runtimeIdentity.spanID == "" || saasIdentity.spanID == "" || runtimeIdentity.spanID == saasIdentity.spanID {
 		t.Fatalf("span runtime=%+v SaaS=%+v", runtimeIdentity, saasIdentity)
 	}
-	if runtimeIdentity.correlationID != "corr-generated-to-saas" || saasIdentity.correlationID != runtimeIdentity.correlationID {
-		t.Fatalf("correlation runtime=%+v SaaS=%+v", runtimeIdentity, saasIdentity)
-	}
-	if runtimeIdentity.requestID == "" || saasIdentity.requestID == "" || runtimeIdentity.requestID == saasIdentity.requestID || runtimeIdentity.requestID == "upstream-request-must-not-survive" {
+	if runtimeIdentity.requestID != runtimeIdentity.traceID || saasIdentity.requestID != runtimeIdentity.traceID || response.Header().Get(telemetry.RequestIDHeader) != runtimeIdentity.traceID {
 		t.Fatalf("request identity runtime=%+v SaaS=%+v", runtimeIdentity, saasIdentity)
 	}
 
@@ -172,7 +160,7 @@ func TestProjectRequestPropagatesParentTraceToIndependentSaaS(t *testing.T) {
 			t.Fatalf("unexpected access route=%q fields=%#v", route, fields)
 		}
 		wantRoutes[route] = true
-		if fields["trace_id"] != runtimeIdentity.traceID || fields["correlation_id"] != "corr-generated-to-saas" {
+		if fields["trace_id"] != runtimeIdentity.traceID || fields["correlation_id"] != nil {
 			t.Fatalf("access correlation fields=%#v", fields)
 		}
 		if text := fmt.Sprint(fields); strings.Contains(text, "must-not-leak") || strings.Contains(text, "authorization") || strings.Contains(text, "token") {

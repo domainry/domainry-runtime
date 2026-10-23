@@ -33,7 +33,7 @@ func TestAutomationAfterOutboxUsesStableRequiredDedupIdentity(t *testing.T) {
 
 func TestAutomationAfterOutboxPersistsIdentityAndCausationChain(t *testing.T) {
 	rules := []automationmodel.AutomationRuleSchema{{Key: "after", ObjectKey: "order", Enabled: true, Trigger: automationmodel.AutomationTriggerSchema{Phase: "after", Operation: "update"}}}
-	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request", CorrelationID: "root", CausationID: "action", AutomationDepth: 2, VisitedRuleKeys: []string{"first"}}, accessfixture.Bundle{Key: "operator"})
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace", UserID: "user"}, RequestID: "request", CausationID: "action", AutomationDepth: 2, VisitedRuleKeys: []string{"first"}}, accessfixture.Bundle{Key: "operator"})
 	messages := AutomationAfterOutbox(rules, "order", "update", nil, recordmodel.Record{RecordID: "record", UpdatedAt: "v2", Data: map[string]any{"status": "ready"}}, principal, "workspace")
 	if len(messages) != 1 {
 		t.Fatalf("messages=%#v", messages)
@@ -42,7 +42,7 @@ func TestAutomationAfterOutboxPersistsIdentityAndCausationChain(t *testing.T) {
 	if event.Rule.Key != "after" || !event.Rule.Enabled || event.Rule.Trigger.Phase != "after" {
 		t.Fatalf("rule snapshot=%#v", event.Rule)
 	}
-	if event.IdentityPolicy != "revalidate_initiator" || event.CorrelationID != "root" || event.CausationID != "action" || event.AutomationDepth != 2 || len(event.VisitedRuleKeys) != 1 || event.VisitedRuleKeys[0] != "first" {
+	if event.IdentityPolicy != "revalidate_initiator" || event.CausationID != "action" || event.AutomationDepth != 2 || len(event.VisitedRuleKeys) != 1 || event.VisitedRuleKeys[0] != "first" {
 		t.Fatalf("event=%#v", event)
 	}
 }

@@ -85,6 +85,7 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 			return runtimeIntegrationReceipt(request, "", "failed", "backend.integration.runtime_automation_principal_required"), err
 		}
 	}
+	principal.RequestID = requestcontext.RequestIDOrNew(ctx)
 	switch strings.TrimSpace(request.Target.Type) {
 	case "action":
 		if s.actions == nil {
@@ -95,7 +96,7 @@ func (s runtimeIntegrationTriggerSink) Trigger(ctx context.Context, request inte
 		result, invokeErr := s.actions.Invoke(ctx, actionmodel.ActionSourceIntegration, actionmodel.ActionInvocation{
 			ActionKey: request.Target.ActionKey, ObjectKey: request.Target.ObjectKey, RecordID: request.Target.RecordID,
 			Input: cloneIntegrationTriggerInput(request.Target.Input), Principal: executionPrincipal, Actor: principal,
-			RequestID: request.EventID, IdempotencyKey: request.IdempotencyKey,
+			RequestID: principal.RequestID, IdempotencyKey: request.IdempotencyKey,
 		})
 		receipt := runtimeIntegrationReceipt(request, result.InvocationID, result.Status, result.ErrorCode)
 		if invokeErr != nil && receipt.ErrorCode == "" {
@@ -185,9 +186,9 @@ func (s runtimeIntegrationTriggerSink) automationOwnerPrincipal(ctx context.Cont
 		return principalmodel.Principal{}, fmt.Errorf("Integration connection owner workspace %q does not match trigger workspace %q", workspaceID, request.WorkspaceID)
 	}
 	resolution.Principal.AccessBundle = &resolution.AccessBundle
-	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, request.EventID)
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, "")
 	principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
-	principal.CorrelationID, principal.CausationID = request.EventID, request.EventID
+	principal.CausationID = request.EventID
 	return principal, nil
 }
 
@@ -201,7 +202,7 @@ func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request in
 				principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified Integration event mapping"),
 			)
 			principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
-			principal.RequestID, principal.CorrelationID, principal.CausationID = request.EventID, request.EventID, request.EventID
+			principal.CausationID = request.EventID
 			return principal, nil
 		}
 		if s.principals == nil {
@@ -231,7 +232,7 @@ func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request in
 		principal.Principal.UserID = ownerUserID
 		principal.Principal.Known = true
 		principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
-		principal.RequestID, principal.CorrelationID, principal.CausationID = request.EventID, request.EventID, request.EventID
+		principal.CausationID = request.EventID
 		return principal, nil
 	}
 	if s.principals == nil {
@@ -245,9 +246,9 @@ func (s runtimeIntegrationTriggerSink) principal(ctx context.Context, request in
 		return principalmodel.Principal{}, fmt.Errorf("Integration actor workspace %q does not match trigger workspace %q", workspaceID, request.WorkspaceID)
 	}
 	resolution.Principal.AccessBundle = &resolution.AccessBundle
-	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, request.EventID)
+	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, "")
 	principal.WorkspaceID = strings.TrimSpace(request.WorkspaceID)
-	principal.CorrelationID, principal.CausationID = request.EventID, request.EventID
+	principal.CausationID = request.EventID
 	return principal, nil
 }
 

@@ -38,7 +38,7 @@ func TestModuleAdapterRouteProducesOneOuterAccessEventWithTemplate(t *testing.T)
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodPost, "/report/weekly/query?token=must-not-leak", nil)
-	request.Header.Set(telemetry.CorrelationIDHeader, "corr-module")
+	request.Header.Set("X-Correlation-ID", "untrusted-business-correlation")
 	telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{ListenerGroup: "public"}, router).ServeHTTP(httptest.NewRecorder(), request)
 
 	entries := observed.FilterMessage("http_request").All()
@@ -46,16 +46,15 @@ func TestModuleAdapterRouteProducesOneOuterAccessEventWithTemplate(t *testing.T)
 		t.Fatalf("terminal events=%d entries=%#v", len(entries), observed.All())
 	}
 	fields := entries[0].ContextMap()
-	if fields["route"] != "/report/{reportKey}/query" || fields["listener_group"] != "public" || fields["correlation_id"] != "corr-module" {
+	if fields["route"] != "/report/{reportKey}/query" || fields["listener_group"] != "public" || fields["correlation_id"] != nil {
 		t.Fatalf("fields=%#v", fields)
 	}
 }
 
-func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing.T) {
-	var observedRequestID, observedCorrelationID string
+func TestModuleAdapterRouterPublishesLocalRequestContextAndResponseHeaders(t *testing.T) {
+	var observedRequestID string
 	sample := moduleAdapterStub{owner: "report", name: "business", handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		observedRequestID = requestcontext.RequestID(request.Context())
-		observedCorrelationID = requestcontext.CorrelationID(request.Context())
 		writer.WriteHeader(http.StatusNoContent)
 	}), routes: []modulehttp.Route{{Action: runtimeHostTestAction("report.query", "POST /report/{reportKey}/query", []actioncontract.Exposure{actioncontract.ExposurePublic}, actioncontract.AuthorizationAnonymous)}}}
 	router := newModuleAdapterRouter(runtimehttp.ListenerRouteGroupPublic, http.NotFoundHandler())
@@ -64,14 +63,14 @@ func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing
 	}
 	request := httptest.NewRequest(http.MethodPost, "/report/weekly/query", nil)
 	request.Header.Set("X-Request-ID", "request-module-1")
-	request.Header.Set("X-Correlation-ID", "correlation-module-1")
+	request.Header.Set("X-Correlation-ID", "untrusted-business-correlation")
 	response := httptest.NewRecorder()
 	observed := telemetry.HTTPServerMiddleware(telemetry.HTTPServerConfig{ListenerGroup: "public"}, router)
 	observed.ServeHTTP(response, request)
-	if observedRequestID == "" || observedRequestID == "request-module-1" || observedCorrelationID != "correlation-module-1" {
-		t.Fatalf("module context request=%q correlation=%q", observedRequestID, observedCorrelationID)
+	if observedRequestID == "" || observedRequestID == "request-module-1" {
+		t.Fatalf("module context request=%q", observedRequestID)
 	}
-	if response.Header().Get("X-Request-ID") != observedRequestID || response.Header().Get("X-Correlation-ID") != observedCorrelationID {
+	if response.Header().Get("X-Request-ID") != observedRequestID || response.Header().Get("X-Correlation-ID") != "" {
 		t.Fatalf("module response headers=%v", response.Header())
 	}
 
@@ -79,10 +78,10 @@ func TestModuleAdapterRouterPublishesRequestContextAndResponseHeaders(t *testing
 	request.Header.Set("X-Request-ID", "invalid request id")
 	response = httptest.NewRecorder()
 	observed.ServeHTTP(response, request)
-	if observedRequestID == "" || observedRequestID == "invalid request id" || observedCorrelationID != observedRequestID {
-		t.Fatalf("generated module context request=%q correlation=%q", observedRequestID, observedCorrelationID)
+	if observedRequestID == "" || observedRequestID == "invalid request id" {
+		t.Fatalf("generated module context request=%q", observedRequestID)
 	}
-	if response.Header().Get("X-Request-ID") != observedRequestID || response.Header().Get("X-Correlation-ID") != observedCorrelationID {
+	if response.Header().Get("X-Request-ID") != observedRequestID || response.Header().Get("X-Correlation-ID") != "" {
 		t.Fatalf("generated module response headers=%v", response.Header())
 	}
 

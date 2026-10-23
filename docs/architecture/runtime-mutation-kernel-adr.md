@@ -24,7 +24,7 @@ Planning owns object resolution, defaults, normalization, RLS/CLS/field policy, 
 
 Before Automation is restricted to deterministic, replayable validation and candidate derivation. It may not invoke Actions, Workflows, Connectors, immediate messages or nested commits. Rules that must hold for every entrypoint move into Definition or Domain policy.
 
-After Automation consumes a committed event or Outbox fact. Downstream Action or Workflow invocation uses a new idempotency scope, an explicit identity snapshot/revocation policy, causation and correlation identifiers, loop detection, maximum depth and recoverable retry.
+After Automation consumes a committed event or Outbox fact. Downstream Action or Workflow invocation uses a new idempotency scope, an explicit identity snapshot/revocation policy, source event and causation identities, loop detection, maximum depth and recoverable retry. W3C trace context remains infrastructure-owned and is not reused as a business key.
 
 ## Pre-release migration
 

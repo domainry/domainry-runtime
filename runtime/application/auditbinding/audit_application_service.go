@@ -37,7 +37,7 @@ func runtimePolicy() auditapplication.Policy[principalmodel.Principal, principal
 			} else if !principal.Known || principal.SystemScope.Valid() {
 				kind = "system"
 			}
-			return auditcontract.Actor{WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID, RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID, AuthorizationRevision: principal.EffectiveAuthorizationRevision()}
+			return auditcontract.Actor{WorkspaceID: principal.WorkspaceID, SubjectID: principal.UserID, RoleKey: principal.RoleKey, Kind: kind, RequestID: principal.RequestID, CausationID: principal.CausationID, AuthorizationRevision: principal.EffectiveAuthorizationRevision()}
 		},
 		WorkspaceID: func(principal principalmodel.Principal) string { return principal.WorkspaceID },
 		ValidateCommand: func(principal principalmodel.Principal) error {

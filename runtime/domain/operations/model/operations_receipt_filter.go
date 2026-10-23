@@ -11,7 +11,6 @@ type OperationsReceiptFilter struct {
 	ResourceType      string                 `json:"resource_type,omitempty"`
 	ResourceID        string                 `json:"resource_id,omitempty"`
 	RequestedBy       string                 `json:"requested_by,omitempty"`
-	Correlation       string                 `json:"correlation,omitempty"`
 	CreatedFrom       string                 `json:"created_from,omitempty"`
 	CreatedTo         string                 `json:"created_to,omitempty"`
 	Search            string                 `json:"search,omitempty"`

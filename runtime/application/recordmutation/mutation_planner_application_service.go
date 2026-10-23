@@ -136,16 +136,15 @@ func (s *MutationPlannerApplicationService) planCanonical(ctx context.Context, p
 		return transactionmodel.MutationPlan{}, err
 	}
 	requestID := firstMutationCoordinate(principal.RequestID, requestcontext.RequestID(ctx))
-	correlationID := firstMutationCoordinate(requestcontext.CorrelationID(ctx), requestID)
-	if correlationID == "" {
-		correlationID = requestcontext.NewRequestID()
+	if requestID == "" {
+		requestID = requestcontext.NewRequestID()
 	}
 	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: principal.WorkspaceID, ActorID: principal.UserID, RoleKey: principal.RoleKey,
 		Permissions: principal.PermissionKeys(),
 		Source:      invocation.Source, ActionKey: invocation.ActionKey, WorkflowKey: invocation.WorkflowKey,
 		AutomationKey: invocation.AutomationKey, RequestID: requestID, IdempotencyKey: invocation.IdempotencyKey,
-		CorrelationID: correlationID, CausationID: invocation.CausationID, ApplicationSchemaRevision: revision,
+		CausationID: invocation.CausationID, ApplicationSchemaRevision: revision,
 		EffectAuthority: invocation.EffectAuthority, AssuranceEvidence: invocation.AssuranceEvidence,
 	})
 	if err != nil {

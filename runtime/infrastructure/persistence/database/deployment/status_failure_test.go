@@ -150,14 +150,14 @@ func TestRuntimeStatusCleanupStatesAndReceiptLimit(t *testing.T) {
 }
 
 func deploymentOperationColumns() []string {
-	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "correlation", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
+	return []string{"id", "operation_id", "workspace_id", "system_purpose", "owner", "kind", "action_key", "parent_operation_id", "resource_type", "resource_id", "idempotency_key", "request_fingerprint", "requested_by", "reason", "reference", "status", "status_url", "result_json", "metadata_json", "error_code", "failure_class", "next_action", "related_ids_json", "evidence_json", "lease_owner", "lease_expires_at", "fencing_token", "expires_at", "created_at", "started_at", "finished_at", "updated_at"}
 }
 
 func deploymentOperationRow(spec idempotencyReceiptTable, index int) []driver.Value {
 	updatedAt := timevalue.Millis(fmt.Sprintf("2026-07-20T12:00:0%dZ", index))
 	return []driver.Value{
 		int64(index + 1), fmt.Sprintf("op-%d", index), "workspace-primary", "", spec.rowOwner, "scope", "scope", "", "resource", "target", "key", "fingerprint", "actor", "", "key",
-		"processing", "/operations/id", "{}", "{}", "", "", "", "[]", "", "[]", "", int64(0), int64(index), int64(0), updatedAt, updatedAt, int64(0), updatedAt,
+		"processing", "/operations/id", "{}", "{}", "", "", "", "[]", "[]", "", int64(0), int64(index), int64(0), updatedAt, updatedAt, int64(0), updatedAt,
 	}
 }
 

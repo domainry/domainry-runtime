@@ -31,7 +31,7 @@ func (g *AgentToolGateway) InvokeInteractiveHost(ctx context.Context, request ag
 }
 
 func (g *AgentToolGateway) invokeInteractive(ctx context.Context, request agentmodulehost.InteractiveToolInvocationRequest) (result AgentToolInvocationResult, err error) {
-	ctx, span := telemetry.StartUseCase(ctx, "agent.interactive.tool.invoke", attribute.String("workspace.id", request.Principal.WorkspaceID), attribute.String("agent.session", request.SessionID), attribute.String("agent.interactive_run_id", request.RunID), attribute.String("agent.entrypoint", request.EntrypointKey), attribute.String("route.key", request.RouteKey), attribute.String("correlation.id", request.CorrelationID))
+	ctx, span := telemetry.StartUseCase(ctx, "agent.interactive.tool.invoke", attribute.String("workspace.id", request.Principal.WorkspaceID), attribute.String("agent.session", request.SessionID), attribute.String("agent.interactive_run_id", request.RunID), attribute.String("agent.entrypoint", request.EntrypointKey), attribute.String("route.key", request.RouteKey))
 	defer func() { telemetry.EndUseCase(span, err, result.Status) }()
 	if g == nil || g.dependencies.Authorization == nil {
 		return result, apperror.New(apperror.KindUnavailable, "agent.tool.gateway_unavailable", nil, nil)
@@ -136,7 +136,7 @@ func runtimeHostPrincipal(principal agentmodulehost.Principal) principalmodel.Pr
 	return principalmodel.Principal{Principal: identitysdk.Principal{
 		Known: principal.Known, WorkspaceID: principal.WorkspaceID, UserID: principal.UserID,
 		RoleKey: principal.RoleKey, AuthorizationRevision: principal.AuthorizationRevision,
-	}, RequestID: principal.RequestID, CorrelationID: principal.CorrelationID, CausationID: principal.CausationID}
+	}, RequestID: principal.RequestID, CausationID: principal.CausationID}
 }
 
 func interactiveAuthorizationEvidence(authorization AgentInteractiveAuthorization) agentmodel.AgentAuthorizationEvidence {

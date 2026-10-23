@@ -18,7 +18,7 @@ Every hook declares `DurableRecovery=true` and a supported purpose before the tr
 If a hook fails:
 
 1. the database commit remains successful and the Unit of Work does not retry the business transaction;
-2. the failure is recorded with hook name, purpose, correlation ID, and cause;
+2. the failure is recorded with hook name, purpose, the request/trace ID, and cause;
 3. durable polling or reconciliation remains responsible for eventual execution;
 4. operators may alert on the recorded failure, but must not reinterpret it as a rollback.
 

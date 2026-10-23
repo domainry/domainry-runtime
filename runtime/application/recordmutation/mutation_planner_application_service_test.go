@@ -20,7 +20,7 @@ import (
 
 func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *testing.T) {
 	planner := NewMutationPlannerApplicationService(func(context.Context, principalmodel.Principal) (string, error) { return "published-17", nil })
-	ctx := requestcontext.WithCorrelationID(t.Context(), "correlation-1")
+	ctx := requestcontext.WithRequestID(t.Context(), "request-1")
 	ctx = WithMutationInvocation(ctx, MutationInvocation{Source: transactionmodel.MutationSourceAction, ActionKey: "order.pay", IdempotencyKey: "idem-1", EffectAuthority: map[string][]string{"order": {"status"}}, AssuranceEvidence: map[string]string{"mfa": "verified"}})
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{WorkspaceID: "workspace-a", UserID: "user-a"}, RequestID: "request-1"}, accessfixture.Bundle{
 		Key: "cashier", Permissions: []string{"order.update"}, DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"order.update"}, "owner"),
@@ -30,7 +30,7 @@ func TestMutationPlannerBuildsCanonicalContextFromPrincipalAndInvocation(t *test
 		t.Fatal(err)
 	}
 	got := plan.Context()
-	if got.Source() != transactionmodel.MutationSourceAction || got.ActionKey() != "order.pay" || got.ApplicationSchemaRevision() != "published-17" || got.CorrelationID() != "correlation-1" || got.IdempotencyKey() != "idem-1" || got.RoleKey() != "cashier" || !got.AllowsEffect("order", "status") || got.AssuranceEvidence()["mfa"] != "verified" {
+	if got.Source() != transactionmodel.MutationSourceAction || got.ActionKey() != "order.pay" || got.ApplicationSchemaRevision() != "published-17" || got.RequestID() != "request-1" || got.IdempotencyKey() != "idem-1" || got.RoleKey() != "cashier" || !got.AllowsEffect("order", "status") || got.AssuranceEvidence()["mfa"] != "verified" {
 		t.Fatalf("context=%+v", got)
 	}
 }
@@ -44,7 +44,7 @@ func TestMutationPlannerUsesDeterministicObjectRevisionWithoutRepositoryResolver
 		t.Fatal(err)
 	}
 	second, err := planner.Plan(t.Context(), principal, commit, nil)
-	if err != nil || first.Context().ApplicationSchemaRevision() != second.Context().ApplicationSchemaRevision() || !strings.HasPrefix(first.Context().ApplicationSchemaRevision(), "object:") || first.Context().Source() != transactionmodel.MutationSourceHTTP || first.Context().CorrelationID() == "" {
+	if err != nil || first.Context().ApplicationSchemaRevision() != second.Context().ApplicationSchemaRevision() || !strings.HasPrefix(first.Context().ApplicationSchemaRevision(), "object:") || first.Context().Source() != transactionmodel.MutationSourceHTTP || first.Context().RequestID() == "" {
 		t.Fatalf("first=%+v second=%+v err=%v", first.Context(), second.Context(), err)
 	}
 }

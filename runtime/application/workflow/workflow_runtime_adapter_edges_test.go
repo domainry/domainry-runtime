@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -202,8 +203,9 @@ func TestWorkflowTimerContinuationReauthorizesInheritedInitiator(t *testing.T) {
 		ProcessID: "process", WorkspaceID: worker.WorkspaceID, InitiatorID: "sales-1", InitiatorRoleKey: "sales_rep",
 		DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "scheduled-send"},
 	}
-	actual, err := engine.timerContinuationPrincipal(t.Context(), process, worker)
-	if err != nil || actual.UserID != "sales-1" || actual.RoleKey != "sales_rep" || actual.RequestID != "process:timer" {
+	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	actual, err := engine.timerContinuationPrincipal(requestcontext.WithRequestID(t.Context(), traceID), process, worker)
+	if err != nil || actual.UserID != "sales-1" || actual.RoleKey != "sales_rep" || actual.RequestID != traceID {
 		t.Fatalf("continuation principal=%+v err=%v", actual, err)
 	}
 	if resolver.request.SubjectID != identitysdk.SubjectID("sales-1") || resolver.request.RoleKey != "sales_rep" {

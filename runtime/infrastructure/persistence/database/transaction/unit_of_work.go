@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/mutation"
-	"github.com/domainry/domainry-foundation/requestcontext"
 	transactioncontract "github.com/domainry/domainry-runtime/runtime/domain/transaction/contract"
 )
 
@@ -17,7 +16,7 @@ var (
 	ErrUnitOfWorkIsolationInvalid = errors.New("unit of work isolation is invalid")
 	ErrNestedUnitOfWork           = errors.New("nested unit of work requires an explicit savepoint contract")
 	ErrUnitOfWorkRetryUnsafe      = errors.New("unit of work retry requires transactional-only side effects")
-	ErrUnitOfWorkRetryIdentity    = errors.New("unit of work retry requires one idempotency scope and correlation id")
+	ErrUnitOfWorkRetryIdentity    = errors.New("unit of work retry requires one complete idempotency scope")
 	ErrUnitOfWorkRetryPolicy      = errors.New("unit of work retry policy is invalid")
 	ErrUnitOfWorkRetryBudget      = errors.New("unit of work retry budget exhausted")
 	ErrUnitOfWorkRetryDeadline    = errors.New("unit of work retry deadline exceeded")
@@ -75,7 +74,6 @@ func (u *SQLUnitOfWork[Ports]) WithinTransaction(ctx context.Context, operation 
 	}
 	retryIdentity := transactioncontract.TransactionRetryIdentity{
 		IdempotencyScope: u.options.Retry.IdempotencyScope,
-		CorrelationID:    requestcontext.CorrelationID(ctx),
 	}.Normalized()
 	if maxAttempts > 1 && !retryIdentity.IsComplete() {
 		return ErrUnitOfWorkRetryIdentity
@@ -91,9 +89,8 @@ func (u *SQLUnitOfWork[Ports]) WithinTransaction(ctx context.Context, operation 
 		return err
 	}
 	observation := mutation.TransactionObservation{
-		WorkspaceID:   retryIdentity.IdempotencyScope.WorkspaceID,
-		Scope:         retryIdentity.IdempotencyScope.UseCase,
-		CorrelationID: retryIdentity.CorrelationID,
+		WorkspaceID: retryIdentity.IdempotencyScope.WorkspaceID,
+		Scope:       retryIdentity.IdempotencyScope.UseCase,
 	}
 	startedAt := u.now()
 	defer func() {

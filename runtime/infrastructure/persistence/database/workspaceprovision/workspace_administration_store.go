@@ -488,7 +488,7 @@ func (store *WorkspaceAdministrationStore) insertReceipt(ctx context.Context, tx
 			ActionKey: actionKey, ResourceType: "workspace", ResourceID: workspaceID, IdempotencyKey: id,
 			RequestFingerprint: fingerprint, RequestedBy: actor.UserID, Reason: "Governed Workspace administration", Reference: actor.RequestID,
 			Status: "succeeded", StatusURL: "/operations/" + id, ResultJSON: payload, MetadataJSON: metadata,
-			RelatedIDsJSON: related, Correlation: actor.RequestID, EvidenceJSON: evidence,
+			RelatedIDsJSON: related, EvidenceJSON: evidence,
 			CreatedAt: now, StartedAt: now, FinishedAt: now, UpdatedAt: now,
 		},
 	)

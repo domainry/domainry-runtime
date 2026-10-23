@@ -230,7 +230,7 @@ func TestDeleteServiceOwnsHardDeleteCascadeAndSetNull(t *testing.T) {
 			setNullRecords = append(setNullRecords, reference.Record.RecordID)
 			updated := reference.Record
 			updated.Data = map[string]any{"root_id": nil}
-			mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceHTTP, CorrelationID: "delete-cascade", ApplicationSchemaRevision: "revision-1"})
+			mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: principal.WorkspaceID, Source: transactionmodel.MutationSourceHTTP, ApplicationSchemaRevision: "revision-1"})
 			if err != nil {
 				return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 			}

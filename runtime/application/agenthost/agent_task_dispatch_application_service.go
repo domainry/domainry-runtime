@@ -31,7 +31,6 @@ type AgentTaskDispatchRequest struct {
 	TimeoutSeconds         int
 	MaxAttempts            int
 	Initiator              principalmodel.Principal
-	CorrelationID          string
 }
 
 // AgentTaskDispatchApplicationService is a Runtime Host adapter: it validates
@@ -88,7 +87,7 @@ func (s *AgentTaskDispatchApplicationService) PrepareRequest(ctx context.Context
 		Task: authorization.Task, Identity: authorization.Identity, Input: cloneAgentHostMap(request.Input),
 		AllowedObjects: append([]string(nil), authorization.AllowedObjects...), AllowedActions: append([]string(nil), authorization.AllowedActions...),
 		AllowedOutcomes: append([]string(nil), authorization.AllowedOutcomes...), AllowedTools: append([]string(nil), authorization.AllowedTools...),
-		CorrelationID: strings.TrimSpace(request.CorrelationID), IdempotencyKey: fmt.Sprintf("%s:%s:%d", strings.TrimSpace(request.ProcessID), strings.TrimSpace(request.NodeID), request.Iteration), MaxAttempts: maxAttempts,
+		IdempotencyKey: fmt.Sprintf("%s:%s:%d", strings.TrimSpace(request.ProcessID), strings.TrimSpace(request.NodeID), request.Iteration), MaxAttempts: maxAttempts,
 	}
 	if timeoutSeconds > 0 {
 		now := s.clock.Now().UTC()

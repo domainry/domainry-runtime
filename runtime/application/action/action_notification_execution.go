@@ -70,7 +70,6 @@ func (e *businessActionExecution) prepareNotificationBatch(ctx context.Context, 
 		event.SubjectVersion = strings.TrimSpace(intent.SubjectVersion)
 		event.DedupeKey = strings.TrimSpace(intent.DedupeKey)
 		event.OccurredAt = intent.OccurredAt.UTC().Format(time.RFC3339Nano)
-		event.CorrelationID = e.identity.ExecutionID
 		receipts[index], events[index] = receipt, event
 	}
 	return receipts, events, nil

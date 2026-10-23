@@ -174,7 +174,7 @@ func (s *RecordSchemaSnapshotProvider) SchemaForPrincipal(_ context.Context, pri
 }
 
 // SnapshotForPrincipal depends on the current policy bundle plus explicit
-// system scope. Request IDs, correlation IDs and business values do not affect
+// system scope. Transport trace identity and business values do not affect
 // this schema projection. The complete policy bundle is hashed so revocation
 // and field/data rule changes cannot reuse a prior projection. Expiry is kept
 // on the cache entry instead of the key: a refreshed, otherwise identical

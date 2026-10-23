@@ -58,7 +58,7 @@ func TestScheduledNotificationTargetReauthorizesAndPublishesNarrowIntent(t *test
 		t.Fatalf("receipt=%+v resolver=%d publisher=%d err=%v", receipt, resolver.calls, publisher.calls, err)
 	}
 	intent := publisher.intent
-	if intent.SourceEventID != receipt.ID || intent.DedupeKey != receipt.ID || intent.WorkspaceID != owner.WorkspaceID || len(intent.RecipientUserIDs) != 1 || intent.RecipientUserIDs[0] != owner.UserID || intent.EventType != scheduledReminderEventType || intent.Locale != "zh-CN" || intent.CorrelationID != "scheduler-run-1" || intent.OccurredAt != "2026-09-15T01:02:03.456Z" {
+	if intent.SourceEventID != receipt.ID || intent.DedupeKey != receipt.ID || intent.WorkspaceID != owner.WorkspaceID || len(intent.RecipientUserIDs) != 1 || intent.RecipientUserIDs[0] != owner.UserID || intent.EventType != scheduledReminderEventType || intent.Locale != "zh-CN" || intent.OccurredAt != "2026-09-15T01:02:03.456Z" {
 		t.Fatalf("intent=%+v", intent)
 	}
 	if intent.Variables["title"] != "交周报" || intent.Variables["message"] != "请在下班前提交周报。" || intent.Variables["scheduled_for"] != "2026-09-15T01:02:03Z" || intent.SubjectID != "" || intent.SubjectType != "" {

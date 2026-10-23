@@ -140,7 +140,7 @@ func TestProvisionStoreOrganizationUsesRuntimeStableIDAndFixesAllWritesToNewTarg
 			t.Fatalf("mutation target authority=%#v", invocation)
 		}
 		record := recordmodel.Record{RecordID: "store-profile-1", OwnerOrgID: wantID, Data: fields}
-		mutationContext, contextErr := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "store.create", CorrelationID: "correlation", ApplicationSchemaRevision: "schema"})
+		mutationContext, contextErr := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "store.create", ApplicationSchemaRevision: "schema"})
 		if contextErr != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, contextErr
 		}
@@ -262,7 +262,7 @@ func TestTargetOrganizationRejectsMixedMutationPlan(t *testing.T) {
 		targetGrant:    &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit},
 		targetResolved: true, targetOrganization: runtimeext.TargetOrganization{ID: "store-north"},
 	}
-	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "order.create", CorrelationID: "correlation", ApplicationSchemaRevision: "schema"})
+	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "order.create", ApplicationSchemaRevision: "schema"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,4 +25,10 @@ func TestCORSMiddlewareAllowsIdentityProductSurfaceHeader(t *testing.T) {
 			t.Fatalf("allowed headers %q do not include %q", allowed, required)
 		}
 	}
+	if !strings.Contains(allowed, "x-request-id") {
+		t.Fatalf("allowed headers %q do not include caller-selected trace ID", allowed)
+	}
+	if strings.Contains(allowed, "x-correlation-id") {
+		t.Fatalf("allowed headers %q include retired correlation header", allowed)
+	}
 }

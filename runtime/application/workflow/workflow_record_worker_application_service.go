@@ -301,10 +301,7 @@ func (s *WorkflowApplicationService) workflowTriggerInitiatorPrincipal(ctx conte
 	if !principal.Known || principal.WorkspaceID != worker.WorkspaceID || principal.UserID != userID || principal.RoleKey == "" || (roleKey != "" && principal.RoleKey != roleKey) {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_revoked", nil, nil)
 	}
-	principal.RequestID = strings.TrimSpace(workflowpolicy.WorkflowPayloadString(intent.Payload, "request_id"))
-	if principal.RequestID == "" {
-		principal.RequestID = intent.ExecutionID
-	}
+	principal.RequestID = requestcontext.RequestIDOrNew(requestcontext.WithRequestID(ctx, workflowpolicy.WorkflowPayloadString(intent.Payload, "request_id")))
 	return principal, nil
 }
 
@@ -351,7 +348,8 @@ func (s *WorkflowApplicationService) agentTaskContinuationPrincipal(ctx context.
 	if strings.TrimSpace(principal.RoleKey) != executionRoleKey {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.execution_principal_revoked", nil, nil)
 	}
-	principal.RequestID, principal.CorrelationID, principal.CausationID = worker.RequestID, worker.CorrelationID, worker.CausationID
+	principal.RequestID = requestcontext.RequestIDOrNew(requestcontext.WithRequestID(ctx, worker.RequestID))
+	principal.CausationID = worker.CausationID
 	return principal, nil
 }
 

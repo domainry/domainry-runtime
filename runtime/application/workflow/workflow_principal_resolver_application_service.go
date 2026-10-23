@@ -82,15 +82,7 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipalForExecution(ctx con
 	if workspaceID := strings.TrimSpace(initiator.WorkspaceID); workspaceID != "" && strings.TrimSpace(resolved.WorkspaceID) != workspaceID {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.execution_principal_workspace_mismatch", nil, nil)
 	}
-	resolved.RequestID = strings.TrimSpace(initiator.RequestID)
-	if resolved.RequestID == "" {
-		// Durable workers rehydrate the process without the original HTTP
-		// request context. Give each workflow task a stable invocation identity
-		// so project Actions can require a non-empty request ID without falling
-		// back to a human or system user session.
-		resolved.RequestID = strings.TrimSpace(execution.TaskID)
-	}
-	resolved.CorrelationID = initiator.CorrelationID
+	resolved.RequestID = requestcontext.RequestIDOrNew(requestcontext.WithRequestID(ctx, initiator.RequestID))
 	resolved.CausationID = initiator.CausationID
 	return resolved, nil
 }

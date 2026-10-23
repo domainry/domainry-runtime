@@ -12,6 +12,7 @@ import (
 	"github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/idempotency"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	reportcontract "github.com/domainry/domainry-report-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
 	auditcontract "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
@@ -131,7 +132,9 @@ func (p *DataExchangeProvider) principal(ctx context.Context, scope dataexchange
 		return principalmodel.Principal{}, internalError(nil)
 	}
 	principal := p.dependencies.ResolvePrincipal(ctx, scope)
-	principal.WorkspaceID, principal.UserID, principal.RequestID = strings.TrimSpace(scope.WorkspaceID), strings.TrimSpace(scope.ActorID), strings.TrimSpace(scope.RequestID)
+	principal.WorkspaceID = strings.TrimSpace(scope.WorkspaceID)
+	principal.UserID = strings.TrimSpace(scope.ActorID)
+	principal.RequestID = requestcontext.RequestIDOrNew(requestcontext.WithRequestID(ctx, scope.RequestID))
 	if _, err := principalmodel.QueryScopeForPrincipal(principal); err != nil {
 		return principalmodel.Principal{}, workspaceError(err)
 	}

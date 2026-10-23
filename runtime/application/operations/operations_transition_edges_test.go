@@ -132,7 +132,7 @@ func TestOperationsFinishDefaultsValidationPersistenceAndConflict(t *testing.T) 
 	receipt.Command.Status = operationsmodel.OperationsStatusSucceeded
 	finished, err := service.Finish(t.Context(), receipt, scope)
 	expiresAt, parseErr := time.Parse(time.RFC3339Nano, finished.ExpiresAt)
-	if err != nil || parseErr != nil || finished.Command.FinishedAt == nil || expiresAt.Sub(*finished.Command.FinishedAt) != 365*24*time.Hour || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || finished.Correlation != receipt.Command.OperationID || len(finished.Evidence) != 1 {
+	if err != nil || parseErr != nil || finished.Command.FinishedAt == nil || expiresAt.Sub(*finished.Command.FinishedAt) != 365*24*time.Hour || finished.NextAction == "" || len(finished.RelatedIDs) != 1 || len(finished.Evidence) != 1 {
 		t.Fatalf("finished=%#v err=%v", finished, err)
 	}
 }

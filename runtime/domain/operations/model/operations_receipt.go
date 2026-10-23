@@ -22,7 +22,6 @@ type OperationsReceipt struct {
 	FailureClass OperationsFailureClass `json:"failure_class,omitempty"`
 	NextAction   string                 `json:"next_action,omitempty"`
 	RelatedIDs   []string               `json:"related_ids,omitempty"`
-	Correlation  string                 `json:"correlation,omitempty"`
 	Evidence     []string               `json:"evidence,omitempty"`
 	LeaseOwner   string                 `json:"lease_owner,omitempty"`
 	LeaseExpires string                 `json:"lease_expires_at,omitempty"`

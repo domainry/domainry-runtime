@@ -39,6 +39,7 @@ func WithSimulation(ctx context.Context, targetNodeID string) context.Context {
 type RuleExecutionRequest struct {
 	Rule               automationmodel.AutomationRuleSchema
 	Phase              string
+	EventID            string
 	Input              map[string]any
 	Before             map[string]any
 	Candidate          map[string]any
@@ -106,14 +107,10 @@ func (s *AutomationRuleApplicationService) Execute(ctx context.Context, request 
 		if s.executionRepository == nil && request.PersistExecution == nil {
 			return
 		}
-		eventID := ""
-		if request.Record != nil && automationDurableEffectPhase(request.Phase) {
-			eventID = automationruntime.AutomationRuleIdempotencyKey(request.Rule, request.Record)
-		}
 		execution := automationmodel.AutomationRuleExecution{
 			RunID: executionID, IdempotencyKey: idempotencyKey, WorkspaceID: request.WorkspaceID, RuleKey: request.Rule.Key, ObjectKey: request.Rule.ObjectKey, RecordID: recordID,
 			Phase: request.Phase, Operation: request.Rule.Trigger.Operation, Status: trace.Status, ActorID: request.Principal.UserID, RoleKey: request.Principal.RoleKey,
-			RequestID: request.Principal.RequestID, CorrelationID: valueOrDefault(request.Principal.RequestID, executionID), EventID: eventID,
+			RequestID: request.Principal.RequestID, EventID: strings.TrimSpace(request.EventID),
 			DurationMS: trace.DurationMS, ErrorCode: trace.ErrorCode, Candidate: recordcontract.RecordCloneData(request.Candidate), Trace: automationdomain.TraceMap(trace),
 		}
 		if request.PersistExecution != nil {

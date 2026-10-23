@@ -32,7 +32,6 @@ type MutationContextInput struct {
 	AutomationKey             string
 	RequestID                 string
 	IdempotencyKey            string
-	CorrelationID             string
 	CausationID               string
 	ApplicationSchemaRevision string
 	EffectAuthority           map[string][]string
@@ -51,7 +50,6 @@ type MutationContext struct {
 	automationKey     string
 	requestID         string
 	idempotencyKey    string
-	correlationID     string
 	causationID       string
 	metadataRevision  string
 	effectAuthority   map[string][]string
@@ -77,7 +75,6 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	input.AutomationKey = strings.TrimSpace(input.AutomationKey)
 	input.RequestID = strings.TrimSpace(input.RequestID)
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
-	input.CorrelationID = strings.TrimSpace(input.CorrelationID)
 	input.CausationID = strings.TrimSpace(input.CausationID)
 	input.ApplicationSchemaRevision = strings.TrimSpace(input.ApplicationSchemaRevision)
 	if input.WorkspaceID == "" {
@@ -85,9 +82,6 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 	}
 	if !mutationSourceValid(input.Source) {
 		return MutationContext{}, mutationContextError("source")
-	}
-	if input.CorrelationID == "" {
-		return MutationContext{}, mutationContextError("correlation_id")
 	}
 	if input.ApplicationSchemaRevision == "" {
 		return MutationContext{}, mutationContextError("metadata_revision")
@@ -103,7 +97,7 @@ func NewMutationContext(input MutationContextInput) (MutationContext, error) {
 		workspaceID: input.WorkspaceID, actorID: input.ActorID, roleKey: input.RoleKey,
 		permissions: mutationNormalizedStrings(input.Permissions), identityVersion: input.IdentityVersion,
 		source: input.Source, actionKey: input.ActionKey, workflowKey: input.WorkflowKey, automationKey: input.AutomationKey,
-		requestID: input.RequestID, idempotencyKey: input.IdempotencyKey, correlationID: input.CorrelationID,
+		requestID: input.RequestID, idempotencyKey: input.IdempotencyKey,
 		causationID: input.CausationID, metadataRevision: input.ApplicationSchemaRevision,
 		effectAuthority: mutationCloneAuthority(input.EffectAuthority), assuranceEvidence: mutationCloneEvidence(input.AssuranceEvidence),
 	}, nil
@@ -120,7 +114,6 @@ func (c MutationContext) WorkflowKey() string               { return c.workflowK
 func (c MutationContext) AutomationKey() string             { return c.automationKey }
 func (c MutationContext) RequestID() string                 { return c.requestID }
 func (c MutationContext) IdempotencyKey() string            { return c.idempotencyKey }
-func (c MutationContext) CorrelationID() string             { return c.correlationID }
 func (c MutationContext) CausationID() string               { return c.causationID }
 func (c MutationContext) ApplicationSchemaRevision() string { return c.metadataRevision }
 

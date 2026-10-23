@@ -66,7 +66,7 @@ func TestSQLUnitOfWorkRetryDeadlineAndBackoffConditions(t *testing.T) {
 		now = policy.Deadline
 		return nil
 	}
-	err := unit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err := unit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		return mutation.TransactionTransient("probe", "id", mutation.TransactionTransientDeadlock, nil)
 	})
 	if !errors.Is(err, ErrUnitOfWorkRetryDeadline) {
@@ -78,7 +78,7 @@ func TestSQLUnitOfWorkRetryDeadlineAndBackoffConditions(t *testing.T) {
 		unit.now = func() time.Time { return base }
 		return unit
 	}
-	ctx, cancel := context.WithCancel(requestcontext.WithCorrelationID(context.Background(), "correlation-1"))
+	ctx, cancel := context.WithCancel(requestcontext.WithRequestID(context.Background(), "correlation-1"))
 	cancelUnit := newRetryUnit()
 	cancelUnit.wait = func(context.Context, time.Duration) error { cancel(); return nil }
 	err = cancelUnit.WithinTransaction(ctx, func(context.Context, testTransactionPorts) error {
@@ -90,7 +90,7 @@ func TestSQLUnitOfWorkRetryDeadlineAndBackoffConditions(t *testing.T) {
 	waitErr := errors.New("retry wait failed")
 	waitUnit := newRetryUnit()
 	waitUnit.wait = func(context.Context, time.Duration) error { return waitErr }
-	err = waitUnit.WithinTransaction(requestcontext.WithCorrelationID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
+	err = waitUnit.WithinTransaction(requestcontext.WithRequestID(t.Context(), "correlation-1"), func(context.Context, testTransactionPorts) error {
 		return mutation.TransactionTransient("probe", "id", mutation.TransactionTransientDeadlock, nil)
 	})
 	if !errors.Is(err, waitErr) {

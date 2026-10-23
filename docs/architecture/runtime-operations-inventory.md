@@ -12,7 +12,7 @@ requires an operation ID, owner kind, permission, explicit workspace or system
 scope, idempotency key, semantic request fingerprint, requester, reason,
 optional ticket/reference, and created/started/finished lifecycle timestamps.
 The stable `OperationsReceipt` carries a status URL, redacted result evidence,
-related IDs, correlation, next action, and one of `retryable`, `terminal`, or
+related IDs, explicit evidence, next action, and one of `retryable`, `terminal`, or
 `manual_intervention` for failures.
 
 Same owner/key plus the same fingerprint replays the original operation.

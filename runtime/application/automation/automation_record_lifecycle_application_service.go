@@ -77,12 +77,11 @@ func AutomationAfterOutbox(rules []automationmodel.AutomationRuleSchema, objectK
 	for _, rule := range matched {
 		recordVersion := automationdomain.MutationVersion(before, record)
 		eventID := fmt.Sprintf("automation:%s:%s:%s:%s:%s", rule.Key, objectKey, record.RecordID, operation, recordVersion)
-		correlationID := valueOrDefault(strings.TrimSpace(principal.CorrelationID), principal.RequestID)
-		causationID := valueOrDefault(strings.TrimSpace(principal.CausationID), principal.RequestID)
+		causationID := strings.TrimSpace(principal.CausationID)
 		event := automationmodel.AutomationLifecycleEvent{
 			ID: eventID, RuleKey: rule.Key, Rule: cloneAutomationRule(rule), ObjectKey: objectKey, Operation: operation, RecordID: record.RecordID, RecordVersion: recordVersion,
 			Before: recordcontract.RecordCloneData(before), Record: record, ActorUserID: principal.UserID, ActorRoleKey: principal.RoleKey,
-			RequestID: principal.RequestID, CorrelationID: correlationID, CausationID: causationID, IdentityPolicy: "revalidate_initiator",
+			CausationID: causationID, IdentityPolicy: "revalidate_initiator",
 			AutomationDepth: principal.AutomationDepth, VisitedRuleKeys: append([]string(nil), principal.VisitedRuleKeys...), OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		}
 		messages = append(messages, publicationmodel.Message{MessageID: eventID, WorkspaceID: workspaceID, ConnectorKey: "__automation__", Operation: rule.Key, Status: "queued", EventID: eventID, RequestRef: principal.RequestID, DedupKey: eventID, CreatedBy: principal.UserID, Payload: automationdomain.LifecycleEventPayload(event)})
@@ -121,15 +120,11 @@ func (s *AutomationApplicationService) ExecuteOutboxMessage(ctx context.Context,
 	if event.AutomationDepth >= maxDepth {
 		return automationError(apperror.KindBadRequest, "backend.automation.max_depth_exceeded", nil, "rule", rule.Key)
 	}
-	principal.RequestID = event.ID
-	principal.CorrelationID = valueOrDefault(event.CorrelationID, event.RequestID)
 	principal.CausationID = event.ID
 	principal.AutomationDepth = event.AutomationDepth + 1
 	principal.VisitedRuleKeys = append(append([]string(nil), event.VisitedRuleKeys...), rule.Key)
-	ctx = requestcontext.WithRequestID(ctx, event.ID)
-	ctx = requestcontext.WithCorrelationID(ctx, principal.CorrelationID)
 	var execution automationmodel.AutomationRuleExecution
-	trace, executionErr := s.executeRuleWithPersistence(ctx, rule, "after", recordcontract.RecordCloneData(record.Data), event.Before, recordcontract.RecordCloneData(record.Data), &record, principal, func(_ context.Context, value automationmodel.AutomationRuleExecution) error {
+	trace, executionErr := s.executeRuleWithPersistence(ctx, rule, "after", event.ID, recordcontract.RecordCloneData(record.Data), event.Before, recordcontract.RecordCloneData(record.Data), &record, principal, func(_ context.Context, value automationmodel.AutomationRuleExecution) error {
 		execution = value
 		return nil
 	})

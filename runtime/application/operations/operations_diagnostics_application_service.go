@@ -100,7 +100,7 @@ func (s *OperationsApplicationService) CaptureDiagnostics(ctx context.Context, c
 	}
 	encoded, _ := json.Marshal(snapshot)
 	receipt.Command.Status, receipt.Result = operationsmodel.OperationsStatusSucceeded, encoded
-	receipt.Correlation, receipt.RelatedIDs = receipt.Command.OperationID, []string{s.instanceID, principal.WorkspaceID}
+	receipt.RelatedIDs = []string{s.instanceID, principal.WorkspaceID}
 	receipt.Evidence, receipt.NextAction = []string{"/operations/runbooks/diagnostics"}, "follow each degraded section runbook, then capture a new snapshot to verify recovery"
 	receipt, err = s.Finish(ctx, receipt, scope)
 	if err != nil {

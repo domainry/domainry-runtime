@@ -583,7 +583,7 @@ func TestActionApplicationInvokesFrozenProjectExtensionRegistry(t *testing.T) {
 
 func TestBusinessHandlerExecutorReturnsOneAtomicMutationBatchAndDurableIntent(t *testing.T) {
 	newPlan := func(operation, objectKey, recordID string, fields map[string]any) (transactionmodel.MutationPlan, recordmodel.Record, error) {
-		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", ActorID: "user-a", RoleKey: "operator", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.reserve", CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1"})
+		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{WorkspaceID: "workspace-a", ActorID: "user-a", RoleKey: "operator", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.reserve", ApplicationSchemaRevision: "snapshot-1"})
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 		}
@@ -627,7 +627,7 @@ func TestBusinessActionPlansConditionalDeleteAndRestoreInOneCommitBoundary(t *te
 	newPlan := func(operation, objectKey, recordID string) transactionmodel.MutationPlan {
 		t.Helper()
 		mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
-			WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.change", CorrelationID: "correlation-1", ApplicationSchemaRevision: "snapshot-1",
+			WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: "booking.change", ApplicationSchemaRevision: "snapshot-1",
 		})
 		if err != nil {
 			t.Fatal(err)

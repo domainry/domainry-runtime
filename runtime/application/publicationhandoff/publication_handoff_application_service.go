@@ -246,7 +246,7 @@ func (s *PublicationHandoffApplicationService) process(ctx context.Context, loca
 	workerplatform.ObserveOutcome(queueKind, "claimed")
 	applicationPayload, asyncLink := telemetry.ConsumeAsyncPayload(claimed.Payload)
 	claimed.Payload = applicationPayload
-	ctx, executionSpan := telemetry.StartLinkedSpan(ctx, "domainry.runtime.worker", "runtime.publication.execute", asyncLink, trace.WithSpanKind(trace.SpanKindConsumer))
+	ctx, executionSpan := telemetry.StartAsyncSpan(ctx, "domainry.runtime.worker", "runtime.publication.execute", asyncLink, trace.WithSpanKind(trace.SpanKindConsumer))
 	defer executionSpan.End()
 	if requestcontext.OwnerExecutionID(ctx) == "" {
 		ctx = requestcontext.WithOwnerExecutionID(ctx, claimed.MessageID)

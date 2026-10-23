@@ -60,7 +60,6 @@ type WorkflowAgentTaskPreparation struct {
 	Contract               definitionmodel.WorkflowAgentTaskNodeContract
 	Input                  map[string]any
 	Initiator              principalmodel.Principal
-	CorrelationID          string
 }
 
 type WorkflowTaskNotificationCommitter interface {

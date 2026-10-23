@@ -162,7 +162,8 @@ func TestWorkflowContractHelpersCoverSuccessAndFailureOutcomes(t *testing.T) {
 }
 
 func TestWorkflowPrincipalResolverUsesIdentityAccessBundle(t *testing.T) {
-	initiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "workspace-1"}, RequestID: "request", CorrelationID: "correlation"}
+	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	initiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "initiator", WorkspaceID: "workspace-1"}, RequestID: traceID}
 	unchanged, err := NewWorkflowPrincipalResolver(nil).ResolveWorkflowPrincipal(t.Context(), definitionmodel.WorkflowSchema{Key: "flow"}, initiator)
 	if err != nil || unchanged.UserID != initiator.UserID {
 		t.Fatalf("unchanged=%+v err=%v", unchanged, err)
@@ -171,7 +172,7 @@ func TestWorkflowPrincipalResolverUsesIdentityAccessBundle(t *testing.T) {
 	resolved := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "workflow:flow", WorkspaceID: "workspace-1", AccessBundle: &bundle}}, accessfixture.Bundle{Key: "configured"})
 	resolver := &workflowPrincipalResolverTestStub{resolution: workflowPrincipalResolution(resolved)}
 	principal, err := NewWorkflowPrincipalResolver(resolver).ResolveWorkflowPrincipal(t.Context(), definitionmodel.WorkflowSchema{Key: "flow", RunAs: " configured "}, initiator)
-	if err != nil || principal.UserID != "workflow:flow" || principal.RoleKey != "configured" || principal.AccessBundle == nil || principal.RequestID != "request" || principal.CorrelationID != "correlation" {
+	if err != nil || principal.UserID != "workflow:flow" || principal.RoleKey != "configured" || principal.AccessBundle == nil || principal.RequestID != traceID {
 		t.Fatalf("principal=%+v err=%v", principal, err)
 	}
 	if _, err := NewWorkflowPrincipalResolver(nil).ResolveWorkflowPrincipal(t.Context(), definitionmodel.WorkflowSchema{Key: "flow", RunAs: "configured"}, initiator); err == nil {

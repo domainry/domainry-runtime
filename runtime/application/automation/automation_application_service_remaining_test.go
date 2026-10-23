@@ -57,10 +57,13 @@ func TestAutomationRunBeforePersistsExecutionAndAfterRuleStoresResult(t *testing
 		}},
 	}
 	trace, err := service.executeRule(
-		t.Context(), afterRule, "after", nil, nil, map[string]any{"active": true}, nil, principal,
+		t.Context(), afterRule, "after", "event-1", nil, nil, map[string]any{"active": true}, nil, principal,
 	)
 	if err != nil || trace.Status != "succeeded" || len(trace.InstructionTraces) != 1 {
 		t.Fatalf("after trace=%+v err=%v", trace, err)
+	}
+	if len(repository.inserted) != 2 || repository.inserted[1].EventID != "event-1" {
+		t.Fatalf("after execution event identity=%+v", repository.inserted)
 	}
 }
 

@@ -16,7 +16,7 @@ import (
 
 // WorkflowAgentTaskCompletion is Runtime's local projection of the asynchronous
 // Agent capability result. It contains no Agent lease, repository or worker
-// state; Runtime owns only the workflow correlation and continuation.
+// state; Runtime owns only the workflow task identity and continuation.
 type WorkflowAgentTaskCompletion struct {
 	WorkspaceID, TaskRunID, ProcessID, NodeInstanceID string
 	TaskKey, TaskVersion                              string
@@ -70,7 +70,7 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 		return conflict("backend.workflow.agent_task_node_not_waiting")
 	}
 	if strings.TrimSpace(fmt.Sprint(instance.Input["agent_task_run_id"])) != strings.TrimSpace(completion.TaskRunID) {
-		return conflict("backend.workflow.agent_task_correlation_mismatch")
+		return conflict("backend.workflow.agent_task_identity_mismatch")
 	}
 	node, found := workflowpolicy.WorkflowGraphNode(process.DefinitionSnapshot.Graph, instance.NodeID)
 	if !found || node.Contract == nil || node.Contract.AgentTask == nil {

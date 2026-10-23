@@ -238,7 +238,7 @@ func TestListOperationsPassesAllLedgerFiltersToApplication(t *testing.T) {
 	var captured operationsmodel.OperationsReceiptFilter
 	handler, _ := operationsEdgeHandler(operationsServiceEdgeStub{searchFilter: &captured})
 	response := httptest.NewRecorder()
-	handler.listOperations(response, operationEdgeRequest(http.MethodGet, "/operations?status=failed&failure_class=manual_intervention&kind=workflow.process.retry&resource_type=workflow_process&resource_id=process-1&requested_by=operator-1&correlation=req-1&created_from=2026-07-26T00%3A00%3A00Z&created_to=2026-07-26T02%3A00%3A00Z&search=INC-42&limit=17"))
+	handler.listOperations(response, operationEdgeRequest(http.MethodGet, "/operations?status=failed&failure_class=manual_intervention&kind=workflow.process.retry&resource_type=workflow_process&resource_id=process-1&requested_by=operator-1&created_from=2026-07-26T00%3A00%3A00Z&created_to=2026-07-26T02%3A00%3A00Z&search=INC-42&limit=17"))
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d", response.Code)
 	}
@@ -248,7 +248,6 @@ func TestListOperationsPassesAllLedgerFiltersToApplication(t *testing.T) {
 		captured.ResourceType != "workflow_process" ||
 		captured.ResourceID != "process-1" ||
 		captured.RequestedBy != "operator-1" ||
-		captured.Correlation != "req-1" ||
 		captured.CreatedFrom != "2026-07-26T00:00:00Z" ||
 		captured.CreatedTo != "2026-07-26T02:00:00Z" ||
 		captured.Search != "INC-42" ||

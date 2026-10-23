@@ -31,18 +31,16 @@ func (scope TransactionIdempotencyScope) IsComplete() bool {
 
 type TransactionRetryIdentity struct {
 	IdempotencyScope TransactionIdempotencyScope
-	CorrelationID    string
 }
 
 func (identity TransactionRetryIdentity) Normalized() TransactionRetryIdentity {
 	identity.IdempotencyScope = identity.IdempotencyScope.Normalized()
-	identity.CorrelationID = strings.TrimSpace(identity.CorrelationID)
 	return identity
 }
 
 func (identity TransactionRetryIdentity) IsComplete() bool {
 	identity = identity.Normalized()
-	return identity.IdempotencyScope.IsComplete() && identity.CorrelationID != ""
+	return identity.IdempotencyScope.IsComplete()
 }
 
 func WithTransactionRetryIdentity(ctx context.Context, identity TransactionRetryIdentity) context.Context {

@@ -23,7 +23,7 @@ func TestAuditBuildEventPreservesWorkflowWorkloadLineage(t *testing.T) {
 		t.Fatalf("audit event identity = %+v", event)
 	}
 	if event.OperationID != "operation-2" || event.CausationID != "cause-2" {
-		t.Fatalf("audit correlation identity = %+v", event)
+		t.Fatalf("audit business lineage = %+v", event)
 	}
 	for key, want := range map[string]any{
 		"actor_kind":   "workload",

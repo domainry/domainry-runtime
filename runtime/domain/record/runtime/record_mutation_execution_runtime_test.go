@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -144,7 +143,7 @@ func TestBeginCreateValidatesDependenciesFingerprintAndClaimFailure(t *testing.T
 		t.Fatalf("claim error was not preserved: %v", err)
 	}
 	request := store.beginRequests[len(store.beginRequests)-1]
-	if request.Execution.WorkspaceID != "workspace-primary" || request.Execution.ObjectKey != "customer" || request.Execution.IdempotencyKey != "key" || !strings.HasPrefix(request.LeaseOwner, "req_") || request.LeaseTTL != recordMutationLeaseTTL || request.RequestFingerprint == "" {
+	if request.Execution.WorkspaceID != "workspace-primary" || request.Execution.ObjectKey != "customer" || request.Execution.IdempotencyKey != "key" || requestcontext.NormalizeTraceID(request.LeaseOwner) == "" || request.LeaseTTL != recordMutationLeaseTTL || request.RequestFingerprint == "" {
 		t.Fatalf("initialized claim request=%+v", request)
 	}
 }

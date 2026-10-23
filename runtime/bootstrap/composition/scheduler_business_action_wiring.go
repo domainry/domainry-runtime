@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	dispatchapplication "github.com/domainry/domainry-runtime/runtime/application/dispatch"
 	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
@@ -114,9 +115,10 @@ func (runtime schedulerBusinessActionRuntime) ExecuteBusinessActionTarget(ctx co
 	if err != nil {
 		return dispatchapplication.BusinessActionTargetReceipt{}, err
 	}
+	principal.RequestID = requestcontext.RequestIDOrNew(ctx)
 	result, err := runtime.actions.Invoke(ctx, actionmodel.ActionSourceScheduler, actionmodel.ActionInvocation{
 		PreventExecutionReclaim: true, ActionKey: actionKey, ObjectKey: objectKey, Input: payload, Principal: principal, Actor: principal,
-		RequestID: strings.TrimSpace(request.IdempotencyKey), IdempotencyKey: strings.TrimSpace(request.IdempotencyKey),
+		RequestID: principal.RequestID, IdempotencyKey: strings.TrimSpace(request.IdempotencyKey),
 	})
 	if err != nil {
 		return dispatchapplication.BusinessActionTargetReceipt{}, err

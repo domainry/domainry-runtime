@@ -80,14 +80,12 @@ type deliveryProbe struct {
 	request          integrationsdk.DeliveryRequest
 	err              error
 	spanContext      trace.SpanContext
-	correlationID    string
 	ownerExecutionID string
 }
 
 func (p *deliveryProbe) Accept(ctx context.Context, request integrationsdk.DeliveryRequest) (integrationsdk.DeliveryReceipt, error) {
 	p.request = request
 	p.spanContext = trace.SpanContextFromContext(ctx)
-	p.correlationID = requestcontext.CorrelationID(ctx)
 	p.ownerExecutionID = requestcontext.OwnerExecutionID(ctx)
 	if p.err != nil {
 		return integrationsdk.DeliveryReceipt{}, p.err
@@ -95,7 +93,7 @@ func (p *deliveryProbe) Accept(ctx context.Context, request integrationsdk.Deliv
 	return integrationsdk.DeliveryReceipt{MessageID: request.MessageID, InvocationID: "invocation-1", Status: integrationsdk.DeliveryStatusAccepted}, nil
 }
 
-func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
+func TestWorkerContinuesProducerTraceAndStripsTelemetryPayload(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
 	previous := otel.GetTracerProvider()
@@ -105,8 +103,7 @@ func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
 		otel.SetTracerProvider(previous)
 	})
 
-	producerContext := requestcontext.WithCorrelationID(t.Context(), "correlation-1")
-	producerContext = requestcontext.WithOwnerExecutionID(producerContext, "workflow-1")
+	producerContext := requestcontext.WithOwnerExecutionID(t.Context(), "workflow-1")
 	producerContext, producerSpan := provider.Tracer("test.producer").Start(producerContext, "http.request")
 	producerSpanContext := producerSpan.SpanContext()
 	payload := telemetry.EnsureAsyncPayload(producerContext, map[string]any{"subject": "hello"})
@@ -120,8 +117,8 @@ func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
 	if _, err := service.process(t.Context(), Locator{WorkspaceID: "workspace-primary", MessageID: "message-linked"}); err != nil {
 		t.Fatal(err)
 	}
-	if !delivery.spanContext.IsValid() || delivery.spanContext.TraceID() == producerSpanContext.TraceID() || delivery.correlationID != "correlation-1" || delivery.ownerExecutionID != "workflow-1" {
-		t.Fatalf("delivery span=%v correlation=%q owner=%q", delivery.spanContext, delivery.correlationID, delivery.ownerExecutionID)
+	if !delivery.spanContext.IsValid() || delivery.spanContext.TraceID() != producerSpanContext.TraceID() || delivery.ownerExecutionID != "workflow-1" {
+		t.Fatalf("delivery span=%v owner=%q", delivery.spanContext, delivery.ownerExecutionID)
 	}
 	if strings.Contains(string(delivery.request.Payload), telemetry.AsyncPayloadKey) {
 		t.Fatalf("framework telemetry leaked to provider payload: %s", delivery.request.Payload)
@@ -132,7 +129,7 @@ func TestWorkerStartsLinkedRootSpanAndStripsTelemetryPayload(t *testing.T) {
 			workerSpan = ended
 		}
 	}
-	if workerSpan == nil || workerSpan.Parent().IsValid() || len(workerSpan.Links()) != 1 || workerSpan.Links()[0].SpanContext.TraceID() != producerSpanContext.TraceID() || workerSpan.Links()[0].SpanContext.SpanID() != producerSpanContext.SpanID() {
+	if workerSpan == nil || workerSpan.Parent().SpanID() != producerSpanContext.SpanID() || workerSpan.SpanContext().TraceID() != producerSpanContext.TraceID() || len(workerSpan.Links()) != 0 {
 		t.Fatalf("worker span=%#v producer=%v", workerSpan, producerSpanContext)
 	}
 }

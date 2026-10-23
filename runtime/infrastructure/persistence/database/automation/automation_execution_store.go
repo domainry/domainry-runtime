@@ -34,7 +34,7 @@ func scanAutomationRuleExecution(scanner interface{ Scan(...any) error }) (autom
 	var execution automationmodel.AutomationRuleExecution
 	var candidateJSON, traceJSON string
 	var createdAt, updatedAt int64
-	if err := scanner.Scan(&execution.ID, &execution.RunID, &execution.IdempotencyKey, &execution.WorkspaceID, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.Phase, &execution.Operation, &execution.Status, &execution.ActorID, &execution.RoleKey, &execution.RequestID, &execution.CorrelationID, &execution.EventID, &execution.DurationMS, &execution.ErrorCode, &candidateJSON, &traceJSON, &createdAt, &updatedAt); err != nil {
+	if err := scanner.Scan(&execution.ID, &execution.RunID, &execution.IdempotencyKey, &execution.WorkspaceID, &execution.RuleKey, &execution.ObjectKey, &execution.RecordID, &execution.Phase, &execution.Operation, &execution.Status, &execution.ActorID, &execution.RoleKey, &execution.RequestID, &execution.EventID, &execution.DurationMS, &execution.ErrorCode, &candidateJSON, &traceJSON, &createdAt, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return automationmodel.AutomationRuleExecution{}, err
 		}
@@ -85,8 +85,8 @@ func (r AutomationExecutionStore) InsertExecution(ctx context.Context, workspace
 	// _automation_runs also stores instruction lease rows. Keep the shared
 	// non-null JSON envelope complete on strict MySQL instead of relying on a
 	// dialect-specific implicit default for the instruction result column.
-	columns := []string{"run_id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "result_json", "created_at", "updated_at"}
-	values := []any{value.RunID, automationRuleRunKind, value.IdempotencyKey, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.CorrelationID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), "{}", timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
+	columns := []string{"run_id", "run_kind", "idempotency_key", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "result_json", "created_at", "updated_at"}
+	values := []any{value.RunID, automationRuleRunKind, value.IdempotencyKey, value.RuleKey, value.ObjectKey, value.RecordID, value.Phase, value.Operation, value.Status, value.ActorID, value.RoleKey, value.RequestID, value.EventID, value.DurationMS, value.ErrorCode, string(candidateJSON), string(traceJSON), "{}", timevalue.Millis(value.CreatedAt), timevalue.Millis(value.UpdatedAt)}
 	builder, buildErr := r.store.SubjectEvidenceInsertBuilder(workspaceID, automationRunsTable, columns, values)
 	if buildErr != nil {
 		return automationmodel.AutomationRuleExecution{}, buildErr
@@ -158,7 +158,7 @@ func (r AutomationExecutionStore) ListExecutions(ctx context.Context, workspaceI
 	}
 	predicates = append(predicates, query.Equal("run_kind", automationRuleRunKind))
 	builder := query.NewWorkspaceSelectBuilder(r.store.SQLRenderer, automationRunsTable, workspaceID).
-		Columns("id", "run_id", "idempotency_key", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "correlation_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at").
+		Columns("id", "run_id", "idempotency_key", "workspace_id", "rule_key", "object_key", "record_id", "phase", "operation", "status", "actor_id", "role_key", "request_id", "event_id", "duration_ms", "error_code", "candidate_json", "trace_json", "created_at", "updated_at").
 		OrderBy(query.Descending("created_at"), query.Descending("id")).Limit(limit)
 	if len(predicates) > 0 {
 		builder.Where(query.And(predicates...))

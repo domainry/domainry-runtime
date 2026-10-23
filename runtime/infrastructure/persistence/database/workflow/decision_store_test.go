@@ -126,7 +126,7 @@ func TestWorkflowStateCommitAtomicallyCreatesAgentNodeCorrelation(t *testing.T) 
 		}
 		err := newAgentWorkflowDecisionStore(store).CommitWorkflowState(t.Context(), commit)
 		if duplicateEvent && err == nil {
-			t.Fatal("expected duplicate event to roll back Agent node correlation")
+			t.Fatal("expected duplicate event to roll back Agent node identity")
 		}
 		if !duplicateEvent && err != nil {
 			t.Fatal(err)

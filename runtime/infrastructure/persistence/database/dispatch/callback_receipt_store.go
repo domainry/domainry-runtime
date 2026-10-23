@@ -252,7 +252,7 @@ func callbackRecord(receipt dispatchmodel.CallbackReceipt) sharedoperation.Recor
 		ActionKey: dispatchCallbackActionKey, ResourceType: "dispatch_callback", ResourceID: receipt.ExecutionID,
 		IdempotencyKey: receipt.OperationID, RequestFingerprint: receipt.BodySHA256, RequestedBy: receipt.RuntimeID,
 		Reason: receipt.Method, Reference: receipt.Path, Status: receipt.Status, StatusURL: "/operations/" + receipt.OperationID,
-		ResultJSON: result, MetadataJSON: metadata, RelatedIDsJSON: json.RawMessage(`[]`), Correlation: receipt.ExecutionID,
+		ResultJSON: result, MetadataJSON: metadata, RelatedIDsJSON: json.RawMessage(`[]`),
 		EvidenceJSON: json.RawMessage(`[]`), LeaseOwner: receipt.LeaseOwner, LeaseExpiresAt: receipt.LeaseExpiresAt,
 		FencingToken: receipt.FencingToken, ExpiresAt: receipt.ExpiresAt, CreatedAt: receipt.CreatedAt, UpdatedAt: receipt.UpdatedAt,
 	}
@@ -296,7 +296,7 @@ func callbackReceipt(record sharedoperation.Record) (dispatchmodel.CallbackRecei
 	}
 	receipt.RuntimeID, receipt.Method, receipt.Path, receipt.IdempotencyKey, receipt.ExecutionID = metadata.RuntimeID, metadata.Method, metadata.Path, metadata.IdempotencyKey, metadata.ExecutionID
 	receipt.DownstreamID, receipt.DownstreamOwner, receipt.DownstreamStatus = result.DownstreamID, result.DownstreamOwner, result.DownstreamStatus
-	if receipt.RuntimeID != record.RequestedBy || receipt.Method != record.Reason || receipt.Path != record.Reference || receipt.ExecutionID != record.ResourceID || receipt.ExecutionID != record.Correlation {
+	if receipt.RuntimeID != record.RequestedBy || receipt.Method != record.Reason || receipt.Path != record.Reference || receipt.ExecutionID != record.ResourceID {
 		return receipt, fmt.Errorf("dispatch callback operation metadata is inconsistent")
 	}
 	return receipt, nil

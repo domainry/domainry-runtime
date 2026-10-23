@@ -97,7 +97,7 @@ func (f *agentSDKModuleFactoryStub) OpenModule(_ context.Context, application ag
 
 func TestOpenAgentBindingUsesModuleFactoryAndValidatesDescriptor(t *testing.T) {
 	runner := &agentSDKRunnerStub{}
-	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
+	binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV2, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
 	factory := &agentSDKModuleFactoryStub{binding: binding}
 	store := openAgentBindingRuntimeStore(t)
 	opened, err := openAgentBinding(t.Context(), "runtime", store, nil, nil, factory)
@@ -141,7 +141,7 @@ func (f *conversationModuleFactoryStub) ConversationEnabled() bool { return f.en
 func TestOpenProjectAgentBindingSupportsConversationsWithoutDefinitions(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		runner := &agentSDKRunnerStub{}
-		binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV1, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
+		binding := &agentSDKBindingStub{runner: runner, descriptor: agentsdk.Descriptor{ProtocolVersion: agentsdk.ProtocolVersionV2, Mode: agentsdk.DeploymentModeModule, Capabilities: []string{agentsdk.CapabilityTaskStart, agentsdk.CapabilityTaskPoll, agentsdk.CapabilityTaskCancel, agentsdk.CapabilityInteractiveRun, agentsdk.CapabilityLifecycleExecute}}}
 		factory := &conversationModuleFactoryStub{agentSDKModuleFactoryStub: &agentSDKModuleFactoryStub{binding: binding}, enabled: enabled}
 		opened, err := openProjectAgentBinding(t.Context(), "runtime", openAgentBindingRuntimeStore(t), nil, nil, factory, runtimeext.ProjectDefinitions{})
 		if err != nil || (opened != nil) != enabled || (factory.runtimeID != "") != enabled {

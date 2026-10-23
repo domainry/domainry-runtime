@@ -24,7 +24,7 @@ type OperationsDeadLetterItem struct {
 	ResourceType   string         `json:"resource_type"`
 	Status         string         `json:"status"`
 	FailureCode    string         `json:"failure_code,omitempty"`
-	CorrelationID  string         `json:"correlation_id,omitempty"`
+	RelatedIDs     []string       `json:"related_ids,omitempty"`
 	BusinessKey    string         `json:"business_key,omitempty"`
 	EvidenceRef    string         `json:"evidence_ref,omitempty"`
 	AllowedActions []string       `json:"allowed_actions"`
@@ -120,13 +120,37 @@ func (s *OperationsApplicationService) ActOnDeadLetter(ctx context.Context, owne
 	}
 	result, _ := json.Marshal(item)
 	receipt.Command.Status, receipt.Result = operationsmodel.OperationsStatusSucceeded, result
-	receipt.RelatedIDs = []string{owner, id, item.CorrelationID, item.BusinessKey, item.EvidenceRef}
+	relatedIDs := make([]string, 0, len(item.RelatedIDs)+2)
+	relatedIDs = append(relatedIDs, id)
+	relatedIDs = append(relatedIDs, item.RelatedIDs...)
+	relatedIDs = append(relatedIDs, item.BusinessKey)
+	receipt.RelatedIDs = compactOperationsIDs(relatedIDs)
+	if evidenceRef := strings.TrimSpace(item.EvidenceRef); evidenceRef != "" {
+		receipt.Evidence = []string{evidenceRef}
+	}
 	receipt.NextAction = "inspect owner evidence and confirm the requested transition completed"
 	receipt, err = s.Finish(ctx, receipt, scope)
 	if err != nil {
 		return OperationsDeadLetterActionResult{}, err
 	}
 	return OperationsDeadLetterActionResult{Item: item, Receipt: receipt}, nil
+}
+
+func compactOperationsIDs(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *OperationsApplicationService) deadLetterOwner(owner string) (OperationsDeadLetterOwner, error) {

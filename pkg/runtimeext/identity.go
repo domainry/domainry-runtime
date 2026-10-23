@@ -19,7 +19,6 @@ type Principal struct {
 	RoleKey               string
 	OrgID                 string
 	RequestID             string
-	CorrelationID         string
 	CausationID           string
 	AuthorizationRevision string
 	AuthenticatedProvider string

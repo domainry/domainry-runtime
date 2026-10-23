@@ -146,7 +146,7 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 
 	mutationContext, err := transactionmodel.NewMutationContext(transactionmodel.MutationContextInput{
 		WorkspaceID: "workspace-a", Source: transactionmodel.MutationSourceAction, ActionKey: action.Key,
-		CorrelationID: "correlation", ApplicationSchemaRevision: "schema",
+		ApplicationSchemaRevision: "schema",
 	})
 	if err != nil {
 		t.Fatal(err)

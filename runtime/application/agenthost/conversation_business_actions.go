@@ -259,7 +259,6 @@ func (h *ConversationBusinessHost) executePreparedBusinessAction(ctx context.Con
 	in.IdempotencyKey = request.IdempotencyKey
 	in.RequestID = "conversation:" + request.RunID + ":" + request.CallID
 	in.Principal.RequestID = in.RequestID
-	in.Principal.CorrelationID = request.RunID
 	if reconcile {
 		stored, err := h.actions.InspectInvocation(ctx, in)
 		if err != nil {

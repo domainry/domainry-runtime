@@ -141,8 +141,10 @@ func NewAutomationApplicationService(dependencies AutomationApplicationDependenc
 			return service.schema(ctx, principal).Integrations.Connectors
 		},
 		ValidateDefinition: service.validateRule,
-		ExecuteRule:        service.executeRule,
-		Audit:              service.audit,
+		ExecuteRule: func(ctx context.Context, rule automationmodel.AutomationRuleSchema, phase string, input, before, candidate map[string]any, record *recordmodel.Record, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
+			return service.executeRule(ctx, rule, phase, "", input, before, candidate, record, principal)
+		},
+		Audit: service.audit,
 	})
 	return service
 }
@@ -172,22 +174,21 @@ func (s *AutomationApplicationService) RunBefore(ctx context.Context, objectKey,
 			trace.DurationMS = time.Since(started).Milliseconds()
 			if s.executionRepo != nil {
 				_, _ = s.executionRepo.InsertExecution(execCtx, automationWorkspaceID(principal), automationmodel.AutomationRuleExecution{
-					RunID:         trace.ExecutionID,
-					WorkspaceID:   automationWorkspaceID(principal),
-					RuleKey:       rule.Key,
-					ObjectKey:     rule.ObjectKey,
-					RecordID:      recordID,
-					Phase:         "before",
-					Operation:     rule.Trigger.Operation,
-					Status:        trace.Status,
-					ActorID:       principal.UserID,
-					RoleKey:       principal.RoleKey,
-					RequestID:     principal.RequestID,
-					CorrelationID: valueOrDefault(principal.RequestID, trace.ExecutionID),
-					DurationMS:    trace.DurationMS,
-					ErrorCode:     trace.ErrorCode,
-					Candidate:     recordvalidation.RecordCloneData(candidate),
-					Trace:         automationbusiness.TraceMap(trace),
+					RunID:       trace.ExecutionID,
+					WorkspaceID: automationWorkspaceID(principal),
+					RuleKey:     rule.Key,
+					ObjectKey:   rule.ObjectKey,
+					RecordID:    recordID,
+					Phase:       "before",
+					Operation:   rule.Trigger.Operation,
+					Status:      trace.Status,
+					ActorID:     principal.UserID,
+					RoleKey:     principal.RoleKey,
+					RequestID:   principal.RequestID,
+					DurationMS:  trace.DurationMS,
+					ErrorCode:   trace.ErrorCode,
+					Candidate:   recordvalidation.RecordCloneData(candidate),
+					Trace:       automationbusiness.TraceMap(trace),
 				})
 			}
 			return trace, executeErr
@@ -247,13 +248,11 @@ func (s *AutomationApplicationService) RunWebhookAutomation(ctx context.Context,
 	if !found || !rule.Enabled || rule.Trigger.Phase != "webhook" || strings.TrimSpace(rule.Trigger.Source) != request.Provider || strings.TrimSpace(rule.Trigger.Operation) != request.EventType {
 		return automationprojection.AutomationRuleTrace{}, automationError(apperror.KindBadRequest, "backend.automation.webhook_rule_not_found", nil, "rule", request.RuleKey)
 	}
-	principal.RequestID = request.EventID
-	principal.CorrelationID = valueOrDefault(principal.CorrelationID, request.EventID)
 	principal.CausationID = request.EventID
 	input := recordvalidation.RecordCloneData(request.Input)
 	record := recordmodel.Record{RecordID: request.EventID, Data: recordvalidation.RecordCloneData(input)}
 	automationruntime.AutomationBindRecordVersion(&record, request.EventID+":"+request.MappingRevision)
-	return s.executeRule(ctx, rule, "webhook", input, nil, recordvalidation.RecordCloneData(input), &record, principal)
+	return s.executeRule(ctx, rule, "webhook", request.EventID, input, nil, recordvalidation.RecordCloneData(input), &record, principal)
 }
 
 func (s *AutomationApplicationService) ExecuteBeforeRule(execCtx context.Context, rule automationmodel.AutomationRuleSchema, input, before, candidate map[string]any, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
@@ -263,17 +262,18 @@ func (s *AutomationApplicationService) ExecuteBeforeRule(execCtx context.Context
 	return executeBeforeRule(execCtx, rule, input, before, candidate, principal)
 }
 
-func (s *AutomationApplicationService) executeRule(execCtx context.Context, rule automationmodel.AutomationRuleSchema, phase string, input, before, candidate map[string]any, record *recordmodel.Record, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
-	return s.executeRuleWithPersistence(execCtx, rule, phase, input, before, candidate, record, principal, nil)
+func (s *AutomationApplicationService) executeRule(execCtx context.Context, rule automationmodel.AutomationRuleSchema, phase, eventID string, input, before, candidate map[string]any, record *recordmodel.Record, principal principalmodel.Principal) (automationprojection.AutomationRuleTrace, error) {
+	return s.executeRuleWithPersistence(execCtx, rule, phase, eventID, input, before, candidate, record, principal, nil)
 }
 
-func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx context.Context, rule automationmodel.AutomationRuleSchema, phase string, input, before, candidate map[string]any, record *recordmodel.Record, principal principalmodel.Principal, persist func(context.Context, automationmodel.AutomationRuleExecution) error) (automationprojection.AutomationRuleTrace, error) {
+func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx context.Context, rule automationmodel.AutomationRuleSchema, phase, eventID string, input, before, candidate map[string]any, record *recordmodel.Record, principal principalmodel.Principal, persist func(context.Context, automationmodel.AutomationRuleExecution) error) (automationprojection.AutomationRuleTrace, error) {
 	if strings.TrimSpace(phase) == "before" {
 		return executeBeforeRule(execCtx, rule, input, before, candidate, principal)
 	}
+	eventID = strings.TrimSpace(eventID)
 	actionContext := automationmodel.AutomationRenderContext{}
 	return NewAutomationRuleApplicationServiceWithWorker(s.executionRepo, s.workerRepo, s.audit, s.worker).Execute(execCtx, RuleExecutionRequest{
-		Rule: rule, Phase: phase, Input: input, Before: before, Candidate: candidate, Record: record,
+		Rule: rule, Phase: phase, EventID: eventID, Input: input, Before: before, Candidate: candidate, Record: record,
 		Principal: principal, WorkspaceID: automationWorkspaceID(principal),
 		Initialize: func() {
 			actionContext = automationmodel.AutomationRenderContext{
@@ -283,7 +283,7 @@ func (s *AutomationApplicationService) executeRuleWithPersistence(execCtx contex
 				Before:  recordvalidation.RecordCloneData(before),
 				Actor:   map[string]any{"user_id": principal.UserID, "role": principal.RoleKey},
 				Event: map[string]any{
-					"id":         principal.RequestID,
+					"id":         eventID,
 					"phase":      phase,
 					"operation":  rule.Trigger.Operation,
 					"object_key": rule.ObjectKey,

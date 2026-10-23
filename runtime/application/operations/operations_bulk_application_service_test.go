@@ -105,15 +105,18 @@ func TestOperationsBulkEnforcesExplicitBoundedFilter(t *testing.T) {
 func TestOperationsDeadLetterActionReplaysReceiptWithoutDuplicateOwnerMutation(t *testing.T) {
 	sequence := 0
 	service := NewOperationsApplicationService(&operationsRepositoryProbe{receipts: map[string]operationsmodel.OperationsReceipt{}}, nil, nil, func() string { sequence++; return fmt.Sprintf("dead-letter-%d", sequence) })
-	owner := &bulkDeadLetterOwnerProbe{items: map[string]OperationsDeadLetterItem{"item-1": {Owner: "probe", ID: "item-1", Status: "dead_letter", CorrelationID: "correlation-1", BusinessKey: "order-42", EvidenceRef: "evidence-7", AllowedActions: []string{"resolve"}}}}
+	owner := &bulkDeadLetterOwnerProbe{items: map[string]OperationsDeadLetterItem{"item-1": {Owner: "probe", ID: "item-1", Status: "dead_letter", RelatedIDs: []string{"operation-1"}, BusinessKey: "order-42", EvidenceRef: "evidence-7", AllowedActions: []string{"resolve"}}}}
 	if err := service.RegisterDeadLetterOwner("probe", owner); err != nil {
 		t.Fatal(err)
 	}
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "admin"}}, accessfixture.Bundle{Permissions: []string{"runtime.operations.resolve_dead_letter"}})
 	request := OperationsDeadLetterActionRequest{Reason: "verified and resolved", Reference: "INC-42"}
 	first, err := service.ActOnDeadLetter(t.Context(), "probe", "item-1", "resolve", request, "resolve-key", principal)
-	if err != nil || owner.acts != 1 || first.Item.CorrelationID != "correlation-1" || first.Item.BusinessKey != "order-42" || first.Item.EvidenceRef != "evidence-7" {
+	if err != nil || owner.acts != 1 || len(first.Item.RelatedIDs) != 1 || first.Item.RelatedIDs[0] != "operation-1" || first.Item.BusinessKey != "order-42" || first.Item.EvidenceRef != "evidence-7" {
 		t.Fatalf("first=%#v acts=%d err=%v", first, owner.acts, err)
+	}
+	if fmt.Sprint(first.Receipt.RelatedIDs) != "[item-1 operation-1 order-42]" || fmt.Sprint(first.Receipt.Evidence) != "[evidence-7]" {
+		t.Fatalf("receipt business identities=%#v evidence=%#v", first.Receipt.RelatedIDs, first.Receipt.Evidence)
 	}
 	if len(owner.operationIDs) != 1 || owner.operationIDs[0] != first.Receipt.Command.OperationID {
 		t.Fatalf("owner operation ids=%v receipt=%q", owner.operationIDs, first.Receipt.Command.OperationID)

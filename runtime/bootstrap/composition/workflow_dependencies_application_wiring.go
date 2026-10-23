@@ -74,7 +74,7 @@ func workflowDependencies(records *runtimeAssembly) workflowapplication.Workflow
 				TaskKey: preparation.Contract.TaskKey, TaskVersion: preparation.Contract.TaskVersion,
 				Identity: agentsdk.AgentTaskIdentity{Mode: preparation.Contract.Identity.Mode, PrincipalKey: preparation.Contract.Identity.PrincipalKey}, Input: preparation.Input,
 				AllowedObjects: preparation.Contract.AllowedObjects, AllowedActions: preparation.Contract.AllowedActions, AllowedOutcomes: preparation.Contract.AllowedOutcomes,
-				TimeoutSeconds: preparation.Contract.TimeoutSeconds, MaxAttempts: maxAttempts, Initiator: preparation.Initiator, CorrelationID: preparation.CorrelationID,
+				TimeoutSeconds: preparation.Contract.TimeoutSeconds, MaxAttempts: maxAttempts, Initiator: preparation.Initiator,
 			})
 			if err != nil {
 				return agentsdk.TaskResult{}, err

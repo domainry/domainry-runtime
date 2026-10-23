@@ -138,7 +138,7 @@ func modulePermissionDeniedAuditEvent(route modulehttp.Route, request *http.Requ
 			"action_key": route.Action.Key, "permission_key": permissionKey,
 			"method": request.Method, "route_template": routeTemplate,
 			"result": "denied", "reason": "permission_denied", "error_code": "auth.permission_denied",
-			"request_id": requestcontext.RequestID(request.Context()), "correlation_id": requestcontext.CorrelationID(request.Context()),
+			"request_id": requestcontext.RequestID(request.Context()),
 		},
 	}
 }

@@ -63,15 +63,15 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	}
 	contract := *node.Contract.AgentTask
 	instance := e.newNodeInstance(ctx, process.WorkspaceID, process.ProcessID, node, "waiting", workflowpolicy.WorkflowCloneMap(process.Variables), nil)
-	nodeInstanceID, runID := workflowAgentTaskCorrelation(process.ProcessID, node.ID, instance.Iteration)
+	nodeInstanceID, runID := workflowAgentTaskIdentity(process.ProcessID, node.ID, instance.Iteration)
 	instance.NodeInstanceID = nodeInstanceID
 	input := renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal)
 	instance.Input = workflowpolicy.WorkflowCloneMap(input)
 	instance.Input["agent_task_run_id"] = runID
-	// Persist the exact workflow correlation before making the Agent task
+	// Persist the exact workflow task identity before making the Agent task
 	// runnable. A fast task may complete as soon as StartAgentTask returns; if
 	// the waiting node is inserted afterwards, its terminal callback cannot be
-	// correlated and the workflow is stranded even though the task succeeded.
+	// matched to its node and the workflow is stranded even though the task succeeded.
 	if err := stateStore.CommitWorkflowState(ctx, transactionmodel.WorkflowStateCommit{
 		WorkspaceID: process.WorkspaceID, InsertNodes: []workflowmodel.WorkflowNodeInstance{instance},
 	}); err != nil {
@@ -80,7 +80,7 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	result, err := e.runtime.dependencies.StartAgentTask(ctx, WorkflowAgentTaskPreparation{
 		RunID: runID, WorkspaceID: process.WorkspaceID, ProcessID: process.ProcessID, NodeInstanceID: instance.NodeInstanceID,
 		NodeID: node.ID, Iteration: instance.Iteration, DefinitionVersionID: process.DefinitionVersionID, DefinitionSnapshotHash: process.DefinitionHash,
-		Contract: contract, Input: input, Initiator: principal, CorrelationID: principal.CorrelationID,
+		Contract: contract, Input: input, Initiator: principal,
 	})
 	if err != nil {
 		e.failPreparedAgentTaskNode(ctx, instance, serviceErrorCode(err))
@@ -111,7 +111,7 @@ func (e *WorkflowProcessEngine) failPreparedAgentTaskNode(ctx context.Context, i
 	_ = e.runtime.dependencies.Processes.UpdateNode(ctx, instance.WorkspaceID, instance)
 }
 
-func workflowAgentTaskCorrelation(processID, nodeID string, iteration int) (string, string) {
+func workflowAgentTaskIdentity(processID, nodeID string, iteration int) (string, string) {
 	seed := fmt.Sprintf("%s:%s:%d", strings.TrimSpace(processID), strings.TrimSpace(nodeID), iteration)
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(seed)))
 	return workflowProcessID(context.Background(), "node"), "agent_task_" + hash[:24]
@@ -328,10 +328,8 @@ func (e *WorkflowProcessEngine) timerContinuationPrincipal(ctx context.Context, 
 	if !principal.Known || principal.AccessBundle == nil || strings.TrimSpace(principal.WorkspaceID) != strings.TrimSpace(process.WorkspaceID) || strings.TrimSpace(principal.UserID) != userID || strings.TrimSpace(principal.RoleKey) != roleKey {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.initiator_identity_revoked", nil, nil)
 	}
-	principal.RequestID, principal.CorrelationID, principal.CausationID = worker.RequestID, worker.CorrelationID, worker.CausationID
-	if strings.TrimSpace(principal.RequestID) == "" {
-		principal.RequestID = process.ProcessID + ":timer"
-	}
+	principal.RequestID = requestcontext.RequestIDOrNew(requestcontext.WithRequestID(ctx, worker.RequestID))
+	principal.CausationID = worker.CausationID
 	return principal, nil
 }
 

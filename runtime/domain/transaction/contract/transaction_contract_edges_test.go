@@ -40,7 +40,6 @@ func TestRegisterAfterCommitRejectsMissingRegistryAndInvalidHooks(t *testing.T) 
 func TestTransactionRetryIdentityHandlesNilAndIncompleteContexts(t *testing.T) {
 	complete := TransactionRetryIdentity{
 		IdempotencyScope: TransactionIdempotencyScope{WorkspaceID: "workspace", UseCase: "record.update", ResourceType: "record", Key: "key"},
-		CorrelationID:    "correlation",
 	}
 	if ctx := WithTransactionRetryIdentity(nil, complete); ctx != nil {
 		t.Fatalf("nil context became %#v", ctx)
@@ -53,7 +52,7 @@ func TestTransactionRetryIdentityHandlesNilAndIncompleteContexts(t *testing.T) {
 		t.Fatalf("nil context identity=%#v ok=%v", identity, ok)
 	}
 	stored := WithTransactionRetryIdentity(t.Context(), complete)
-	if identity, ok := TransactionRetryIdentityFromContext(stored); !ok || !identity.IsComplete() || identity.CorrelationID != "correlation" {
+	if identity, ok := TransactionRetryIdentityFromContext(stored); !ok || !identity.IsComplete() {
 		t.Fatalf("stored identity=%#v ok=%v", identity, ok)
 	}
 }

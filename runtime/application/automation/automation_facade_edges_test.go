@@ -261,7 +261,7 @@ func TestAutomationFacadeExecuteOutboxValidatesScopeRuleAndExecutes(t *testing.T
 		return notificationmodel.NotificationEvent{EventType: intent.EventType}, nil
 	}
 	service.commitNotification = automationNotificationCommitterStub{}
-	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", Rule: afterRule, RecordVersion: "v2", Record: recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role", RequestID: "request"})}
+	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{RuleKey: "after", Rule: afterRule, RecordVersion: "v2", Record: recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "ready"}}, ActorUserID: "user", ActorRoleKey: "role"})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestAutomationAfterInstructionCanRenderStableEventID(t *testing.T) {
 	revision := "2026-09-29T08:00:00Z"
 	message := publicationmodel.Message{WorkspaceID: "workspace-1", Payload: automationbusiness.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
 		ID: eventID, RuleKey: rule.Key, Rule: rule, RecordVersion: "v1", Record: recordmodel.Record{RecordID: "order-1", Data: map[string]any{"status": "ready"}, UpdatedAt: revision},
-		ActorUserID: "user", ActorRoleKey: "role", RequestID: "request", IdentityPolicy: "revalidate_initiator",
+		ActorUserID: "user", ActorRoleKey: "role", IdentityPolicy: "revalidate_initiator",
 	})}
 	if err := service.ExecuteOutboxMessage(t.Context(), message); err != nil {
 		t.Fatal(err)

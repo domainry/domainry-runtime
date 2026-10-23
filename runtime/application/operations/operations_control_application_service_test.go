@@ -89,7 +89,7 @@ func TestOperationsControlPersistsSystemStateAndReceipt(t *testing.T) {
 	if !result.Control.Active() || result.Control.Revision != 1 || result.Receipt.Command.Status != operationsmodel.OperationsStatusSucceeded || result.Receipt.Command.Scope.SystemPurpose != operationsmodel.OperationsSystemPurposeRuntimeControl {
 		t.Fatalf("result=%#v", result)
 	}
-	if result.Receipt.Correlation == "" || len(result.Receipt.RelatedIDs) == 0 || len(result.Receipt.Evidence) == 0 || result.Receipt.NextAction == "" {
+	if len(result.Receipt.RelatedIDs) == 0 || len(result.Receipt.Evidence) == 0 || result.Receipt.NextAction == "" {
 		t.Fatalf("terminal receipt missing recovery evidence: %#v", result.Receipt)
 	}
 	replayed, err := service.Set(t.Context(), OperationsControlRequest{Kind: operationsmodel.OperationsControlMaintenance, Owner: "runtime", Active: true, Reason: "restore drill", Reference: "CHG-42"}, "maintenance-1", principal)

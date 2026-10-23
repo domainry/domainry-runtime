@@ -91,7 +91,7 @@ func TestRuntimePublicationDeliveryExecutesAutomationLocally(t *testing.T) {
 	payload, _ := json.Marshal(automationservice.LifecycleEventPayload(automationmodel.AutomationLifecycleEvent{
 		ID: "event-1", RuleKey: rule.Key, Rule: rule, ObjectKey: rule.ObjectKey, Operation: rule.Trigger.Operation,
 		RecordID: "record-1", RecordVersion: "version-1", Record: recordmodel.Record{RecordID: "record-1", Data: map[string]any{"status": "ready"}},
-		ActorUserID: "user-1", ActorRoleKey: "sales", RequestID: "request-1", IdentityPolicy: "revalidate_initiator",
+		ActorUserID: "user-1", ActorRoleKey: "sales", IdentityPolicy: "revalidate_initiator",
 	}))
 	receipt, err := delivery.Accept(t.Context(), integrationsdk.DeliveryRequest{
 		MessageID: "message-1", DeduplicationKey: "event-1", WorkspaceID: "workspace-1",

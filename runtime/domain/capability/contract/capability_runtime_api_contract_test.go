@@ -10,7 +10,7 @@ import (
 )
 
 func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
-	if RuntimeAPIContractVersion != "runtime-domain-api-v1" {
+	if RuntimeAPIContractVersion != "runtime-domain-api-v2" {
 		t.Fatalf("unexpected Runtime API contract version %q", RuntimeAPIContractVersion)
 	}
 	if hash := RuntimeAPIContractHash(); len(hash) != 64 || hash != RuntimeAPIContractHash() {
@@ -37,6 +37,27 @@ func TestRuntimeAPIContractIdentityIsStable(t *testing.T) {
 	digest := sha256.Sum256(payload)
 	if calculated := hex.EncodeToString(digest[:]); calculated != RuntimeAPIContractHash() {
 		t.Fatalf("published Runtime API content hash=%q want=%q", calculated, RuntimeAPIContractHash())
+	}
+}
+
+func TestRuntimeAPIContractPublishesRequestIDAsTraceAlias(t *testing.T) {
+	var document struct {
+		Identity struct {
+			RequestID map[string]string `json:"request_id"`
+			Trace     struct {
+				Propagation    string   `json:"propagation"`
+				RequestHeaders []string `json:"request_headers"`
+			} `json:"trace"`
+		} `json:"identity"`
+	}
+	if err := json.Unmarshal(RuntimeAPIContractDocument(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Identity.RequestID["request_header"] != "X-Request-ID" || document.Identity.RequestID["response_header"] != "X-Request-ID" || document.Identity.RequestID["value"] != "trace_id" || document.Identity.RequestID["when_absent"] != "server_generated" {
+		t.Fatalf("request identity contract=%v", document.Identity.RequestID)
+	}
+	if document.Identity.Trace.Propagation != "w3c" || !reflect.DeepEqual(document.Identity.Trace.RequestHeaders, []string{"traceparent", "tracestate", "baggage"}) {
+		t.Fatalf("trace identity contract=%+v", document.Identity.Trace)
 	}
 }
 

@@ -13,7 +13,7 @@ func TestMutationContextCapturesImmutableIdentitySourceAuthorityAndAssurance(t *
 	context, err := NewMutationContext(MutationContextInput{
 		WorkspaceID: " workspace-a ", ActorID: "user-a", RoleKey: "operator", Permissions: permissions,
 		IdentityVersion: "identity-v7", Source: MutationSourceAction, ActionKey: " order.submit ",
-		RequestID: "request-1", IdempotencyKey: "idem-1", CorrelationID: "correlation-1", CausationID: "cause-1",
+		RequestID: "request-1", IdempotencyKey: "idem-1", CausationID: "cause-1",
 		ApplicationSchemaRevision: "revision-9", EffectAuthority: authority, AssuranceEvidence: assurance,
 	})
 	if err != nil {
@@ -34,19 +34,18 @@ func TestMutationContextCapturesImmutableIdentitySourceAuthorityAndAssurance(t *
 }
 
 func TestMutationContextValidatesSourceIdentityAndRequiredSnapshotCoordinates(t *testing.T) {
-	base := MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: MutationSourceHTTP}
+	base := MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceHTTP}
 	for _, test := range []struct {
 		name  string
 		input MutationContextInput
 		field string
 	}{
-		{name: "workspace", input: MutationContextInput{Source: MutationSourceHTTP, CorrelationID: "correlation", ApplicationSchemaRevision: "revision"}, field: "workspace_id"},
-		{name: "source", input: MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: "unknown"}, field: "source"},
-		{name: "correlation", input: MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceHTTP}, field: "correlation_id"},
-		{name: "revision", input: MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", Source: MutationSourceHTTP}, field: "metadata_revision"},
-		{name: "action key", input: MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: MutationSourceAction}, field: "action_key"},
-		{name: "workflow key", input: MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: MutationSourceWorkflow}, field: "workflow_key"},
-		{name: "automation key", input: MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: MutationSourceAutomation}, field: "automation_key"},
+		{name: "workspace", input: MutationContextInput{Source: MutationSourceHTTP, ApplicationSchemaRevision: "revision"}, field: "workspace_id"},
+		{name: "source", input: MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: "unknown"}, field: "source"},
+		{name: "revision", input: MutationContextInput{WorkspaceID: "workspace", Source: MutationSourceHTTP}, field: "metadata_revision"},
+		{name: "action key", input: MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceAction}, field: "action_key"},
+		{name: "workflow key", input: MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceWorkflow}, field: "workflow_key"},
+		{name: "automation key", input: MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceAutomation}, field: "automation_key"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewMutationContext(test.input)
@@ -66,7 +65,7 @@ func TestMutationContextValidatesSourceIdentityAndRequiredSnapshotCoordinates(t 
 }
 
 func TestMutationContextWildcardEffectAuthority(t *testing.T) {
-	context, err := NewMutationContext(MutationContextInput{WorkspaceID: "workspace", CorrelationID: "correlation", ApplicationSchemaRevision: "revision", Source: MutationSourceInternal, EffectAuthority: map[string][]string{"projection": {"*"}}})
+	context, err := NewMutationContext(MutationContextInput{WorkspaceID: "workspace", ApplicationSchemaRevision: "revision", Source: MutationSourceInternal, EffectAuthority: map[string][]string{"projection": {"*"}}})
 	if err != nil || !context.AllowsEffect("projection", "any_field") || context.AllowsEffect("other", "any_field") {
 		t.Fatalf("context=%+v err=%v", context, err)
 	}
@@ -80,14 +79,14 @@ func TestTransactionModelRemainingValueAndCloneEdges(t *testing.T) {
 	context, err := NewMutationContext(MutationContextInput{
 		WorkspaceID: "workspace", ActorID: "actor", RoleKey: "role", Permissions: []string{"", "read", "read"},
 		IdentityVersion: "v1", Source: MutationSourceWorkflow, WorkflowKey: "workflow",
-		RequestID: "request", IdempotencyKey: "idem", CorrelationID: "correlation", CausationID: "cause", ApplicationSchemaRevision: "revision",
+		RequestID: "request", IdempotencyKey: "idem", CausationID: "cause", ApplicationSchemaRevision: "revision",
 		EffectAuthority:   map[string][]string{"": {"ignored"}, "order": {"status"}},
 		AssuranceEvidence: map[string]string{"": "ignored", " method ": " otp "},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if context.IdentityVersion() != "v1" || context.WorkflowKey() != "workflow" || context.AutomationKey() != "" || context.RequestID() != "request" || context.IdempotencyKey() != "idem" || context.CorrelationID() != "correlation" || context.CausationID() != "cause" {
+	if context.IdentityVersion() != "v1" || context.WorkflowKey() != "workflow" || context.AutomationKey() != "" || context.RequestID() != "request" || context.IdempotencyKey() != "idem" || context.CausationID() != "cause" {
 		t.Fatalf("context getters=%+v", context)
 	}
 	if !context.HasEffectAuthority() || len(context.EffectAuthority()) != 1 || context.AssuranceEvidence()["method"] != "otp" {

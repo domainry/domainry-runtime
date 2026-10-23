@@ -141,7 +141,7 @@ func (s *AgentAuthorizationApplicationService) ResolveExecutionIdentity(ctx cont
 	if workspaceErr != nil || executionWorkspace != initiatorWorkspace {
 		return principalmodel.Principal{}, agentsdk.ExecutionIdentity{}, agentAuthorizationError("agent.authorization.workspace_removed", execution.AuthorizationRevision)
 	}
-	execution.RequestID, execution.CorrelationID, execution.CausationID = initiator.RequestID, initiator.CorrelationID, initiator.CausationID
+	execution.RequestID, execution.CausationID = initiator.RequestID, initiator.CausationID
 	identity.Execution = agentPrincipalReference(execution)
 	return execution, identity, nil
 }
