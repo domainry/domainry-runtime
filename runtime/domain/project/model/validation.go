@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
@@ -351,7 +352,7 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 			}
 			fields = append(fields, definitionmodel.FieldSchema{
 				Key: fieldKey, Name: field.Name, Description: field.Description, Type: field.Type, I18n: field.I18n,
-				Validation: definitionmodel.FieldValidation{MinLength: field.Validation.MinLength, MaxLength: field.Validation.MaxLength, Min: field.Validation.Min, Max: field.Validation.Max, Pattern: field.Validation.Pattern, Options: append([]string(nil), field.Validation.Options...), Target: relationFieldTarget(field)},
+				Validation: definitionmodel.FieldValidation{MinLength: field.Validation.MinLength, MaxLength: field.Validation.MaxLength, Min: field.Validation.Min, Max: field.Validation.Max, Pattern: field.Validation.Pattern, Options: append([]string(nil), field.Validation.Options...), Target: runtimeRelationFieldTarget(model, field)},
 				Required:   field.Required, Unique: field.Unique, Default: defaultValue, Sensitive: field.Sensitive, Config: config,
 			})
 		}
@@ -374,6 +375,16 @@ func RuntimeObjects(model Model) ([]definitionmodel.ObjectSchema, error) {
 		})
 	}
 	return result, nil
+}
+
+func runtimeRelationFieldTarget(model Model, field Field) string {
+	target := relationFieldTarget(field)
+	if target == "organization_unit" {
+		if _, declaredByProduct := model.Objects[target]; !declaredByProduct {
+			return definitioncontract.IdentityOrganizationUnitObjectKey
+		}
+	}
+	return target
 }
 
 func ContentHash(model Model) (string, error) {

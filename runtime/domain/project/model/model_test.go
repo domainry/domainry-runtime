@@ -3,6 +3,8 @@ package projectmodel
 import (
 	"strings"
 	"testing"
+
+	definitioncontract "github.com/domainry/domainry-runtime/runtime/domain/definition/contract"
 )
 
 func validModelJSON() string {
@@ -71,6 +73,36 @@ func TestRuntimeObjectsPreserveCompactJSONArrayShape(t *testing.T) {
 		}
 	}
 	t.Fatal("recipients field was not projected")
+}
+
+func TestRuntimeObjectsResolveIdentityOrganizationUnitRelation(t *testing.T) {
+	model, err := Decode([]byte(strings.Replace(
+		validModelJSON(),
+		`"objects":{"customer":{"name":"Customer","description":"","fields":{"name":"text!"}}}`,
+		`"objects":{"customer":{"name":"Customer","description":"","fields":{"name":"text!"}},"site":{"name":"Site","fields":{"organization_unit":"relation!->organization_unit"}}}`,
+		1,
+	)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, err := RuntimeObjects(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, object := range objects {
+		if object.Key != "site" {
+			continue
+		}
+		for _, field := range object.Fields {
+			if field.Key == "organization_unit" {
+				if field.Validation.Target != definitioncontract.IdentityOrganizationUnitObjectKey {
+					t.Fatalf("organization unit relation target=%q", field.Validation.Target)
+				}
+				return
+			}
+		}
+	}
+	t.Fatal("site.organization_unit was not compiled")
 }
 
 func TestDecodeRejectsDuplicateUnknownBehaviorAndPresentationFields(t *testing.T) {
