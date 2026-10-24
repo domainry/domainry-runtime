@@ -3,11 +3,14 @@ package runtimehost
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 )
 
@@ -128,5 +131,44 @@ func TestCheckModelDefersCodeOwnedPermissionClosure(t *testing.T) {
 	}
 	if projectResult.State != projectCheckStateInvalid || len(projectResult.Diagnostics) != 1 || projectResult.Diagnostics[0].Code != "project_model.permission_unknown" {
 		t.Fatalf("project result = %#v", projectResult)
+	}
+}
+
+func TestCheckProjectRequiresGatewayForExternalAuthorizationActions(t *testing.T) {
+	modelFile := filepath.Join(t.TempDir(), "model.json")
+	if err := os.WriteFile(modelFile, []byte(`{
+  "schema_version":"1",
+  "project":{"key":"facility","name":"Facility","time_zone":"UTC","initial_workspace_administrator_role":"administrator"},
+  "objects":{},
+  "roles":{"administrator":{"name":"Administrator","permissions":["im.messages.send;all"]}},
+  "identity_profiles":{}
+}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	action := actioncontract.ActionDefinition{
+		Key: "im.messages.send", Owner: "module:im", SourceKind: "module_http",
+		CapabilityKey: "im", CapabilityLabel: "IM", OperationKey: "send", OperationLabel: "Send", Label: "Send",
+		Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic}, Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
+		HTTP: &actioncontract.HTTPBinding{Method: http.MethodPost, RouteTemplate: "/im/messages"}, Permission: &actioncontract.PermissionDefinition{
+			Key: "im.messages.send", Owner: "module:im", ResourceKey: "im.messages", OperationKey: "send", Label: "Send", Category: "IM",
+			GrantMode: actioncontract.PermissionGrantDirect, LifecycleStatus: actioncontract.LifecycleActive,
+		},
+		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskMedium, IdempotencyDecision: "caller_key_required", AuditClass: "im_http", LifecycleStatus: actioncontract.LifecycleActive,
+	}
+	options := minimalHostOptions()
+	options.ModelFile = modelFile
+	options.ProjectExtensions = func(ConnectorGateway) (runtimeext.ProjectExtensions, error) {
+		return runtimeext.ProjectExtensions{Definitions: runtimeext.ProjectDefinitions{ExternalAuthorizationActions: []actioncontract.ActionDefinition{action}}}, nil
+	}
+
+	missingGateway := CheckProject(options)
+	if missingGateway.State != projectCheckStateInvalid || len(missingGateway.Diagnostics) != 1 || missingGateway.Diagnostics[0].Code != "project_definition.external_authorization_http_required" {
+		t.Fatalf("missing gateway result=%#v", missingGateway)
+	}
+
+	options.ProjectHTTP = func(runtimeengine.Engine) http.Handler { return http.NotFoundHandler() }
+	withGateway := CheckProject(options)
+	if withGateway.State != projectCheckStateValid || len(withGateway.Diagnostics) != 0 {
+		t.Fatalf("gateway result=%#v", withGateway)
 	}
 }

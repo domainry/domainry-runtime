@@ -488,6 +488,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	)
 	authorizationModuleActions, err := moduleBindings.AuthorizationActions()
 	mustCompleteRuntimeStartup(err)
+	authorizationModuleActions = append(authorizationModuleActions, projectDefinitions.ExternalAuthorizationActions...)
 	if identityActions, embedded := identityBinding.(actioncontract.Provider); embedded {
 		identityAuthorizationActions, actionsErr := identityActions.AuthorizationActions()
 		mustCompleteRuntimeStartup(actionsErr)

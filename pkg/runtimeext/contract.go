@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v57"
-	ContractSHA256  = "6a3575f1b3316fab23bcdf14ebf60b595deab57efd324d3fb8af9c4901a87496"
+	ContractVersion = "runtimeext-v58"
+	ContractSHA256  = "53ca22e70dfa074dae87fd22a7e73bc9bca2c6f3f5c41fbbe85b9cb249784eca"
 )
 
-const contractDefinitionV57 = `runtimeext-v57
+const contractDefinitionV58 = `runtimeext-v58
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -132,7 +132,8 @@ ProjectExtensions.BusinessHandlers=[]BusinessHandler
 ProjectExtensions.AssigneeResolvers=[]AssigneeResolver
 ProjectExtensions.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
 ProjectExtensions.Definitions=ProjectDefinitions
-ProjectDefinitions=code_owned_behavior_only|reports|public_resources|workflows|business_calendars|schedules|automation|notification|integration_mappings|agents
+ProjectDefinitions=code_owned_behavior_only|reports|public_resources|workflows|business_calendars|schedules|automation|notification|integration_mappings|agents|external_authorization_actions
+ExternalAuthorizationAction=source_owned_complete_manifest|module_http|authenticated|exact_permission|project_http_gateway
 ProjectDefinitionRegistry=stable_key|typed_descriptor|computed_sha256|freeze|duplicate_rejection|detached_snapshot
 ReportDefinition=ReportSchema|OperationStateExamples|SensitiveFieldPolicies|ExportControls|single_immutable_report_definition|object_sql_owned_in_go
 ProjectExtensionDescriptor=closed_kind_envelope|business_handler|workflow_assignee_resolver|workspace_bootstrap
@@ -191,7 +192,7 @@ func stableContractTypeName(current reflect.Type) string {
 // by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV57)
+	definition.WriteString(contractDefinitionV58)
 	for _, current := range contractStructTypes() {
 		definition.WriteString(current.Name())
 		definition.WriteByte('{')

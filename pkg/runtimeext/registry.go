@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
 	reportmodel "github.com/domainry/domainry-report-sdk/model"
@@ -40,23 +41,28 @@ type ProjectExtensions struct {
 }
 
 // ProjectDefinitions is the sole code-owned source for executable product
-// behavior. None of these definitions are accepted from model.json.
+// behavior and external module authorization manifests. None of these
+// definitions are accepted from model.json.
 type ProjectDefinitions struct {
-	Reports                []ReportDefinition
-	PublicResources        []PublicResourceDefinition
-	Workflows              []definitionmodel.WorkflowSchema
-	BusinessCalendars      []businesscalendarmodel.BusinessCalendarSchema
-	Schedules              []schedulersdk.Definition
-	AutomationRules        []automationmodel.AutomationRuleSchema
-	NotificationTemplates  []notificationcontract.NotificationTemplate
-	NotificationEventTypes []notificationcontract.NotificationEventType
-	NotificationRules      []notificationcontract.NotificationRule
-	IntegrationMappings    []integrationsdk.EventMappingRequirement
-	AgentSkills            []agentsdk.SkillSchema
-	Agents                 []agentsdk.AgentSchema
-	AgentTasks             []agentsdk.AgentTaskDefinition
-	AgentEntrypoints       []agentsdk.AgentEntrypointAssignment
-	AgentServicePrincipals []agentsdk.AgentServicePrincipalBinding
+	Reports                      []ReportDefinition
+	PublicResources              []PublicResourceDefinition
+	Workflows                    []definitionmodel.WorkflowSchema
+	BusinessCalendars            []businesscalendarmodel.BusinessCalendarSchema
+	Schedules                    []schedulersdk.Definition
+	AutomationRules              []automationmodel.AutomationRuleSchema
+	NotificationTemplates        []notificationcontract.NotificationTemplate
+	NotificationEventTypes       []notificationcontract.NotificationEventType
+	NotificationRules            []notificationcontract.NotificationRule
+	IntegrationMappings          []integrationsdk.EventMappingRequirement
+	AgentSkills                  []agentsdk.SkillSchema
+	Agents                       []agentsdk.AgentSchema
+	AgentTasks                   []agentsdk.AgentTaskDefinition
+	AgentEntrypoints             []agentsdk.AgentEntrypointAssignment
+	AgentServicePrincipals       []agentsdk.AgentServicePrincipalBinding
+	// ExternalAuthorizationActions publishes the complete source-owned Action
+	// manifest for independently deployed modules reached through ProjectHTTP.
+	// Runtime reconciles authorization only and never executes these Actions.
+	ExternalAuthorizationActions []actioncontract.ActionDefinition
 }
 
 // PublicResourceDefinition binds one anonymous, revocable projection to its

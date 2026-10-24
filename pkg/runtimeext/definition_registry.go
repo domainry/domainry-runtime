@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	notificationcontract "github.com/domainry/domainry-notification-sdk/contract"
 	automationmodel "github.com/domainry/domainry-runtime/runtime/domain/automation/model"
@@ -43,6 +44,7 @@ const (
 	ProjectDefinitionAgentTask             = "agent_task"
 	ProjectDefinitionAgentEntrypoint       = "agent_entrypoint"
 	ProjectDefinitionAgentPrincipal        = "agent_service_principal"
+	ProjectDefinitionExternalAuthorization = "external_authorization_action"
 )
 
 type frozenProjectDefinitions struct {
@@ -61,6 +63,7 @@ type frozenProjectDefinitions struct {
 	agentTasks             map[string]agentsdk.AgentTaskDefinition
 	agentEntrypoints       map[string]agentsdk.AgentEntrypointAssignment
 	agentPrincipals        map[string]agentsdk.AgentServicePrincipalBinding
+	externalAuthorization  map[string]actioncontract.ActionDefinition
 	identities             map[string]ProjectDefinitionIdentity
 }
 
@@ -72,7 +75,8 @@ func newFrozenProjectDefinitions() frozenProjectDefinitions {
 		notificationEventTypes: map[string]notificationcontract.NotificationEventType{}, notificationRules: map[string]notificationcontract.NotificationRule{},
 		integrationMappings: map[string]integrationsdk.EventMappingRequirement{}, agentSkills: map[string]agentsdk.SkillSchema{}, agents: map[string]agentsdk.AgentSchema{},
 		agentTasks: map[string]agentsdk.AgentTaskDefinition{}, agentEntrypoints: map[string]agentsdk.AgentEntrypointAssignment{},
-		agentPrincipals: map[string]agentsdk.AgentServicePrincipalBinding{}, identities: map[string]ProjectDefinitionIdentity{},
+		agentPrincipals: map[string]agentsdk.AgentServicePrincipalBinding{}, externalAuthorization: map[string]actioncontract.ActionDefinition{},
+		identities: map[string]ProjectDefinitionIdentity{},
 	}
 }
 
@@ -258,6 +262,30 @@ func validateProjectDefinitions(input ProjectDefinitions) (frozenProjectDefiniti
 		}
 		result.agentPrincipals[key] = cloneDefinition(value)
 	}
+	externalAuthorizationRegistry := actioncontract.NewRegistry()
+	for _, value := range input.ExternalAuthorizationActions {
+		normalized, err := actioncontract.NormalizeDefinition(value)
+		if err != nil {
+			return result, fmt.Errorf("%w: external authorization action %s: %v", ErrProjectDefinitionInvalid, strings.TrimSpace(value.Key), err)
+		}
+		key := normalized.Key
+		if normalized.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || normalized.Permission == nil || normalized.HTTP == nil {
+			return result, fmt.Errorf("%w: external authorization action %s requires authenticated HTTP and an exact permission", ErrProjectDefinitionInvalid, key)
+		}
+		if !strings.HasPrefix(normalized.Owner, "module:") || normalized.SourceKind != "module_http" {
+			return result, fmt.Errorf("%w: external authorization action %s must be owned by a module_http source", ErrProjectDefinitionInvalid, key)
+		}
+		if err := externalAuthorizationRegistry.Register(normalized); err != nil {
+			return result, fmt.Errorf("%w: external authorization action %s: %v", ErrProjectDefinitionInvalid, key, err)
+		}
+		if err := register(ProjectDefinitionExternalAuthorization, key, normalized); err != nil {
+			return result, err
+		}
+		result.externalAuthorization[key] = actioncontract.CloneDefinition(normalized)
+	}
+	if err := externalAuthorizationRegistry.Freeze(); err != nil {
+		return result, fmt.Errorf("%w: freeze external authorization actions: %v", ErrProjectDefinitionInvalid, err)
+	}
 	return result, nil
 }
 
@@ -307,6 +335,7 @@ func (d *frozenProjectDefinitions) merge(candidate frozenProjectDefinitions) {
 	mergeMap(d.agentTasks, candidate.agentTasks)
 	mergeMap(d.agentEntrypoints, candidate.agentEntrypoints)
 	mergeMap(d.agentPrincipals, candidate.agentPrincipals)
+	mergeMap(d.externalAuthorization, candidate.externalAuthorization)
 	mergeMap(d.identities, candidate.identities)
 }
 
@@ -331,7 +360,7 @@ func (d frozenProjectDefinitions) snapshot() ProjectDefinitions {
 		Schedules: values(d.schedules), AutomationRules: values(d.automationRules), NotificationTemplates: values(d.notificationTemplates),
 		NotificationEventTypes: values(d.notificationEventTypes), NotificationRules: values(d.notificationRules), IntegrationMappings: values(d.integrationMappings),
 		AgentSkills: values(d.agentSkills), Agents: values(d.agents), AgentTasks: values(d.agentTasks), AgentEntrypoints: values(d.agentEntrypoints),
-		AgentServicePrincipals: values(d.agentPrincipals),
+		AgentServicePrincipals: values(d.agentPrincipals), ExternalAuthorizationActions: values(d.externalAuthorization),
 	}
 }
 

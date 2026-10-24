@@ -40,15 +40,19 @@ func ValidateComposition(model projectmodel.Model, registry *runtimeext.ProjectE
 		}
 	}
 	if registry != nil {
+		definitions := registry.ProjectDefinitions()
 		for _, handler := range registry.BusinessHandlerDescriptors() {
 			knownPermissions[strings.TrimSpace(handler.ActionKey)] = true
 		}
-		for _, report := range registry.ProjectDefinitions().Reports {
+		for _, external := range definitions.ExternalAuthorizationActions {
+			knownPermissions[strings.TrimSpace(external.Permission.Key)] = true
+		}
+		for _, report := range definitions.Reports {
 			for _, permission := range report.Report.RequiredPermissions {
 				knownPermissions[strings.TrimSpace(permission)] = true
 			}
 		}
-		for _, entrypoint := range registry.ProjectDefinitions().AgentEntrypoints {
+		for _, entrypoint := range definitions.AgentEntrypoints {
 			for _, permission := range entrypoint.RequiredPermissions {
 				knownPermissions[strings.TrimSpace(permission)] = true
 			}

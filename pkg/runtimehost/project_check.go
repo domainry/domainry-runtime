@@ -153,7 +153,14 @@ func prepareProjectModel(
 		return checkedProject{}, err
 	}
 	if projectExtensions != nil {
-		if err := attachPublicResources(&runtimeModel, projectExtensions.ProjectDefinitions().PublicResources); err != nil {
+		definitions := projectExtensions.ProjectDefinitions()
+		if len(definitions.ExternalAuthorizationActions) != 0 && options.ProjectHTTP == nil {
+			return checkedProject{}, &projectCheckBoundaryError{
+				code: "project_definition.external_authorization_http_required", path: "/definitions/external_authorization_actions", message: "external authorization actions require ProjectHTTP",
+				owner: "project_code", category: "composition", remediation: "mount the project-owned authenticated gateway through Options.ProjectHTTP",
+			}
+		}
+		if err := attachPublicResources(&runtimeModel, definitions.PublicResources); err != nil {
 			return checkedProject{}, &projectCheckBoundaryError{
 				code: "project_definition.public_resources_invalid", path: "/definitions/public_resources", message: "attach code-owned public resources",
 				owner: "project_code", category: "composition", remediation: "fix the code-owned public resource definitions", cause: err,
