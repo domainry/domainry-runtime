@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v59"
-	ContractSHA256  = "3f42120f3416892b5b0356c343d691258e473a4ee512b988f8ef104e9e8b98dd"
+	ContractVersion = "runtimeext-v60"
+	ContractSHA256  = "b85f27235c2f4b1fca6dd1d8fc440dfeb144f04a839a47cf22c503fd21931a45"
 )
 
-const contractDefinitionV59 = `runtimeext-v59
+const contractDefinitionV60 = `runtimeext-v60
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -137,7 +137,9 @@ ProjectExtensions.BusinessHandlers=[]BusinessHandler
 ProjectExtensions.AssigneeResolvers=[]AssigneeResolver
 ProjectExtensions.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
 ProjectExtensions.Definitions=ProjectDefinitions
-ProjectDefinitions=code_owned_behavior_only|reports|public_resources|workflows|business_calendars|schedules|automation|notification|integration_mappings|agents|external_authorization_actions
+ProjectDefinitions=code_owned_behavior_only|reports|public_resources|workflows|business_calendars|schedules|automation|notification|notification_native_push_targets|integration_connections|integration_mappings|agents|external_authorization_actions
+NotificationNativePushTargetDefinition=project_owned_device_target_binding|recipient_user|platform|sensitive_token|active_status|updated_at
+IntegrationConnectionRequirement=deployment_neutral|public_config_only|secret_refs_operator_owned
 ExternalAuthorizationAction=source_owned_complete_manifest|module_http|authenticated|exact_permission|project_http_gateway
 ProjectDefinitionRegistry=stable_key|typed_descriptor|computed_sha256|freeze|duplicate_rejection|detached_snapshot
 ReportDefinition=ReportSchema|OperationStateExamples|SensitiveFieldPolicies|ExportControls|single_immutable_report_definition|object_sql_owned_in_go
@@ -170,7 +172,7 @@ func contractStructTypes() []reflect.Type {
 		AssigneeResolverConfigField{}, AssigneeResolverRecordCapability{}, AssigneeResolverRelationCapability{}, AssigneeResolverDescriptor{}, AssigneeRecordFilter{}, AssigneeRecordListRequest{}, AssigneeRelationRequest{}, AssigneeRecord{}, AssigneeIdentityUser{}, AssigneeResolverContext{}, AssigneeEvidenceFact{}, AssigneeResolverCandidate{}, AssigneeResolverBinding{},
 		Record{}, Filter{}, Sort{}, RecordQuery{}, RecordQueryResult{},
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
-		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{}, ProjectDefinitions{}, ReportDefinition{}, PublicResourceDefinition{}, ProjectDefinitionIdentity{},
+		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{}, ProjectDefinitions{}, ReportDefinition{}, PublicResourceDefinition{}, NotificationNativePushTargetDefinition{}, ProjectDefinitionIdentity{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
 		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
 	}
@@ -197,7 +199,7 @@ func stableContractTypeName(current reflect.Type) string {
 // by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV59)
+	definition.WriteString(contractDefinitionV60)
 	for _, current := range contractStructTypes() {
 		definition.WriteString(current.Name())
 		definition.WriteByte('{')

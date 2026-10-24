@@ -26,8 +26,8 @@ require (
 	github.com/domainry/domainry-metadata v0.1.35
 	github.com/domainry/domainry-metadata-sdk v0.1.16
 	github.com/domainry/domainry-monitoring-sdk v0.1.13
-	github.com/domainry/domainry-notification v0.1.35
-	github.com/domainry/domainry-notification-sdk v0.1.21
+	github.com/domainry/domainry-notification v0.1.36
+	github.com/domainry/domainry-notification-sdk v0.1.22
 	github.com/domainry/domainry-report v0.1.41
 	github.com/domainry/domainry-report-sdk v0.1.26
 	github.com/domainry/domainry-scheduler v0.1.44

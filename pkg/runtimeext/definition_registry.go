@@ -29,42 +29,46 @@ var (
 )
 
 const (
-	ProjectDefinitionReport                = "report"
-	ProjectDefinitionPublicResource        = "public_resource"
-	ProjectDefinitionWorkflow              = "workflow"
-	ProjectDefinitionBusinessCalendar      = "business_calendar"
-	ProjectDefinitionSchedule              = "schedule"
-	ProjectDefinitionAutomation            = "automation"
-	ProjectDefinitionNotificationTemplate  = "notification_template"
-	ProjectDefinitionNotificationEventType = "notification_event_type"
-	ProjectDefinitionNotificationRule      = "notification_rule"
-	ProjectDefinitionIntegrationMapping    = "integration_mapping"
-	ProjectDefinitionAgentSkill            = "agent_skill"
-	ProjectDefinitionAgent                 = "agent"
-	ProjectDefinitionAgentTask             = "agent_task"
-	ProjectDefinitionAgentEntrypoint       = "agent_entrypoint"
-	ProjectDefinitionAgentPrincipal        = "agent_service_principal"
-	ProjectDefinitionExternalAuthorization = "external_authorization_action"
+	ProjectDefinitionReport                 = "report"
+	ProjectDefinitionPublicResource         = "public_resource"
+	ProjectDefinitionWorkflow               = "workflow"
+	ProjectDefinitionBusinessCalendar       = "business_calendar"
+	ProjectDefinitionSchedule               = "schedule"
+	ProjectDefinitionAutomation             = "automation"
+	ProjectDefinitionNotificationTemplate   = "notification_template"
+	ProjectDefinitionNotificationEventType  = "notification_event_type"
+	ProjectDefinitionNotificationRule       = "notification_rule"
+	ProjectDefinitionNotificationPushTarget = "notification_native_push_target"
+	ProjectDefinitionIntegrationConnection  = "integration_connection"
+	ProjectDefinitionIntegrationMapping     = "integration_mapping"
+	ProjectDefinitionAgentSkill             = "agent_skill"
+	ProjectDefinitionAgent                  = "agent"
+	ProjectDefinitionAgentTask              = "agent_task"
+	ProjectDefinitionAgentEntrypoint        = "agent_entrypoint"
+	ProjectDefinitionAgentPrincipal         = "agent_service_principal"
+	ProjectDefinitionExternalAuthorization  = "external_authorization_action"
 )
 
 type frozenProjectDefinitions struct {
-	reports                map[string]ReportDefinition
-	publicResources        map[string]PublicResourceDefinition
-	workflows              map[string]definitionmodel.WorkflowSchema
-	businessCalendars      map[string]businesscalendarmodel.BusinessCalendarSchema
-	schedules              map[string]schedulersdk.Definition
-	automationRules        map[string]automationmodel.AutomationRuleSchema
-	notificationTemplates  map[string]notificationcontract.NotificationTemplate
-	notificationEventTypes map[string]notificationcontract.NotificationEventType
-	notificationRules      map[string]notificationcontract.NotificationRule
-	integrationMappings    map[string]integrationsdk.EventMappingRequirement
-	agentSkills            map[string]agentsdk.SkillSchema
-	agents                 map[string]agentsdk.AgentSchema
-	agentTasks             map[string]agentsdk.AgentTaskDefinition
-	agentEntrypoints       map[string]agentsdk.AgentEntrypointAssignment
-	agentPrincipals        map[string]agentsdk.AgentServicePrincipalBinding
-	externalAuthorization  map[string]actioncontract.ActionDefinition
-	identities             map[string]ProjectDefinitionIdentity
+	reports                 map[string]ReportDefinition
+	publicResources         map[string]PublicResourceDefinition
+	workflows               map[string]definitionmodel.WorkflowSchema
+	businessCalendars       map[string]businesscalendarmodel.BusinessCalendarSchema
+	schedules               map[string]schedulersdk.Definition
+	automationRules         map[string]automationmodel.AutomationRuleSchema
+	notificationTemplates   map[string]notificationcontract.NotificationTemplate
+	notificationEventTypes  map[string]notificationcontract.NotificationEventType
+	notificationRules       map[string]notificationcontract.NotificationRule
+	notificationPushTargets map[string]NotificationNativePushTargetDefinition
+	integrationConnections  map[string]integrationsdk.ConnectionRequirement
+	integrationMappings     map[string]integrationsdk.EventMappingRequirement
+	agentSkills             map[string]agentsdk.SkillSchema
+	agents                  map[string]agentsdk.AgentSchema
+	agentTasks              map[string]agentsdk.AgentTaskDefinition
+	agentEntrypoints        map[string]agentsdk.AgentEntrypointAssignment
+	agentPrincipals         map[string]agentsdk.AgentServicePrincipalBinding
+	externalAuthorization   map[string]actioncontract.ActionDefinition
+	identities              map[string]ProjectDefinitionIdentity
 }
 
 func newFrozenProjectDefinitions() frozenProjectDefinitions {
@@ -73,7 +77,8 @@ func newFrozenProjectDefinitions() frozenProjectDefinitions {
 		businessCalendars: map[string]businesscalendarmodel.BusinessCalendarSchema{}, schedules: map[string]schedulersdk.Definition{},
 		automationRules: map[string]automationmodel.AutomationRuleSchema{}, notificationTemplates: map[string]notificationcontract.NotificationTemplate{},
 		notificationEventTypes: map[string]notificationcontract.NotificationEventType{}, notificationRules: map[string]notificationcontract.NotificationRule{},
-		integrationMappings: map[string]integrationsdk.EventMappingRequirement{}, agentSkills: map[string]agentsdk.SkillSchema{}, agents: map[string]agentsdk.AgentSchema{},
+		notificationPushTargets: map[string]NotificationNativePushTargetDefinition{},
+		integrationConnections:  map[string]integrationsdk.ConnectionRequirement{}, integrationMappings: map[string]integrationsdk.EventMappingRequirement{}, agentSkills: map[string]agentsdk.SkillSchema{}, agents: map[string]agentsdk.AgentSchema{},
 		agentTasks: map[string]agentsdk.AgentTaskDefinition{}, agentEntrypoints: map[string]agentsdk.AgentEntrypointAssignment{},
 		agentPrincipals: map[string]agentsdk.AgentServicePrincipalBinding{}, externalAuthorization: map[string]actioncontract.ActionDefinition{},
 		identities: map[string]ProjectDefinitionIdentity{},
@@ -202,6 +207,41 @@ func validateProjectDefinitions(input ProjectDefinitions) (frozenProjectDefiniti
 		}
 		result.notificationRules[key] = cloneDefinition(value)
 	}
+	for _, value := range input.NotificationNativePushTargets {
+		value.Key = strings.TrimSpace(value.Key)
+		value.ObjectKey = strings.TrimSpace(value.ObjectKey)
+		value.RecipientUserField = strings.TrimSpace(value.RecipientUserField)
+		value.PlatformField = strings.TrimSpace(value.PlatformField)
+		value.TokenField = strings.TrimSpace(value.TokenField)
+		value.StatusField = strings.TrimSpace(value.StatusField)
+		value.ActiveStatus = strings.TrimSpace(value.ActiveStatus)
+		value.UpdatedAtField = strings.TrimSpace(value.UpdatedAtField)
+		if !publicResourceKeyPattern.MatchString(value.ObjectKey) || !publicResourceKeyPattern.MatchString(value.RecipientUserField) || !publicResourceKeyPattern.MatchString(value.PlatformField) || !publicResourceKeyPattern.MatchString(value.TokenField) || !publicResourceKeyPattern.MatchString(value.StatusField) || !publicResourceKeyPattern.MatchString(value.UpdatedAtField) || value.ActiveStatus == "" {
+			return result, fmt.Errorf("%w: native push target %s requires stable object, field and active-status bindings", ErrProjectDefinitionInvalid, value.Key)
+		}
+		if err := register(ProjectDefinitionNotificationPushTarget, value.Key, value); err != nil {
+			return result, err
+		}
+		result.notificationPushTargets[value.Key] = cloneDefinition(value)
+	}
+	for _, value := range input.IntegrationConnections {
+		key := strings.TrimSpace(value.Key)
+		value.Key, value.WorkspaceID = key, strings.TrimSpace(value.WorkspaceID)
+		value.ConnectorKey, value.ProviderKey = strings.TrimSpace(value.ConnectorKey), strings.TrimSpace(value.ProviderKey)
+		value.Name, value.Status = strings.TrimSpace(value.Name), strings.TrimSpace(value.Status)
+		if value.WorkspaceID != "" {
+			return result, fmt.Errorf("%w: integration connection %s: workspace_id must be empty in project definitions", ErrProjectDefinitionInvalid, key)
+		}
+		validation := value
+		validation.WorkspaceID = "project-installation"
+		if err := validation.Validate(); err != nil {
+			return result, fmt.Errorf("%w: integration connection %s: %v", ErrProjectDefinitionInvalid, key, err)
+		}
+		if err := register(ProjectDefinitionIntegrationConnection, key, value); err != nil {
+			return result, err
+		}
+		result.integrationConnections[key] = cloneDefinition(value)
+	}
 	for _, value := range input.IntegrationMappings {
 		key := strings.TrimSpace(value.Key)
 		value.Key = key
@@ -329,6 +369,8 @@ func (d *frozenProjectDefinitions) merge(candidate frozenProjectDefinitions) {
 	mergeMap(d.notificationTemplates, candidate.notificationTemplates)
 	mergeMap(d.notificationEventTypes, candidate.notificationEventTypes)
 	mergeMap(d.notificationRules, candidate.notificationRules)
+	mergeMap(d.notificationPushTargets, candidate.notificationPushTargets)
+	mergeMap(d.integrationConnections, candidate.integrationConnections)
 	mergeMap(d.integrationMappings, candidate.integrationMappings)
 	mergeMap(d.agentSkills, candidate.agentSkills)
 	mergeMap(d.agents, candidate.agents)
@@ -358,7 +400,7 @@ func (d frozenProjectDefinitions) snapshot() ProjectDefinitions {
 	return ProjectDefinitions{
 		Reports: values(d.reports), PublicResources: values(d.publicResources), Workflows: values(d.workflows), BusinessCalendars: values(d.businessCalendars),
 		Schedules: values(d.schedules), AutomationRules: values(d.automationRules), NotificationTemplates: values(d.notificationTemplates),
-		NotificationEventTypes: values(d.notificationEventTypes), NotificationRules: values(d.notificationRules), IntegrationMappings: values(d.integrationMappings),
+		NotificationEventTypes: values(d.notificationEventTypes), NotificationRules: values(d.notificationRules), NotificationNativePushTargets: values(d.notificationPushTargets), IntegrationConnections: values(d.integrationConnections), IntegrationMappings: values(d.integrationMappings),
 		AgentSkills: values(d.agentSkills), Agents: values(d.agents), AgentTasks: values(d.agentTasks), AgentEntrypoints: values(d.agentEntrypoints),
 		AgentServicePrincipals: values(d.agentPrincipals), ExternalAuthorizationActions: values(d.externalAuthorization),
 	}

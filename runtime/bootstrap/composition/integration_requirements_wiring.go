@@ -1,8 +1,6 @@
 package composition
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	connectormodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -11,17 +9,12 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
 
-func IntegrationConnectionRequirements(connections []connectormodel.ConnectionSchema) []integrationsdk.ConnectionRequirement {
-	result := make([]integrationsdk.ConnectionRequirement, 0, len(connections))
-	for _, connection := range connections {
-		if connection.Key == "" || connection.ConnectorKey == "" {
-			continue
-		}
-		config, err := json.Marshal(connection.Config)
-		if err != nil {
-			panic(fmt.Errorf("encode manifest Integration connection %q: %w", connection.Key, err))
-		}
-		result = append(result, integrationsdk.ConnectionRequirement{Key: connection.Key, WorkspaceID: principalmodel.InstallationWorkspaceID, ConnectorKey: connection.ConnectorKey, ProviderKey: connection.ProviderKey, Name: connection.Name, Status: connection.Status, Config: config})
+func IntegrationConnectionRequirements(values []integrationsdk.ConnectionRequirement) []integrationsdk.ConnectionRequirement {
+	result := make([]integrationsdk.ConnectionRequirement, len(values))
+	for index, value := range values {
+		value.WorkspaceID = principalmodel.InstallationWorkspaceID
+		value.Config = append([]byte(nil), value.Config...)
+		result[index] = value
 	}
 	return result
 }

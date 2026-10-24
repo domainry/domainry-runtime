@@ -44,6 +44,7 @@ import (
 	deploymentpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/deployment"
 	notificationpublication "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notificationpublication"
 	publicationhandoffpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/publicationhandoff"
+	recordpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/record"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
@@ -204,7 +205,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		projectExtensions, connectorProviders,
 	)
 	if integrationOwner.Requirements != nil {
-		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, nil))
+		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, composition.IntegrationConnectionRequirements(projectDefinitions.IntegrationConnections)))
 		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, composition.IntegrationEventMappingRequirements(projectIntegrations.EventMappings)))
 	}
 	templateID := projectModel.ProjectKey
@@ -244,10 +245,12 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(scopeErr)
 		application := notificationScope.applicationRef()
 		if moduleFactory, ok := notificationFactory.(modulehost.Factory); ok {
+			nativePushTargets, nativePushErr := newNotificationNativePushTargetResolver(recordpersistence.NewRecordStore(store), projectModel.Objects, projectDefinitions.NotificationNativePushTargets)
+			mustCompleteRuntimeStartup(nativePushErr)
 			host := notificationSDKModuleHost{
 				store: store, identity: identityBinding, clock: workerDependencies.Clock, workerID: workerDependencies.WorkerID.String(), catalog: catalog,
 				projection: identityProjection, workflow: workflowNotificationTasks.GetTask, delivery: sdkDeliveryGateway,
-				metrics: notificationSDKDeliveryMetrics{operations: integrationOwner.Operations, clock: workerDependencies.Clock}, validator: modulehost.DefaultProviderTemplateValidator{}, archives: notificationArchives,
+				metrics: notificationSDKDeliveryMetrics{operations: integrationOwner.Operations, clock: workerDependencies.Clock}, validator: modulehost.DefaultProviderTemplateValidator{}, archives: notificationArchives, nativePush: nativePushTargets,
 			}
 			notificationBinding, err = moduleFactory.OpenModule(ctx, application, host)
 		} else {

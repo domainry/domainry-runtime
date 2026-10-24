@@ -35,6 +35,7 @@ type notificationSDKModuleHost struct {
 	metrics    modulehost.DeliveryMetrics
 	validator  modulehost.ProviderTemplateValidator
 	archives   modulehost.RetentionArchiveStore
+	nativePush *notificationNativePushTargetResolver
 }
 
 func notificationSDKCatalog(defaultLocale string, projectTemplates []notificationmodel.NotificationTemplate, eventTypes []notificationmodel.NotificationEventType, projectRules []notificationmodel.NotificationRule) (modulehost.Catalog, error) {
@@ -130,6 +131,9 @@ func (h notificationSDKModuleHost) WorkNotifier() modulehost.WorkNotifier {
 }
 func (h notificationSDKModuleHost) RecipientResolver() modulehost.RecipientResolver {
 	return notificationSDKRecipientResolver{h.projection}
+}
+func (h notificationSDKModuleHost) FindNativePushToken(ctx context.Context, workspaceID, userID, provider string) (string, bool, error) {
+	return h.nativePush.FindNativePushToken(ctx, workspaceID, userID, provider)
 }
 func (h notificationSDKModuleHost) AudienceResolver() modulehost.AudienceResolver {
 	return notificationSDKWorkflowAudience{h.workflow}
@@ -380,6 +384,23 @@ func notificationSDKOutboxPayload(content contract.RenderedNotification, product
 	}
 	if content.Channel == "email" {
 		payload["to"], payload["subject"], payload["text"], payload["html"] = append([]string(nil), content.Recipients...), content.Subject, content.Text, content.HTML
+		return payload, nil
+	}
+	if content.Channel == "native_push" {
+		if len(content.Recipients) != 1 || strings.TrimSpace(content.Title) == "" || strings.TrimSpace(content.Text) == "" {
+			return nil, fmt.Errorf("native push delivery requires exactly one device target, title and body")
+		}
+		data := map[string]string{}
+		for _, key := range []string{"notification_event_id", "notification_channel_plan_id"} {
+			if value, ok := metadata[key].(string); ok && strings.TrimSpace(value) != "" {
+				data[key] = strings.TrimSpace(value)
+			}
+		}
+		payload["device_token"], payload["title"], payload["body"] = content.Recipients[0], content.Title, content.Text
+		payload["data"], payload["priority"] = data, "high"
+		if value, ok := metadata["dedupe_key"].(string); ok && strings.TrimSpace(value) != "" {
+			payload["collapse_key"] = strings.TrimSpace(value)
+		}
 		return payload, nil
 	}
 	if (content.Channel != "collaboration" && content.Channel != "whatsapp") || len(content.Recipients) != 1 {

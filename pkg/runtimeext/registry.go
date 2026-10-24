@@ -44,25 +44,41 @@ type ProjectExtensions struct {
 // behavior and external module authorization manifests. None of these
 // definitions are accepted from model.json.
 type ProjectDefinitions struct {
-	Reports                      []ReportDefinition
-	PublicResources              []PublicResourceDefinition
-	Workflows                    []definitionmodel.WorkflowSchema
-	BusinessCalendars            []businesscalendarmodel.BusinessCalendarSchema
-	Schedules                    []schedulersdk.Definition
-	AutomationRules              []automationmodel.AutomationRuleSchema
-	NotificationTemplates        []notificationcontract.NotificationTemplate
-	NotificationEventTypes       []notificationcontract.NotificationEventType
-	NotificationRules            []notificationcontract.NotificationRule
-	IntegrationMappings          []integrationsdk.EventMappingRequirement
-	AgentSkills                  []agentsdk.SkillSchema
-	Agents                       []agentsdk.AgentSchema
-	AgentTasks                   []agentsdk.AgentTaskDefinition
-	AgentEntrypoints             []agentsdk.AgentEntrypointAssignment
-	AgentServicePrincipals       []agentsdk.AgentServicePrincipalBinding
+	Reports                       []ReportDefinition
+	PublicResources               []PublicResourceDefinition
+	Workflows                     []definitionmodel.WorkflowSchema
+	BusinessCalendars             []businesscalendarmodel.BusinessCalendarSchema
+	Schedules                     []schedulersdk.Definition
+	AutomationRules               []automationmodel.AutomationRuleSchema
+	NotificationTemplates         []notificationcontract.NotificationTemplate
+	NotificationEventTypes        []notificationcontract.NotificationEventType
+	NotificationRules             []notificationcontract.NotificationRule
+	NotificationNativePushTargets []NotificationNativePushTargetDefinition
+	IntegrationConnections        []integrationsdk.ConnectionRequirement
+	IntegrationMappings           []integrationsdk.EventMappingRequirement
+	AgentSkills                   []agentsdk.SkillSchema
+	Agents                        []agentsdk.AgentSchema
+	AgentTasks                    []agentsdk.AgentTaskDefinition
+	AgentEntrypoints              []agentsdk.AgentEntrypointAssignment
+	AgentServicePrincipals        []agentsdk.AgentServicePrincipalBinding
 	// ExternalAuthorizationActions publishes the complete source-owned Action
 	// manifest for independently deployed modules reached through ProjectHTTP.
 	// Runtime reconciles authorization only and never executes these Actions.
 	ExternalAuthorizationActions []actioncontract.ActionDefinition
+}
+
+// NotificationNativePushTargetDefinition binds Notification's generic native
+// push channel to a project-owned device-registration object without moving
+// token ownership into Notification or Integration.
+type NotificationNativePushTargetDefinition struct {
+	Key                string `json:"key"`
+	ObjectKey          string `json:"object_key"`
+	RecipientUserField string `json:"recipient_user_field"`
+	PlatformField      string `json:"platform_field"`
+	TokenField         string `json:"token_field"`
+	StatusField        string `json:"status_field"`
+	ActiveStatus       string `json:"active_status"`
+	UpdatedAtField     string `json:"updated_at_field"`
 }
 
 // PublicResourceDefinition binds one anonymous, revocable projection to its

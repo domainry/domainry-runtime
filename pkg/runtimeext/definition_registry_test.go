@@ -1,6 +1,7 @@
 package runtimeext
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -98,6 +99,73 @@ func TestProjectDefinitionRegistryBindsIntegrationWorkspaceAtRuntime(t *testing.
 	mapping.WorkspaceID = "workspace-baked-into-source"
 	if err := NewProjectExtensionRegistry().RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{IntegrationMappings: []integrationsdk.EventMappingRequirement{mapping}}}); !errors.Is(err, ErrProjectDefinitionInvalid) {
 		t.Fatalf("source-owned workspace error=%v", err)
+	}
+}
+
+func TestProjectDefinitionRegistryFreezesDeploymentNeutralIntegrationConnections(t *testing.T) {
+	connection := integrationsdk.ConnectionRequirement{
+		Key: "facility_fcm", ConnectorKey: "notification", ProviderKey: "fcm", Name: "Facility FCM", Config: json.RawMessage(`{}`),
+	}
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{IntegrationConnections: []integrationsdk.ConnectionRequirement{connection}}}); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	connection.Config[0] = '['
+	snapshot := registry.ProjectDefinitions()
+	if len(snapshot.IntegrationConnections) != 1 || snapshot.IntegrationConnections[0].WorkspaceID != "" || string(snapshot.IntegrationConnections[0].Config) != `{}` {
+		t.Fatalf("connections=%#v", snapshot.IntegrationConnections)
+	}
+	snapshot.IntegrationConnections[0].Config[0] = '['
+	if string(registry.ProjectDefinitions().IntegrationConnections[0].Config) != `{}` {
+		t.Fatal("registry returned a mutable Integration connection snapshot")
+	}
+	identities := registry.ProjectDefinitionIdentities()
+	if len(identities) != 1 || identities[0].Kind != ProjectDefinitionIntegrationConnection || identities[0].Key != "facility_fcm" {
+		t.Fatalf("identities=%#v", identities)
+	}
+
+	connection.WorkspaceID = "source-owned-workspace"
+	err := NewProjectExtensionRegistry().RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{IntegrationConnections: []integrationsdk.ConnectionRequirement{connection}}})
+	if !errors.Is(err, ErrProjectDefinitionInvalid) {
+		t.Fatalf("source-owned workspace error=%v", err)
+	}
+}
+
+func TestProjectDefinitionRegistryFreezesNativePushTargets(t *testing.T) {
+	definition := NotificationNativePushTargetDefinition{
+		Key: "mobile_device", ObjectKey: "device_registration", RecipientUserField: "recipient_user",
+		PlatformField: "platform", TokenField: "push_token", StatusField: "status", ActiveStatus: "active", UpdatedAtField: "updated_at",
+	}
+	registry := NewProjectExtensionRegistry()
+	if err := registry.RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{NotificationNativePushTargets: []NotificationNativePushTargetDefinition{definition}}}); err != nil {
+		t.Fatal(err)
+	}
+	registry.Freeze()
+	definition.TokenField = "mutated_input"
+	snapshot := registry.ProjectDefinitions()
+	if len(snapshot.NotificationNativePushTargets) != 1 || snapshot.NotificationNativePushTargets[0].TokenField != "push_token" {
+		t.Fatalf("native push targets=%#v", snapshot.NotificationNativePushTargets)
+	}
+	snapshot.NotificationNativePushTargets[0].TokenField = "mutated_snapshot"
+	if registry.ProjectDefinitions().NotificationNativePushTargets[0].TokenField != "push_token" {
+		t.Fatal("registry returned a mutable native push target snapshot")
+	}
+	identities := registry.ProjectDefinitionIdentities()
+	if len(identities) != 1 || identities[0].Kind != ProjectDefinitionNotificationPushTarget || identities[0].Key != "mobile_device" || len(identities[0].SHA256) != 64 {
+		t.Fatalf("identities=%#v", identities)
+	}
+}
+
+func TestProjectDefinitionRegistryRejectsInvalidNativePushTarget(t *testing.T) {
+	definition := NotificationNativePushTargetDefinition{
+		Key: "mobile_device", ObjectKey: "device_registration", RecipientUserField: "recipient_user",
+		PlatformField: "platform", TokenField: "push_token", StatusField: "status", ActiveStatus: "active", UpdatedAtField: "updated_at",
+	}
+	definition.TokenField = ""
+	err := NewProjectExtensionRegistry().RegisterProjectExtensions(ProjectExtensions{Definitions: ProjectDefinitions{NotificationNativePushTargets: []NotificationNativePushTargetDefinition{definition}}})
+	if !errors.Is(err, ErrProjectDefinitionInvalid) {
+		t.Fatalf("error=%v", err)
 	}
 }
 
