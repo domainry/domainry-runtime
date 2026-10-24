@@ -118,6 +118,8 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 			OpenVerifiedFile:  records.openVerifiedFile,
 			IssueFileDownload: records.issueFileDownload,
 			CreateDerivedFile: records.createDerivedFile,
+			ReadKnowledgeFile: records.readKnowledgeFile,
+			BindKnowledgeFile: records.bindKnowledgeFile,
 			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				if records.recordTimerService == nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindInternal, "backend.business_job.unavailable", nil, nil)

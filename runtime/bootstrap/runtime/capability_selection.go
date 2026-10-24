@@ -59,8 +59,13 @@ func projectUsesUploads(model projectmodel.RuntimeModel, definitions runtimeext.
 		return true
 	}
 	for _, handler := range handlers {
-		if len(handler.FileCapabilities) != 0 {
-			return true
+		for _, operation := range handler.FileCapabilities {
+			switch strings.TrimSpace(operation) {
+			case runtimeext.FileOperationReadKnowledge, runtimeext.FileOperationBindKnowledge:
+				continue
+			default:
+				return true
+			}
 		}
 	}
 	for _, object := range model.Objects {

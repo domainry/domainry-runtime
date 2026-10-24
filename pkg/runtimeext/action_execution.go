@@ -128,6 +128,15 @@ type DerivedFileExecution interface {
 	CreateDerivedFile(context.Context, DerivedFileRequest) (DerivedFileEvidence, error)
 }
 
+// KnowledgeFileExecution exposes only metadata reads and durable resource
+// binding for files owned by the independent Knowledge service. Runtime
+// derives the caller authority; project handlers cannot choose a Runtime,
+// Workspace or subject.
+type KnowledgeFileExecution interface {
+	ReadKnowledgeFile(context.Context, KnowledgeFileReadRequest) (KnowledgeFileEvidence, error)
+	BindKnowledgeFile(context.Context, KnowledgeFileBindingRequest) error
+}
+
 type BusinessJobExecution interface {
 	RunBusinessJob(context.Context, BusinessJobRequest) (BusinessJobReceipt, error)
 }
@@ -204,6 +213,22 @@ func CreateDerivedFile(ctx context.Context, execution ActionExecution, request D
 	return creator.CreateDerivedFile(ctx, request)
 }
 
+func ReadKnowledgeFile(ctx context.Context, execution ActionExecution, request KnowledgeFileReadRequest) (KnowledgeFileEvidence, error) {
+	reader, ok := execution.(KnowledgeFileExecution)
+	if !ok {
+		return KnowledgeFileEvidence{}, &BusinessError{Class: BusinessErrorUnavailable, Code: "backend.knowledge.file_service_unavailable", Message: "Runtime Knowledge file access is unavailable"}
+	}
+	return reader.ReadKnowledgeFile(ctx, request)
+}
+
+func BindKnowledgeFile(ctx context.Context, execution ActionExecution, request KnowledgeFileBindingRequest) error {
+	binder, ok := execution.(KnowledgeFileExecution)
+	if !ok {
+		return &BusinessError{Class: BusinessErrorUnavailable, Code: "backend.knowledge.file_service_unavailable", Message: "Runtime Knowledge file binding is unavailable"}
+	}
+	return binder.BindKnowledgeFile(ctx, request)
+}
+
 func RunBusinessJob(ctx context.Context, execution ActionExecution, request BusinessJobRequest) (BusinessJobReceipt, error) {
 	runner, ok := execution.(BusinessJobExecution)
 	if !ok {
@@ -268,6 +293,31 @@ type DerivedFileEvidence struct {
 	Filename          string
 	ContentType       string
 	ProtectedDownload string
+}
+
+type KnowledgeFileReadRequest struct {
+	FileID string
+}
+
+type KnowledgeFileEvidence struct {
+	ID          string
+	WorkspaceID string
+	CreatedBy   string
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	SHA256      string
+}
+
+// KnowledgeFileBinding identifies the product-owned resource that retains an
+// opaque Knowledge file ID. It records ownership only; it never grants read
+// access to that resource.
+type KnowledgeFileBindingRequest struct {
+	FileID       string
+	Owner        string
+	ResourceType string
+	ResourceID   string
+	FieldKey     string
 }
 
 type BusinessJobRequest struct {

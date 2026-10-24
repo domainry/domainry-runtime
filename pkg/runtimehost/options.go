@@ -11,6 +11,7 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
+	knowledgefiles "github.com/domainry/domainry-knowledge-sdk/files"
 	knowledgemodulehost "github.com/domainry/domainry-knowledge-sdk/modulehost"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
@@ -65,6 +66,10 @@ type Options struct {
 	// ports after Runtime has resolved its durable Runtime and Workspace IDs.
 	// Runtime supplies Identity and record authorization ports itself.
 	KnowledgeOptionsFactory func(string, string) (knowledgecontract.Options, error)
+	// KnowledgeFiles is the independent generic file service used by governed
+	// project handlers. Runtime always derives its authority from the active
+	// Action and never exposes this raw service to handler code.
+	KnowledgeFiles knowledgefiles.Service
 	// AnalysisTableSourceFactory is assembled by project code from a Knowledge
 	// or data-service public adapter. Runtime supplies the resolved instance ID
 	// and consumes only the Report SDK owner port.

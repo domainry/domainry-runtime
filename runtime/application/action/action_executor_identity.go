@@ -151,6 +151,45 @@ func (e *businessActionExecution) CreateDerivedFile(ctx context.Context, request
 	return e.dependencies.CreateDerivedFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.invocation.Principal, request)
 }
 
+func (e *businessActionExecution) ReadKnowledgeFile(ctx context.Context, request runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error) {
+	if !e.hasFileGrant(runtimeext.FileOperationReadKnowledge) {
+		return runtimeext.KnowledgeFileEvidence{}, apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)
+	}
+	request.FileID = strings.TrimSpace(request.FileID)
+	if request.FileID == "" || strings.TrimSpace(e.principal.UserID) == "" {
+		return runtimeext.KnowledgeFileEvidence{}, apperror.New(apperror.KindBadRequest, "backend.knowledge.file_read_request_invalid", nil, nil)
+	}
+	if e.dependencies.ReadKnowledgeFile == nil {
+		return runtimeext.KnowledgeFileEvidence{}, missingExecutorPort("read_knowledge_file")
+	}
+	lease, err := e.unitOfWork.acquireSynchronousConnectorCall()
+	if err != nil {
+		return runtimeext.KnowledgeFileEvidence{}, err
+	}
+	defer lease.Release()
+	return e.dependencies.ReadKnowledgeFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.principal, request)
+}
+
+func (e *businessActionExecution) BindKnowledgeFile(ctx context.Context, request runtimeext.KnowledgeFileBindingRequest) error {
+	if !e.hasFileGrant(runtimeext.FileOperationBindKnowledge) {
+		return apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)
+	}
+	request.FileID, request.Owner = strings.TrimSpace(request.FileID), strings.TrimSpace(request.Owner)
+	request.ResourceType, request.ResourceID, request.FieldKey = strings.TrimSpace(request.ResourceType), strings.TrimSpace(request.ResourceID), strings.TrimSpace(request.FieldKey)
+	if request.FileID == "" || request.Owner == "" || request.ResourceType == "" || request.ResourceID == "" || strings.TrimSpace(e.principal.UserID) == "" {
+		return apperror.New(apperror.KindBadRequest, "backend.knowledge.file_binding_request_invalid", nil, nil)
+	}
+	if e.dependencies.BindKnowledgeFile == nil {
+		return missingExecutorPort("bind_knowledge_file")
+	}
+	lease, err := e.unitOfWork.acquireSynchronousConnectorCall()
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	return e.dependencies.BindKnowledgeFile(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.principal, request)
+}
+
 func (e *businessActionExecution) RunBusinessJob(ctx context.Context, request runtimeext.BusinessJobRequest) (runtimeext.BusinessJobReceipt, error) {
 	if !e.hasFileGrant(runtimeext.FileOperationRunJob) {
 		return runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindForbidden, runtimeext.FileActionGrantDeniedErrorCode, nil, nil)

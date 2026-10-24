@@ -114,6 +114,46 @@ func TestCreateDerivedFilePassesTheInvocationPrincipal(t *testing.T) {
 	}
 }
 
+func TestKnowledgeFilesRequireExplicitGrantsAndRunBeforeWrites(t *testing.T) {
+	readCalls, bindCalls := 0, 0
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{
+			ReadKnowledgeFile: func(_ context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error) {
+				readCalls++
+				if workspaceID != "workspace-a" || principal.UserID != "user-a" || request.FileID != "file-a" {
+					t.Fatalf("unexpected Knowledge read authority: workspace=%q principal=%+v request=%+v", workspaceID, principal, request)
+				}
+				return runtimeext.KnowledgeFileEvidence{ID: request.FileID, WorkspaceID: workspaceID, CreatedBy: principal.UserID}, nil
+			},
+			BindKnowledgeFile: func(_ context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.KnowledgeFileBindingRequest) error {
+				bindCalls++
+				if workspaceID != "workspace-a" || principal.UserID != "user-a" || request.ResourceID != "report-a" {
+					t.Fatalf("unexpected Knowledge binding authority: workspace=%q principal=%+v request=%+v", workspaceID, principal, request)
+				}
+				return nil
+			},
+		},
+		principal: runtimeext.Principal{Known: true, UserID: "user-a"}, workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(),
+	}
+	if _, err := execution.ReadKnowledgeFile(t.Context(), runtimeext.KnowledgeFileReadRequest{FileID: "file-a"}); apperror.CodeOf(err) != runtimeext.FileActionGrantDeniedErrorCode {
+		t.Fatalf("missing read grant code=%q err=%v", apperror.CodeOf(err), err)
+	}
+	execution.fileGrants = []string{runtimeext.FileOperationReadKnowledge, runtimeext.FileOperationBindKnowledge}
+	evidence, err := execution.ReadKnowledgeFile(t.Context(), runtimeext.KnowledgeFileReadRequest{FileID: "file-a"})
+	if err != nil || evidence.ID != "file-a" || readCalls != 1 {
+		t.Fatalf("evidence=%+v read calls=%d err=%v", evidence, readCalls, err)
+	}
+	if err := execution.BindKnowledgeFile(t.Context(), runtimeext.KnowledgeFileBindingRequest{FileID: "file-a", Owner: "facility_ops", ResourceType: "work_report", ResourceID: "report-a"}); err != nil || bindCalls != 1 {
+		t.Fatalf("bind calls=%d err=%v", bindCalls, err)
+	}
+	if _, err := execution.unitOfWork.beginDeferredWriting(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execution.ReadKnowledgeFile(t.Context(), runtimeext.KnowledgeFileReadRequest{FileID: "file-a"}); apperror.CodeOf(err) != runtimeext.ConnectorCallAfterWriteErrorCode || readCalls != 1 {
+		t.Fatalf("after-write code=%q read calls=%d err=%v", apperror.CodeOf(err), readCalls, err)
+	}
+}
+
 func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 	stageCalls := 0
 	newExecution := func(granted bool) *businessActionExecution {

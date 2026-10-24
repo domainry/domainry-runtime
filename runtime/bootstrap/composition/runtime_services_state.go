@@ -152,6 +152,8 @@ type runtimeAssembly struct {
 	openVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	issueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	createDerivedFile                   func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	readKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
+	bindKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	validateFileReferences              func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	workspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	workspaceActiveResolver             workspaceaggregatecontract.ActiveResolver

@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v58"
-	ContractSHA256  = "53ca22e70dfa074dae87fd22a7e73bc9bca2c6f3f5c41fbbe85b9cb249784eca"
+	ContractVersion = "runtimeext-v59"
+	ContractSHA256  = "3f42120f3416892b5b0356c343d691258e473a4ee512b988f8ef104e9e8b98dd"
 )
 
-const contractDefinitionV58 = `runtimeext-v58
+const contractDefinitionV59 = `runtimeext-v59
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -52,6 +52,11 @@ CreateDerivedFile(context.Context,ActionExecution,DerivedFileRequest)(DerivedFil
 FileOperationCreateDerived=create_derived
 RunBusinessJob(context.Context,ActionExecution,BusinessJobRequest)(BusinessJobReceipt,error)
 FileOperationRunJob=run_business_job
+ReadKnowledgeFile(context.Context,ActionExecution,KnowledgeFileReadRequest)(KnowledgeFileEvidence,error)
+FileOperationReadKnowledge=read_knowledge_file
+BindKnowledgeFile(context.Context,ActionExecution,KnowledgeFileBindingRequest)error
+FileOperationBindKnowledge=bind_knowledge_file
+KnowledgeFileSemantics=runtime_derived_runtime_workspace_and_subject|prewrite_only|exact_metadata_projection|idempotent_resource_binding|no_resource_read_grant
 OpenVerifiedFileSemantics=exact_workspace|caller_readable_record_field_binding|clean_receipt_and_sha256|exact_stored_bytes
 IssueFileDownloadSemantics=exact_workspace|exact_user_and_authorization_revision|caller_readable_record_field_binding|clean_receipt_and_sha256|opaque_file_identity|hmac_signed_two_minute_expiry|download_audit
 CreateDerivedFileSemantics=bounded_128_mib|stable_idempotency_key|immutable_content_identity|protected_download_reference|runtime_clean_receipt
@@ -153,7 +158,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 
 func contractStructTypes() []reflect.Type {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, KnowledgeFileReadRequest{}, KnowledgeFileEvidence{}, KnowledgeFileBindingRequest{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		AccountErasureCapability{}, AccountErasureStageRequest{}, AccountErasureGetRequest{}, AccountErasureReceipt{},
@@ -192,7 +197,7 @@ func stableContractTypeName(current reflect.Type) string {
 // by source-owned project composition and Runtime readiness checks.
 func ComputedContractSHA256() string {
 	var definition strings.Builder
-	definition.WriteString(contractDefinitionV58)
+	definition.WriteString(contractDefinitionV59)
 	for _, current := range contractStructTypes() {
 		definition.WriteString(current.Name())
 		definition.WriteByte('{')

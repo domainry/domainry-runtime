@@ -20,10 +20,12 @@ import (
 	connector "github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
+	"github.com/domainry/domainry-foundation/apperror"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
+	knowledgefiles "github.com/domainry/domainry-knowledge-sdk/files"
 	lifecyclesdk "github.com/domainry/domainry-lifecycle-sdk"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
@@ -119,6 +121,7 @@ type runtimeExtensionRegistries struct {
 	workspaceIdentityUsageBinder    identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	blobStore                       runtimefile.BlobStore
 	fileScanner                     runtimefile.FileScanner
+	knowledgeFiles                  knowledgefiles.Service
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectModel projectmodel.RuntimeModel, projectDefinitions runtimeext.ProjectDefinitions, integrations appschemamodel.IntegrationSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityProjection identitysdk.Projection, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -502,6 +505,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var openVerifiedFile func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	var issueFileDownload func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	var createDerivedFile func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	var readKnowledgeFile func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
+	var bindKnowledgeFile func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	var validateFileReferences func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	if fileCapabilities != nil {
 		verifyFileClean = fileCapabilities.VerifyClean
@@ -509,6 +514,28 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 		issueFileDownload = fileCapabilities.IssueDownload
 		createDerivedFile = fileCapabilities.CreateDerived
 		validateFileReferences = fileCapabilities.ValidateRecordReferences
+	}
+	if len(extensionRegistries) > 0 && extensionRegistries[0].knowledgeFiles != nil {
+		files := extensionRegistries[0].knowledgeFiles
+		readKnowledgeFile = func(ctx context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error) {
+			value, err := files.Get(ctx, knowledgefiles.Authority{RuntimeID: cfg.RuntimeInstanceID, WorkspaceID: workspaceID, SubjectID: principal.UserID}, request.FileID)
+			if err != nil {
+				return runtimeext.KnowledgeFileEvidence{}, classifyKnowledgeFileError(err)
+			}
+			return runtimeext.KnowledgeFileEvidence{
+				ID: value.ID, WorkspaceID: value.WorkspaceID, CreatedBy: value.CreatedBy, Filename: value.Filename,
+				ContentType: value.ContentType, SizeBytes: value.SizeBytes, SHA256: value.SHA256,
+			}, nil
+		}
+		bindKnowledgeFile = func(ctx context.Context, workspaceID string, principal runtimeext.Principal, request runtimeext.KnowledgeFileBindingRequest) error {
+			err := files.Bind(ctx, knowledgefiles.Authority{RuntimeID: cfg.RuntimeInstanceID, WorkspaceID: workspaceID, SubjectID: principal.UserID}, request.FileID, knowledgefiles.Binding{
+				Owner: request.Owner, ResourceType: request.ResourceType, ResourceID: request.ResourceID, FieldKey: request.FieldKey,
+			})
+			if err != nil {
+				return classifyKnowledgeFileError(err)
+			}
+			return nil
+		}
 	}
 	services := composition.NewRuntimeServices(ctx, composition.RuntimeServicesConfig{
 		ProjectModel: projectModel, ProjectDefinitions: projectDefinitions,
@@ -569,6 +596,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			OpenVerifiedFile:                    openVerifiedFile,
 			IssueFileDownload:                   issueFileDownload,
 			CreateDerivedFile:                   createDerivedFile,
+			ReadKnowledgeFile:                   readKnowledgeFile,
+			BindKnowledgeFile:                   bindKnowledgeFile,
 			ValidateFileReferences:              validateFileReferences,
 			PrepareOutboxPayload: func(ctx context.Context, message publicationmodel.Message, payload map[string]any) (map[string]any, error) {
 				if strings.TrimSpace(message.ConnectorKey) != "email" || strings.TrimSpace(message.Operation) != "send_file_email" {
@@ -642,6 +671,13 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			services.Applications().RecordTimers.ConfigureWorker(recordtimerapplication.WorkerConfig{Enabled: cfg.RecordTimerEnabled, PollInterval: cfg.RecordTimerPollInterval, BatchSize: cfg.RecordTimerBatchSize, LeaseTTL: cfg.RecordTimerLeaseTTL})
 		},
 	)
+}
+
+func classifyKnowledgeFileError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return apperror.FromError(apperror.KindOf(err), err)
 }
 
 func bindEmbeddedDataExchangeSubjectLifecyclePersistence(binding dataexchangesdk.Binding) error {

@@ -47,6 +47,8 @@ const (
 	FileOperationIssueDownload = "issue_download"
 	FileOperationCreateDerived = "create_derived"
 	FileOperationRunJob        = "run_business_job"
+	FileOperationReadKnowledge = "read_knowledge_file"
+	FileOperationBindKnowledge = "bind_knowledge_file"
 )
 
 // ConnectorOperationMode is the Action-visible delivery boundary of one
@@ -294,7 +296,7 @@ func (d HandlerDescriptor) Validate() error {
 
 func supportedFileOperation(operation string) bool {
 	switch operation {
-	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationIssueDownload, FileOperationCreateDerived, FileOperationRunJob:
+	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationIssueDownload, FileOperationCreateDerived, FileOperationRunJob, FileOperationReadKnowledge, FileOperationBindKnowledge:
 		return true
 	default:
 		return false

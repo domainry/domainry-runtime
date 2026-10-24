@@ -150,6 +150,8 @@ type RuntimeServicesDependencies struct {
 	OpenVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	IssueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	CreateDerivedFile                   func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	ReadKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
+	BindKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	ValidateFileReferences              func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
 	WorkspaceAggregateCatalog           workspaceaggregatecontract.Catalog
 	WorkspaceActiveResolver             workspaceaggregatecontract.ActiveResolver

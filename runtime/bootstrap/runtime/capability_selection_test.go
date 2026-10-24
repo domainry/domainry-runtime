@@ -44,6 +44,13 @@ func TestProjectSchemaCapabilitiesSelectUploadsForHandlerAndAgentUse(t *testing.
 	}
 }
 
+func TestProjectSchemaCapabilitiesDoesNotSelectUploadsForKnowledgeOwnedFiles(t *testing.T) {
+	selected := projectSchemaCapabilities(projectmodel.RuntimeModel{}, runtimeext.ProjectDefinitions{}, []runtimeext.HandlerDescriptor{{FileCapabilities: []string{runtimeext.FileOperationReadKnowledge, runtimeext.FileOperationBindKnowledge}}})
+	if selected.Uploads || selected.Lifecycle {
+		t.Fatalf("Knowledge-owned files selected Runtime upload storage: %#v", selected)
+	}
+}
+
 func TestProjectSchemaCapabilitiesSelectLifecycleForAccountErasure(t *testing.T) {
 	selected := projectSchemaCapabilities(projectmodel.RuntimeModel{}, runtimeext.ProjectDefinitions{}, []runtimeext.HandlerDescriptor{{
 		AccountErasure: &runtimeext.AccountErasureCapability{},

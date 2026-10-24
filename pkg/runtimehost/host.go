@@ -537,6 +537,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				AnalysisTableSource:       analysisTableSource,
 				KnowledgeFactory:          options.KnowledgeFactory,
 				KnowledgeOptions:          knowledgeOptions,
+				KnowledgeFiles:            options.KnowledgeFiles,
 				BlobStore:                 options.BlobStore,
 				FileScanner:               options.FileScanner,
 				ProjectHTTP:               options.ProjectHTTP,

@@ -366,6 +366,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		workspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
 		blobStore:                       startupOptions.BlobStore,
 		fileScanner:                     startupOptions.FileScanner,
+		knowledgeFiles:                  startupOptions.KnowledgeFiles,
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records

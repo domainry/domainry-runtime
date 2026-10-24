@@ -78,6 +78,8 @@ func newRuntimeServicesState(ctx context.Context, definitions runtimeext.Project
 		openVerifiedFile:                    deps.OpenVerifiedFile,
 		issueFileDownload:                   deps.IssueFileDownload,
 		createDerivedFile:                   deps.CreateDerivedFile,
+		readKnowledgeFile:                   deps.ReadKnowledgeFile,
+		bindKnowledgeFile:                   deps.BindKnowledgeFile,
 		validateFileReferences:              deps.ValidateFileReferences,
 		workspaceAggregateCatalog:           deps.WorkspaceAggregateCatalog,
 		workspaceActiveResolver:             deps.WorkspaceActiveResolver,
