@@ -37,9 +37,13 @@ func New(runtimeID string, application identitysdk.ApplicationScope, principals 
 }
 
 func (h *Host) resolve(ctx context.Context, authority knowledgesdk.Authority) (principalmodel.Principal, error) {
-	if !authority.Known || authority.RuntimeID != h.runtimeID || authority.WorkspaceID != string(h.application.WorkspaceID) || len(strings.TrimSpace(authority.UserID)) == 0 {
+	if !authority.Known || authority.RuntimeID != h.runtimeID || len(strings.TrimSpace(authority.WorkspaceID)) == 0 || len(strings.TrimSpace(authority.UserID)) == 0 {
 		return principalmodel.Principal{}, denied("knowledge.library_access_denied")
 	}
+	// The authenticated principal owns the request Workspace. External Identity
+	// providers may resolve one application installation to multiple tenant
+	// Workspaces, so the installation Workspace is not an authorization bound.
+	// Resolve in the selected Workspace and verify the returned principal below.
 	resolution, err := h.principals.Resolve(requestcontext.WithWorkspaceID(ctx, authority.WorkspaceID), identitysdk.PrincipalResolutionRequest{SubjectID: identitysdk.SubjectID(authority.UserID), RoleKey: authority.RoleKey})
 	if err != nil {
 		return principalmodel.Principal{}, classify("knowledge.identity_unavailable", err)
