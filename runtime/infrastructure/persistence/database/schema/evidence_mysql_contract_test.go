@@ -32,6 +32,7 @@ func TestAutomationEvidenceUsesBoundedMySQLCompositeIndexColumns(t *testing.T) {
 		"`rule_key` VARCHAR(128) NOT NULL",
 		"`object_key` VARCHAR(128) NOT NULL",
 		"`record_id` VARCHAR(191) NOT NULL",
+		"`correlation_id` TEXT NOT NULL DEFAULT ''",
 		"`status` VARCHAR(64) NOT NULL",
 		"`created_at` BIGINT NOT NULL",
 	} {
