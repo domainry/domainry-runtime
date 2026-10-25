@@ -2,10 +2,10 @@ package projectdatabase
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
@@ -24,7 +24,7 @@ func (Profile) EnsureProjectDatabase(ctx context.Context, cfg config.Config) err
 		return fmt.Errorf("MySQL project database name is required")
 	}
 	target.DBName = ""
-	database, err := sql.Open("mysql", target.FormatDSN())
+	database, err := telemetry.OpenObservedSQL("mysql", target.FormatDSN(), "runtime", nil)
 	if err != nil {
 		return fmt.Errorf("open MySQL project database bootstrap connection: %w", err)
 	}

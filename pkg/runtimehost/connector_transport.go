@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/safehttp"
+	"github.com/domainry/domainry-foundation/telemetry"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/microsoft/go-mssqldb"
@@ -44,14 +45,28 @@ func newConnectorTransport() connector.Transport {
 }
 
 func newConnectorTransportWithProcessPolicy(policy ConnectorProcessPolicy) connector.Transport {
+	httpClient := safehttp.NewClient(safehttp.Policy{AllowLiteralLoopback: true})
 	return &connectorTransport{
-		httpClient:    safehttp.NewClient(safehttp.Policy{AllowLiteralLoopback: true}),
+		httpClient: telemetry.InstrumentHTTPClientWithOptions(httpClient, "domainry.runtime.connector.http", telemetry.HTTPClientInstrumentationOptions{
+			DisableDiagnosticContent: true,
+		}),
 		processPolicy: policy,
 	}
 }
 
 func (t *connectorTransport) SendSMTP(ctx context.Context, request connector.SMTPRequest) (result connector.SMTPResult, returnErr error) {
+	started := time.Now()
 	host := strings.TrimSpace(request.Host)
+	operation := "send"
+	if request.ProbeOnly {
+		operation = "probe"
+	}
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureSMTP, "smtp", operation, map[string]any{
+			"host": host, "port": request.Port, "implicit_tls": request.ImplicitTLS, "start_tls": request.StartTLS,
+			"recipient_count": len(request.Recipients), "message_bytes": len(request.Message),
+		}, map[string]any{"connected": result.Connected, "accepted": result.Accepted}, started, returnErr)
+	}()
 	if host == "" || request.Port < 1 || request.Port > 65535 {
 		return result, errors.New("Connector SMTP host and valid port are required")
 	}
@@ -176,7 +191,8 @@ func (t *connectorTransport) RoundTripHTTP(ctx context.Context, request connecto
 	if err != nil {
 		return connector.HTTPResponse{}, err
 	}
-	httpRequest, err := http.NewRequestWithContext(ctx, strings.TrimSpace(request.Method), strings.TrimSpace(request.URL), bytes.NewReader(body))
+	requestContext := telemetry.WithHTTPClientOperation(ctx, "connector.http.round_trip")
+	httpRequest, err := http.NewRequestWithContext(requestContext, strings.TrimSpace(request.Method), strings.TrimSpace(request.URL), bytes.NewReader(body))
 	if err != nil {
 		return connector.HTTPResponse{}, fmt.Errorf("build Connector HTTP request: %w", err)
 	}
@@ -352,7 +368,7 @@ func (t *connectorTransport) ExecuteSQL(ctx context.Context, request connector.S
 		requestCtx, cancel = context.WithTimeout(ctx, request.Timeout)
 		defer cancel()
 	}
-	database, err := sql.Open(driver, request.DSN)
+	database, err := telemetry.OpenObservedSQL(driver, request.DSN, "connector", nil)
 	if err != nil {
 		return result, err
 	}

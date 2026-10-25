@@ -13,11 +13,19 @@ import (
 	"time"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-foundation/telemetry"
 )
 
 const maxConnectorProcessMessageBytes = int64(4 << 20)
 
-func (transport *connectorTransport) StartProcess(ctx context.Context, request connector.ProcessRequest) (connector.ProcessSession, error) {
+func (transport *connectorTransport) StartProcess(ctx context.Context, request connector.ProcessRequest) (session connector.ProcessSession, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureProcess, "connector.process", "start", map[string]any{
+			"executable": filepath.Base(strings.TrimSpace(request.Executable)), "argument_count": len(request.Arguments),
+			"working_directory_hash": connectorDiagnosticHash(request.WorkingDirectory), "max_message_bytes": request.MaxMessageBytes,
+		}, map[string]any{"started": session != nil}, started, returnErr)
+	}()
 	if transport == nil {
 		return nil, errors.New("Connector process transport is unavailable")
 	}
@@ -74,7 +82,11 @@ type connectorProcessSession struct {
 	closeErr        error
 }
 
-func (session *connectorProcessSession) SendLine(ctx context.Context, message []byte) error {
+func (session *connectorProcessSession) SendLine(ctx context.Context, message []byte) (returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureProcess, "connector.process", "send_line", map[string]any{"message_bytes": len(message)}, nil, started, returnErr)
+	}()
 	if session == nil || session.stdin == nil {
 		return errors.New("Connector process session is unavailable")
 	}
@@ -93,7 +105,11 @@ func (session *connectorProcessSession) SendLine(ctx context.Context, message []
 	return nil
 }
 
-func (session *connectorProcessSession) ReceiveLine(ctx context.Context) ([]byte, error) {
+func (session *connectorProcessSession) ReceiveLine(ctx context.Context) (message []byte, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureProcess, "connector.process", "receive_line", nil, map[string]any{"message_bytes": len(message)}, started, returnErr)
+	}()
 	if session == nil || session.scanner == nil {
 		return nil, errors.New("Connector process session is unavailable")
 	}
@@ -115,7 +131,11 @@ func (session *connectorProcessSession) ReceiveLine(ctx context.Context) ([]byte
 	return nil, io.EOF
 }
 
-func (session *connectorProcessSession) Close(ctx context.Context) error {
+func (session *connectorProcessSession) Close(ctx context.Context) (returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureProcess, "connector.process", "close", nil, nil, started, returnErr)
+	}()
 	if session == nil {
 		return nil
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/ratelimit"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 	redis "github.com/redis/go-redis/v9"
 )
 
@@ -58,6 +59,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 }
 
 func New(client redis.UniversalClient, prefix string) *RateLimiter {
+	redisdiagnostics.Install(client)
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
 		prefix = defaultPrefix

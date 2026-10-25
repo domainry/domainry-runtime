@@ -133,6 +133,7 @@ func LoadContract(sources ...Source) (Config, Snapshot, error) {
 func processEnvironmentOnlyConfig(name string) bool {
 	switch name {
 	case "LOG_LEVEL", "LOG_ENCODING", "LOG_CONSOLE", "LOG_DIRECTORY", "LOG_MAX_FILE_SIZE_MB", "LOG_RETENTION_DAYS", "LOG_MAX_TOTAL_SIZE_MB",
+		"LOG_DIAGNOSTIC_ENABLED", "LOG_DIAGNOSTIC_FEATURES", "LOG_HTTP_CONTENT", "LOG_SQL_STATEMENT", "LOG_CONTENT_MAX_BYTES", "LOG_DIAGNOSTIC_POLICY_FILE",
 		"WORKSPACE_PROVISION_FAILURE_POINT", "INITIAL_ACCEPTANCE_FIXTURES", "RUNTIME_ACCEPTANCE_FIXTURES_ENABLED",
 		"INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", "INSTALLATION_ADMINISTRATOR_REQUEST_ID", "INSTALLATION_ADMINISTRATOR_LOGIN_ID",
 		"INSTALLATION_ADMINISTRATOR_NAME", "INSTALLATION_ADMINISTRATOR_CREDENTIAL_FILE":
@@ -250,6 +251,18 @@ func (c Config) Validate() error {
 	}
 	if fileLoggingConfigured && (c.LogMaxFileSizeMB <= 0 || c.LogRetentionDays <= 0 || c.LogMaxTotalSizeMB <= 0 || c.LogMaxTotalSizeMB < c.LogMaxFileSizeMB) {
 		return errors.New("invalid process logging configuration: log file size and retention limits must be positive and total size must cover one file")
+	}
+	if c.LogContentMaxBytes != 0 && (c.LogContentMaxBytes < 1 || c.LogContentMaxBytes > 64<<10) {
+		return errors.New("invalid process logging configuration: LOG_CONTENT_MAX_BYTES must be between 1 and 65536")
+	}
+	allowedDiagnosticFeatures := map[string]bool{
+		"http_server": true, "http_client": true, "sql": true, "redis": true, "object_store": true,
+		"smtp": true, "mqtt": true, "filesystem": true, "process": true, "scanner": true,
+	}
+	for _, feature := range c.LogDiagnosticFeatures {
+		if !allowedDiagnosticFeatures[strings.ToLower(strings.TrimSpace(feature))] {
+			return fmt.Errorf("invalid process logging configuration: unsupported LOG_DIAGNOSTIC_FEATURES value %q", feature)
+		}
 	}
 	if strings.TrimSpace(os.Getenv("NOTIFICATION_TENANT_ID")) != "" {
 		return errors.New("NOTIFICATION_TENANT_ID is retired; Notification scope is derived from NOTIFICATION_WORKSPACE_ID")

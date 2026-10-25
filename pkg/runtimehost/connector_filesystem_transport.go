@@ -10,13 +10,22 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-foundation/telemetry"
 )
 
 const maxConnectorFilesystemReadBytes = int64(64 << 20)
 
-func (t *connectorTransport) ExecuteFilesystem(ctx context.Context, request connector.FilesystemRequest) (connector.FilesystemResult, error) {
+func (t *connectorTransport) ExecuteFilesystem(ctx context.Context, request connector.FilesystemRequest) (result connector.FilesystemResult, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureFilesystem, "connector.filesystem", string(request.Operation), map[string]any{
+			"root_hash": connectorDiagnosticHash(request.Root), "path_hash": connectorDiagnosticHash(request.Path),
+			"content_bytes": len(request.Content), "max_read_bytes": request.MaxReadBytes,
+		}, map[string]any{"exists": result.Exists, "size": result.Size, "path_hash": connectorDiagnosticHash(result.Path)}, started, returnErr)
+	}()
 	if t == nil {
 		return connector.FilesystemResult{}, errors.New("Connector filesystem transport is unavailable")
 	}

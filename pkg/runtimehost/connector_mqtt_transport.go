@@ -16,11 +16,27 @@ import (
 	"time"
 
 	connector "github.com/domainry/domainry-connector-sdk"
+	"github.com/domainry/domainry-foundation/telemetry"
 )
 
 const maxConnectorMQTTPayloadBytes = 1 << 20
 
 func (t *connectorTransport) ExecuteMQTT(ctx context.Context, request connector.MQTTRequest) (result connector.MQTTResult, returnErr error) {
+	started := time.Now()
+	operation := "publish"
+	if request.ProbeOnly {
+		operation = "probe"
+	}
+	defer func() {
+		endpoint, _ := url.Parse(strings.TrimSpace(request.BrokerURL))
+		host, scheme := "", ""
+		if endpoint != nil {
+			host, scheme = endpoint.Hostname(), endpoint.Scheme
+		}
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureMQTT, "mqtt", operation, map[string]any{
+			"host": host, "scheme": scheme, "qos": request.QoS, "payload_bytes": len(request.Payload),
+		}, map[string]any{"connected": result.Connected, "accepted": result.Accepted, "packet_id": result.PacketID}, started, returnErr)
+	}()
 	if t == nil {
 		return result, errors.New("Connector MQTT transport is unavailable")
 	}

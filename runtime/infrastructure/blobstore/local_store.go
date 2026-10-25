@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 )
 
@@ -37,7 +39,11 @@ func (*LocalStore) Descriptor() runtimefile.AdapterDescriptor {
 	return runtimefile.AdapterDescriptor{Provider: "domainry-local-filesystem", Revision: "v1"}
 }
 
-func (s *LocalStore) Stage(ctx context.Context, request runtimefile.BlobStageRequest) (runtimefile.BlobInfo, error) {
+func (s *LocalStore) Stage(ctx context.Context, request runtimefile.BlobStageRequest) (result runtimefile.BlobInfo, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordLocalBlobCall(ctx, "stage", map[string]any{"stage_hash": localDiagnosticHash(request.StageID), "max_bytes": request.MaxBytes}, result, started, returnErr)
+	}()
 	if err := ctx.Err(); err != nil {
 		return runtimefile.BlobInfo{}, err
 	}
@@ -96,7 +102,13 @@ func (s *LocalStore) Stage(ctx context.Context, request runtimefile.BlobStageReq
 	return runtimefile.BlobInfo{WorkspaceID: workspaceID, BlobKey: stageKey, ContentSHA256: hex.EncodeToString(hash.Sum(nil)), Size: size}, nil
 }
 
-func (s *LocalStore) Commit(ctx context.Context, request runtimefile.BlobCommitRequest) (runtimefile.BlobInfo, error) {
+func (s *LocalStore) Commit(ctx context.Context, request runtimefile.BlobCommitRequest) (result runtimefile.BlobInfo, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordLocalBlobCall(ctx, "commit", map[string]any{
+			"stage_hash": localDiagnosticHash(request.StageKey), "blob_hash": localDiagnosticHash(request.BlobKey), "size": request.Size,
+		}, result, started, returnErr)
+	}()
 	if err := ctx.Err(); err != nil {
 		return runtimefile.BlobInfo{}, err
 	}
@@ -141,7 +153,14 @@ func (s *LocalStore) Commit(ctx context.Context, request runtimefile.BlobCommitR
 	return s.Stat(ctx, request.WorkspaceID, request.BlobKey)
 }
 
-func (s *LocalStore) Open(ctx context.Context, workspaceID, blobKey string) (io.ReadCloser, error) {
+func (s *LocalStore) Open(ctx context.Context, workspaceID, blobKey string) (reader io.ReadCloser, returnErr error) {
+	started := time.Now()
+	defer func() {
+		telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
+			Feature: telemetry.DiagnosticFeatureObjectStore, Dependency: "local_blobstore", Operation: "open",
+			Input: map[string]any{"blob_hash": localDiagnosticHash(blobKey)},
+		}, telemetry.DependencyResult{Output: map[string]any{"opened": reader != nil}, Err: returnErr}, time.Since(started))
+	}()
 	return s.openFile(ctx, workspaceID, blobKey)
 }
 
@@ -177,7 +196,11 @@ func (s *LocalStore) openFile(ctx context.Context, workspaceID, blobKey string) 
 	return file, err
 }
 
-func (s *LocalStore) Stat(ctx context.Context, workspaceID, blobKey string) (runtimefile.BlobInfo, error) {
+func (s *LocalStore) Stat(ctx context.Context, workspaceID, blobKey string) (result runtimefile.BlobInfo, returnErr error) {
+	started := time.Now()
+	defer func() {
+		recordLocalBlobCall(ctx, "stat", map[string]any{"blob_hash": localDiagnosticHash(blobKey)}, result, started, returnErr)
+	}()
 	reader, err := s.openFile(ctx, workspaceID, blobKey)
 	if err != nil {
 		return runtimefile.BlobInfo{}, err
@@ -195,7 +218,14 @@ func (s *LocalStore) Stat(ctx context.Context, workspaceID, blobKey string) (run
 	return runtimefile.BlobInfo{WorkspaceID: strings.TrimSpace(workspaceID), BlobKey: strings.TrimSpace(blobKey), ContentSHA256: hex.EncodeToString(hash.Sum(nil)), Size: size, ModifiedAt: info.ModTime().UTC()}, nil
 }
 
-func (s *LocalStore) Delete(ctx context.Context, workspaceID, blobKey string) error {
+func (s *LocalStore) Delete(ctx context.Context, workspaceID, blobKey string) (returnErr error) {
+	started := time.Now()
+	defer func() {
+		telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
+			Feature: telemetry.DiagnosticFeatureObjectStore, Dependency: "local_blobstore", Operation: "delete",
+			Input: map[string]any{"blob_hash": localDiagnosticHash(blobKey)},
+		}, telemetry.DependencyResult{Err: returnErr}, time.Since(started))
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -231,6 +261,19 @@ func (s *LocalStore) path(workspaceID, blobKey string) (string, error) {
 func validLocalBlobKey(value string) bool {
 	value = strings.TrimSpace(value)
 	return localBlobKeyPattern.MatchString(value) && filepath.Base(value) == value && !strings.Contains(value, "..")
+}
+
+func recordLocalBlobCall(ctx context.Context, operation string, input map[string]any, result runtimefile.BlobInfo, started time.Time, err error) {
+	telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
+		Feature: telemetry.DiagnosticFeatureObjectStore, Dependency: "local_blobstore", Operation: operation, Input: input,
+	}, telemetry.DependencyResult{Output: map[string]any{
+		"blob_hash": localDiagnosticHash(result.BlobKey), "size": result.Size, "content_sha256": result.ContentSHA256,
+	}, Err: err}, time.Since(started))
+}
+
+func localDiagnosticHash(value string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(digest[:8])
 }
 
 type contextReader struct {

@@ -14,6 +14,7 @@ import (
 
 	identity "github.com/domainry/domainry-identity-sdk/authorization"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 	redis "github.com/redis/go-redis/v9"
 )
 
@@ -140,6 +141,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 }
 
 func New(client redis.UniversalClient, prefix string) *Cache {
+	redisdiagnostics.Install(client)
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
 		prefix = DefaultPrefix

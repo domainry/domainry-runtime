@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -28,7 +29,7 @@ func (Profile) EnsureProjectDatabase(ctx context.Context, cfg config.Config) err
 	}
 	maintenance := target.Copy()
 	maintenance.Database = "postgres"
-	database := sql.OpenDB(stdlib.GetConnector(*maintenance))
+	database := sql.OpenDB(telemetry.WrapSQLConnector(stdlib.GetConnector(*maintenance), "runtime", nil))
 	defer database.Close()
 	var exists bool
 	if err := database.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", databaseName).Scan(&exists); err != nil {

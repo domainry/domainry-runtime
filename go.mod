@@ -7,32 +7,32 @@ toolchain go1.26.6
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.91
+	github.com/domainry/domainry-agent v0.1.92
 	github.com/domainry/domainry-agent-sdk v0.1.54
 	github.com/domainry/domainry-audit v0.1.41
 	github.com/domainry/domainry-audit-sdk v0.1.18
 	github.com/domainry/domainry-connector-sdk v0.1.15
 	github.com/domainry/domainry-data-exchange v0.3.36
 	github.com/domainry/domainry-data-exchange-sdk v0.3.17
-	github.com/domainry/domainry-foundation v0.2.14
-	github.com/domainry/domainry-identity v0.2.67
+	github.com/domainry/domainry-foundation v0.2.16
+	github.com/domainry/domainry-identity v0.2.69
 	github.com/domainry/domainry-identity-sdk v0.1.35
-	github.com/domainry/domainry-integration v0.1.57
+	github.com/domainry/domainry-integration v0.1.58
 	github.com/domainry/domainry-integration-sdk v0.1.23
-	github.com/domainry/domainry-knowledge v0.1.61
-	github.com/domainry/domainry-knowledge-sdk v0.1.26
+	github.com/domainry/domainry-knowledge v0.1.65
+	github.com/domainry/domainry-knowledge-sdk v0.1.27
 	github.com/domainry/domainry-lifecycle v0.1.41
 	github.com/domainry/domainry-lifecycle-sdk v0.1.29
 	github.com/domainry/domainry-metadata v0.1.35
 	github.com/domainry/domainry-metadata-sdk v0.1.16
 	github.com/domainry/domainry-monitoring-sdk v0.1.13
-	github.com/domainry/domainry-notification v0.1.36
+	github.com/domainry/domainry-notification v0.1.37
 	github.com/domainry/domainry-notification-sdk v0.1.22
 	github.com/domainry/domainry-report v0.1.41
 	github.com/domainry/domainry-report-sdk v0.1.26
-	github.com/domainry/domainry-scheduler v0.1.44
+	github.com/domainry/domainry-scheduler v0.1.45
 	github.com/domainry/domainry-scheduler-sdk v0.1.23
-	github.com/domainry/domainry-todo v0.1.33
+	github.com/domainry/domainry-todo v0.1.34
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -58,6 +58,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
+	github.com/domainry/domainry-connectors v0.1.22 // indirect
 	github.com/domainry/domainry-todo-sdk v0.1.18 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect

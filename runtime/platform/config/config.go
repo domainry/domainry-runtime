@@ -27,6 +27,12 @@ type Config struct {
 	LogMaxFileSizeMB                        int
 	LogRetentionDays                        int
 	LogMaxTotalSizeMB                       int
+	LogDiagnosticEnabled                    bool
+	LogDiagnosticFeatures                   []string
+	LogHTTPContent                          bool
+	LogSQLStatement                         bool
+	LogContentMaxBytes                      int
+	LogDiagnosticPolicyFile                 string
 	AppLocale                               string
 	HTTPBindHost                            string
 	Port                                    string
@@ -218,6 +224,12 @@ func FromEnv() Config {
 		LogMaxFileSizeMB:                                intEnv("LOG_MAX_FILE_SIZE_MB", 100),
 		LogRetentionDays:                                intEnv("LOG_RETENTION_DAYS", 30),
 		LogMaxTotalSizeMB:                               intEnv("LOG_MAX_TOTAL_SIZE_MB", 2048),
+		LogDiagnosticEnabled:                            boolEnv("LOG_DIAGNOSTIC_ENABLED", true),
+		LogDiagnosticFeatures:                           csvEnv("LOG_DIAGNOSTIC_FEATURES", []string{"http_server", "http_client", "sql", "redis", "object_store", "smtp", "mqtt", "filesystem", "process", "scanner"}),
+		LogHTTPContent:                                  boolEnv("LOG_HTTP_CONTENT", true),
+		LogSQLStatement:                                 boolEnv("LOG_SQL_STATEMENT", true),
+		LogContentMaxBytes:                              intEnv("LOG_CONTENT_MAX_BYTES", 16<<10),
+		LogDiagnosticPolicyFile:                         strings.TrimSpace(os.Getenv("LOG_DIAGNOSTIC_POLICY_FILE")),
 		AppLocale:                                       env("APP_LOCALE", "en-US"),
 		HTTPBindHost:                                    strings.TrimSpace(os.Getenv("HTTP_BIND_HOST")),
 		Port:                                            env("PORT", "8081"),
