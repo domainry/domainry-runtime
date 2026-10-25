@@ -103,6 +103,31 @@ func (c ActionConnectorCapability) Valid() bool {
 // service container.
 type Handler[Capabilities, Input, Output any] func(context.Context, Capabilities, Input) (Output, error)
 
+// GeneratedActionOutputField declares one Handler result field with no Object
+// field lineage. It is intentionally narrower than Runtime's internal output
+// model so project bindings can describe Runtime-generated values without
+// importing Runtime implementation packages.
+type GeneratedActionOutputField struct {
+	Key      string
+	Type     string
+	Required bool
+	Repeated bool
+}
+
+// GeneratedActionOutputFields converts source-owned generated output
+// declarations into the closed Runtime Action contract. Object-backed output
+// must continue to use the generated binding APIs that preserve field lineage.
+func GeneratedActionOutputFields(fields ...GeneratedActionOutputField) []definitionmodel.ActionOutputField {
+	result := make([]definitionmodel.ActionOutputField, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, definitionmodel.ActionOutputField{
+			Key: strings.TrimSpace(field.Key), Type: strings.TrimSpace(field.Type),
+			Required: field.Required, Repeated: field.Repeated,
+		})
+	}
+	return result
+}
+
 // HandlerDescriptor is the Runtime-readable identity of a typed Handler
 // wrapper.
 type HandlerDescriptor struct {
