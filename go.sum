@@ -74,10 +74,10 @@ github.com/domainry/domainry-integration v0.1.60 h1:Ci0p4HJDQc04ChDb4sJ1mjfQ21Kv
 github.com/domainry/domainry-integration v0.1.60/go.mod h1:mzkRs0bSdbXyvNlpy93IacpcZIPQkemBEWe34d8DBZ8=
 github.com/domainry/domainry-integration-sdk v0.1.27 h1:WcXNE2Z6BsEo+GkFDQ36gAXbQSsK4d5Pro2NjK8n6uc=
 github.com/domainry/domainry-integration-sdk v0.1.27/go.mod h1:B2qa6q0+htOB05pScG19Szgeqd1tJqWeSg3pmcxnChE=
-github.com/domainry/domainry-knowledge v0.1.74 h1:NADrNODBYgm+ufMj+1jmAh3oy49O86q7RLCGYGYOGWA=
-github.com/domainry/domainry-knowledge v0.1.74/go.mod h1:UY0RLHygMhTtcTN/4OWFBpuZmSAW6+KSZ5vCDHjMCmc=
-github.com/domainry/domainry-knowledge-sdk v0.1.33 h1:YpBW+o3H4hCS2w1L5R6rRqTwOL+y4OwBPVC3MKn3XGc=
-github.com/domainry/domainry-knowledge-sdk v0.1.33/go.mod h1:7V2V4Ner0o9+KqTShZOIKeVE70QA01YWNsfeVMoQYPc=
+github.com/domainry/domainry-knowledge v0.1.75 h1:dfRfN5WvOXrYgdOga5u7d/Sv4ZvbVk7EHFeNwTlG6KQ=
+github.com/domainry/domainry-knowledge v0.1.75/go.mod h1:sSBK+Iw5Vi6nWwEWYiOK1i6u+ji06vRGrz+2NxNcovo=
+github.com/domainry/domainry-knowledge-sdk v0.1.34 h1:o3rQ0bzdyP0XRCO3vnw9B3oMeLoGUFCGVM5uDl9TJ3c=
+github.com/domainry/domainry-knowledge-sdk v0.1.34/go.mod h1:7V2V4Ner0o9+KqTShZOIKeVE70QA01YWNsfeVMoQYPc=
 github.com/domainry/domainry-lifecycle v0.1.44 h1:MiTBspmz5GXTpcbp6FFaFWjKX2TJqp4W/5SRL1Dqrnc=
 github.com/domainry/domainry-lifecycle v0.1.44/go.mod h1:UL2LyY+W5SK8uCR4Mr7w+H+to0UnroMQc+J6XYEw5hY=
 github.com/domainry/domainry-lifecycle-sdk v0.1.32 h1:+UsboTJEE8i8kDvG1yqZvEXr8Y9tmdBT3uUjteD5QSc=
