@@ -67,9 +67,12 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 			},
 			NonHTTP: []actioncontract.NonHTTPBinding{{Kind: "runtime_object_action", InvocationKey: key}},
 			Permission: &actioncontract.PermissionDefinition{
-				Key: key, Owner: owner, ResourceKey: objectKey, OperationKey: operation.key,
+				Key: key, Owner: owner, ModuleKey: "business", GroupKey: objectKey,
+				ResourceKey: objectKey, OperationKey: operation.key,
 				Label: capabilityLabel + " · " + operation.label, Category: capabilityLabel,
-				GrantMode: grantMode, LifecycleStatus: actioncontract.LifecycleActive,
+				GrantMode: grantMode, ScopeKind: actioncontract.PermissionScopeRecord, ObjectKey: objectKey,
+				DefaultLocale: "en", I18n: objectPermissionText(object, capabilityLabel, operation.key, operation.label),
+				LifecycleStatus: actioncontract.LifecycleActive,
 			},
 			EffectClass: operation.effect, RiskLevel: operation.risk,
 			IdempotencyDecision: operation.idempotency, AuditClass: "record_authorization", LifecycleStatus: actioncontract.LifecycleActive,
@@ -80,4 +83,51 @@ func DefaultActionsForObject(object definitionmodel.ObjectSchema, owner string) 
 		definitions = append(definitions, definition)
 	}
 	return definitions, nil
+}
+
+func objectPermissionText(object definitionmodel.ObjectSchema, capabilityLabel, operationKey, operationLabel string) actioncontract.PermissionLocalizedText {
+	result := actioncontract.PermissionLocalizedText{
+		"en": {
+			ModuleLabel: "Business data", GroupLabel: capabilityLabel, ResourceLabel: capabilityLabel,
+			OperationLabel: operationLabel, Label: capabilityLabel + " · " + operationLabel,
+			Description: strings.TrimSpace(object.Description),
+		},
+	}
+	for locale, values := range object.I18n {
+		localizedName := strings.TrimSpace(values["name"])
+		if localizedName == "" {
+			localizedName = capabilityLabel
+		}
+		localizedOperation := localizedObjectOperation(locale, operationKey, operationLabel)
+		result[locale] = actioncontract.PermissionText{
+			ModuleLabel: localizedBusinessModule(locale), GroupLabel: localizedName, ResourceLabel: localizedName,
+			OperationLabel: localizedOperation, Label: localizedName + " · " + localizedOperation,
+			Description: strings.TrimSpace(values["description"]),
+		}
+	}
+	return result
+}
+
+func localizedBusinessModule(locale string) string {
+	switch strings.ToLower(strings.TrimSpace(locale)) {
+	case "zh-cn", "zh-hans":
+		return "业务数据"
+	case "zh-tw", "zh-hant":
+		return "業務資料"
+	default:
+		return "Business data"
+	}
+}
+
+func localizedObjectOperation(locale, operationKey, fallback string) string {
+	translations := map[string]map[string]string{
+		"zh-cn":   {"create": "新建", "read": "查看", "update": "编辑", "delete": "删除", "import": "导入", "export": "导出"},
+		"zh-hans": {"create": "新建", "read": "查看", "update": "编辑", "delete": "删除", "import": "导入", "export": "导出"},
+		"zh-tw":   {"create": "新增", "read": "檢視", "update": "編輯", "delete": "刪除", "import": "匯入", "export": "匯出"},
+		"zh-hant": {"create": "新增", "read": "檢視", "update": "編輯", "delete": "刪除", "import": "匯入", "export": "匯出"},
+	}
+	if value := translations[strings.ToLower(strings.TrimSpace(locale))][operationKey]; value != "" {
+		return value
+	}
+	return fallback
 }

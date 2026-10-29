@@ -47,3 +47,23 @@ func TestRestoredSQLiteLoadsTheOriginalInitialWorkspace(t *testing.T) {
 		t.Fatalf("restored installation=%+v expected=%+v found=%t error=%v", observed, expected, found, err)
 	}
 }
+
+func TestInitializeExternalInstallationUsesConfiguredWorkspaceAuthority(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "external.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	installation, err := InitializeExternalInstallation(t.Context(), store, "workspace-primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installation.WorkspaceID != "workspace-primary" {
+		t.Fatalf("workspace=%q", installation.WorkspaceID)
+	}
+	loaded, found, err := LoadInstallation(t.Context(), store)
+	if err != nil || !found || loaded.WorkspaceID != installation.WorkspaceID {
+		t.Fatalf("loaded=%+v found=%t error=%v", loaded, found, err)
+	}
+}

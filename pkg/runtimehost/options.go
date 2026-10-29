@@ -9,6 +9,7 @@ import (
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
 	knowledgefiles "github.com/domainry/domainry-knowledge-sdk/files"
@@ -39,6 +40,11 @@ type Options struct {
 	// injects domainry-identity-sdk/remote.Factory. Runtime never selects or
 	// switches the deployment topology.
 	IdentityFactory identitysdk.Factory
+	// IdentityBrowserGatewayFactory creates the same-origin browser session
+	// adapter for a SaaS Identity Binding. The SDK owns the protocol and cookie
+	// handling; Runtime only mounts the project-selected adapter. Module Identity
+	// already owns its browser routes and therefore rejects this option.
+	IdentityBrowserGatewayFactory func(identitysdk.Binding) (identityhttpapi.Adapter, error)
 	// AuditFactory is selected by the project composition root. Runtime never
 	// imports or constructs the source Audit implementation.
 	AuditFactory auditsdk.Factory

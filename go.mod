@@ -9,29 +9,29 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/domainry/domainry-agent v0.1.94
 	github.com/domainry/domainry-agent-sdk v0.1.56
-	github.com/domainry/domainry-audit v0.1.44
+	github.com/domainry/domainry-audit v0.1.45
 	github.com/domainry/domainry-audit-sdk v0.1.21
 	github.com/domainry/domainry-connector-sdk v0.1.18
-	github.com/domainry/domainry-data-exchange v0.3.39
-	github.com/domainry/domainry-data-exchange-sdk v0.3.20
-	github.com/domainry/domainry-foundation v0.2.18
-	github.com/domainry/domainry-identity v0.2.71
-	github.com/domainry/domainry-identity-sdk v0.1.38
+	github.com/domainry/domainry-data-exchange v0.3.40
+	github.com/domainry/domainry-data-exchange-sdk v0.3.21
+	github.com/domainry/domainry-foundation v0.2.19
+	github.com/domainry/domainry-identity v0.2.73
+	github.com/domainry/domainry-identity-sdk v0.1.39
 	github.com/domainry/domainry-integration v0.1.60
-	github.com/domainry/domainry-integration-sdk v0.1.26
-	github.com/domainry/domainry-knowledge v0.1.70
-	github.com/domainry/domainry-knowledge-sdk v0.1.30
+	github.com/domainry/domainry-integration-sdk v0.1.27
+	github.com/domainry/domainry-knowledge v0.1.71
+	github.com/domainry/domainry-knowledge-sdk v0.1.31
 	github.com/domainry/domainry-lifecycle v0.1.44
 	github.com/domainry/domainry-lifecycle-sdk v0.1.32
-	github.com/domainry/domainry-metadata v0.1.38
+	github.com/domainry/domainry-metadata v0.1.39
 	github.com/domainry/domainry-metadata-sdk v0.1.19
-	github.com/domainry/domainry-monitoring-sdk v0.1.16
-	github.com/domainry/domainry-notification v0.1.40
+	github.com/domainry/domainry-monitoring-sdk v0.1.17
+	github.com/domainry/domainry-notification v0.1.41
 	github.com/domainry/domainry-notification-sdk v0.1.25
-	github.com/domainry/domainry-report v0.1.43
+	github.com/domainry/domainry-report v0.1.44
 	github.com/domainry/domainry-report-sdk v0.1.29
 	github.com/domainry/domainry-scheduler v0.1.48
-	github.com/domainry/domainry-scheduler-sdk v0.1.26
+	github.com/domainry/domainry-scheduler-sdk v0.1.27
 	github.com/domainry/domainry-todo v0.1.36
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0

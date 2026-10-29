@@ -51,7 +51,7 @@ func newProjectWorkspaceManager(ctx context.Context, cfg config.Config, factory 
 		return nil, err
 	}
 	if _, external := factory.(identitysdk.ExternalDatabaseFactory); external && !found {
-		installation, err = workspaceprovision.InitializeExternalInstallation(ctx, database)
+		installation, err = workspaceprovision.InitializeExternalInstallation(ctx, database, cfg.IdentityWorkspaceID)
 		if err != nil {
 			return nil, err
 		}
@@ -105,13 +105,13 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, model proj
 	// Bootstrap receives only the validated Workspace-login subset. Ordinary
 	// publication later receives the complete catalog, including validated
 	// internal service roles.
-	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(model.Objects, model.Roles, model.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience, handlerDescriptors...)
+	roleCatalog, err := runtimebootstrap.RuntimeWorkspaceBootstrapRoleCatalog(model.Objects, model.Roles, model.InitialWorkspaceAdministratorRole, model.ProjectKey, handlerDescriptors...)
 	if err != nil {
 		return fmt.Errorf("compile roles for initial Workspace: %w", err)
 	}
 	initialRoleCatalog := roleCatalog
 	if manager.bootstrap != nil && manager.cfg.InstallationAdministratorBootstrapEnabled {
-		initialRoleCatalog, err = runtimebootstrap.RuntimeInstallationWorkspaceBootstrapRoleCatalog(model.Objects, model.Roles, model.InitialWorkspaceAdministratorRole, manager.cfg.IdentityAudience, handlerDescriptors...)
+		initialRoleCatalog, err = runtimebootstrap.RuntimeInstallationWorkspaceBootstrapRoleCatalog(model.Objects, model.Roles, model.InitialWorkspaceAdministratorRole, model.ProjectKey, handlerDescriptors...)
 		if err != nil {
 			return fmt.Errorf("compile installation roles for initial Workspace: %w", err)
 		}
@@ -345,7 +345,7 @@ func (manager *projectWorkspaceManager) publishInstallationAdministratorRole(ctx
 	if !ok {
 		return fmt.Errorf("explicit installation administrator bootstrap requires embedded Identity role publication")
 	}
-	catalog, err := runtimebootstrap.RuntimeInstallationWorkspaceProjectRoleCatalog(nil, nil, installation.WorkspaceID, manager.cfg.IdentityAudience)
+	catalog, err := runtimebootstrap.RuntimeInstallationWorkspaceProjectRoleCatalog(nil, nil, installation.WorkspaceID, manager.bootstrapRoleCatalog.SourceOwner)
 	if err != nil {
 		return fmt.Errorf("compile installation administrator role: %w", err)
 	}

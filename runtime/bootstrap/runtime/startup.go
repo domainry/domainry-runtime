@@ -504,17 +504,11 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	workspaceRolePolicy := workspaceprovisionpersistence.WorkspaceBootstrapRolePolicyEvidence{}
 	initialWorkspaceAdministratorRole := projectModel.InitialWorkspaceAdministratorRole
-	for _, role := range projectModel.Roles {
-		if !role.ProvisionToWorkspaces || identityBinding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
-			continue
-		}
-		bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, projectModel.Roles, initialWorkspaceAdministratorRole, cfg.IdentityAudience, handlerDescriptors...)
-		mustCompleteRuntimeStartup(catalogErr)
-		workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog)
-		mustCompleteRuntimeStartup(catalogErr)
-		initialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
-		break
-	}
+	bootstrapRoleCatalog, catalogErr := RuntimeWorkspaceBootstrapRoleCatalog(records.Schema().Objects, projectModel.Roles, initialWorkspaceAdministratorRole, projectModel.ProjectKey, handlerDescriptors...)
+	mustCompleteRuntimeStartup(catalogErr)
+	workspaceRolePolicy, catalogErr = workspaceprovisionpersistence.NewWorkspaceBootstrapRolePolicyEvidence(bootstrapRoleCatalog)
+	mustCompleteRuntimeStartup(catalogErr)
+	initialWorkspaceAdministratorRole = bootstrapRoleCatalog.InitialWorkspaceAdministratorRoleKey
 	authorizationRegistry, err := reconcileRuntimeIdentityAuthorization(ctx, identityBinding, records.Schema(), authorizationModuleActions, nil, projectModel.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.IdentityRedirectURLs, schemaCapabilities)
 	mustCompleteRuntimeStartup(err)
 	authorizationRegistrySnapshot := &runtimeAuthorizationRegistrySnapshot{}
@@ -522,7 +516,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if binder, embedded := identityBinding.(identitysdk.PermissionUsageProviderBinder); embedded {
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
-	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, projectModel.Roles, cfg.IdentityWorkspaceID, cfg.IdentityAudience, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...))
+	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, projectModel.Roles, cfg.IdentityWorkspaceID, projectModel.ProjectKey, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...))
 	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {

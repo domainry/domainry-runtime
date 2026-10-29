@@ -1,6 +1,9 @@
 package projection
 
-import definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+import (
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
+)
 
 // RecordTimerSystemObjects contains the Runtime-owned record timer lifecycle.
 func RecordTimerSystemObjects() []definitionmodel.ObjectSchema {
@@ -81,8 +84,13 @@ func recordTimerEventObject() definitionmodel.ObjectSchema {
 }
 
 func recordTimerSystemObject(key, name, description string, fields []definitionmodel.FieldSchema) definitionmodel.ObjectSchema {
+	localized := map[string]map[string]string{
+		"record_timer":       {"name": "记录定时器", "description": "用于业务记录的持久化动作和工作流定时任务。"},
+		"record_timer_event": {"name": "记录定时器事件", "description": "记录定时任务执行过程的不可变审计证据。"},
+	}[key]
 	return definitionmodel.ObjectSchema{
 		Key: key, Name: name, Description: description, Fields: fields,
+		I18n:                    localizationmodel.LocalizedTextMap{"zh-CN": localized},
 		DirectGrantCapabilities: &definitionmodel.ObjectCapabilitySet{},
 		Config:                  map[string]any{"runtime_owned": true, "system_kind": "record_timer", "record_timer_runtime": true},
 	}

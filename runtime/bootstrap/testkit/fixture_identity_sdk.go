@@ -465,7 +465,7 @@ func (binding *fixtureIdentityBinding) Reconcile(_ context.Context, request iden
 	}
 	binding.permissions[request.SourceOwner] = definitions
 	binding.permissionSnapshotHashes[request.SourceOwner] = request.SnapshotHash
-	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: currentSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(definitions), Updated: len(definitions)}, nil
+	return identitysdk.PermissionReconcileReceipt{SourceOwner: request.SourceOwner, PreviousSnapshotHash: currentSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(definitions), Updated: len(definitions)}, nil
 }
 
 func (binding *fixtureIdentityBinding) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
@@ -482,7 +482,7 @@ func (binding *fixtureIdentityBinding) CurrentSourceSnapshot(_ context.Context, 
 	snapshotHash := binding.permissionSnapshotHashes[request.SourceOwner]
 	binding.mu.RUnlock()
 	return identitysdk.PermissionSourceSnapshot{
-		WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner,
+		SourceOwner:  request.SourceOwner,
 		SnapshotHash: snapshotHash, Definitions: definitions,
 	}, nil
 }

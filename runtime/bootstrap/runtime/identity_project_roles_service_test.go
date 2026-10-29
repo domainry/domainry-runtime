@@ -14,12 +14,7 @@ func TestWorkspaceRoleCatalogAcceptsManualServiceAccountRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bootstrap) != 0 || len(complete) != 1 || complete[0].Key != role.Key {
+	if len(bootstrap) != 1 || bootstrap[0].Key != role.Key || len(complete) != 1 || complete[0].Key != role.Key {
 		t.Fatalf("bootstrap=%#v complete=%#v", bootstrap, complete)
-	}
-
-	role.ProvisionToWorkspaces = true
-	if _, _, err = runtimeWorkspaceRoleCatalogRoles([]projectmodel.Role{role}); err == nil {
-		t.Fatal("service role was accepted as a human Workspace bootstrap role")
 	}
 }

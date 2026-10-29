@@ -88,7 +88,7 @@ type Project struct {
 	Name                              string `json:"name"`
 	DefaultLocale                     string `json:"default_locale,omitempty"`
 	TimeZone                          string `json:"time_zone,omitempty"`
-	InitialWorkspaceAdministratorRole string `json:"initial_workspace_administrator_role"`
+	InitialWorkspaceAdministratorRole string `json:"initial_workspace_administrator_role,omitempty"`
 	// SubjectErasureDefault is the project's explicit default for fields on
 	// records linked to a Runtime user. Empty keeps fail-closed preflight.
 	SubjectErasureDefault string `json:"subject_erasure_default,omitempty"`
@@ -100,6 +100,7 @@ type Role struct {
 	PlatformRoleExtension bool                               `json:"platform_role_extension,omitempty"`
 	Key                   string                             `json:"key,omitempty"`
 	Name                  string                             `json:"name"`
+	Description           string                             `json:"description,omitempty"`
 	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
 	Permissions           []RolePermission                   `json:"permissions"`
 	FieldPermissions      []RoleFieldPermission              `json:"field_permissions,omitempty"`
@@ -115,7 +116,7 @@ type Role struct {
 	PermissionSetGroups   []string                           `json:"permission_set_group_keys,omitempty"`
 	GuardrailKeys         []string                           `json:"guardrail_keys,omitempty"`
 	Guardrails            []RoleGuardrailPolicy              `json:"guardrails,omitempty"`
-	ProvisionToWorkspaces bool                               `json:"provision_to_workspaces,omitempty"`
+	MenuKeys              []string                           `json:"menu_keys,omitempty"`
 }
 
 type RolePermission struct {

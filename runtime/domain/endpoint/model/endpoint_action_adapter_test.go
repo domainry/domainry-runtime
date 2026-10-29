@@ -24,7 +24,7 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definition.Key != contract.ActionKey || definition.OperationLabel != contract.ApplicationUseCase || definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission == nil || definition.Permission.Key != definition.Key {
+	if definition.Key != contract.ActionKey || definition.OperationLabel != "Provision workspace" || definition.Authorization.Strategy != actioncontract.AuthorizationAuthenticated || definition.Permission == nil || definition.Permission.Key != definition.Key {
 		t.Fatalf("definition=%#v", definition)
 	}
 	if definition.HTTP == nil || definition.HTTP.RouteTemplate != "/workspaces" || definition.ApprovalPolicies[0] != actioncontract.ApprovalConfirmation {
@@ -32,6 +32,9 @@ func TestAuthorizationActionDefinitionProjectsStaticEndpointAsSameKeyPermission(
 	}
 	if definition.Permission.GrantMode != actioncontract.PermissionGrantInternal {
 		t.Fatalf("workspace provisioning permission is directly grantable: %#v", definition.Permission)
+	}
+	if definition.Permission.ModuleKey != "runtime" || definition.Permission.GroupKey != "runtime.workspaceprovision" || definition.Permission.DefaultLocale != "en" || definition.Permission.I18n["zh-CN"].Label != "工作区 · 创建工作区" {
+		t.Fatalf("workspace provisioning permission presentation is incomplete: %#v", definition.Permission)
 	}
 }
 

@@ -17,7 +17,7 @@ func ValidatePlatformRoleExtension(role Role) error {
 		return fmt.Errorf("platform role extension %q must declare explicit business grants", role.Key)
 	}
 	if role.Name != "Installation administrator" || role.Audience != "user" || role.AssignmentMode != "system_managed" || role.RiskLevel != "privileged" ||
-		role.ProvisionToWorkspaces || role.RequiredBindingKey != "" || len(role.I18n) != 0 || len(role.ConflictRoleKeys) != 0 || len(role.GrantableRoleKeys) != 0 ||
+		role.RequiredBindingKey != "" || len(role.I18n) != 0 || len(role.ConflictRoleKeys) != 0 || len(role.GrantableRoleKeys) != 0 || len(role.MenuKeys) != 0 ||
 		len(role.PermissionSetKeys) != 0 || len(role.PermissionSetGroups) != 0 || len(role.GuardrailKeys) != 0 || len(role.Guardrails) != 0 {
 		return fmt.Errorf("platform role extension %q cannot change platform-owned identity or assignment policy", role.Key)
 	}

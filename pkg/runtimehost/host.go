@@ -486,6 +486,20 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 			if err != nil {
 				return nil, err
 			}
+			browserAdapters := []modulehttp.Adapter{}
+			if options.IdentityBrowserGatewayFactory != nil {
+				if identityBinding.Descriptor().Mode != identitysdk.DeploymentModeSaaS {
+					return nil, fmt.Errorf("Identity browser gateway is only valid for a SaaS binding")
+				}
+				adapter, gatewayErr := options.IdentityBrowserGatewayFactory(identityBinding)
+				if gatewayErr != nil {
+					return nil, fmt.Errorf("create Identity SaaS browser gateway: %w", gatewayErr)
+				}
+				if adapter == nil {
+					return nil, fmt.Errorf("Identity SaaS browser gateway factory returned no adapter")
+				}
+				browserAdapters = append(browserAdapters, adapter)
+			}
 			for group, router := range identityRouters {
 				if err := router.Bind(workspaceManager.Adapters(), moduleGuard); err != nil {
 					return nil, fmt.Errorf("mount Identity HTTP adapters on %s listener: %w", group, err)
@@ -546,6 +560,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				return nil, errors.New("Runtime bootstrap returned no process")
 			}
 			moduleAdapters := append([]modulehttp.Adapter(nil), workspaceManager.Adapters()...)
+			moduleAdapters = append(moduleAdapters, browserAdapters...)
 			runtimeModuleAdapters := []modulehttp.Adapter{}
 			if provider, ok := runtime.(runtimeModuleAdapterProcess); ok {
 				runtimeModuleAdapters = provider.ModuleHTTPAdapters()

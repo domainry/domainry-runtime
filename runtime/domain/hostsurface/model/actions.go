@@ -16,8 +16,17 @@ func ModuleInventoryAction() actioncontract.ActionDefinition {
 		OperationKey: "list", OperationLabel: "List Runtime modules", Label: "List Runtime modules", Exposures: []actioncontract.Exposure{actioncontract.ExposureOps},
 		Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
 		HTTP:          &actioncontract.HTTPBinding{Method: http.MethodGet, RouteTemplate: "/discovery/modules"},
-		Permission:    &actioncontract.PermissionDefinition{Key: "runtime.discovery.modules.list", Owner: "runtime:builtin", ResourceKey: "runtime.discovery.modules", OperationKey: "list", Label: "List Runtime modules", Category: "Runtime", LifecycleStatus: actioncontract.LifecycleActive},
-		EffectClass:   actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_module_inventory_read", LifecycleStatus: actioncontract.LifecycleActive,
+		Permission: &actioncontract.PermissionDefinition{
+			Key: "runtime.discovery.modules.list", Owner: "runtime:builtin", ModuleKey: "runtime", GroupKey: "runtime.discovery",
+			ResourceKey: "runtime.discovery.modules", OperationKey: "list", Label: "List Runtime modules", Category: "Runtime",
+			GrantMode: actioncontract.PermissionGrantInternal, ScopeKind: actioncontract.PermissionScopeNone, DefaultLocale: "en",
+			I18n: actioncontract.PermissionLocalizedText{
+				"en":    {ModuleLabel: "Runtime", GroupLabel: "Runtime discovery", ResourceLabel: "Loaded modules", OperationLabel: "List", Label: "List loaded Runtime modules", Description: "Allows viewing the modules loaded by this Runtime instance."},
+				"zh-CN": {ModuleLabel: "Runtime", GroupLabel: "Runtime 发现", ResourceLabel: "已加载模块", OperationLabel: "查看列表", Label: "查看 Runtime 已加载模块", Description: "允许查看当前 Runtime 实例已加载的模块。"},
+			},
+			LifecycleStatus: actioncontract.LifecycleActive,
+		},
+		EffectClass: actioncontract.EffectRead, RiskLevel: actioncontract.RiskLow, IdempotencyDecision: "not_applicable", AuditClass: "runtime_module_inventory_read", LifecycleStatus: actioncontract.LifecycleActive,
 	}
 }
 

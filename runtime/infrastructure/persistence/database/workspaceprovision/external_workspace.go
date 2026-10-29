@@ -18,7 +18,7 @@ import (
 
 // InitializeExternalInstallation records technical installation authority without
 // creating an account or promoting the first external user to administrator.
-func InitializeExternalInstallation(ctx context.Context, store *database.RuntimeStore) (Installation, error) {
+func InitializeExternalInstallation(ctx context.Context, store *database.RuntimeStore, configuredWorkspaceID ...string) (Installation, error) {
 	if err := store.EnsureRuntimeSchema(ctx); err != nil {
 		return Installation{}, err
 	}
@@ -29,9 +29,19 @@ func InitializeExternalInstallation(ctx context.Context, store *database.Runtime
 	if err != nil {
 		return Installation{}, err
 	}
-	id, err := randomID("ws")
-	if err != nil {
-		return Installation{}, err
+	id := ""
+	if len(configuredWorkspaceID) > 0 {
+		id = strings.TrimSpace(configuredWorkspaceID[0])
+	}
+	if strings.EqualFold(id, "default") {
+		return Installation{}, fmt.Errorf("external installation Workspace authority is invalid")
+	}
+	if id == "" {
+		var err error
+		id, err = randomID("ws")
+		if err != nil {
+			return Installation{}, err
+		}
 	}
 	tx, err := store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {

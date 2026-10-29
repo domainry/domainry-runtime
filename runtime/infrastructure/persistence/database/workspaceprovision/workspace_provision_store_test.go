@@ -446,10 +446,11 @@ func newWorkspaceProvisionTestStore(t *testing.T) (*database.RuntimeStore, *iden
 func workspaceBootstrapRolePolicyForTest(t *testing.T) WorkspaceBootstrapRolePolicyEvidence {
 	t.Helper()
 	policy, err := NewWorkspaceBootstrapRolePolicyEvidence(identitysdk.ProjectRoleCatalog{
+		SourceOwner:                          "application:runtime",
 		InitialWorkspaceAdministratorRoleKey: "crm_acceptance_admin",
 		Roles: []identitysdk.ProjectRoleDefinition{{
 			Key: "crm_acceptance_admin", Name: "CRM acceptance administrator",
-			Audience: "user", AssignmentMode: "manual", ProvisionToWorkspaces: true,
+			Audience: "user", AssignmentMode: "manual",
 		}},
 	})
 	if err != nil {

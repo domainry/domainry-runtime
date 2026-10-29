@@ -71,9 +71,9 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	if err := bootstrap.BindOperationsPersistence(); err != nil {
 		t.Fatal(err)
 	}
-	catalog := identitysdk.ProjectRoleCatalog{Application: identitysdk.ApplicationRef{ApplicationKey: "runtime"}, InitialWorkspaceAdministratorRoleKey: "member", Roles: []identitysdk.ProjectRoleDefinition{
-		{Key: "member", Name: "Member", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: dataexchange.ActionDataExchangeJobGet, DataScope: "owner"}, {PermissionKey: dataexchange.ActionDataExchangeJobDownload, DataScope: "owner"}, {PermissionKey: "customer.read", DataScope: "owner"}, {PermissionKey: "customer.export", DataScope: "owner"}}},
-		{Key: "member_onboarding", Name: "Onboarding", Audience: "any", AssignmentMode: "manual", ProvisionToWorkspaces: true, Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: "identity.users.list", DataScope: "owner"}}},
+	catalog := identitysdk.ProjectRoleCatalog{SourceOwner: "application:runtime", InitialWorkspaceAdministratorRoleKey: "member", Roles: []identitysdk.ProjectRoleDefinition{
+		{Key: "member", Name: "Member", Audience: "any", AssignmentMode: "manual", Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: dataexchange.ActionDataExchangeJobGet, DataScope: "owner"}, {PermissionKey: dataexchange.ActionDataExchangeJobDownload, DataScope: "owner"}, {PermissionKey: "customer.read", DataScope: "owner"}, {PermissionKey: "customer.export", DataScope: "owner"}}},
+		{Key: "member_onboarding", Name: "Onboarding", Audience: "any", AssignmentMode: "manual", Permissions: []identitysdk.ProjectRolePermission{{PermissionKey: "identity.users.list", DataScope: "owner"}}},
 	}}
 	if err := bootstrap.BindBootstrapProjectRoleCatalog(ctx, catalog); err != nil {
 		t.Fatal(err)
@@ -138,9 +138,17 @@ func TestReportExportRealIdentityRecoveryRetryDownloadAndRevocation(t *testing.T
 	permissionDefinitions := []identitysdk.PermissionDefinition{}
 	for _, permission := range catalog.Roles[0].Permissions {
 		separator := strings.LastIndexByte(permission.PermissionKey, '.')
-		permissionDefinitions = append(permissionDefinitions, identitysdk.PermissionDefinition{PermissionKey: permission.PermissionKey, ResourceKey: permission.PermissionKey[:separator], OperationKey: permission.PermissionKey[separator+1:], Label: permission.PermissionKey, Category: "Exports", SourceKind: "object_action"})
+		resourceKey, operationKey := permission.PermissionKey[:separator], permission.PermissionKey[separator+1:]
+		permissionDefinitions = append(permissionDefinitions, identitysdk.PermissionDefinition{
+			PermissionKey: permission.PermissionKey, ModuleKey: "exports", GroupKey: resourceKey,
+			ResourceKey: resourceKey, OperationKey: operationKey, Label: permission.PermissionKey,
+			Category: "Exports", SourceKind: "object_action", GrantMode: "direct", ScopeKind: "none", DefaultLocale: "en",
+			I18n: identitysdk.PermissionLocalizedText{"en": {
+				ModuleLabel: "Exports", GroupLabel: "Exports", ResourceLabel: "Exports", OperationLabel: operationKey, Label: permission.PermissionKey,
+			}},
+		})
 	}
-	permissionRequest, err := identitysdk.NewPermissionReconcileRequest(identitysdk.ApplicationRef{WorkspaceID: "workspace-export", ApplicationKey: "runtime"}, "application:runtime", "", permissionDefinitions)
+	permissionRequest, err := identitysdk.NewPermissionReconcileRequest("application:runtime", "", permissionDefinitions)
 	if err != nil {
 		t.Fatal(err)
 	}

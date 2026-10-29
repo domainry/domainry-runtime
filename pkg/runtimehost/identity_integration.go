@@ -24,6 +24,9 @@ func openProjectIdentity(ctx context.Context, cfg config.Config, factory identit
 		WorkspaceID:    identitysdk.WorkspaceID(cfg.IdentityWorkspaceID),
 		ApplicationKey: identitysdk.ApplicationKey(cfg.IdentityAudience),
 	}
+	if global, ok := factory.(identitysdk.GlobalApplicationFactory); ok && global.GlobalApplicationBinding() {
+		application.WorkspaceID = ""
+	}
 	var binding identitysdk.Binding
 	var err error
 	if externalFactory, ok := factory.(identitysdk.ExternalDatabaseFactory); ok && len(databases) > 0 {

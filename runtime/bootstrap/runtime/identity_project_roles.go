@@ -17,16 +17,15 @@ import (
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
 )
 
-// publishRuntimeProjectRoles projects application-owned authorization roles
-// through Identity's deployment-neutral port. Older/remote bindings may omit
-// the optional capability; they continue to own their role provisioning.
+// publishRuntimeProjectRoles projects the complete application-owned global
+// role catalog through Identity's deployment-neutral port.
 func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding, objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, applicationKey string, includeInstallationAdministrator bool, handlerDescriptors ...runtimeext.HandlerDescriptor) error {
 	if binding == nil {
-		return nil
+		return fmt.Errorf("Runtime Identity binding is unavailable for global role registration")
 	}
 	publisher, ok := binding.(identitysdk.ProjectRoleCatalogPublisher)
 	if !ok {
-		return nil
+		return fmt.Errorf("Runtime Identity binding does not support global role registration")
 	}
 	var catalog identitysdk.ProjectRoleCatalog
 	var err error
@@ -49,7 +48,7 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 // HTTP traffic, ordinary publication replaces this definition with the
 // system-managed variant returned by RuntimeInstallationWorkspaceProjectRoleCatalog.
 func RuntimeInstallationWorkspaceBootstrapRoleCatalog(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, initialWorkspaceAdministratorRole, applicationKey string, handlerDescriptors ...runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
-	roles, err := runtimeRolesWithInstallationAdministrator(roles, "manual", true)
+	roles, err := runtimeRolesWithInstallationAdministrator(roles, "manual")
 	if err != nil {
 		return identitysdk.ProjectRoleCatalog{}, err
 	}
@@ -61,14 +60,14 @@ func RuntimeInstallationWorkspaceBootstrapRoleCatalog(objects []definitionmodel.
 // system-managed, cannot be granted through public Identity APIs, and is not
 // copied by the ordinary new-Workspace bootstrap catalog.
 func RuntimeInstallationWorkspaceProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, applicationKey string, handlerDescriptors ...runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
-	roles, err := runtimeRolesWithInstallationAdministrator(roles, "system_managed", false)
+	roles, err := runtimeRolesWithInstallationAdministrator(roles, "system_managed")
 	if err != nil {
 		return identitysdk.ProjectRoleCatalog{}, err
 	}
 	return RuntimeWorkspaceProjectRoleCatalog(objects, roles, workspaceID, applicationKey, handlerDescriptors...)
 }
 
-func runtimeRolesWithInstallationAdministrator(roles []projectmodel.Role, assignmentMode string, provisionToWorkspaces bool) ([]projectmodel.Role, error) {
+func runtimeRolesWithInstallationAdministrator(roles []projectmodel.Role, assignmentMode string) ([]projectmodel.Role, error) {
 	result := make([]projectmodel.Role, 0, len(roles)+1)
 	var extension *projectmodel.Role
 	for _, role := range roles {
@@ -99,7 +98,6 @@ func runtimeRolesWithInstallationAdministrator(roles []projectmodel.Role, assign
 	administrator := projectmodel.Role{
 		Key: workspaceprovisionapplication.WorkspaceAdministratorRoleKey, Name: "Installation administrator",
 		Permissions: grants, Audience: "user", AssignmentMode: assignmentMode, RiskLevel: "privileged",
-		ProvisionToWorkspaces: provisionToWorkspaces,
 	}
 	if extension != nil {
 		base := make(map[string]bool, len(permissions))
@@ -127,34 +125,33 @@ func runtimeRolesWithInstallationAdministrator(roles []projectmodel.Role, assign
 // Identity's deployment-neutral role contract. Callers that publish a Runtime
 // manifest must first apply the Workspace role policy through
 // RuntimeWorkspaceProjectRoleCatalog or RuntimeWorkspaceBootstrapRoleCatalog.
-func RuntimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, applicationKey string) identitysdk.ProjectRoleCatalog {
+func RuntimeProjectRoleCatalog(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, sourceOwner string) identitysdk.ProjectRoleCatalog {
+	_ = workspaceID
 	catalog := identitysdk.ProjectRoleCatalog{
-		Application: identitysdk.ApplicationRef{
-			WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),
-			ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
-		},
-		Objects: mustProjectRoleJSON(objects),
-		Roles:   make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
+		SourceOwner: runtimeRoleSourceOwner(sourceOwner),
+		Objects:     mustProjectRoleJSON(objects),
+		Roles:       make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
 	}
 	for _, role := range roles {
 		definition := identitysdk.ProjectRoleDefinition{
-			Key:                   strings.TrimSpace(role.Key),
-			Name:                  strings.TrimSpace(role.Name),
-			Permissions:           runtimeRolePermissions(role.Permissions),
-			FieldPermissions:      mustProjectRoleJSON(role.FieldPermissions),
-			ReferencePermissions:  mustProjectRoleJSON(role.ReferencePermissions),
-			ExportRules:           mustProjectRoleJSON(role.ExportRules),
-			Audience:              strings.TrimSpace(role.Audience),
-			RequiredBindingKey:    strings.TrimSpace(role.RequiredBindingKey),
-			AssignmentMode:        strings.TrimSpace(role.AssignmentMode),
-			RiskLevel:             strings.TrimSpace(role.RiskLevel),
-			ConflictRoleKeys:      append([]string(nil), role.ConflictRoleKeys...),
-			GrantableRoleKeys:     append([]string(nil), role.GrantableRoleKeys...),
-			PermissionSetKeys:     append([]string(nil), role.PermissionSetKeys...),
-			PermissionSetGroups:   append([]string(nil), role.PermissionSetGroups...),
-			GuardrailKeys:         append([]string(nil), role.GuardrailKeys...),
-			Guardrails:            mustProjectRoleJSON(role.Guardrails),
-			ProvisionToWorkspaces: role.ProvisionToWorkspaces,
+			Key:                  strings.TrimSpace(role.Key),
+			Name:                 strings.TrimSpace(role.Name),
+			Description:          strings.TrimSpace(role.Description),
+			Permissions:          runtimeRolePermissions(role.Permissions),
+			FieldPermissions:     mustProjectRoleJSON(role.FieldPermissions),
+			ReferencePermissions: mustProjectRoleJSON(role.ReferencePermissions),
+			ExportRules:          mustProjectRoleJSON(role.ExportRules),
+			Audience:             strings.TrimSpace(role.Audience),
+			RequiredBindingKey:   strings.TrimSpace(role.RequiredBindingKey),
+			AssignmentMode:       strings.TrimSpace(role.AssignmentMode),
+			RiskLevel:            strings.TrimSpace(role.RiskLevel),
+			ConflictRoleKeys:     append([]string(nil), role.ConflictRoleKeys...),
+			GrantableRoleKeys:    append([]string(nil), role.GrantableRoleKeys...),
+			PermissionSetKeys:    append([]string(nil), role.PermissionSetKeys...),
+			PermissionSetGroups:  append([]string(nil), role.PermissionSetGroups...),
+			GuardrailKeys:        append([]string(nil), role.GuardrailKeys...),
+			Guardrails:           mustProjectRoleJSON(role.Guardrails),
+			MenuKeys:             append([]string(nil), role.MenuKeys...),
 		}
 		payload, err := json.Marshal(definition)
 		if err != nil {
@@ -209,18 +206,16 @@ func RuntimeWorkspaceBootstrapRoleCatalog(objects []definitionmodel.ObjectSchema
 // Each internal permission inherits the source Action grant's exact data scope.
 // Multiple grants use only a least upper bound proven by Identity's filter
 // semantics; scopes whose union is not representable fail closed.
-func runtimeProjectRoleCatalogWithCapabilityClosure(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, applicationKey string, handlerDescriptors []runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
+func runtimeProjectRoleCatalogWithCapabilityClosure(objects []definitionmodel.ObjectSchema, roles []projectmodel.Role, workspaceID, sourceOwner string, handlerDescriptors []runtimeext.HandlerDescriptor) (identitysdk.ProjectRoleCatalog, error) {
+	_ = workspaceID
 	permissionsByAction, err := runtimeDownstreamCapabilityPermissions(handlerDescriptors)
 	if err != nil {
 		return identitysdk.ProjectRoleCatalog{}, err
 	}
 	catalog := identitysdk.ProjectRoleCatalog{
-		Application: identitysdk.ApplicationRef{
-			WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),
-			ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
-		},
-		Objects: mustProjectRoleJSON(objects),
-		Roles:   make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
+		SourceOwner: runtimeRoleSourceOwner(sourceOwner),
+		Objects:     mustProjectRoleJSON(objects),
+		Roles:       make([]identitysdk.ProjectRoleDefinition, 0, len(roles)),
 	}
 	for _, role := range roles {
 		permissions, permissionErr := runtimeRolePermissionsWithCapabilityClosure(role.Key, role.Permissions, permissionsByAction)
@@ -233,25 +228,34 @@ func runtimeProjectRoleCatalogWithCapabilityClosure(objects []definitionmodel.Ob
 	return catalog, nil
 }
 
+func runtimeRoleSourceOwner(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.Contains(value, ":") {
+		return value
+	}
+	return "project:" + value
+}
+
 func runtimeProjectRoleDefinition(role projectmodel.Role, permissions []identitysdk.ProjectRolePermission) identitysdk.ProjectRoleDefinition {
 	definition := identitysdk.ProjectRoleDefinition{
-		Key:                   strings.TrimSpace(role.Key),
-		Name:                  strings.TrimSpace(role.Name),
-		Permissions:           permissions,
-		FieldPermissions:      mustProjectRoleJSON(role.FieldPermissions),
-		ReferencePermissions:  mustProjectRoleJSON(role.ReferencePermissions),
-		ExportRules:           mustProjectRoleJSON(role.ExportRules),
-		Audience:              strings.TrimSpace(role.Audience),
-		RequiredBindingKey:    strings.TrimSpace(role.RequiredBindingKey),
-		AssignmentMode:        strings.TrimSpace(role.AssignmentMode),
-		RiskLevel:             strings.TrimSpace(role.RiskLevel),
-		ConflictRoleKeys:      append([]string(nil), role.ConflictRoleKeys...),
-		GrantableRoleKeys:     append([]string(nil), role.GrantableRoleKeys...),
-		PermissionSetKeys:     append([]string(nil), role.PermissionSetKeys...),
-		PermissionSetGroups:   append([]string(nil), role.PermissionSetGroups...),
-		GuardrailKeys:         append([]string(nil), role.GuardrailKeys...),
-		Guardrails:            mustProjectRoleJSON(role.Guardrails),
-		ProvisionToWorkspaces: role.ProvisionToWorkspaces,
+		Key:                  strings.TrimSpace(role.Key),
+		Name:                 strings.TrimSpace(role.Name),
+		Description:          strings.TrimSpace(role.Description),
+		Permissions:          permissions,
+		FieldPermissions:     mustProjectRoleJSON(role.FieldPermissions),
+		ReferencePermissions: mustProjectRoleJSON(role.ReferencePermissions),
+		ExportRules:          mustProjectRoleJSON(role.ExportRules),
+		Audience:             strings.TrimSpace(role.Audience),
+		RequiredBindingKey:   strings.TrimSpace(role.RequiredBindingKey),
+		AssignmentMode:       strings.TrimSpace(role.AssignmentMode),
+		RiskLevel:            strings.TrimSpace(role.RiskLevel),
+		ConflictRoleKeys:     append([]string(nil), role.ConflictRoleKeys...),
+		GrantableRoleKeys:    append([]string(nil), role.GrantableRoleKeys...),
+		PermissionSetKeys:    append([]string(nil), role.PermissionSetKeys...),
+		PermissionSetGroups:  append([]string(nil), role.PermissionSetGroups...),
+		GuardrailKeys:        append([]string(nil), role.GuardrailKeys...),
+		Guardrails:           mustProjectRoleJSON(role.Guardrails),
+		MenuKeys:             append([]string(nil), role.MenuKeys...),
 	}
 	payload, err := json.Marshal(definition)
 	if err != nil {
@@ -444,8 +448,8 @@ func runtimeInitialWorkspaceAdministratorRole(roles []projectmodel.Role, request
 		if assignmentMode == "" {
 			assignmentMode = "manual"
 		}
-		if !role.ProvisionToWorkspaces || (audience != "any" && audience != "user") || assignmentMode != "manual" || strings.TrimSpace(role.RequiredBindingKey) != "" {
-			return "", fmt.Errorf("project model initial_workspace_administrator_role %q must reference a provisioned any/user manual role without required_binding_key", key)
+		if (audience != "any" && audience != "user") || assignmentMode != "manual" || strings.TrimSpace(role.RequiredBindingKey) != "" {
+			return "", fmt.Errorf("project model initial_workspace_administrator_role %q must reference an any/user manual role without required_binding_key", key)
 		}
 		return key, nil
 	}
@@ -498,15 +502,7 @@ func runtimeWorkspaceRoleCatalogRoles(roles []projectmodel.Role) ([]projectmodel
 		if audience == "service" && assignmentMode == "request_only" {
 			return nil, nil, fmt.Errorf("Runtime Workspace service role %q cannot use assignment_mode request_only", key)
 		}
-		if role.ProvisionToWorkspaces {
-			if audience == "service" {
-				return nil, nil, fmt.Errorf("Runtime Workspace service role %q cannot set provision_to_workspaces true", key)
-			}
-			if assignmentMode == "system_managed" {
-				return nil, nil, fmt.Errorf("Runtime Workspace system-managed role %q cannot set provision_to_workspaces true", key)
-			}
-			bootstrap = append(bootstrap, role)
-		}
+		bootstrap = append(bootstrap, role)
 		complete = append(complete, role)
 	}
 	sort.Slice(bootstrap, func(left, right int) bool { return bootstrap[left].Key < bootstrap[right].Key })

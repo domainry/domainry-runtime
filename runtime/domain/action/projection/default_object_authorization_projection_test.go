@@ -6,10 +6,14 @@ import (
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	localizationmodel "github.com/domainry/domainry-runtime/runtime/domain/localization/model"
 )
 
 func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
-	definitions, err := DefaultActionsForObject(definitionmodel.ObjectSchema{Key: "sales.order", Name: "Sales order"}, "application:orders")
+	definitions, err := DefaultActionsForObject(definitionmodel.ObjectSchema{
+		Key: "sales.order", Name: "Sales order",
+		I18n: localizationmodel.LocalizedTextMap{"zh-CN": {"name": "销售订单", "description": "销售订单业务数据"}},
+	}, "application:orders")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,6 +24,12 @@ func TestDefaultObjectAuthorizationActionsOwnExactPermissions(t *testing.T) {
 	for _, definition := range definitions {
 		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.ResourceKey+"."+definition.Permission.OperationKey != definition.Key {
 			t.Fatalf("definition is not exact: %+v", definition)
+		}
+		if definition.Permission.ModuleKey != "business" || definition.Permission.GroupKey != "sales.order" || definition.Permission.ScopeKind != actioncontract.PermissionScopeRecord || definition.Permission.ObjectKey != "sales.order" {
+			t.Fatalf("permission catalog identity is incomplete: %+v", definition.Permission)
+		}
+		if text := definition.Permission.I18n["zh-CN"]; text.ModuleLabel != "业务数据" || text.ResourceLabel != "销售订单" || text.Label == "" {
+			t.Fatalf("permission localized text is incomplete: %+v", text)
 		}
 		if definition.HTTP == nil || strings.Contains(definition.HTTP.DisplayRouteTemplate, "{objectKey}") || !strings.HasPrefix(definition.HTTP.DisplayRouteTemplate, "/records/sales.order") {
 			t.Fatalf("definition has no concrete object route: %+v", definition)

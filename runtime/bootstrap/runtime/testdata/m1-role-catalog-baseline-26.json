@@ -28,8 +28,7 @@
       "name": "Crm Acceptance Admin",
       "permissions": [],
       "audience": "any",
-      "assignment_mode": "manual",
-      "provision_to_workspaces": true
+      "assignment_mode": "manual"
     },
     {
       "key": "followup_reminder_service",
@@ -48,16 +47,14 @@
       "name": "Sales Director",
       "permissions": [],
       "audience": "any",
-      "assignment_mode": "manual",
-      "provision_to_workspaces": true
+      "assignment_mode": "manual"
     },
     {
       "key": "sales_rep",
       "name": "Sales Rep",
       "permissions": [],
       "audience": "any",
-      "assignment_mode": "manual",
-      "provision_to_workspaces": true
+      "assignment_mode": "manual"
     }
   ],
   "workflows": [

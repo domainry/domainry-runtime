@@ -135,11 +135,11 @@ func (runtimeIdentityApplicationRegistryStub) Register(_ context.Context, reques
 type runtimeIdentityPermissionRegistryStub struct{}
 
 func (runtimeIdentityPermissionRegistryStub) CurrentSourceSnapshot(_ context.Context, request identitysdk.PermissionSourceSnapshotRequest) (identitysdk.PermissionSourceSnapshot, error) {
-	return identitysdk.PermissionSourceSnapshot{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner}, nil
+	return identitysdk.PermissionSourceSnapshot{SourceOwner: request.SourceOwner}, nil
 }
 
 func (runtimeIdentityPermissionRegistryStub) Reconcile(_ context.Context, request identitysdk.PermissionReconcileRequest) (identitysdk.PermissionReconcileReceipt, error) {
-	return identitysdk.PermissionReconcileReceipt{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
+	return identitysdk.PermissionReconcileReceipt{SourceOwner: request.SourceOwner, PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash, DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions)}, request.ValidateContract()
 }
 
 type runtimeIdentityCredentialsStub struct{}

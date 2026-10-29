@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v60"
-	ContractSHA256  = "b85f27235c2f4b1fca6dd1d8fc440dfeb144f04a839a47cf22c503fd21931a45"
+	ContractVersion = "runtimeext-v61"
+	ContractSHA256  = "25b00309125bf951cfbe0f1d021d25587c9a1b6dfca06ca20ddc68c58873f350"
 )
 
-const contractDefinitionV60 = `runtimeext-v60
+const contractDefinitionV60 = `runtimeext-v61
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -153,7 +153,7 @@ WorkspaceBootstrapParticipant.Descriptor()WorkspaceBootstrapDescriptor
 WorkspaceBootstrapParticipant.BuildWorkspaceBootstrap(context.Context,WorkspaceBootstrapContext,map[string]any)([]WorkspaceBootstrapRecord,error)
 WorkspaceBootstrapInputExactDecimal=canonical_decimal_string|no_binary_float|exact_range_validation
 WorkspaceBootstrapRuntimeOwnedFields=workspace_id,id,owner_org_id,created_at,updated_at
-RuntimeWorkspaceRoleCatalog=project_model_defined_roles|bootstrap=provision_to_workspaces_and_audience_any,user,business_profile_and_assignment_manual,request_only|complete_publication=all_project_model_roles|initial_workspace_administrator_role=explicit_provisioned_audience_any,user_assignment_manual_without_required_binding
+RuntimeWorkspaceRoleCatalog=project_model_defined_global_roles|bootstrap=assign_explicit_initial_workspace_administrator_only|complete_publication=all_project_model_roles|initial_workspace_administrator_role=explicit_audience_any,user_assignment_manual_without_required_binding
 WorkspaceProvisioningVocabulary=workspace_name,workspace_code
 AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 `

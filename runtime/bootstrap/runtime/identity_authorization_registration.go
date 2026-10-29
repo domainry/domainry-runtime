@@ -38,10 +38,13 @@ func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identity
 		WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),
 		ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
 	}
-	if _, err := binding.Applications().Register(ctx, identitysdk.ApplicationRegistration{Application: application, RedirectURLs: append([]string(nil), redirectURLs...)}); err != nil {
-		return nil, fmt.Errorf("register Runtime Identity application: %w", err)
+	global, isGlobal := binding.(identitysdk.GlobalApplicationBinding)
+	if !isGlobal || !global.IsGlobalApplication() {
+		if _, err := binding.Applications().Register(ctx, identitysdk.ApplicationRegistration{Application: application, RedirectURLs: append([]string(nil), redirectURLs...)}); err != nil {
+			return nil, fmt.Errorf("register Runtime Identity application: %w", err)
+		}
 	}
-	if err := reconcileRuntimePermissionRegistries(ctx, binding.Permissions(), application, previousRegistry, registry); err != nil {
+	if err := reconcileRuntimePermissionRegistries(ctx, binding.Permissions(), previousRegistry, registry); err != nil {
 		return nil, err
 	}
 	return registry, nil
@@ -131,7 +134,7 @@ func (e *AuthorizationReferenceError) Diagnostic() map[string]any {
 	}
 }
 
-func reconcileRuntimePermissionRegistries(ctx context.Context, permissions identitysdk.PermissionRegistry, application identitysdk.ApplicationRef, previousRegistry, nextRegistry *actioncontract.Registry) error {
+func reconcileRuntimePermissionRegistries(ctx context.Context, permissions identitysdk.PermissionRegistry, previousRegistry, nextRegistry *actioncontract.Registry) error {
 	if permissions == nil {
 		return errors.New("Runtime Identity permission registry is unavailable")
 	}
@@ -155,7 +158,7 @@ func reconcileRuntimePermissionRegistries(ctx context.Context, permissions ident
 	previousDefinitionsByOwner := make(map[string][]identitysdk.PermissionDefinition, len(owners))
 	previousSnapshotHashes := make(map[string]string, len(owners))
 	for _, owner := range owners {
-		request := identitysdk.PermissionSourceSnapshotRequest{Application: application, SourceOwner: owner}
+		request := identitysdk.PermissionSourceSnapshotRequest{SourceOwner: owner}
 		snapshot, err := snapshotReader.CurrentSourceSnapshot(ctx, request)
 		if err != nil {
 			return fmt.Errorf("read current Runtime Identity permissions for %q: %w", owner, err)
@@ -168,34 +171,34 @@ func reconcileRuntimePermissionRegistries(ctx context.Context, permissions ident
 	}
 	applied := make([]identitysdk.PermissionReconcileRequest, 0, len(owners))
 	for _, owner := range owners {
-		request, err := identitysdk.NewPermissionReconcileRequest(application, owner, previousSnapshotHashes[owner], nextDefinitionsByOwner[owner])
+		request, err := identitysdk.NewPermissionReconcileRequest(owner, previousSnapshotHashes[owner], nextDefinitionsByOwner[owner])
 		if err != nil {
 			return fmt.Errorf("build Runtime Identity permission snapshot for %q: %w", owner, err)
 		}
 		receipt, err := permissions.Reconcile(ctx, request)
 		if err != nil {
 			forwardErr := fmt.Errorf("reconcile Runtime Identity permissions for %q: %w", owner, err)
-			return errors.Join(forwardErr, compensateRuntimePermissionReconcileBounded(ctx, permissions, application, previousDefinitionsByOwner, applied))
+			return errors.Join(forwardErr, compensateRuntimePermissionReconcileBounded(ctx, permissions, previousDefinitionsByOwner, applied))
 		}
 		applied = append(applied, request)
 		if err := receipt.ValidateFor(request); err != nil {
-			return errors.Join(err, compensateRuntimePermissionReconcileBounded(ctx, permissions, application, previousDefinitionsByOwner, applied))
+			return errors.Join(err, compensateRuntimePermissionReconcileBounded(ctx, permissions, previousDefinitionsByOwner, applied))
 		}
 	}
 	return nil
 }
 
-func compensateRuntimePermissionReconcileBounded(ctx context.Context, permissions identitysdk.PermissionRegistry, application identitysdk.ApplicationRef, previousDefinitionsByOwner map[string][]identitysdk.PermissionDefinition, applied []identitysdk.PermissionReconcileRequest) error {
+func compensateRuntimePermissionReconcileBounded(ctx context.Context, permissions identitysdk.PermissionRegistry, previousDefinitionsByOwner map[string][]identitysdk.PermissionDefinition, applied []identitysdk.PermissionReconcileRequest) error {
 	compensationCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	return compensateRuntimePermissionReconcile(compensationCtx, permissions, application, previousDefinitionsByOwner, applied)
+	return compensateRuntimePermissionReconcile(compensationCtx, permissions, previousDefinitionsByOwner, applied)
 }
 
-func compensateRuntimePermissionReconcile(ctx context.Context, permissions identitysdk.PermissionRegistry, application identitysdk.ApplicationRef, previousDefinitionsByOwner map[string][]identitysdk.PermissionDefinition, applied []identitysdk.PermissionReconcileRequest) error {
+func compensateRuntimePermissionReconcile(ctx context.Context, permissions identitysdk.PermissionRegistry, previousDefinitionsByOwner map[string][]identitysdk.PermissionDefinition, applied []identitysdk.PermissionReconcileRequest) error {
 	var result error
 	for index := len(applied) - 1; index >= 0; index-- {
 		forward := applied[index]
-		rollback, err := identitysdk.NewPermissionReconcileRequest(application, forward.SourceOwner, forward.SnapshotHash, previousDefinitionsByOwner[forward.SourceOwner])
+		rollback, err := identitysdk.NewPermissionReconcileRequest(forward.SourceOwner, forward.SnapshotHash, previousDefinitionsByOwner[forward.SourceOwner])
 		if err != nil {
 			result = errors.Join(result, fmt.Errorf("build Runtime Identity permission compensation for %q: %w", forward.SourceOwner, err))
 			continue
@@ -224,10 +227,23 @@ func runtimePermissionDefinitionsByOwner(registry *actioncontract.Registry) map[
 		permission := definition.Permission
 		owner := strings.TrimSpace(permission.Owner)
 		result[owner] = append(result[owner], identitysdk.PermissionDefinition{
-			PermissionKey: permission.Key, ResourceKey: permission.ResourceKey, OperationKey: permission.OperationKey,
+			PermissionKey: permission.Key, ModuleKey: permission.ModuleKey, GroupKey: permission.GroupKey,
+			ResourceKey: permission.ResourceKey, OperationKey: permission.OperationKey,
 			Label: permission.Label, Description: permission.Description, Category: permission.Category,
-			SourceKind: definition.SourceKind,
+			SourceKind: definition.SourceKind, GrantMode: string(permission.GrantMode), ScopeKind: string(permission.ScopeKind),
+			ObjectKey: permission.ObjectKey, DefaultLocale: permission.DefaultLocale, I18n: runtimePermissionTextToSDK(permission.I18n),
 		})
+	}
+	return result
+}
+
+func runtimePermissionTextToSDK(source actioncontract.PermissionLocalizedText) identitysdk.PermissionLocalizedText {
+	result := make(identitysdk.PermissionLocalizedText, len(source))
+	for locale, text := range source {
+		result[locale] = identitysdk.PermissionText{
+			ModuleLabel: text.ModuleLabel, GroupLabel: text.GroupLabel, ResourceLabel: text.ResourceLabel,
+			OperationLabel: text.OperationLabel, Label: text.Label, Description: text.Description,
+		}
 	}
 	return result
 }
