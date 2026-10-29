@@ -17,6 +17,7 @@ func (resolve principalResolverFunc) Resolve(ctx context.Context, request identi
 }
 
 func TestResolveAcceptsIdentityValidatedExternalWorkspace(t *testing.T) {
+	var resolvedRequest identitysdk.PrincipalResolutionRequest
 	host := &Host{
 		runtimeID: "runtime-a",
 		application: identitysdk.ApplicationScope{
@@ -24,8 +25,9 @@ func TestResolveAcceptsIdentityValidatedExternalWorkspace(t *testing.T) {
 			ApplicationKey: "knowledge",
 		},
 		principals: principalResolverFunc(func(ctx context.Context, request identitysdk.PrincipalResolutionRequest) (identitysdk.PrincipalResolution, error) {
+			resolvedRequest = request
 			workspaceID := requestcontext.WorkspaceID(ctx)
-			principal := identitysdk.Principal{Known: true, WorkspaceID: workspaceID, UserID: string(request.SubjectID), RoleKey: request.RoleKey}
+			principal := identitysdk.Principal{Known: true, WorkspaceID: workspaceID, UserID: string(request.SubjectID), RoleKey: request.SessionRoleKey}
 			return identitysdk.PrincipalResolution{Principal: principal}, nil
 		}),
 	}
@@ -38,6 +40,9 @@ func TestResolveAcceptsIdentityValidatedExternalWorkspace(t *testing.T) {
 	}
 	if principal.WorkspaceID != "external-team-workspace" || principal.UserID != "user-a" {
 		t.Fatalf("unexpected principal: %#v", principal)
+	}
+	if resolvedRequest.RoleKey != "" || resolvedRequest.SessionRoleKey != "knowledge_member" {
+		t.Fatalf("bearer session role must preserve the effective role union: %#v", resolvedRequest)
 	}
 }
 

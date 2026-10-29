@@ -8,6 +8,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	actionprojection "github.com/domainry/domainry-runtime/runtime/domain/action/projection"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 )
 
@@ -33,7 +34,7 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 	applicationOwner := "application:" + applicationKey
 	registry := actioncontract.NewRegistry()
 	for _, object := range input.Snapshot.Objects {
-		definitions, err := actionprojection.DefaultActionsForObject(object, applicationOwner)
+		definitions, err := actionprojection.DefaultActionsForObject(object, defaultObjectAuthorizationOwner(object, applicationOwner))
 		if err != nil {
 			return nil, err
 		}
@@ -127,6 +128,13 @@ func BuildAuthorizationRegistry(input AuthorizationRegistryInput) (*actioncontra
 		return nil, fmt.Errorf("freeze Runtime authorization Action registry: %w", err)
 	}
 	return registry, nil
+}
+
+func defaultObjectAuthorizationOwner(object definitionmodel.ObjectSchema, applicationOwner string) string {
+	if strings.TrimSpace(fmt.Sprint(object.Config["system_kind"])) == "record_timer" && object.Config["runtime_owned"] == true {
+		return "runtime:record-timer"
+	}
+	return applicationOwner
 }
 
 // applyRuntimePermissionGrantPolicy classifies generated protocol, agent and

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
 
 func TestRuntimePermissionGrantPolicyClassifiesSecureDefaults(t *testing.T) {
@@ -42,5 +44,26 @@ func TestRuntimePermissionGrantPolicyClassifiesSecureDefaults(t *testing.T) {
 				t.Fatalf("grant mode=%s want=%s", got.Permission.GrantMode, test.want)
 			}
 		})
+	}
+}
+
+func TestRuntimeOwnedRecordTimerPermissionsUseStableRuntimeOwner(t *testing.T) {
+	registry, err := BuildAuthorizationRegistry(AuthorizationRegistryInput{
+		ApplicationKey: "knowledge",
+		Snapshot: appschemamodel.ApplicationSchemaSnapshot{Objects: []definitionmodel.ObjectSchema{
+			{Key: "record_timer", Config: map[string]any{"runtime_owned": true, "system_kind": "record_timer"}},
+			{Key: "customer"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	timer, ok := registry.Definition("record_timer.read")
+	if !ok || timer.Permission == nil || timer.Owner != "runtime:record-timer" || timer.Permission.Owner != "runtime:record-timer" {
+		t.Fatalf("record timer permission owner=%q permission=%#v", timer.Owner, timer.Permission)
+	}
+	customer, ok := registry.Definition("customer.read")
+	if !ok || customer.Permission == nil || customer.Owner != "application:knowledge" || customer.Permission.Owner != "application:knowledge" {
+		t.Fatalf("business object permission owner=%q permission=%#v", customer.Owner, customer.Permission)
 	}
 }
