@@ -68,6 +68,13 @@ func (h *Host) AuthorizeKnowledgeLibrary(ctx context.Context, operation string, 
 	if err != nil {
 		return err
 	}
+	// A concrete library is authorized by Knowledge's live membership and page
+	// policy. Identity is deliberately evaluated only for global capabilities,
+	// otherwise every reader/editor/manager grant would have to be configured a
+	// second time in the product role.
+	if !knowledgesdk.RequiresIdentityActionGrant(operation, library) {
+		return nil
+	}
 	facts := identitysdk.ResourceFacts{
 		"workspace_id": authority.WorkspaceID, "library_id": library.ID, "library_kind": library.Kind,
 		"library_role": library.Role, "owner_user_id": library.OwnerUserID,
