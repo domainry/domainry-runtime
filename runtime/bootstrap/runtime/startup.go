@@ -15,6 +15,7 @@ import (
 	dataexchangemodulehost "github.com/domainry/domainry-data-exchange-sdk/modulehost"
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -71,6 +72,11 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	}
 	mustCompleteRuntimeStartup(foundationModules.Validate())
 	cfg = NormalizeConfig(cfg)
+	// Runtime startup does not pass through HTTP middleware. Scope its entire
+	// lifecycle explicitly so global SaaS bindings can resolve the installation
+	// workspace for every bootstrap dependency call, including nested workflow
+	// activation and role publication.
+	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(principalmodel.ConfigureInstallationWorkspaceID(cfg.IdentityWorkspaceID))
 	mustCompleteRuntimeStartup(cfg.ValidateSecurity())
 	if strings.TrimSpace(startupOptions.ProjectModel.ContentHash) == "" {
@@ -517,7 +523,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		mustCompleteRuntimeStartup(binder.BindPermissionUsageProvider(authorizationRegistrySnapshot))
 	}
 	mustCompleteRuntimeStartup(publishRuntimeProjectRoles(ctx, identityBinding, records.Schema().Objects, projectModel.Roles, cfg.IdentityWorkspaceID, projectModel.ProjectKey, cfg.InstallationAdministratorBootstrapEnabled, handlerDescriptors...))
-	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, records.Schema().IdentityProfileExtensions))
+	mustCompleteRuntimeStartup(publishRuntimeProjectProfileExtensions(ctx, identityBinding, cfg.IdentityWorkspaceID, records.Schema().IdentityProfileExtensions))
 	startupCallbacks.records = records
 	notificationWakeup := func(message publicationmodel.Message) {
 		records.Applications().PublicationHandoff.Wake(ctx, publicationhandoff.Locator{WorkspaceID: message.WorkspaceID, MessageID: message.MessageID})

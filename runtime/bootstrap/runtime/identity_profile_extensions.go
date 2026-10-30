@@ -2,7 +2,9 @@ package runtime
 
 import (
 	"context"
+	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	profilebindingmodel "github.com/domainry/domainry-runtime/runtime/domain/profilebinding/model"
 )
@@ -11,7 +13,7 @@ import (
 // through Identity's typed, in-process publication port. Remote and older
 // bindings may omit the optional capability; Identity will then continue to
 // use its source-owned metadata only.
-func publishRuntimeProjectProfileExtensions(ctx context.Context, binding identitysdk.Binding, extensions []profilebindingmodel.Binding) error {
+func publishRuntimeProjectProfileExtensions(ctx context.Context, binding identitysdk.Binding, workspaceID string, extensions []profilebindingmodel.Binding) error {
 	provider, ok := binding.(identitysdk.EmbeddedProjectProfileExtensionBinding)
 	if !ok {
 		return nil
@@ -20,6 +22,7 @@ func publishRuntimeProjectProfileExtensions(ctx context.Context, binding identit
 	if publisher == nil {
 		return nil
 	}
+	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(workspaceID))
 	return publisher.PublishProjectProfileExtensions(ctx, runtimeProjectProfileExtensions(extensions))
 }
 

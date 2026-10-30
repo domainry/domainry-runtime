@@ -38,7 +38,7 @@ func TestPublishRuntimeProjectProfileExtensionsUsesTypedOptionalPortAndDeepCopie
 		DefaultVisibility: "authenticated", RequiredPermissions: []string{"employee_profile.read"},
 	}}
 	binding := &runtimeProjectProfileExtensionPublisherBinding{}
-	if err := publishRuntimeProjectProfileExtensions(t.Context(), binding, source); err != nil {
+	if err := publishRuntimeProjectProfileExtensions(t.Context(), binding, "workspace-a", source); err != nil {
 		t.Fatal(err)
 	}
 	if len(binding.published) != 1 {
@@ -52,7 +52,7 @@ func TestPublishRuntimeProjectProfileExtensionsUsesTypedOptionalPortAndDeepCopie
 	if published.BusinessIdentity.ActiveStatusValues[0] != "active" {
 		t.Fatalf("publisher retained source aliases: %#v", published)
 	}
-	if err := publishRuntimeProjectProfileExtensions(t.Context(), &binding.runtimeIdentityBindingStub, source); err != nil {
+	if err := publishRuntimeProjectProfileExtensions(t.Context(), &binding.runtimeIdentityBindingStub, "workspace-a", source); err != nil {
 		t.Fatalf("binding without optional publisher failed: %v", err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -38,11 +39,14 @@ func reconcileRuntimeIdentityAuthorization(ctx context.Context, binding identity
 		WorkspaceID:    identitysdk.WorkspaceID(strings.TrimSpace(workspaceID)),
 		ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(applicationKey)),
 	}
-	global, isGlobal := binding.(identitysdk.GlobalApplicationBinding)
-	if !isGlobal || !global.IsGlobalApplication() {
-		if _, err := binding.Applications().Register(ctx, identitysdk.ApplicationRegistration{Application: application, RedirectURLs: append([]string(nil), redirectURLs...)}); err != nil {
-			return nil, fmt.Errorf("register Runtime Identity application: %w", err)
-		}
+	// A global SaaS Identity binding resolves its workspace from request context.
+	// Runtime bootstrap is not entered through HTTP middleware, so scope the
+	// registration and permission-catalog calls explicitly before using the
+	// binding. Without this, the remote SDK omits X-Domainry-Workspace-ID and
+	// Identity correctly rejects the service credential as unscoped.
+	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(workspaceID))
+	if _, err := binding.Applications().Register(ctx, identitysdk.ApplicationRegistration{Application: application, RedirectURLs: append([]string(nil), redirectURLs...)}); err != nil {
+		return nil, fmt.Errorf("register Runtime Identity application: %w", err)
 	}
 	if err := reconcileRuntimePermissionRegistries(ctx, binding.Permissions(), previousRegistry, registry); err != nil {
 		return nil, err

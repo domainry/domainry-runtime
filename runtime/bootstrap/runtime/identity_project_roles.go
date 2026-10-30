@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -37,6 +38,7 @@ func publishRuntimeProjectRoles(ctx context.Context, binding identitysdk.Binding
 	if err != nil {
 		return err
 	}
+	ctx = requestcontext.WithWorkspaceID(ctx, strings.TrimSpace(workspaceID))
 	_, err = publisher.PublishProjectRoles(ctx, catalog)
 	return err
 }
