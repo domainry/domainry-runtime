@@ -27,7 +27,11 @@ func (stub *moduleServiceVerifierStub) Verify(_ context.Context, request identit
 	if request.AccessToken != "valid-service-token" {
 		return identitysdk.ApplicationServicePrincipal{}, &identitysdk.Error{Class: identitysdk.ErrorClassForbidden, Code: "invalid_service_token"}
 	}
-	return identitysdk.ApplicationServicePrincipal{SubjectID: "service:identity", Audience: request.Audience}, nil
+	return identitysdk.ApplicationServicePrincipal{
+		SubjectID:   "service:sample",
+		Application: identitysdk.ApplicationRef{WorkspaceID: "workspace-a", ApplicationKey: "sample"},
+		Audience:    request.Audience,
+	}, nil
 }
 
 type moduleServiceBindingStub struct {
@@ -137,8 +141,12 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 		Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.action.permission_usages.query", Audiences: []string{"domainry-runtime"},
 	}
 	executed := 0
-	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		executed++
+		identity, known := identitysdk.RequestIdentityFromContext(request.Context())
+		if !known || identity.Principal.WorkspaceID != "workspace-a" || identity.Principal.UserID != "service:sample" {
+			t.Fatalf("signed request identity=%+v known=%v", identity, known)
+		}
 		writer.WriteHeader(http.StatusNoContent)
 	}), nil)
 	if err != nil {

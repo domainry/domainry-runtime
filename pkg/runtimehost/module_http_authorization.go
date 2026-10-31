@@ -198,7 +198,7 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 			writeModuleGovernanceError(writer, request, http.StatusUnauthorized, "auth.signed_request_required")
 			return
 		}
-		_, err := services.Verify(request.Context(), identitysdk.VerifyApplicationServiceTokenRequest{AccessToken: accessToken, Audience: audience, Grant: grant})
+		servicePrincipal, err := services.Verify(request.Context(), identitysdk.VerifyApplicationServiceTokenRequest{AccessToken: accessToken, Audience: audience, Grant: grant})
 		if err != nil {
 			status := http.StatusUnauthorized
 			var sdkError *identitysdk.Error
@@ -208,7 +208,13 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 			writeModuleGovernanceError(writer, request, status, "auth.signed_request_invalid")
 			return
 		}
-		next.ServeHTTP(writer, request)
+		identity := identitysdk.RequestIdentity{Principal: identitysdk.Principal{
+			Known:                 true,
+			WorkspaceID:           string(servicePrincipal.Application.WorkspaceID),
+			UserID:                string(servicePrincipal.SubjectID),
+			AuthorizationRevision: string(servicePrincipal.AuthorizationRevision),
+		}}
+		next.ServeHTTP(writer, request.WithContext(identitysdk.WithRequestIdentity(request.Context(), identity)))
 	})
 }
 

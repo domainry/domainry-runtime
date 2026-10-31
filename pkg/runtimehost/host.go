@@ -566,6 +566,9 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				runtimeModuleAdapters = provider.ModuleHTTPAdapters()
 				moduleAdapters = append(moduleAdapters, runtimeModuleAdapters...)
 			}
+			if options.ProjectHTTPAdapters != nil {
+				moduleAdapters = append(moduleAdapters, options.ProjectHTTPAdapters()...)
+			}
 			mountedModuleCount = len(moduleAdapters)
 			hostGuard := moduleGuard
 			if provider, ok := runtime.(runtimeModuleRouteGuardProcess); ok {

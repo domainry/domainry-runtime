@@ -8,6 +8,7 @@ import (
 	auditsdk "github.com/domainry/domainry-audit-sdk"
 	"github.com/domainry/domainry-connector-sdk"
 	dataexchangesdk "github.com/domainry/domainry-data-exchange-sdk"
+	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityhttpapi "github.com/domainry/domainry-identity-sdk/httpapi"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
@@ -107,6 +108,12 @@ type Options struct {
 	// governed in-process Engine and keeps authentication and workspace policy
 	// outside the project transport implementation.
 	ProjectHTTP runtimeengine.HTTPFactory
+	// ProjectHTTPAdapters contributes project-owned non-browser routes to the
+	// same Runtime listener. Runtime validates every Adapter and applies the
+	// Action-declared host guard, including signed application-service requests.
+	// The factory is evaluated after Runtime startup so ProjectHTTP may bind any
+	// in-process handler dependencies before these routes become reachable.
+	ProjectHTTPAdapters func() []modulehttp.Adapter
 	// DevelopmentData enables one-shot generated sample records after the
 	// project model has materialized. Runtime accepts it only in the development
 	// environment and only while every eligible business object is empty.
