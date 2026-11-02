@@ -38,15 +38,16 @@ const (
 )
 
 type WorkspaceProvisionStore struct {
-	runtime                      *database.RuntimeStore
-	bootstrap                    identitysdk.WorkspaceIdentityBootstrap
-	model                        projectmodel.RuntimeModel
-	rolePolicy                   WorkspaceBootstrapRolePolicyEvidence
-	participant                  runtimeext.WorkspaceBootstrapParticipant
-	acceptanceFixtureProvisioner identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner
-	acceptanceFixtureRequest     identitysdk.WorkspaceAcceptanceFixtureRequest
-	acceptanceFixturesConfigured bool
-	failures                     FailureInjector
+	runtime                              *database.RuntimeStore
+	bootstrap                            identitysdk.WorkspaceIdentityBootstrap
+	model                                projectmodel.RuntimeModel
+	rolePolicy                           WorkspaceBootstrapRolePolicyEvidence
+	remoteInitialAdminMustChangePassword bool
+	participant                          runtimeext.WorkspaceBootstrapParticipant
+	acceptanceFixtureProvisioner         identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner
+	acceptanceFixtureRequest             identitysdk.WorkspaceAcceptanceFixtureRequest
+	acceptanceFixturesConfigured         bool
+	failures                             FailureInjector
 }
 
 // WorkspaceBootstrapRolePolicyEvidence is the host-side expectation for the
@@ -77,7 +78,10 @@ func NewWorkspaceBootstrapRolePolicyEvidence(catalog identitysdk.ProjectRoleCata
 // provisioning path requires its single current bootstrap capability.
 func NewWorkspaceProvisionStore(store *database.RuntimeStore, binding identitysdk.Binding, model projectmodel.RuntimeModel, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
 	bootstrap, _ := binding.(identitysdk.WorkspaceIdentityBootstrap)
-	return &WorkspaceProvisionStore{runtime: store, bootstrap: bootstrap, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
+	return &WorkspaceProvisionStore{
+		runtime: store, bootstrap: bootstrap, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy),
+		remoteInitialAdminMustChangePassword: true,
+	}
 }
 
 func NewWorkspaceProvisionStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.Binding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
@@ -87,7 +91,10 @@ func NewWorkspaceProvisionStoreWithParticipant(store *database.RuntimeStore, bin
 }
 
 func NewWorkspaceInitializationStore(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
-	return &WorkspaceProvisionStore{runtime: store, bootstrap: binding, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy)}
+	return &WorkspaceProvisionStore{
+		runtime: store, bootstrap: binding, model: model, rolePolicy: firstWorkspaceBootstrapRolePolicy(rolePolicy),
+		remoteInitialAdminMustChangePassword: true,
+	}
 }
 
 func NewWorkspaceInitializationStoreWithParticipant(store *database.RuntimeStore, binding identitysdk.BootstrapBinding, model projectmodel.RuntimeModel, participant runtimeext.WorkspaceBootstrapParticipant, rolePolicy ...WorkspaceBootstrapRolePolicyEvidence) *WorkspaceProvisionStore {
@@ -122,13 +129,22 @@ func firstWorkspaceBootstrapRolePolicy(policies []WorkspaceBootstrapRolePolicyEv
 	return policies[0]
 }
 
+// ConfigureRemoteInitialCredentialRotation binds remote Workspace
+// provisioning to the same Runtime-owned policy used to configure embedded
+// Identity. The HTTP request cannot select or override this value.
+func (store *WorkspaceProvisionStore) ConfigureRemoteInitialCredentialRotation(required bool) {
+	if store != nil {
+		store.remoteInitialAdminMustChangePassword = required
+	}
+}
+
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
 	// A remotely provisioned Workspace must not accept an administrator secret
 	// from the HTTP request. Generate the one-time credential inside Runtime,
 	// after replay detection, so a retry observes the durable receipt instead of
 	// producing a different idempotency fingerprint.
 	request.InitialAdminPassword = ""
-	request.InitialAdminMustChangePassword = false
+	request.InitialAdminMustChangePassword = store.remoteInitialAdminMustChangePassword
 	return store.provision(ctx, request, false)
 }
 
@@ -172,7 +188,6 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		if err != nil {
 			return workspaceprovisionmodel.Result{}, err
 		}
-		request.InitialAdminMustChangePassword = true
 	}
 
 	_, initialized, err := LoadInstallation(ctx, store.runtime)

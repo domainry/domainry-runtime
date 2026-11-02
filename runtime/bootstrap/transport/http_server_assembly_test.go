@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	workerplatform "github.com/domainry/domainry-foundation/worker"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	composition "github.com/domainry/domainry-runtime/runtime/bootstrap/composition"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -16,6 +17,35 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
+
+type workspaceAdmissionStub struct{}
+
+func (workspaceAdmissionStub) WorkspaceActive(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+type globalTransportIdentityBindingStub struct {
+	transportIdentityBindingStub
+	global bool
+}
+
+func (binding globalTransportIdentityBindingStub) IsGlobalApplication() bool { return binding.global }
+
+var _ identitysdk.GlobalApplicationBinding = globalTransportIdentityBindingStub{}
+
+func TestWorkspaceAdmissionUsesAuthoritativeIdentityBoundary(t *testing.T) {
+	local := workspaceAdmissionStub{}
+
+	if got := workspaceAdmissionForIdentityBinding(transportIdentityBindingStub{}, local); got == nil {
+		t.Fatal("workspace-pinned Identity binding lost local workspace admission")
+	}
+	if got := workspaceAdmissionForIdentityBinding(globalTransportIdentityBindingStub{global: false}, local); got == nil {
+		t.Fatal("non-global Identity binding lost local workspace admission")
+	}
+	if got := workspaceAdmissionForIdentityBinding(globalTransportIdentityBindingStub{global: true}, local); got != nil {
+		t.Fatalf("global Identity binding retained product-local workspace admission: %T", got)
+	}
+}
 
 func TestAssembleRuntimeHTTPServerRequiresConstructionContext(t *testing.T) {
 	defer func() {

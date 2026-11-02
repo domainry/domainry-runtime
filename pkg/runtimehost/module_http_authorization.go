@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
@@ -92,7 +93,7 @@ func newModuleHTTPRouteGuard(binding identitysdk.Binding, resolverOptions ...ide
 			if !audience.Valid() || !containsSignedModuleAudience(route.Action.Authorization.Audiences, string(audience)) {
 				return nil, fmt.Errorf("signed module route %q does not allow the Runtime audience", route.Action.Key)
 			}
-			return requireSignedModuleRequest(servicesBinding.ApplicationServiceVerifier(), audience, grant, governed), nil
+			return requireSignedModuleRequest(servicesBinding.ApplicationServiceVerifier(), audience, grant, route.Action.Authorization.SignedPermissions, governed), nil
 		case actioncontract.AuthorizationAnonymous:
 			return governed, nil
 		default:
@@ -191,7 +192,7 @@ func containsSignedModuleAudience(values []string, audience string) bool {
 	return false
 }
 
-func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVerifier, audience identitysdk.ApplicationKey, grant identitysdk.ApplicationServiceGrant, next http.Handler) http.Handler {
+func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVerifier, audience identitysdk.ApplicationKey, grant identitysdk.ApplicationServiceGrant, permissions []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		accessToken, ok := identityhttpmiddleware.BearerToken(request)
 		if !ok {
@@ -208,14 +209,66 @@ func requireSignedModuleRequest(services identitysdk.ApplicationServiceTokenVeri
 			writeModuleGovernanceError(writer, request, status, "auth.signed_request_invalid")
 			return
 		}
-		identity := identitysdk.RequestIdentity{Principal: identitysdk.Principal{
-			Known:                 true,
-			WorkspaceID:           string(servicePrincipal.Application.WorkspaceID),
-			UserID:                string(servicePrincipal.SubjectID),
-			AuthorizationRevision: string(servicePrincipal.AuthorizationRevision),
-		}}
+		identity, err := signedModuleRequestIdentity(servicePrincipal, permissions, time.Now().UTC())
+		if err != nil {
+			writeModuleGovernanceError(writer, request, http.StatusUnauthorized, "auth.signed_request_invalid")
+			return
+		}
 		next.ServeHTTP(writer, request.WithContext(identitysdk.WithRequestIdentity(request.Context(), identity)))
 	})
+}
+
+// signedModuleRequestIdentity projects exact source-declared permissions onto
+// a verified machine identity. Every permission receives the canonical `all`
+// record scope, but the bundle remains bounded by the signed token Workspace,
+// subject, revision and expiry. No Role or user assignment is synthesized.
+func signedModuleRequestIdentity(service identitysdk.ApplicationServicePrincipal, permissions []string, now time.Time) (identitysdk.RequestIdentity, error) {
+	principal := identitysdk.Principal{
+		ContractVersion:       identitysdk.PrincipalContextContractVersion,
+		Known:                 true,
+		WorkspaceID:           string(service.Application.WorkspaceID),
+		UserID:                string(service.SubjectID),
+		AuthorizationRevision: string(service.AuthorizationRevision),
+	}
+	if len(permissions) == 0 {
+		return identitysdk.RequestIdentity{Principal: principal}, nil
+	}
+	bundle := identitysdk.AccessBundle{
+		ContractVersion:       identitysdk.CurrentPolicyBundleVersion,
+		AuthorizationRevision: service.AuthorizationRevision,
+		ExpiresAt:             service.ExpiresAt,
+		Subject: identitysdk.Subject{
+			WorkspaceID: service.Application.WorkspaceID,
+			SubjectID:   service.SubjectID,
+		},
+	}
+	resources := map[identitysdk.ResourceType]bool{}
+	for _, permission := range permissions {
+		permission = strings.TrimSpace(permission)
+		separator := strings.LastIndexByte(permission, '.')
+		if separator <= 0 || separator == len(permission)-1 {
+			return identitysdk.RequestIdentity{}, fmt.Errorf("invalid signed permission %q", permission)
+		}
+		resource, action := identitysdk.ResourceType(permission[:separator]), identitysdk.Action(permission[separator+1:])
+		if !resource.Valid() || !action.Valid() {
+			return identitysdk.RequestIdentity{}, fmt.Errorf("invalid signed permission %q", permission)
+		}
+		bundle.FunctionGrants = append(bundle.FunctionGrants, identitysdk.FunctionGrant{Resource: resource, Action: action, Effect: identitysdk.EffectAllow})
+		bundle.DataPolicies = append(bundle.DataPolicies, identitysdk.DataPolicy{
+			Key: "signed:" + permission, Resource: resource, Action: action, Effect: identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		})
+		if !resources[resource] {
+			resources[resource] = true
+			bundle.FieldPolicies = append(bundle.FieldPolicies, identitysdk.FieldPolicy{Resource: resource, Field: "*", Read: true, Write: true, Export: true})
+		}
+	}
+	if err := bundle.Validate(now); err != nil {
+		return identitysdk.RequestIdentity{}, err
+	}
+	principal.AccessBundle = &bundle
+	principal.Permissions = append([]string(nil), permissions...)
+	return identitysdk.RequestIdentity{Principal: principal}, nil
 }
 
 func governModuleHTTPRoute(route modulehttp.Route, next http.Handler) http.Handler {

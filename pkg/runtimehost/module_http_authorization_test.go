@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
@@ -28,9 +29,11 @@ func (stub *moduleServiceVerifierStub) Verify(_ context.Context, request identit
 		return identitysdk.ApplicationServicePrincipal{}, &identitysdk.Error{Class: identitysdk.ErrorClassForbidden, Code: "invalid_service_token"}
 	}
 	return identitysdk.ApplicationServicePrincipal{
-		SubjectID:   "service:sample",
-		Application: identitysdk.ApplicationRef{WorkspaceID: "workspace-a", ApplicationKey: "sample"},
-		Audience:    request.Audience,
+		SubjectID:             "service:sample",
+		Application:           identitysdk.ApplicationRef{WorkspaceID: "workspace-a", ApplicationKey: "sample"},
+		Audience:              request.Audience,
+		AuthorizationRevision: "service-revision",
+		ExpiresAt:             time.Now().UTC().Add(time.Minute),
 	}, nil
 }
 
@@ -139,12 +142,16 @@ func TestModuleHTTPSignedRequestVerifiesExactAudienceAndGrant(t *testing.T) {
 	action := runtimeHostTestAction("runtime.action.permission_usages.query", "POST /action/permission-usages/query", []actioncontract.Exposure{actioncontract.ExposureManagement}, actioncontract.AuthorizationSigned)
 	action.Authorization = actioncontract.Authorization{
 		Strategy: actioncontract.AuthorizationSigned, PolicyKey: "runtime.action.permission_usages.query", Audiences: []string{"domainry-runtime"},
+		SignedPermissions: []string{"knowledge_runtime.read"},
 	}
 	executed := 0
 	handler, err := guard(modulehttp.Route{Action: action}, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		executed++
 		identity, known := identitysdk.RequestIdentityFromContext(request.Context())
-		if !known || identity.Principal.WorkspaceID != "workspace-a" || identity.Principal.UserID != "service:sample" {
+		if !known || identity.Principal.WorkspaceID != "workspace-a" || identity.Principal.UserID != "service:sample" ||
+			!identity.Principal.HasPermission("knowledge_runtime.read") || identity.Principal.AccessBundle == nil ||
+			len(identity.Principal.AccessBundle.DataPolicies) != 1 || len(identity.Principal.AccessBundle.DataPolicies[0].DataScopes) != 1 ||
+			identity.Principal.AccessBundle.DataPolicies[0].DataScopes[0] != identitysdk.DataScopeAll {
 			t.Fatalf("signed request identity=%+v known=%v", identity, known)
 		}
 		writer.WriteHeader(http.StatusNoContent)

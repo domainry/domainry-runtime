@@ -41,8 +41,20 @@ func (s *HTTPRouter) PrincipalFromContext(ctx context.Context) (principalmodel.P
 	if ctx == nil {
 		return principalmodel.Principal{}, false
 	}
-	principal, ok := ctx.Value(principalContextKey{}).(principalmodel.Principal)
-	return principal, ok && principal.Known
+	if principal, ok := ctx.Value(principalContextKey{}).(principalmodel.Principal); ok && principal.Known {
+		return principal, true
+	}
+	// Signed module routes are authenticated by Runtime's module HTTP guard.
+	// That guard owns the SDK RequestIdentity and deliberately does not invent a
+	// user role. Convert the already verified SDK principal into Runtime's thin
+	// execution wrapper here so the in-process Engine applies its AccessBundle
+	// through the ordinary record policy path.
+	identity, ok := identitysdk.RequestIdentityFromContext(ctx)
+	if !ok || !identity.Principal.Known || identity.Principal.AccessBundle == nil {
+		return principalmodel.Principal{}, false
+	}
+	principal := principalmodel.NewPrincipalFromIdentity(identity.Principal, requestcontext.RequestID(ctx))
+	return principal.WithAuthorizationEvaluationTime(time.Now().UTC()), true
 }
 
 func (s *HTTPRouter) decodeJSONBody(w http.ResponseWriter, r *http.Request, value any) bool {

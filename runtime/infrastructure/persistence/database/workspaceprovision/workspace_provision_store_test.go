@@ -261,6 +261,32 @@ func TestRemoteWorkspaceProvisionGeneratesCredentialAfterReplayDetection(t *test
 	}
 }
 
+func TestRemoteWorkspaceProvisionHonorsConfiguredCredentialRotationPolicy(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	repository := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy)
+	if _, err := repository.Initialize(t.Context(), validWorkspaceRequest("initialize-rotation-policy")); err != nil {
+		t.Fatal(err)
+	}
+
+	probe.claimed = false
+	probe.credential.MustChangePassword = false
+	repository.ConfigureRemoteInitialCredentialRotation(false)
+	request := validWorkspaceRequest("remote-no-rotation")
+	request.WorkspaceCode = "secondary-no-rotation"
+	request.WorkspaceName = "Secondary without rotation"
+	request.FirstStoreCode = "secondary-no-rotation-store"
+	request.FirstStoreName = "Secondary Store"
+	request.AdminLoginID = "secondary-no-rotation@example.test"
+	request.InitialAdminMustChangePassword = true
+	result, err := repository.Provision(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MustChangePassword || result.CredentialDelivery != workspaceprovisionmodel.CredentialDelivered || result.InitialPassword == "" {
+		t.Fatalf("result=%+v", result)
+	}
+}
+
 func TestWorkspaceInitializationProvisionsConfiguredAcceptanceFixturesInHostTransaction(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
 	fixtures := identitysdk.WorkspaceAcceptanceFixtureRequest{Actors: []identitysdk.WorkspaceAcceptanceActor{{

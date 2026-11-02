@@ -77,6 +77,26 @@ func TestProjectHTTPReceivesResolvedSessionIdentityAndAccessToken(t *testing.T) 
 	}
 }
 
+func TestProjectEngineAcceptsVerifiedSignedRequestIdentity(t *testing.T) {
+	bundle := &identitysdk.AccessBundle{
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion,
+		FunctionGrants:  []identitysdk.FunctionGrant{{Resource: "knowledge_runtime", Action: "read", Effect: identitysdk.EffectAllow}},
+		DataPolicies: []identitysdk.DataPolicy{{
+			Key: "knowledge_runtime.read", Resource: "knowledge_runtime", Action: "read", Effect: identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		}},
+	}
+	identity := identitysdk.RequestIdentity{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge", AccessBundle: bundle,
+	}}
+	ctx := identitysdk.WithRequestIdentity(context.Background(), identity)
+	principal, ok := (&HTTPRouter{}).PrincipalFromContext(ctx)
+	if !ok || principal.UserID != identity.Principal.UserID || principal.WorkspaceID != identity.Principal.WorkspaceID ||
+		!principal.HasPermission("knowledge_runtime.read") || principal.AuthorizationEvaluatedAt.IsZero() {
+		t.Fatalf("principal=%+v ok=%v", principal, ok)
+	}
+}
+
 type projectBusinessPrincipalResolver struct {
 	authorizationRevision string
 }

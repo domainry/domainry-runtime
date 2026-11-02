@@ -136,6 +136,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		panic("transport.AssembleRuntimeHTTPServer requires a complete Identity SDK Binding")
 	}
 	workspaceAdministrationStore := workspaceprovisionpersistence.NewWorkspaceAdministrationStore(dependencies.Store)
+	workspaceAdmission := workspaceAdmissionForIdentityBinding(dependencies.IdentityBinding, workspaceAdministrationStore)
 	integrationAuthentication := newIntegrationAPIKeyPrincipalProvider(
 		dependencies.IntegrationBinding,
 		identityPrincipals,
@@ -186,7 +187,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 				return records.Schema().IdentityProfileExtensions
 			},
 		}),
-		WorkspaceAdmission: workspaceAdministrationStore,
+		WorkspaceAdmission: workspaceAdmission,
 		SecurityAudit:      records.Applications().Audit,
 		RuntimeHealth:      dependencies.MonitoringBinding,
 		RuntimeReadiness:   records.Applications().RuntimeStatus,
@@ -246,6 +247,22 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	return runtimehttp.UseProjectModelIdentity(server, dependencies.ProjectModel.ProjectKey, dependencies.ProjectModel.ContentHash)
 }
 
+// workspaceAdmissionForIdentityBinding keeps workspace lifecycle ownership at
+// the same boundary that authenticated the request. A global SaaS Identity
+// binding resolves the workspace dynamically from the verified request and is
+// authoritative for that workspace. Consulting this product's local
+// _workspaces table as a second admission source would reject every valid
+// external workspace that was not provisioned into the product database.
+//
+// Embedded and workspace-pinned bindings still use the local administration
+// store because Runtime owns their workspace lifecycle.
+func workspaceAdmissionForIdentityBinding(binding identitysdk.Binding, local runtimehttp.WorkspaceAdmission) runtimehttp.WorkspaceAdmission {
+	if global, ok := binding.(identitysdk.GlobalApplicationBinding); ok && global.IsGlobalApplication() {
+		return nil
+	}
+	return local
+}
+
 func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 	if a.dependencies.Store == nil {
 		return
@@ -258,6 +275,7 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 		workspaceprovisionpersistence.NewAcceptanceFailureInjector(a.dependencies.Config.WorkspaceProvisionFailurePoint),
 		a.dependencies.WorkspaceRolePolicy,
 	)
+	repository.ConfigureRemoteInitialCredentialRotation(a.dependencies.Config.AuthInitialCredentialRotationRequired)
 	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
 	installationIdentity, err := a.dependencies.Store.InstallationIdentity(ctx)
 	if err != nil {
