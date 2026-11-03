@@ -15,11 +15,11 @@ require (
 	github.com/domainry/domainry-data-exchange v0.3.40
 	github.com/domainry/domainry-data-exchange-sdk v0.3.21
 	github.com/domainry/domainry-foundation v0.2.20
-	github.com/domainry/domainry-identity v0.2.77
-	github.com/domainry/domainry-identity-sdk v0.1.41
+	github.com/domainry/domainry-identity v0.2.79
+	github.com/domainry/domainry-identity-sdk v0.1.42
 	github.com/domainry/domainry-integration v0.1.60
 	github.com/domainry/domainry-integration-sdk v0.1.27
-	github.com/domainry/domainry-knowledge v0.1.85
+	github.com/domainry/domainry-knowledge v0.1.90
 	github.com/domainry/domainry-knowledge-sdk v0.1.39
 	github.com/domainry/domainry-lifecycle v0.1.44
 	github.com/domainry/domainry-lifecycle-sdk v0.1.32
