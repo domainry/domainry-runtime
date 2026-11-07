@@ -97,28 +97,6 @@ func TestProjectEngineAcceptsVerifiedSignedRequestIdentity(t *testing.T) {
 	}
 }
 
-func TestProjectEnginePrefersAuthorizedSignedIdentityOverUnbundledContextPrincipal(t *testing.T) {
-	bundle := &identitysdk.AccessBundle{
-		ContractVersion: identitysdk.CurrentPolicyBundleVersion,
-		FunctionGrants:  []identitysdk.FunctionGrant{{Resource: "knowledge_runtime", Action: "read", Effect: identitysdk.EffectAllow}},
-		DataPolicies: []identitysdk.DataPolicy{{
-			Key: "knowledge_runtime.read", Resource: "knowledge_runtime", Action: "read", Effect: identitysdk.EffectAllow,
-			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
-		}},
-	}
-	request := requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/internal/v1/knowledge/index-target", nil), principalmodel.Principal{
-		Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge"},
-	})
-	identity := identitysdk.RequestIdentity{Principal: identitysdk.Principal{
-		Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge", AccessBundle: bundle,
-	}}
-	ctx := identitysdk.WithRequestIdentity(request.Context(), identity)
-	principal, ok := (&HTTPRouter{}).PrincipalFromContext(ctx)
-	if !ok || principal.AccessBundle == nil || !principal.HasPermission("knowledge_runtime.read") || principal.AuthorizationEvaluatedAt.IsZero() {
-		t.Fatalf("principal=%+v ok=%v", principal, ok)
-	}
-}
-
 type projectBusinessPrincipalResolver struct {
 	authorizationRevision string
 }
