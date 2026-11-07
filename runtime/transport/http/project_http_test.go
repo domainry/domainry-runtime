@@ -97,7 +97,7 @@ func TestProjectEngineAcceptsVerifiedSignedRequestIdentity(t *testing.T) {
 	}
 }
 
-func TestProjectEnginePrefersAuthorizedSignedIdentityOverUnbundledContextPrincipal(t *testing.T) {
+func TestProjectEnginePrefersRouteScopedSignedIdentityOverOuterServicePrincipal(t *testing.T) {
 	bundle := &identitysdk.AccessBundle{
 		ContractVersion: identitysdk.CurrentPolicyBundleVersion,
 		FunctionGrants:  []identitysdk.FunctionGrant{{Resource: "knowledge_runtime", Action: "read", Effect: identitysdk.EffectAllow}},
@@ -106,15 +106,25 @@ func TestProjectEnginePrefersAuthorizedSignedIdentityOverUnbundledContextPrincip
 			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
 		}},
 	}
+	outerBundle := &identitysdk.AccessBundle{
+		ContractVersion: identitysdk.CurrentPolicyBundleVersion,
+		FunctionGrants:  []identitysdk.FunctionGrant{{Resource: "enterprise.knowledge", Action: "index_target", Effect: identitysdk.EffectAllow}},
+		DataPolicies: []identitysdk.DataPolicy{{
+			Key: "enterprise.knowledge.index_target", Resource: "enterprise.knowledge", Action: "index_target", Effect: identitysdk.EffectAllow,
+			DataScopes: []identitysdk.DataScope{identitysdk.DataScopeAll},
+		}},
+	}
 	request := requestWithPrincipal(httptest.NewRequest(http.MethodPost, "/internal/v1/knowledge/index-target", nil), principalmodel.Principal{
-		Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge"},
+		Principal:                     identitysdk.Principal{Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge", AccessBundle: outerBundle},
+		BusinessAuthorizationRevision: "business-revision",
 	})
 	identity := identitysdk.RequestIdentity{Principal: identitysdk.Principal{
 		Known: true, WorkspaceID: "workspace-signed", UserID: "service:verdent-knowledge", AccessBundle: bundle,
 	}}
 	ctx := identitysdk.WithRequestIdentity(request.Context(), identity)
 	principal, ok := (&HTTPRouter{}).PrincipalFromContext(ctx)
-	if !ok || principal.AccessBundle == nil || !principal.HasPermission("knowledge_runtime.read") || principal.AuthorizationEvaluatedAt.IsZero() {
+	if !ok || principal.AccessBundle == nil || !principal.HasPermission("knowledge_runtime.read") || principal.HasPermission("enterprise.knowledge.index_target") ||
+		principal.BusinessAuthorizationRevision != "business-revision" || principal.AuthorizationEvaluatedAt.IsZero() {
 		t.Fatalf("principal=%+v ok=%v", principal, ok)
 	}
 }
