@@ -42,6 +42,9 @@ func (s *HTTPRouter) PrincipalFromContext(ctx context.Context) (principalmodel.P
 		return principalmodel.Principal{}, false
 	}
 	principal, principalKnown := ctx.Value(principalContextKey{}).(principalmodel.Principal)
+	if principalKnown && principal.Known && principal.AccessBundle != nil {
+		return principal, true
+	}
 	// Signed module routes are authenticated by Runtime's module HTTP guard.
 	// That guard owns the SDK RequestIdentity and deliberately does not invent a
 	// user role. Convert the already verified SDK principal into Runtime's thin
@@ -50,14 +53,6 @@ func (s *HTTPRouter) PrincipalFromContext(ctx context.Context) (principalmodel.P
 	identity, identityKnown := identitysdk.RequestIdentityFromContext(ctx)
 	if identityKnown && identity.Principal.Known && identity.Principal.AccessBundle != nil {
 		resolved := principalmodel.NewPrincipalFromIdentity(identity.Principal, requestcontext.RequestID(ctx))
-		// Runtime authentication may already have attached business-profile and
-		// execution context for the same actor. Preserve those Runtime-owned facts,
-		// but replace the embedded SDK Principal with the RequestIdentity because a
-		// signed module guard can narrow it to the route's exact record permission.
-		if principalKnown && principal.Known && principal.UserID == identity.Principal.UserID && principal.WorkspaceID == identity.Principal.WorkspaceID {
-			resolved = principal
-			resolved.Principal = identity.Principal
-		}
 		return resolved.WithAuthorizationEvaluationTime(time.Now().UTC()), true
 	}
 	if principalKnown && principal.Known {
