@@ -7,8 +7,19 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
+
+type longLivedProjectHTTPHandler struct {
+	http.Handler
+}
+
+func (*longLivedProjectHTTPHandler) IsLongLivedRequest(request *http.Request) bool {
+	return request != nil && request.Method == http.MethodPost && request.URL.Path == "/api/stream"
+}
+
+var _ runtimeengine.LongLivedHTTPHandler = (*longLivedProjectHTTPHandler)(nil)
 
 func TestProjectHTTPUsesRuntimeAuthenticationWithoutCompiledActionRoute(t *testing.T) {
 	called := false
@@ -113,6 +124,18 @@ func TestUseProjectHTTPStoresOnlyExplicitHandler(t *testing.T) {
 		t.Fatal("project HTTP handler was not installed")
 	}
 	UseProjectHTTP(nil, handler)
+}
+
+func TestUseProjectHTTPDiscoversLongLivedRequestPolicy(t *testing.T) {
+	handler := &longLivedProjectHTTPHandler{Handler: http.NotFoundHandler()}
+	router := UseProjectHTTP(&HTTPRouter{}, handler)
+	if !router.longLivedProjectHTTPRequest(httptest.NewRequest(http.MethodPost, "/api/stream", nil)) {
+		t.Fatal("project streaming request was not classified as long-lived")
+	}
+	if router.longLivedProjectHTTPRequest(httptest.NewRequest(http.MethodGet, "/api/stream", nil)) ||
+		router.longLivedProjectHTTPRequest(httptest.NewRequest(http.MethodPost, "/records/stream", nil)) {
+		t.Fatal("ordinary or non-project request bypassed Runtime deadlines")
+	}
 }
 
 func TestProjectHTTPReplacesGenericRecordHTTPRoutes(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	"github.com/domainry/domainry-runtime/pkg/runtimeengine"
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/logging"
@@ -90,6 +91,7 @@ type HTTPRouter struct {
 	releaseIdentity                 RuntimeReleaseIdentity
 	moduleHTTPRoutes                map[string]moduleHTTPRoute
 	projectHTTP                     http.Handler
+	longLivedProjectHTTP            runtimeengine.LongLivedHTTPHandler
 }
 
 func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRouter {
@@ -183,8 +185,16 @@ func UseHTTPMetricsCollector(server *HTTPRouter, collector HTTPMetricsCollector)
 func UseProjectHTTP(server *HTTPRouter, handler http.Handler) *HTTPRouter {
 	if server != nil {
 		server.projectHTTP = handler
+		server.longLivedProjectHTTP, _ = handler.(runtimeengine.LongLivedHTTPHandler)
 	}
 	return server
+}
+
+func (s *HTTPRouter) longLivedProjectHTTPRequest(request *http.Request) bool {
+	if s == nil || s.longLivedProjectHTTP == nil || request == nil || !strings.HasPrefix(request.URL.Path, "/api/") {
+		return false
+	}
+	return s.longLivedProjectHTTP.IsLongLivedRequest(request)
 }
 
 type HTTPRequestMetric struct {

@@ -311,6 +311,15 @@ type TaskAssigneePage struct {
 // authentication, workspace admission, capacity, recovery and CORS layers.
 type HTTPFactory func(Engine) http.Handler
 
+// LongLivedHTTPHandler lets a project-owned router identify streaming requests
+// that must retain client cancellation without inheriting Runtime's ordinary
+// total request and response-write deadlines. Runtime still applies identity,
+// workspace admission, capacity and observability to these requests.
+type LongLivedHTTPHandler interface {
+	http.Handler
+	IsLongLivedRequest(*http.Request) bool
+}
+
 type ErrorKind string
 
 const (

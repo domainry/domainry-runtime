@@ -78,8 +78,16 @@ func (s *HTTPRouter) withListenerRouteGroupPolicy(group ListenerRouteGroup, next
 			}
 			defer lease.Release()
 		}
+		longLived := s.longLivedProjectHTTPRequest(r)
+		if longLived {
+			// Streaming ProjectHTTP routes own their inactivity policy. A zero
+			// deadline keeps Go's listener-wide WriteTimeout from truncating an
+			// otherwise healthy stream while client cancellation still propagates
+			// through the request context.
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+		}
 		ctx := r.Context()
-		if policy.RequestTimeout > 0 {
+		if policy.RequestTimeout > 0 && !longLived {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, policy.RequestTimeout)
 			defer cancel()

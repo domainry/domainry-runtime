@@ -53,6 +53,24 @@ func TestHTTPAdmissionPropagatesRequestDeadline(t *testing.T) {
 	}
 }
 
+func TestHTTPAdmissionLeavesLongLivedProjectRequestWithoutTotalDeadline(t *testing.T) {
+	router := UseProjectHTTP(&HTTPRouter{
+		capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil),
+		requestTimeout:     10 * time.Millisecond,
+	}, &longLivedProjectHTTPHandler{Handler: http.NotFoundHandler()})
+	handler := router.withAdmission(nil, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if _, hasDeadline := request.Context().Deadline(); hasDeadline {
+			t.Error("long-lived project request inherited the capacity total deadline")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, initializedCapacityRequest(http.MethodPost, "/api/stream"))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestHTTPAdmissionShedsNonessentialWorkDuringQueueBackpressure(t *testing.T) {
 	router := &HTTPRouter{capacityController: capacityplatform.NewController(capacityplatform.Limits{}, nil), requestTimeout: time.Second, backpressure: func(context.Context) bool { return true }}
 	handler := router.withAdmission(nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))

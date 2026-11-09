@@ -22,6 +22,23 @@ func (fn listenerRateLimiterFunc) Allow(ctx context.Context, key string, limit i
 	return fn(ctx, key, limit, window)
 }
 
+type writeDeadlineTrackingWriter struct {
+	header   http.Header
+	deadline time.Time
+	set      bool
+}
+
+func (writer *writeDeadlineTrackingWriter) Header() http.Header { return writer.header }
+func (*writeDeadlineTrackingWriter) WriteHeader(int)            {}
+func (*writeDeadlineTrackingWriter) Write(payload []byte) (int, error) {
+	return len(payload), nil
+}
+func (writer *writeDeadlineTrackingWriter) SetWriteDeadline(deadline time.Time) error {
+	writer.deadline = deadline
+	writer.set = true
+	return nil
+}
+
 func TestListenerRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *testing.T) {
 	router := &HTTPRouter{
 		listenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
@@ -71,6 +88,26 @@ func TestListenerRouteGroupPolicyAppliesIndependentBodyTimeoutAndRateLimits(t *t
 	fast.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	if first.Code != http.StatusNoContent || second.Code != http.StatusTooManyRequests {
 		t.Fatalf("rate statuses first=%d second=%d", first.Code, second.Code)
+	}
+}
+
+func TestListenerRouteGroupRemovesTotalAndWriteDeadlinesForLongLivedProjectRequest(t *testing.T) {
+	router := UseProjectHTTP(&HTTPRouter{
+		listenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
+			ListenerRouteGroupPublic: {RequestTimeout: 10 * time.Millisecond},
+		},
+		listenerGroupCapacity: map[ListenerRouteGroup]*capacityplatform.Controller{},
+	}, &longLivedProjectHTTPHandler{Handler: http.NotFoundHandler()})
+	handler := router.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if _, hasDeadline := request.Context().Deadline(); hasDeadline {
+			t.Error("long-lived project request inherited the listener total deadline")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	writer := &writeDeadlineTrackingWriter{header: make(http.Header)}
+	handler.ServeHTTP(writer, httptest.NewRequest(http.MethodPost, "/api/stream", nil))
+	if !writer.set || !writer.deadline.IsZero() {
+		t.Fatalf("write deadline was not cleared: set=%v deadline=%s", writer.set, writer.deadline)
 	}
 }
 

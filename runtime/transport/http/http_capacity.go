@@ -61,7 +61,7 @@ func (s *HTTPRouter) withAdmission(routes *http.ServeMux, next http.Handler) htt
 		defer lease.Release()
 		w.Header().Set("X-Capacity-State", string(decision.State))
 		ctx := r.Context()
-		if s.requestTimeout > 0 {
+		if s.requestTimeout > 0 && !s.longLivedProjectHTTPRequest(r) {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, s.requestTimeout)
 			defer cancel()
