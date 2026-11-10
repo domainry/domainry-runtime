@@ -238,7 +238,7 @@ func expectedCompositionTables(t *testing.T, composition schemaComposition) []st
 
 func TestCompositionSnapshotCountsRemainStable(t *testing.T) {
 	for composition, want := range map[schemaComposition]int{
-		minimalComposition: 44, fullNoAgentComposition: 88, fullAgentComposition: 158,
+		minimalComposition: 44, fullNoAgentComposition: 88, fullAgentComposition: 159,
 	} {
 		if got := len(expectedCompositionTables(t, composition)); got != want {
 			t.Fatalf("%s target table count=%d want=%d", composition, got, want)
