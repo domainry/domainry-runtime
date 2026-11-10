@@ -289,6 +289,33 @@ func TestRuntimeReleaseClaimBranchStages(t *testing.T) {
 	}
 }
 
+func TestRuntimeReleaseClaimUsesActiveFenceForVersionOnlyRollingJoin(t *testing.T) {
+	now := time.Now().UTC()
+	active := releaseIdentity("active-release-hash")
+	active.RuntimeVersion = "v1.2.3"
+	joining := active
+	joining.RuntimeVersion = "v1.2.4"
+	joining.CombinationSHA256 = "joining-release-hash"
+	activeJSON, _ := json.Marshal(active)
+	store, closeDB := scriptedReleaseStore(&releaseSQLState{
+		execSteps: []releaseSQLExecStep{{rows: 1}, {rows: 1}},
+		querySteps: []releaseSQLQueryStep{
+			{columns: releaseColumns(3), rows: [][]driver.Value{{active.CombinationSHA256, string(activeJSON), int64(7)}}},
+			{columns: releaseColumns(4), rows: [][]driver.Value{{"active-instance", active.CombinationSHA256, int64(7), now.Add(time.Minute).UnixMilli()}}},
+		},
+	})
+	defer closeDB()
+	lease, err := store.claim(t.Context(), deploymentmodel.RuntimeReleaseCohortClaim{
+		InstanceID: "joining-instance", Identity: joining, Now: now, LeaseDuration: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.CombinationSHA256 != active.CombinationSHA256 || lease.Generation != 7 {
+		t.Fatalf("rolling join lease=%+v, want active cohort fence", lease)
+	}
+}
+
 func TestRuntimeReleaseHeartbeatStages(t *testing.T) {
 	now := time.Now().UTC()
 	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: "instance", CombinationSHA256: "hash", Generation: 1}

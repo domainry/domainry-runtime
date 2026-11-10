@@ -31,6 +31,18 @@ func (i RuntimeReleaseIdentity) Coordinated() bool {
 	return i.ProjectDefinitionRegistrySHA256 != ""
 }
 
+// CohortCompatible reports whether two releases may serve the same Runtime
+// database concurrently. RuntimeVersion identifies the packaged release for
+// diagnostics, but does not change its database or extension contracts and
+// therefore must not split an otherwise compatible cohort.
+func (i RuntimeReleaseIdentity) CohortCompatible(other RuntimeReleaseIdentity) bool {
+	i.RuntimeVersion = ""
+	i.CombinationSHA256 = ""
+	other.RuntimeVersion = ""
+	other.CombinationSHA256 = ""
+	return i == other
+}
+
 // RuntimeRegistrySHA256 hashes the frozen public descriptor inventory used by
 // both runtimehost identity publication and Runtime readiness drift checks.
 func RuntimeRegistrySHA256(contractVersion string, descriptors any) (string, error) {
