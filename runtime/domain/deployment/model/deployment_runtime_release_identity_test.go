@@ -34,3 +34,14 @@ func TestRuntimeReleaseCohortCompatibilityIgnoresDiagnosticRuntimeVersion(t *tes
 		t.Fatal("runtime extension contract change was accepted as cohort-compatible")
 	}
 }
+
+func TestRuntimeReleaseCoordinationDependsOnProjectIdentityNotReplicaCount(t *testing.T) {
+	identity := RuntimeReleaseIdentity{}
+	if identity.Coordinated() {
+		t.Fatal("empty Generic Runtime identity enabled release coordination")
+	}
+	identity.ProjectDefinitionRegistrySHA256 = "project-registry-hash"
+	if !identity.Coordinated() {
+		t.Fatal("project Runtime identity did not enable release coordination")
+	}
+}

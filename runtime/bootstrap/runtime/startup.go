@@ -86,7 +86,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	projectDefinitions := projectExtensions.ProjectDefinitions()
 	handlerDescriptors := projectExtensions.BusinessHandlerDescriptors()
 	schemaCapabilities := ProjectSchemaCapabilities(projectModel, projectExtensions)
-	schemaCapabilities.ReleaseCoordination = cfg.RuntimeReplicaCount > 1
+	schemaCapabilities.ReleaseCoordination = releaseIdentity.Coordinated()
 	mustCompleteRuntimeStartup(validateSelectedCapabilityFactories(projectDefinitions, handlerDescriptors, notificationFactory, reportFactory, integrationFactory, len(connectorProviders.Descriptors()) != 0, schedulerFactory, agentFactory))
 	var err error
 	store := preparedStore

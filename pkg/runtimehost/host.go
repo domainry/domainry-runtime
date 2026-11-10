@@ -373,7 +373,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 	// model.json and never participates in the project content hash.
 	runtimeModel.Objects = append(runtimeModel.Objects, recordtimerprojection.RecordTimerSystemObjects()...)
 	runtimeSchemaCapabilities := bootstrap.ProjectSchemaCapabilities(runtimeModel, projectExtensions)
-	runtimeSchemaCapabilities.ReleaseCoordination = cfg.RuntimeReplicaCount > 1
+	runtimeSchemaCapabilities.ReleaseCoordination = releaseIdentity.Coordinated()
 	cfg.RuntimeVersion = options.Identity.RuntimeVersion
 	identityFactory := options.IdentityFactory
 	if identityFactory == nil {
