@@ -38,6 +38,24 @@ func TestPublicListenerIncludesPermissionedHumanManagementButNotProvisioning(t *
 	}
 }
 
+func TestMetricsIsAnonymousOnlyOnInternalListeners(t *testing.T) {
+	contract := runtimeEndpointContracts["GET /metrics"]
+	if contract.PermissionPolicyRef != "anonymous" || len(contract.ProtocolAudiences) != 1 || contract.ProtocolAudiences[0] != "anonymous" {
+		t.Fatalf("metrics authorization contract=%+v", contract)
+	}
+	if endpointVisibleOnListener(contract, endpointmodel.ListenerExposurePublic) {
+		t.Fatal("metrics route leaked to public listener")
+	}
+	for _, exposure := range []endpointmodel.ListenerExposure{
+		endpointmodel.ListenerExposureManagement,
+		endpointmodel.ListenerExposureOps,
+	} {
+		if !endpointVisibleOnListener(contract, exposure) {
+			t.Fatalf("metrics route missing from %s listener", exposure)
+		}
+	}
+}
+
 func TestFallbackRouteCanReturnJSONBeforeAuthentication(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", func(http.ResponseWriter, *http.Request) {})

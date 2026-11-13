@@ -123,7 +123,8 @@ func TestListenerRouteGroupsRegisterOnlyTheirCompiledEndpointInventory(t *testin
 
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", nil, http.StatusOK)
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/metrics", nil, http.StatusNotFound)
-	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/metrics", nil, http.StatusUnauthorized)
+	assertStatus(runtimehttp.ListenerRouteGroupManagement, http.MethodGet, "/metrics", nil, http.StatusOK)
+	assertStatus(runtimehttp.ListenerRouteGroupOps, http.MethodGet, "/metrics", nil, http.StatusOK)
 	assertStatus(runtimehttp.ListenerRouteGroupOps, http.MethodGet, "/identity/users", nil, http.StatusNotFound)
 	assertStatus(runtimehttp.ListenerRouteGroupPublic, http.MethodGet, "/live", map[string]string{
 		"Origin": "https://admin.example.com",
