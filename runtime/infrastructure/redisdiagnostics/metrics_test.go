@@ -59,3 +59,28 @@ func TestMetricLabelsRejectUnboundedValues(t *testing.T) {
 		t.Fatal("unbounded Redis label value was accepted")
 	}
 }
+
+func TestNoScriptIsReportedAsCacheMissInsteadOfRedisFailure(t *testing.T) {
+	runtimeCollector.mu.Lock()
+	runtimeCollector.operations = map[operationKey]*operationMetric{}
+	runtimeCollector.fallbacks = map[string]uint64{}
+	runtimeCollector.decisions = map[string]uint64{}
+	runtimeCollector.clients = map[string]redis.UniversalClient{}
+	runtimeCollector.mu.Unlock()
+
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	Install(client, ComponentRateLimit)
+	if err := client.EvalSha(t.Context(), "missing-script-sha", nil).Err(); !redis.HasErrorPrefix(err, "NOSCRIPT") {
+		t.Fatalf("EvalSha error=%v", err)
+	}
+
+	output := OpenMetrics()
+	if !strings.Contains(output, `component="rate_limit",operation="evalsha",outcome="miss"`) {
+		t.Fatalf("NOSCRIPT was not classified as a cache miss:\n%s", output)
+	}
+	if strings.Contains(output, `component="rate_limit",operation="evalsha",outcome="error"`) {
+		t.Fatalf("NOSCRIPT was incorrectly classified as an error:\n%s", output)
+	}
+}

@@ -47,6 +47,12 @@ func (h hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 		if errors.Is(err, redis.Nil) {
 			outcome = "miss"
 			result = telemetry.DependencyResult{Outcome: "miss", Output: map[string]any{"found": false}}
+		} else if redis.HasErrorPrefix(err, "NOSCRIPT") {
+			// Script.Run deliberately probes EVALSHA first and retries with EVAL
+			// when the server-side script cache is cold. That is a normal cache
+			// miss, not an application or Redis availability failure.
+			outcome = "miss"
+			result = telemetry.DependencyResult{Outcome: "miss", Output: map[string]any{"script_cached": false}}
 		}
 		observeOperation(h.component, commandOperation(command.FullName()), outcome, time.Since(started))
 		telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
