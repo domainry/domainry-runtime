@@ -91,8 +91,7 @@ func (s *RecordUpdateApplicationService) update(ctx context.Context, objectKey, 
 		return recordmodel.Record{}, err
 	}
 	patch = recordvalidation.RecordCloneData(patch)
-	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "update")
-	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "update")
+	object, authorizationPrincipal, err := s.authorizeUpdateObject(ctx, principal, objectKey)
 	if err != nil {
 		s.denied(ctx, objectKey, recordID, principal, err, "object_permission", patch)
 		return recordmodel.Record{}, err
@@ -362,6 +361,11 @@ func (s *RecordUpdateApplicationService) applyDerivedAndPipeline(ctx context.Con
 }
 
 func (s *RecordUpdateApplicationService) validateCandidate(ctx context.Context, objectKey string, object definitionmodel.ObjectSchema, record recordmodel.Record, beforeData, nextData, patch map[string]any, principal, authorizationPrincipal principalmodel.Principal, includePolicies bool) error {
+	if recordHasOwnedUpdateParentPlans(ctx, object) {
+		if err := recordValidateOwnedEffectCandidate(ctx, object, nextData, principal); err != nil {
+			return err
+		}
+	}
 	if err := recordvalidation.RecordValidateDataWithPrev(object, nextData, beforeData, false); err != nil {
 		return recordUpdateErrorFrom(apperror.KindBadRequest, err)
 	}

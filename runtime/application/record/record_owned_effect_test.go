@@ -45,7 +45,7 @@ func TestOwnedEffectUsesAuthorizedParentPlanWithoutCopyingSourceACL(t *testing.T
 	if err != nil || record.RecordID != "event-a" || plan.CanonicalCommit().Record.WorkspaceID != "workspace-a" {
 		t.Fatalf("owned event failed: record=%+v err=%v", record, err)
 	}
-	authorized, err := recordOwnedEffectAuthorizationPrincipal(ctx, principal, child)
+	authorized, err := recordOwnedEffectAuthorizationPrincipal(ctx, principal, child, "create")
 	if err != nil {
 		t.Fatal(err)
 	}

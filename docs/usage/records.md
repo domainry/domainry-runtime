@@ -91,6 +91,10 @@ Creating `SO-88` for `store-shanghai-01` succeeds once. A concurrent second crea
 
 Every enabled Object capability creates a distinct permission such as `customer.read` or `sales_order.update`. A Role must grant each exact permission with one data scope.
 
+For an Object with `authorization_parent`, reads inherit the declared parent's live read scope. A Business Action that declares a child create effect must first stage an authorized canonical parent mutation in the same unit of work. Runtime binds the child to those exact parent IDs and the current Workspace.
+
+The same parent authority applies to a declared child update when that Action has already staged parent mutations. Runtime uses the exact parent relation predicate for target loading and the final SQL update, preserves explicit denies, and checks the resulting parent binding again after hooks and self effects. The child may have been created by a different service and need not duplicate the parent's organization. A read alone supplies no parent mutation authority; updates without a staged parent continue to require their explicit operation and record scope.
+
 ## Boundaries
 
 Object JSON must not absorb state machines, Identity relationships, analytical definitions, schedules, or other owners' contracts. Match those requirements to their source owner first.

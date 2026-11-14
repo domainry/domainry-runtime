@@ -39,8 +39,7 @@ func (s *RecordUpdateApplicationService) PlanUpdateMutation(ctx context.Context,
 	if err := recordAuthorizeCommand(principal); err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}
-	authorizationPrincipal := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "update")
-	object, err := s.dependencies.ObjectForAction(authorizationPrincipal, objectKey, "update")
+	object, authorizationPrincipal, err := s.authorizeUpdateObject(ctx, principal, objectKey)
 	if err != nil {
 		return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 	}

@@ -97,7 +97,7 @@ func (s *RecordCreateApplicationService) PlanCreateMutation(ctx context.Context,
 		schema = s.dependencies.Objects()[strings.TrimSpace(objectKey)]
 	}
 	if schema.AuthorizationParent != nil {
-		authorizationPrincipal, err = recordOwnedEffectAuthorizationPrincipal(ctx, principal, schema)
+		authorizationPrincipal, err = recordOwnedEffectAuthorizationPrincipal(ctx, principal, schema, "create")
 		if err != nil {
 			return transactionmodel.MutationPlan{}, recordmodel.Record{}, err
 		}

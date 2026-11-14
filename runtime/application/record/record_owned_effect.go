@@ -14,8 +14,10 @@ import (
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
 
-func recordOwnedEffectAuthorizationPrincipal(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema) (principalmodel.Principal, error) {
-	const action = "create"
+func recordOwnedEffectAuthorizationPrincipal(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, action string) (principalmodel.Principal, error) {
+	if action != "create" && action != "update" {
+		return principal, ownedRecordEffectDenied()
+	}
 	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
 	if object.AuthorizationParent == nil || !ok || invocation.Source != transactionmodel.MutationSourceAction || len(invocation.EffectAuthority[object.Key]) == 0 {
 		return principal, ownedRecordEffectDenied()
@@ -50,9 +52,9 @@ func recordOwnedEffectAuthorizationPrincipal(ctx context.Context, principal prin
 	authorized := principal
 	if principal.AccessBundle != nil {
 		// The parent plan already carries the user's authorization. Grant only
-		// this internal create verb, then bind its candidate to those exact
+		// this internal verb, then bind its candidate to those exact
 		// parent IDs; never pass SourceResource to SDK predicate projection.
-		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{Resource: identitysdk.ResourceType(object.Key), Action: action}, principal.AuthorizationEvaluationTime())
+		bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{Resource: identitysdk.ResourceType(object.Key), Action: identitysdk.Action(action)}, principal.AuthorizationEvaluationTime())
 		if err != nil {
 			return principal, ownedRecordEffectDenied()
 		}
@@ -75,6 +77,25 @@ func recordOwnedEffectAuthorizationPrincipal(ctx context.Context, principal prin
 		return principal, ownedRecordEffectDenied()
 	}
 	return authorized, nil
+}
+
+func (s *RecordUpdateApplicationService) authorizeUpdateObject(ctx context.Context, principal principalmodel.Principal, objectKey string) (definitionmodel.ObjectSchema, principalmodel.Principal, error) {
+	authorized := recordEffectAuthorizationPrincipal(ctx, principal, objectKey, "update")
+	object, err := s.dependencies.ObjectForAction(authorized, objectKey, "update")
+	if err != nil {
+		return object, authorized, err
+	}
+	if recordHasOwnedUpdateParentPlans(ctx, object) {
+		// These exact, already authorized parent plans bound both target
+		// loading and the final SQL mutation, independently of creator metadata.
+		authorized, err = recordOwnedEffectAuthorizationPrincipal(ctx, principal, object, "update")
+	}
+	return object, authorized, err
+}
+
+func recordHasOwnedUpdateParentPlans(ctx context.Context, object definitionmodel.ObjectSchema) bool {
+	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
+	return object.AuthorizationParent != nil && ok && invocation.Source == transactionmodel.MutationSourceAction && len(invocation.EffectAuthority[object.Key]) > 0 && len(recordservice.RecordPlannedRelations(ctx)[object.AuthorizationParent.ObjectKey]) > 0
 }
 
 // Ownership is a local binding check, not another user ACL. It is repeated
