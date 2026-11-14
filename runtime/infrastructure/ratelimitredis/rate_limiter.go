@@ -59,7 +59,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 }
 
 func New(client redis.UniversalClient, prefix string) *RateLimiter {
-	redisdiagnostics.Install(client)
+	redisdiagnostics.Install(client, redisdiagnostics.ComponentRateLimit)
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
 		prefix = defaultPrefix
@@ -94,6 +94,7 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 	}
 	count, ttlMillis := result[0], result[1]
 	decision := ratelimit.Decision{Allowed: count <= int64(limit), Count: int(count), Limit: limit}
+	redisdiagnostics.ObserveRateLimitDecision(decision.Allowed)
 	if !decision.Allowed {
 		if ttlMillis < 1 {
 			ttlMillis = 1

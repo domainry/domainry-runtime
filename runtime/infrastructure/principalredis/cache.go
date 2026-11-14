@@ -141,7 +141,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 }
 
 func New(client redis.UniversalClient, prefix string) *Cache {
-	redisdiagnostics.Install(client)
+	redisdiagnostics.Install(client, redisdiagnostics.ComponentPrincipalCache)
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
 		prefix = DefaultPrefix

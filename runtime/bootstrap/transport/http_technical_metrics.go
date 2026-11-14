@@ -10,11 +10,13 @@ import (
 	workerplatform "github.com/domainry/domainry-foundation/worker"
 	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 )
 
 func runtimeTechnicalOpenMetrics(ctx context.Context, store *persistence.RuntimeStore, status *deploymentapplication.DeploymentRuntimeStatusApplicationService) string {
 	var output strings.Builder
 	output.WriteString(workerplatform.OpenMetrics(ctx))
+	output.WriteString(redisdiagnostics.OpenMetrics())
 	if store != nil {
 		stats := store.DB().Stats()
 		output.WriteString("# HELP domainry_runtime_db_pool_connections Database connection pool state.\n# TYPE domainry_runtime_db_pool_connections gauge\n")

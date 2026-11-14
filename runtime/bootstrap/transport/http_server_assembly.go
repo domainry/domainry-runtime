@@ -30,6 +30,7 @@ import (
 	publicationhandoff "github.com/domainry/domainry-runtime/runtime/application/publicationhandoff"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	workspaceprovisionapplication "github.com/domainry/domainry-runtime/runtime/application/workspaceprovision"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 
 	"github.com/domainry/domainry-foundation/ratelimit"
 	workerplatform "github.com/domainry/domainry-foundation/worker"
@@ -120,6 +121,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 	resolver, err := identityprincipal.NewAuthenticator(dependencies.IdentityBinding, identityprincipal.Options{
 		Clock: dependencies.Clock, MaxCacheTTL: dependencies.Config.EffectivePrincipalCacheTTL(), Cache: dependencies.PrincipalCache,
 		OnCacheError: func(err error) {
+			redisdiagnostics.ObserveFallback(redisdiagnostics.ComponentPrincipalCache)
 			logging.FromContext(ctx).Warn("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "principal_cache_operation", Dependency: "identity_principal_cache", Retryable: true})...)
 		},
 	})

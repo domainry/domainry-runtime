@@ -13,18 +13,21 @@ import (
 
 // Install observes every physical Redis boundary without recording keys,
 // arguments, cached values, credentials, or server error text.
-func Install(client redis.UniversalClient) {
+func Install(client redis.UniversalClient, component string) {
 	if client != nil {
-		client.AddHook(hook{})
+		component = boundedComponent(component)
+		registerClient(component, client)
+		client.AddHook(hook{component: component})
 	}
 }
 
-type hook struct{}
+type hook struct{ component string }
 
-func (hook) DialHook(next redis.DialHook) redis.DialHook {
+func (h hook) DialHook(next redis.DialHook) redis.DialHook {
 	return func(ctx context.Context, network, address string) (connection net.Conn, returnErr error) {
 		started := time.Now()
 		defer func() {
+			observeOperation(h.component, "dial", dependencyOutcome(returnErr), time.Since(started))
 			host, _, _ := net.SplitHostPort(strings.TrimSpace(address))
 			telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
 				Feature: telemetry.DiagnosticFeatureRedis, Dependency: "redis", Operation: "dial",
@@ -35,14 +38,17 @@ func (hook) DialHook(next redis.DialHook) redis.DialHook {
 	}
 }
 
-func (hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+func (h hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, command redis.Cmder) error {
 		started := time.Now()
 		err := next(ctx, command)
+		outcome := dependencyOutcome(err)
 		result := telemetry.DependencyResult{Err: err}
 		if errors.Is(err, redis.Nil) {
+			outcome = "miss"
 			result = telemetry.DependencyResult{Outcome: "miss", Output: map[string]any{"found": false}}
 		}
+		observeOperation(h.component, commandOperation(command.FullName()), outcome, time.Since(started))
 		telemetry.RecordDependencyCall(ctx, telemetry.DependencyCall{
 			Feature: telemetry.DiagnosticFeatureRedis, Dependency: "redis", Operation: strings.ToLower(strings.TrimSpace(command.FullName())),
 			Input: map[string]any{"argument_count": max(0, len(command.Args())-1)},
@@ -51,10 +57,11 @@ func (hook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	}
 }
 
-func (hook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+func (h hook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return func(ctx context.Context, commands []redis.Cmder) error {
 		started := time.Now()
 		err := next(ctx, commands)
+		observeOperation(h.component, "pipeline", dependencyOutcome(err), time.Since(started))
 		operations := make([]string, 0, len(commands))
 		for _, command := range commands {
 			operations = append(operations, strings.ToLower(strings.TrimSpace(command.FullName())))

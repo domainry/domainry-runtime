@@ -34,6 +34,7 @@ import (
 	runtimebootstrap "github.com/domainry/domainry-runtime/runtime/bootstrap/runtime"
 	recordtimerprojection "github.com/domainry/domainry-runtime/runtime/domain/recordtimer/projection"
 	principalcache "github.com/domainry/domainry-runtime/runtime/infrastructure/principalcache"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	"github.com/domainry/domainry-runtime/runtime/platform/localization"
 	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
@@ -417,6 +418,7 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 		MaxCacheTTL: cfg.EffectivePrincipalCacheTTL(),
 		Cache:       modulePrincipalCache,
 		OnCacheError: func(err error) {
+			redisdiagnostics.ObserveFallback(redisdiagnostics.ComponentPrincipalCache)
 			logging.FromContext(lifecycleCtx).Warn("dependency_call_failed", logging.ErrorFields(err, logging.Failure{Stage: "principal_cache_operation", Dependency: "identity_principal_cache", Retryable: true})...)
 		},
 	}
