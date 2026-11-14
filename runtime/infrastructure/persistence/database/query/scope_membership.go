@@ -6,6 +6,7 @@ import (
 
 	"github.com/domainry/domainry-orm/query"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
 
 const ScopeMembershipINThreshold = 1000
@@ -166,7 +167,13 @@ func candidateRelationScopeMatches(s Store, workspace string, candidate recordmo
 func candidateScopeDirectMatch(candidate recordmodel.Record, expression recordmodel.RecordScopeExpression) bool {
 	var raw any = candidate.RecordID
 	exists := strings.TrimSpace(candidate.RecordID) != ""
-	if expression.FieldKey != "record_id" {
+	switch expression.FieldKey {
+	case "record_id":
+	case recordpolicy.RecordOwnerOrgIDSystemField:
+		raw, exists = candidate.OwnerOrgID, strings.TrimSpace(candidate.OwnerOrgID) != ""
+	case recordpolicy.RecordOwnerUserIDSystemField:
+		raw, exists = candidate.OwnerUserID, strings.TrimSpace(candidate.OwnerUserID) != ""
+	default:
 		raw, exists = candidate.Data[expression.FieldKey]
 	}
 	if expression.Operator == "exists" {

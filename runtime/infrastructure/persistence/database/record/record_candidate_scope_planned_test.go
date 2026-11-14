@@ -44,3 +44,26 @@ func TestCandidateScopeMatchesRelationToRecordPlannedInSameAction(t *testing.T) 
 		t.Fatalf("mismatched planned relation scope matched=%v err=%v", matched, err)
 	}
 }
+
+func TestCandidateScopeMatchesRuntimeOwnershipOfPlannedParent(t *testing.T) {
+	parent := recordmodel.Record{RecordID: "case-new", WorkspaceID: "workspace-a", OwnerOrgID: "support-a", OwnerUserID: "ingress-service", Data: map[string]any{"title": "Customer issue", "owner_org_id": "support-b", "owner_user_id": "other-service"}}
+	ctx := recordservice.RecordWithPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{"support_case": {parent.RecordID: parent}})
+	child := recordmodel.Record{RecordID: "event-new", WorkspaceID: "workspace-a", Data: map[string]any{"support_case": parent.RecordID}}
+	for _, test := range []struct{ field, allowed, denied string }{
+		{field: "owner_org_id", allowed: "support-a", denied: "support-b"},
+		{field: "owner_user_id", allowed: "ingress-service", denied: "other-service"},
+	} {
+		t.Run(test.field, func(t *testing.T) {
+			expression := recordmodel.RecordScopeExpression{Operator: "eq", Path: []recordmodel.RecordScopePathSegment{{Direction: "forward", RelationFieldKey: "support_case", TargetObjectKey: "support_case"}}, FieldKey: test.field, Values: []string{test.allowed}}
+			matched, err := (RecordStore{}).CandidateScopeMatches(ctx, "workspace-a", child, expression)
+			if err != nil || !matched {
+				t.Fatalf("same-scope planned parent rejected: matched=%v error=%v", matched, err)
+			}
+			expression.Values = []string{test.denied}
+			matched, err = (RecordStore{}).CandidateScopeMatches(ctx, "workspace-a", child, expression)
+			if err != nil || matched {
+				t.Fatalf("other-scope planned parent admitted: matched=%v error=%v", matched, err)
+			}
+		})
+	}
+}

@@ -107,10 +107,14 @@ func RecordPlannedRelations(ctx context.Context) map[string]map[string]recordmod
 	for objectKey, byID := range records {
 		result[objectKey] = make(map[string]recordmodel.Record, len(byID))
 		for recordID, record := range byID {
+			// Planned parents need the same ownership facts as persisted rows
+			// when a child's relation-path data scope is evaluated.
 			result[objectKey][recordID] = recordmodel.Record{
 				WorkspaceID: record.WorkspaceID,
 				Deleted:     record.Deleted,
 				RecordID:    record.RecordID,
+				OwnerUserID: record.OwnerUserID,
+				OwnerOrgID:  record.OwnerOrgID,
 				Data:        recordvalidation.RecordCloneData(record.Data),
 				CreatedAt:   record.CreatedAt,
 				UpdatedAt:   record.UpdatedAt,
