@@ -103,7 +103,15 @@ func healthAllowed(principal principalmodel.Principal) bool {
 	return principal.Known
 }
 
-func (s *HTTPRouter) live(w http.ResponseWriter, _ *http.Request) {
+func (s *HTTPRouter) live(w http.ResponseWriter, r *http.Request) {
+	// Release admission is intentionally irreversible for a process that may
+	// have lost its cohort lease. Keep ordinary dependency outages out of
+	// liveness, but make this fail-stop state restartable by the orchestrator;
+	// otherwise a drained Pod remains alive and permanently serves only 503s.
+	if s.runtimeReleaseAdmission != nil && s.runtimeReleaseAdmission() != nil {
+		writeError(w, r, http.StatusServiceUnavailable, "runtime.release_cohort_unavailable")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 

@@ -73,3 +73,19 @@ func TestRuntimeReleaseAdmissionIsCriticalReadinessCheck(t *testing.T) {
 		t.Fatalf("ready status=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+func TestRuntimeReleaseAdmissionFailureFailsLivenessForOrchestratorRestart(t *testing.T) {
+	router := &HTTPRouter{runtimeReleaseAdmission: func() error { return errors.New("cohort lease lost") }}
+	response := httptest.NewRecorder()
+	router.live(response, httptest.NewRequest(http.MethodGet, "/live", nil))
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "runtime.release_cohort_unavailable") {
+		t.Fatalf("live status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	healthy := &HTTPRouter{runtimeReleaseAdmission: func() error { return nil }}
+	response = httptest.NewRecorder()
+	healthy.live(response, httptest.NewRequest(http.MethodGet, "/live", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "{\"status\":\"ok\"}\n" {
+		t.Fatalf("healthy live status=%d body=%s", response.Code, response.Body.String())
+	}
+}
