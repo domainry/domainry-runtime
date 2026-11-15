@@ -1,0 +1,129 @@
+package workflow
+
+import (
+	"encoding/json"
+	"fmt"
+	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	"strings"
+	"testing"
+	"time"
+)
+
+func workflowEvidenceFixture(t *testing.T) (*WorkflowApplicationService, *workflowExecutionProcessStub, *workflowAgentTaskStateStub, WorkflowAgentTaskCompletion, WorkflowActionAgentEvidenceScope, runtimeext.WorkflowAgentTaskEvidenceRequest) {
+	t.Helper()
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", WorkflowKey: "case.decide", ObjectKey: "turn", RecordID: "turn-a", Status: "waiting", Variables: map[string]any{}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "decide", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "support.decide", TaskVersion: "1", AllowedOutcomes: []string{"success", "error"}}}}, {ID: "save", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.save"}}}}}}}
+	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "source-node", NodeID: "decide", NodeType: "agent_task", ProcessID: "process", WorkspaceID: "workspace", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "owner-run"}}
+	repo := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {node}}}
+	state := &workflowAgentTaskStateStub{}
+	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: repo, Decisions: state})
+	at := time.UnixMilli(1794700000123).UTC()
+	complete := WorkflowAgentTaskCompletion{WorkspaceID: "workspace", ProcessID: "process", NodeInstanceID: "source-node", TaskRunID: "owner-run", TaskKey: "support.decide", TaskVersion: "1", Status: "succeeded", Outcome: "success", Output: map[string]any{"provider_secret": "never-release-provider-payload"}, Identity: agentsdk.ExecutionIdentity{Execution: agentsdk.PrincipalReference{UserID: "agent", RoleKey: "agent_service"}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "support.agent", Model: "deepseek", Usage: map[string]any{"private": "never-release-usage"}, ToolInvocations: []agentmodel.AgentTaskToolInvocationEvidence{{Ref: "tool-a", Tool: agentsdk.AgentToolGetRecord, Status: "executed", InputHash: "input-sha", OutputHash: "output-sha", StartedAt: at, FinishedAt: &at}}}}
+	scope := WorkflowActionAgentEvidenceScope{WorkspaceID: "workspace", ProcessID: "process", CurrentNodeID: "save", CurrentActionKey: "turn.save", ObjectKey: "turn", RecordID: "turn-a", ExecutionUserID: "agent", ExecutionRoleKey: "agent_service"}
+	request := runtimeext.WorkflowAgentTaskEvidenceRequest{WorkflowKey: "case.decide", NodeID: "decide", TaskKey: "support.decide", TaskVersion: "1"}
+	return service, repo, state, complete, scope, request
+}
+func persistWorkflowEvidenceFixture(t *testing.T, s *WorkflowApplicationService, r *workflowExecutionProcessStub, st *workflowAgentTaskStateStub, c WorkflowAgentTaskCompletion) {
+	t.Helper()
+	if err := s.CompleteAgentTask(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	// Round-trip the owner-produced node through durable JSON before reading it.
+	b, err := json.Marshal(st.commit.UpdateNodes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n workflowmodel.WorkflowNodeInstance
+	if err = json.Unmarshal(b, &n); err != nil {
+		t.Fatal(err)
+	}
+	r.nodes[c.ProcessID] = []workflowmodel.WorkflowNodeInstance{n}
+}
+func TestWorkflowCompletionEvidenceRoundTripsNumericTimeWithoutProviderPayload(t *testing.T) {
+	s, r, st, c, scope, request := workflowEvidenceFixture(t)
+	persistWorkflowEvidenceFixture(t, s, r, st, c)
+	proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || !proof.Available || proof.TaskRunID != "owner-run" || len(proof.Tools) != 1 || proof.Tools[0].Ref != "tool-a" || proof.Tools[0].StartedAt != 1794700000123 || proof.CompletedAt <= 0 {
+		t.Fatal(proof, err)
+	}
+	b, _ := json.Marshal(proof)
+	if strings.Contains(string(b), "never-release") || strings.Contains(string(b), "provider_secret") || !strings.Contains(string(b), `"started_at":1794700000123`) {
+		t.Fatal("unsafe evidence projection", string(b))
+	}
+	// Replayed callbacks cannot rewrite execution history with altered metadata.
+	c.Evidence.Model = "forged"
+	if err = s.CompleteAgentTask(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	again, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || again.Model != "deepseek" {
+		t.Fatal("replay rewrote evidence", again, err)
+	}
+}
+func TestWorkflowEvidenceCannotReadOtherScopeOrOlderTaskIteration(t *testing.T) {
+	for _, change := range []func(*WorkflowActionAgentEvidenceScope, *runtimeext.WorkflowAgentTaskEvidenceRequest){func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.WorkspaceID = "foreign"
+	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.RecordID = "other"
+	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.ObjectKey = "other"
+	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.ExecutionUserID = "other"
+	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.ExecutionRoleKey = "other"
+	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		s.CurrentActionKey = "other"
+	}, func(_ *WorkflowActionAgentEvidenceScope, r *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		r.WorkflowKey = "other"
+	}, func(_ *WorkflowActionAgentEvidenceScope, r *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		r.TaskVersion = "other"
+	}, func(_ *WorkflowActionAgentEvidenceScope, r *runtimeext.WorkflowAgentTaskEvidenceRequest) {
+		r.NodeID = "save"
+	}} {
+		s, r, st, c, scope, request := workflowEvidenceFixture(t)
+		persistWorkflowEvidenceFixture(t, s, r, st, c)
+		change(&scope, &request)
+		if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || proof.Available {
+			t.Fatal("foreign execution evidence released", proof, err)
+		}
+	}
+	s, r, st, c, scope, request := workflowEvidenceFixture(t)
+	persistWorkflowEvidenceFixture(t, s, r, st, c)
+	latest := r.nodes["process"][0]
+	latest.Iteration = 2
+	latest.Status = "waiting"
+	latest.Input = map[string]any{"agent_task_run_id": "new-run"}
+	latest.CompletedAt = ""
+	r.nodes["process"] = append(r.nodes["process"], latest)
+	if _, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); apperror.CodeOf(err) != runtimeext.WorkflowAgentTaskEvidenceUnavailableErrorCode {
+		t.Fatal("old iteration used as current proof", err)
+	}
+}
+func TestWorkflowEvidenceMissingCompletionStaysUnavailable(t *testing.T) {
+	s, r, _, _, scope, request := workflowEvidenceFixture(t)
+	if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || proof.Available {
+		t.Fatal("waiting Task fabricated receipt", proof, err)
+	}
+	r.nodes["process"][0].Status = "configuration_error"
+	if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err != nil || proof.Available || proof.TaskRunID != "" {
+		t.Fatal("failed preparation fabricated receipt", proof, err)
+	}
+}
+
+func TestFailedWorkflowCompletionCommitDoesNotPublishEvidence(t *testing.T) {
+	s, r, st, c, scope, request := workflowEvidenceFixture(t)
+	st.err = fmt.Errorf("commit unavailable")
+	if err := s.CompleteAgentTask(t.Context(), c); err == nil {
+		t.Fatal("commit failure hidden")
+	}
+	if _, ok := r.nodes["process"][0].Input[workflowAgentEvidenceKey]; ok {
+		t.Fatal("uncommitted metadata mutated repository state")
+	}
+	if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || proof.Available {
+		t.Fatal("uncommitted execution released", proof, err)
+	}
+}

@@ -20,6 +20,7 @@ import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	auditapplication "github.com/domainry/domainry-runtime/runtime/application/auditbinding"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	actionpolicy "github.com/domainry/domainry-runtime/runtime/domain/action/policy"
 	actionruntime "github.com/domainry/domainry-runtime/runtime/domain/action/runtime"
@@ -187,6 +188,12 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 					return transactionmodel.WorkflowWithdrawalCommit{}, apperror.New(apperror.KindInternal, "backend.action.workflow_withdrawal_unavailable", nil, nil)
 				}
 				return records.workflowApplicationService.StageWorkflowWithdrawal(ctx, request, callerKey, principal)
+			},
+			ReadWorkflowAgentTaskEvidence: func(ctx context.Context, request runtimeext.WorkflowAgentTaskEvidenceRequest, invocation actionmodel.ActionInvocation) (runtimeext.WorkflowAgentTaskEvidence, error) {
+				if records.workflowApplicationService == nil {
+					return runtimeext.WorkflowAgentTaskEvidence{}, apperror.New(apperror.KindUnavailable, runtimeext.WorkflowAgentTaskEvidenceUnavailableErrorCode, nil, nil)
+				}
+				return records.workflowApplicationService.ReadActionAgentTaskEvidence(ctx, request, workflowapplication.WorkflowActionAgentEvidenceScope{WorkspaceID: invocation.Principal.WorkspaceID, ProcessID: invocation.ProcessID, CurrentNodeID: invocation.NodeID, CurrentActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID, ExecutionUserID: invocation.Principal.UserID, ExecutionRoleKey: invocation.Principal.RoleKey})
 			},
 			StageWorkflowStart: func(ctx context.Context, request workflowmodel.WorkflowRouteStartRequest, principal principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error) {
 				if records.workflowApplicationService == nil {

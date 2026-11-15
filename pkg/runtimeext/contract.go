@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v61"
-	ContractSHA256  = "25b00309125bf951cfbe0f1d021d25587c9a1b6dfca06ca20ddc68c58873f350"
+	ContractVersion = "runtimeext-v63"
+	ContractSHA256  = "3fe01edb54a555ee6265fe2dd87fa527751be3da2d92f5ce3af4ecd49bd93fbc"
 )
 
-const contractDefinitionV60 = `runtimeext-v61
+const contractDefinitionV60 = `runtimeext-v63
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -64,11 +64,14 @@ RunBusinessJobSemantics=exact_json_payload|exact_target_object|same_action_uow_r
 FileActionGrantDeniedErrorCode=backend.upload.action_grant_denied
 WorkflowStartExecution.StageWorkflowStart(context.Context,WorkflowStart)(WorkflowStartReceipt,error)
 StageWorkflowStart(context.Context,ActionExecution,WorkflowStart)(WorkflowStartReceipt,error)
-WorkflowGrantOperation=start|withdraw
+WorkflowGrantOperation=start|withdraw|read_agent_task_evidence
 WorkflowWithdrawalExecution.StageWorkflowWithdrawal(context.Context,WorkflowWithdrawal)(WorkflowWithdrawalReceipt,error)
 StageWorkflowWithdrawal(context.Context,ActionExecution,WorkflowWithdrawal)(WorkflowWithdrawalReceipt,error)
 WorkflowWithdrawalSemantics=exact_descriptor_withdraw_grant|exact_workspace_workflow_object_record_and_initiator|waiting_decision_boundary|process_revision_compare_and_swap|cancel_all_active_children|same_action_uow|business_receipt_and_occupancy_release_by_handler|rollback_together|action_execution_replay
 WorkflowGrantDeniedErrorCode=backend.action.workflow_grant_denied
+WorkflowAgentTaskEvidenceExecution.ReadWorkflowAgentTaskEvidence(context.Context,WorkflowAgentTaskEvidenceRequest)(WorkflowAgentTaskEvidence,error)
+ReadWorkflowAgentTaskEvidence(context.Context,ActionExecution,WorkflowAgentTaskEvidenceRequest)(WorkflowAgentTaskEvidence,error)
+WorkflowAgentTaskEvidenceSemantics=explicit_named_workflow_grant|current_workflow_action_only|exact_workspace_process_target_and_actor|runtime_completion_snapshot|latest_task_iteration|no_run_id_input|no_model_or_provider_payload|utc_milliseconds
 WorkflowStartSemantics=registered_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
 StageNotification(context.Context,ActionExecution,NotificationIntent)(NotificationReceipt,error)
 StageNotificationBatch(context.Context,ActionExecution,[]NotificationIntent)([]NotificationReceipt,error)
@@ -174,7 +177,7 @@ func contractStructTypes() []reflect.Type {
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{}, ProjectDefinitions{}, ReportDefinition{}, PublicResourceDefinition{}, NotificationNativePushTargetDefinition{}, ProjectDefinitionIdentity{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
-		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{},
+		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{}, WorkflowAgentTaskEvidenceRequest{}, WorkflowAgentTaskEvidence{}, WorkflowAgentToolEvidence{},
 	}
 	types := make([]reflect.Type, 0, len(structs))
 	for _, value := range structs {

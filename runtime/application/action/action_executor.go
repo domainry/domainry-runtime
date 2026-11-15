@@ -89,6 +89,7 @@ type BusinessHandlerExecutionDependencies struct {
 	ResolveProfileBindingField        func(string, string) (string, bool)
 	StageWorkflowWithdrawal           func(context.Context, runtimeext.WorkflowWithdrawal, string, principalmodel.Principal) (transactionmodel.WorkflowWithdrawalCommit, error)
 	StageWorkflowStart                func(context.Context, workflowmodel.WorkflowRouteStartRequest, principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error)
+	ReadWorkflowAgentTaskEvidence     func(context.Context, runtimeext.WorkflowAgentTaskEvidenceRequest, actionmodel.ActionInvocation) (runtimeext.WorkflowAgentTaskEvidence, error)
 }
 
 type BusinessHandlerExecutor struct {

@@ -28,7 +28,7 @@ func (g WorkflowGrant) Valid() bool {
 	seen := map[string]bool{}
 	for _, raw := range g.Operations {
 		operation := strings.TrimSpace(raw)
-		if (operation != WorkflowStartOperation && operation != WorkflowWithdrawOperation) || seen[operation] {
+		if (operation != WorkflowStartOperation && operation != WorkflowWithdrawOperation && operation != WorkflowReadAgentTaskEvidenceOperation) || seen[operation] {
 			return false
 		}
 		seen[operation] = true

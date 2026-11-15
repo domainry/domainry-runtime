@@ -67,6 +67,7 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	instance.NodeInstanceID = nodeInstanceID
 	input := renderWorkflowRecordData(ctx, contract.Input, process.Variables, principal)
 	instance.Input = workflowpolicy.WorkflowCloneMap(input)
+	delete(instance.Input, workflowAgentEvidenceKey) // Task input cannot forge host completion evidence.
 	instance.Input["agent_task_run_id"] = runID
 	// Persist the exact workflow task identity before making the Agent task
 	// runnable. A fast task may complete as soon as StartAgentTask returns; if

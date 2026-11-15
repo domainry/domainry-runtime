@@ -23,6 +23,7 @@ type workflowAgentTaskStateStub struct {
 	commit  transactionmodel.WorkflowStateCommit
 	commits []transactionmodel.WorkflowStateCommit
 	err     error
+	apply   func(transactionmodel.WorkflowStateCommit)
 }
 
 func (*workflowAgentTaskStateStub) CommitWorkflowDecision(context.Context, transactionmodel.WorkflowDecisionCommit) (bool, error) {
@@ -32,6 +33,9 @@ func (*workflowAgentTaskStateStub) CommitWorkflowDecision(context.Context, trans
 func (s *workflowAgentTaskStateStub) CommitWorkflowState(_ context.Context, commit transactionmodel.WorkflowStateCommit) error {
 	s.commit = commit
 	s.commits = append(s.commits, commit)
+	if s.err == nil && s.apply != nil {
+		s.apply(commit)
+	}
 	return s.err
 }
 
@@ -51,7 +55,7 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingIdentity(t *testi
 		},
 	})
 	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process-1", WorkspaceID: principal.WorkspaceID, DefinitionHash: "definition-hash", Variables: map[string]any{"record_id": "record-1"}}
-	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Name: "Review", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "{{record_id}}"}, OutputVariable: "review", ExecutionMode: "async"}}}
+	node := definitionmodel.WorkflowGraphNode{ID: "agent", Type: "agent_task", Name: "Review", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "customer.review", TaskVersion: "1.0.0", Identity: definitionmodel.WorkflowAgentTaskIdentity{Mode: agentsdk.AgentTaskIdentityInherit}, Input: map[string]any{"record_id": "{{record_id}}", workflowAgentEvidenceKey: "forged-input"}, OutputVariable: "review", ExecutionMode: "async"}}}
 	outcome, waiting, err := runtime.ProcessEngine().executeNode(t.Context(), &process, node, principal)
 	if err != nil || !waiting || outcome != "waiting" {
 		t.Fatalf("outcome=%q waiting=%v err=%v", outcome, waiting, err)
@@ -60,6 +64,9 @@ func TestWorkflowAgentTaskNodeStartsCapabilityAndCommitsWaitingIdentity(t *testi
 		t.Fatalf("prepared=%#v commits=%#v", prepared, state.commits)
 	}
 	waitingNode := state.commits[0].InsertNodes[0]
+	if _, exists := waitingNode.Input[workflowAgentEvidenceKey]; exists {
+		t.Fatal("Task input forged completion metadata")
+	}
 	if waitingNode.Status != "waiting" || waitingNode.Input["agent_task_run_id"] != prepared.RunID {
 		t.Fatalf("prepared=%#v node=%#v", prepared, waitingNode)
 	}
@@ -85,6 +92,18 @@ func TestAgentCapabilityCompletionAtomicallyUpdatesNodeProcessAndResumeIntent(t 
 	}, Edges: []definitionmodel.WorkflowGraphEdge{{Source: "agent", Target: "done", Branch: "success"}}}
 	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process-1", WorkspaceID: principal.WorkspaceID, WorkflowKey: "flow", WorkflowName: "Flow", DefinitionHash: "hash", DefinitionSnapshot: definitionmodel.WorkflowSchema{Key: "flow", Graph: graph}, Status: "waiting", CurrentNodeIDs: []string{"agent"}, Variables: map[string]any{}, CreatedAt: "created"}
 	processes := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{process.ProcessID: process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{process.ProcessID: {{NodeInstanceID: "node-instance", ProcessID: process.ProcessID, NodeID: "agent", NodeType: "agent_task", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "run-1"}}}}}
+	state.apply = func(commit transactionmodel.WorkflowStateCommit) {
+		for _, n := range commit.UpdateNodes {
+			for i := range processes.nodes[n.ProcessID] {
+				if processes.nodes[n.ProcessID][i].NodeInstanceID == n.NodeInstanceID {
+					processes.nodes[n.ProcessID][i] = n
+				}
+			}
+		}
+		if commit.Process != nil {
+			processes.processes[commit.Process.ProcessID] = *commit.Process
+		}
+	}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: processes, Decisions: state})
 	completion := WorkflowAgentTaskCompletion{TaskRunID: "run-1", WorkspaceID: principal.WorkspaceID, ProcessID: process.ProcessID, NodeInstanceID: "node-instance", TaskKey: "customer.review", TaskVersion: "1.0.0", Status: "succeeded", Outcome: "success", Output: map[string]any{"score": 90}, Identity: agentsdk.ExecutionIdentity{Mode: agentsdk.AgentTaskIdentityInherit, Execution: agentsdk.PrincipalReference{UserID: principal.UserID, RoleKey: principal.RoleKey}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "customer-agent", ToolInvocationRefs: []string{"tool-1"}, AuditRefs: []string{"audit-1"}}}
 	mismatched := completion

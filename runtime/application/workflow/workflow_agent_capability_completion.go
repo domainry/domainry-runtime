@@ -63,7 +63,8 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 			}
 			return conflict("backend.workflow.agent_task_node_not_waiting")
 		}
-		instance = &nodes[index]
+		copy := nodes[index]
+		instance = &copy
 		break
 	}
 	if instance == nil {
@@ -80,6 +81,11 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 		return badRequest("backend.workflow.agent_task_outcome_invalid", "outcome", outcome)
 	}
 	now := time.Now().UTC()
+	instance.Input = workflowpolicy.WorkflowCloneMap(instance.Input)
+	if instance.Input == nil {
+		instance.Input = map[string]any{}
+	}
+	instance.Input[workflowAgentEvidenceKey] = projectWorkflowAgentTaskEvidence(completion, instance.NodeID, node.Contract.AgentTask.TaskKey, node.Contract.AgentTask.TaskVersion, now)
 	instance.Status, instance.Output, instance.ErrorCode, instance.CompletedAt = outcome, workflowpolicy.WorkflowCloneMap(completion.Output), strings.TrimSpace(completion.ErrorCode), now.Format(time.RFC3339Nano)
 	if outputVariable := strings.TrimSpace(node.Contract.AgentTask.OutputVariable); outputVariable != "" {
 		process.Variables[outputVariable] = workflowpolicy.WorkflowCloneMap(completion.Output)
