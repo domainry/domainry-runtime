@@ -142,7 +142,7 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if e.dependencies.ResolveRecordTargetOrganization == nil {
 			return missingExecutorPort("resolve_record_target_organization")
 		}
-		txCtx, err := e.unitOfWork.beginWriting(ctx)
+		txCtx, err := e.unitOfWork.beginRecordOwnerResolution(ctx)
 		if err != nil {
 			return err
 		}

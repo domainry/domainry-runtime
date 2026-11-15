@@ -12,6 +12,13 @@ and unrelated Workflow callers cannot supply a process/run ID to this API.
 Reads are allowed only before the Action's first write. Start/withdraw grants
 never imply evidence access.
 
+The `record_owner` target-organization capability may lock the target record
+before the Handler starts. That metadata resolution keeps the logical prewrite
+phase open for this local, trusted Workflow snapshot read. The physical Action
+transaction is retained, so synchronous external Connector calls remain
+forbidden. The first Handler write or locking record query still closes the
+evidence-read window; committed and rolled-back executions cannot read it.
+
 The Workflow owner retains a redacted completion snapshot in the source node,
 atomically with terminal node state and its continuation. Request data cannot
 seed this reserved snapshot. The reader uses the latest node iteration and

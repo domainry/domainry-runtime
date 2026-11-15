@@ -193,6 +193,34 @@ func (u *actionUnitOfWork) beginWriting(ctx context.Context) (context.Context, e
 	return transaction.Context(ctx), nil
 }
 
+// Resolving a record owner's organization locks metadata in the Action's
+// transaction before the Handler starts. It is not a business mutation: keep
+// local Workflow evidence reads available until the Handler begins writing.
+// Synchronous Connector calls remain forbidden while this transaction is held.
+func (u *actionUnitOfWork) beginRecordOwnerResolution(ctx context.Context) (context.Context, error) {
+	if u == nil || u.manager == nil {
+		return ctx, apperror.New(apperror.KindInternal, "backend.action.transaction_unavailable", nil, nil)
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.phases.current() != runtimeext.ExecutionPhasePrewrite {
+		return ctx, apperror.New(apperror.KindConflict, "backend.action.execution_phase_invalid", nil, nil)
+	}
+	if u.activeSynchronousConnectorCalls > 0 {
+		return ctx, apperror.New(apperror.KindConflict, runtimeext.ActionWriteDuringConnectorCallErrorCode, nil, nil)
+	}
+	if u.transaction != nil {
+		return u.transaction.Context(ctx), nil
+	}
+	transaction, err := u.manager.executions.BeginTransaction(ctx)
+	if err != nil {
+		_ = u.phases.rollBack()
+		return ctx, err
+	}
+	u.transaction = transaction
+	return transaction.Context(ctx), nil
+}
+
 // beginDeferredWriting closes the synchronous Connector-call window without
 // taking a database connection. Create planners may resolve relations through
 // independently composed modules backed by the same SQLite pool; opening the
