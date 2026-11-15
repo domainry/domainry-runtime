@@ -250,7 +250,7 @@ func (h *WorkflowsHandler) retryOpsWorkflowExecution(w http.ResponseWriter, r *h
 		h.writeServiceError(w, r, err)
 		return
 	}
-	result, ok := operation.Value.(workflowmodel.WorkflowRunResult)
+	result, ok := workflowOperationValue[workflowmodel.WorkflowRunResult](operation)
 	if !ok {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.workflow.ops_projection_failed")
 		return
@@ -279,7 +279,7 @@ func (h *WorkflowsHandler) resolveOpsWorkflowExecution(w http.ResponseWriter, r 
 		h.writeServiceError(w, r, err)
 		return
 	}
-	result, ok := operation.Value.(workflowmodel.WorkflowResolveResult)
+	result, ok := workflowOperationValue[workflowmodel.WorkflowResolveResult](operation)
 	if !ok {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.workflow.ops_projection_failed")
 		return
@@ -312,7 +312,7 @@ func (h *WorkflowsHandler) mutateOpsWorkflowProcess(w http.ResponseWriter, r *ht
 		h.writeServiceError(w, r, err)
 		return
 	}
-	process, ok := operation.Value.(workflowapplication.OpsWorkflowProcessDTO)
+	process, ok := workflowOperationValue[workflowapplication.OpsWorkflowProcessDTO](operation)
 	if !ok {
 		h.writeError(w, r, http.StatusInternalServerError, "backend.workflow.ops_projection_failed")
 		return
