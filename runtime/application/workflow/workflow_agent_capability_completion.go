@@ -77,7 +77,11 @@ func (s *WorkflowApplicationService) completeAgentTask(ctx context.Context, comp
 	if !found || node.Contract == nil || node.Contract.AgentTask == nil {
 		return badRequest("backend.workflow.agent_task_contract_required", "node", instance.NodeID)
 	}
-	if !containsWorkflowString(node.Contract.AgentTask.AllowedOutcomes, outcome) {
+	// AllowedOutcomes constrains successful business results, not the transport
+	// or tool failure branch. A terminal execution failure must be acknowledged
+	// so that the authored OnError edge can run instead of waiting forever.
+	executionFailed := completion.Status == "failed" || completion.Status == "dead_letter" || completion.Status == "cancelled"
+	if !executionFailed && !containsWorkflowString(node.Contract.AgentTask.AllowedOutcomes, outcome) {
 		return badRequest("backend.workflow.agent_task_outcome_invalid", "outcome", outcome)
 	}
 	now := time.Now().UTC()
