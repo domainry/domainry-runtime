@@ -301,6 +301,10 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	if failedNodeID == "" {
 		return process, conflict("backend.workflow.process_failed_node_missing")
 	}
+	executionPrincipal, continuation, err := s.workflowAgentRetryPrincipal(ctx, process, nodes, failedNodeID, principal)
+	if err != nil {
+		return process, err
+	}
 	if process.Result == nil {
 		process.Result = map[string]any{}
 	}
@@ -313,8 +317,13 @@ func (s *WorkflowApplicationService) RetryWorkflowProcessWithKey(ctx context.Con
 	if err := s.processRepo.UpdateProcess(ctx, principal.WorkspaceID, process); err != nil {
 		return process, internalError("prepare workflow process retry", err)
 	}
-	s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ProcessID, failedNodeID, "", "process_retry_started", principal.UserID, "workflow.event.process.retryStarted", map[string]any{"retry_count": process.Result["retry_count"]})
-	retried, retryErr := s.processEngine.RunWithContext(ctx, process, []string{failedNodeID}, nil, principal)
+	s.processEngine.appendEvent(ctx, process.WorkspaceID, process.ProcessID, failedNodeID, "", "process_retry_started", principal.UserID, "workflow.event.process.retryStarted", map[string]any{"retry_count": process.Result["retry_count"], "execution_user_id": executionPrincipal.UserID, "execution_role_key": executionPrincipal.RoleKey})
+	retried, retryErr := s.processEngine.RunWithContext(ctx, process, []string{failedNodeID}, nil, executionPrincipal)
+	if continuation != nil {
+		if syncErr := s.syncRecoveredAgentContinuation(ctx, *continuation, retried, retryErr); syncErr != nil {
+			return workflowprojection.WorkflowProcessForPrincipal(retried, false, s.workflowProjectionActions(ctx, principal)), syncErr
+		}
+	}
 	return workflowprojection.WorkflowProcessForPrincipal(retried, false, s.workflowProjectionActions(ctx, principal)), retryErr
 }
 
