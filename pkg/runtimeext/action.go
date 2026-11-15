@@ -46,6 +46,8 @@ const (
 	FileOperationOpenVerified  = "open_verified"
 	FileOperationIssueDownload = "issue_download"
 	FileOperationCreateDerived = "create_derived"
+	FileOperationIngestUpload  = "ingest_upload"
+	FileOperationInspectUpload = "inspect_upload"
 	FileOperationRunJob        = "run_business_job"
 	FileOperationReadKnowledge = "read_knowledge_file"
 	FileOperationBindKnowledge = "bind_knowledge_file"
@@ -321,7 +323,7 @@ func (d HandlerDescriptor) Validate() error {
 
 func supportedFileOperation(operation string) bool {
 	switch operation {
-	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationIssueDownload, FileOperationCreateDerived, FileOperationRunJob, FileOperationReadKnowledge, FileOperationBindKnowledge:
+	case FileOperationVerifyClean, FileOperationOpenVerified, FileOperationIssueDownload, FileOperationCreateDerived, FileOperationIngestUpload, FileOperationInspectUpload, FileOperationRunJob, FileOperationReadKnowledge, FileOperationBindKnowledge:
 		return true
 	default:
 		return false

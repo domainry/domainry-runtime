@@ -65,6 +65,8 @@ type BusinessHandlerExecutionDependencies struct {
 	OpenVerifiedFile                  func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	IssueFileDownload                 func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	CreateDerivedFile                 func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	IngestUploadedFile                func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileRequest, recordmodel.RecordFileFieldPolicy) (runtimeext.FileVerificationEvidence, error)
+	InspectUploadedFile               func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileInspection) (runtimeext.FileVerificationEvidence, error)
 	ReadKnowledgeFile                 func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
 	BindKnowledgeFile                 func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	StageBusinessJob                  func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)

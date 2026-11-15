@@ -19,6 +19,7 @@ const (
 	RecordFileListFieldType = "file_list"
 
 	RecordFileDefaultMaxSizeBytes int64 = 5 << 20
+	RecordFileMaximumSizeBytes    int64 = 128 << 20
 	RecordFileDefaultMaxFiles           = 10
 	RecordFileMaximumFiles              = 100
 )
@@ -85,7 +86,7 @@ func RecordFileFieldPolicyFor(field definitionmodel.FieldSchema) (RecordFileFiel
 	}
 	if raw, found := field.Config["max_size_bytes"]; found {
 		value, ok := recordFileInt64(raw)
-		if !ok || value < 1 || value > RecordFileDefaultMaxSizeBytes {
+		if !ok || value < 1 || value > RecordFileMaximumSizeBytes {
 			return RecordFileFieldPolicy{}, fileContractError("backend.file.max_size_invalid", fmt.Sprint(raw))
 		}
 		policy.MaxSizeBytes = value

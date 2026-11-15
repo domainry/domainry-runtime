@@ -1,62 +1,58 @@
+# Exact production-code workspace fallback candidates reviewed by
+# TestRuntimeWorkspaceFallbackReviewBaseline. Remove entries when the matching
+# fallback is removed; add or change an entry only after explicit adjudication.
 #
 # 2026-09-11 review: six candidates added since the last review are all guard
-# 2026-09-13 review: the file capability and file scan candidates reject an
-# 2026-09-13 review: the file download ticket candidate is the claims validity
-# 2026-09-14 review: four upload-subject candidates arrived with the upload
-# 2026-09-14 review: prepared subject plans reject empty/mismatched scope,
-# 2026-09-16 review: action and workflow receipt readers reject blank request, receipt or subject workspaces; workflow withdrawal refuses a blank workspace. These five additions fail closed and never select a fallback workspace.
-# 2026-09-21 review: BlobStore extraction removed the old file-path guards.
-# 2026-09-22 review: the development-data generator now rejects an empty
-# 2026-09-22 review: the retired worker-queue-scope backfill and its workspace
-# 2026-09-24 review: retired migration/store fallbacks were removed. Current
-# 2026-09-28 review: manager-recipient execution rejects incomplete record and
-# 2026-09-29 review: Automation rule definition persistence rejects empty
-# 2026-10-04 review: Workspace creation rejects an existing target grant,
-# 2026-10-18 review: owned dependent creates accept only same-Workspace parent
-# 2026-10-22 review: eight line hashes changed only because generic string ID
-# Exact production-code workspace fallback candidates reviewed by
-# LocalStore now has five explicit workspace-identity guards in stage, commit,
-# Operations result evidence, Artifact content, and Runtime status candidates
-# PublicResource lookup also rejects an ambiguous result or a row without its
-# Store and permanent fence builders refuse empty scope. Subject evidence
-# TestRuntimeWorkspaceFallbackReviewBaseline. Remove entries when the matching
-# These ten changed/added candidates substitute no workspace or tenant.
-# These two predicates never select or substitute a fallback Workspace.
-# Write receipt evidence checks an empty snapshot proof and exact authority hash.
-# all reject an empty workspace and never substitute a tenant.
-# and none substitutes one.
-# backend.upload.subject_binding_denied. The store refuses a blank workspace or
 # clauses that refuse an empty or "default" workspace (agent host authority and
 # construction, workflow agent invocation receipt, action execution scope, and
-# empty is invalid. It refuses; it substitutes nothing.
-# empty workspace before deriving a workspace-scoped filesystem path. None
-# erasure verifies trusted workspace and refuses an outer Action transaction.
-# existing resolved target. Both are target-scope guards, not Workspace fallbacks.
 # external workspace provisioning requests). None falls back to a workspace.
-# fail closed and never select or substitute a Workspace.
-# fallback candidate were removed with the shared worker-scope implementation.
-# fallback is removed; add or change an entry only after explicit adjudication.
-# fields were replaced by explicit entity business IDs. The new Knowledge host
-# guard -- a ticket whose workspace, user, file, object, record or field is
-# identifier and then scopes every read through NewWorkspaceSelectBuilder on
-# open, delete, and test-only path resolution; all reject an empty workspace
-# or substitute a workspace.
-# or substitutes a fallback workspace.
-# plans, reject an empty caller Workspace and reject deleted/mismatched parents.
-# predicate rejects an unknown or cross-Workspace authority. All nine checks
-# reject any resolved principal whose workspace differs from the durable worker
-# request and subject; retry verifies the exact failed-job owner/workspace.
-# requested workspace and rule. These four checks fail closed and never select
-# scope. Both checks fail closed and never select a fallback workspace.
-# stored workspace identity; it never supplies a fallback workspace.
-# subject binding. UploadSubjectRegistry refuses a blank user and any artifact
+# 2026-09-13 review: the file capability and file scan candidates reject an
+# empty workspace before deriving a workspace-scoped filesystem path. None
 # substitutes a default workspace.
-# target identity or profile binding; other account operations require an
-# that workspace. None of the four substitutes a workspace or tenant.
+# 2026-09-13 review: the file download ticket candidate is the claims validity
+# guard -- a ticket whose workspace, user, file, object, record or field is
+# empty is invalid. It refuses; it substitutes nothing.
+# 2026-09-14 review: prepared subject plans reject empty/mismatched scope,
+# request and subject; retry verifies the exact failed-job owner/workspace.
+# Store and permanent fence builders refuse empty scope. Subject evidence
+# erasure verifies trusted workspace and refuses an outer Action transaction.
+# Write receipt evidence checks an empty snapshot proof and exact authority hash.
+# These ten changed/added candidates substitute no workspace or tenant.
+# 2026-09-14 review: four upload-subject candidates arrived with the upload
+# subject binding. UploadSubjectRegistry refuses a blank user and any artifact
 # whose workspace differs from the caller's, both with
+# backend.upload.subject_binding_denied. The store refuses a blank workspace or
+# identifier and then scopes every read through NewWorkspaceSelectBuilder on
+# that workspace. None of the four substitutes a workspace or tenant.
+# 2026-09-16 review: action and workflow receipt readers reject blank request, receipt or subject workspaces; workflow withdrawal refuses a blank workspace. These five additions fail closed and never select a fallback workspace.
+# 2026-09-21 review: BlobStore extraction removed the old file-path guards.
+# LocalStore now has five explicit workspace-identity guards in stage, commit,
+# open, delete, and test-only path resolution; all reject an empty workspace
+# and none substitutes one.
+# PublicResource lookup also rejects an ambiguous result or a row without its
+# stored workspace identity; it never supplies a fallback workspace.
+# 2026-09-22 review: the development-data generator now rejects an empty
 # workspace before calling its application persistence port. It never selects
+# or substitutes a fallback workspace.
+# 2026-09-22 review: the retired worker-queue-scope backfill and its workspace
+# fallback candidate were removed with the shared worker-scope implementation.
+# 2026-09-24 review: retired migration/store fallbacks were removed. Current
+# Operations result evidence, Artifact content, and Runtime status candidates
+# all reject an empty workspace and never substitute a tenant.
+# 2026-09-28 review: manager-recipient execution rejects incomplete record and
 # workspace identity before opening its unit of work. Workflow record workers
+# reject any resolved principal whose workspace differs from the durable worker
+# scope. Both checks fail closed and never select a fallback workspace.
+# 2026-09-29 review: Automation rule definition persistence rejects empty
 # workspace/rule identities and verifies decoded Metadata identities against the
+# requested workspace and rule. These four checks fail closed and never select
+# or substitute a workspace.
+# 2026-10-22 review: eight line hashes changed only because generic string ID
+# fields were replaced by explicit entity business IDs. The new Knowledge host
+# predicate rejects an unknown or cross-Workspace authority. All nine checks
+# fail closed and never select or substitute a Workspace.
+# 2026-11-15 review: S3 stage, commit and object lookup reject an empty
+# Workspace before any store operation; no default Workspace is selected.
 runtime/application/action/action_identity_handler_delivery_execution.go|0db3a82169f3df78
 runtime/application/action/action_identity_handler_delivery_execution.go|a22efc6acc55525d
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
@@ -92,11 +88,14 @@ runtime/application/upload/file_capability_service.go|78a91dc513a29438
 runtime/application/upload/file_download_ticket_service.go|e49199ea673c10e3
 runtime/application/upload/upload_subject_registry.go|256e805788613c3d
 runtime/application/upload/upload_subject_registry.go|ce800c2d21c30df5
+runtime/application/upload/uploaded_file_capability_service.go|3a6b5813316363b0
+runtime/application/upload/uploaded_file_capability_service.go|c0a9069bd1fa58d6
 runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d608a730
 runtime/application/workflow/workflow_agent_invocation_application_service.go|a80a54ef2a050bdb
 runtime/application/workflow/workflow_agent_receipt_read.go|3163cd0573c216d4
 runtime/application/workflow/workflow_agent_receipt_read.go|f7281c25559cf6ce
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
+runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_worker_application_service.go|8cbd407e209a3f70
 runtime/application/workspaceprovision/workspace_administration_application_service.go|0e4286d03e5f3289
@@ -104,6 +103,8 @@ runtime/application/workspaceprovision/workspace_administration_application_serv
 runtime/application/workspaceprovision/workspace_administration_application_service.go|b7fd3431341b3beb
 runtime/infrastructure/blobstore/lifecycle_adapter.go|cf5184adabe49643
 runtime/infrastructure/blobstore/local_store.go|2c55a13d781fdec0
+runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
+runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
 runtime/infrastructure/blobstore/local_store.go|9eacf70f950bff5a
 runtime/infrastructure/blobstore/local_store.go|f8a2fa401c03632f
 runtime/infrastructure/blobstore/s3_store.go|8afd515a98f72b3c
@@ -121,6 +122,8 @@ runtime/infrastructure/persistence/database/datamigration/verify.go|d6e7f1f7aec0
 runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|036305867efec4eb
 runtime/infrastructure/persistence/database/deployment/runtime_status_store.go|b2e5ab60c1900c7a
 runtime/infrastructure/persistence/database/notificationpublication/publication_outbox_store.go|f916b78deacb02b7
+runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
+runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|7a71ce1034c84994
 runtime/infrastructure/persistence/database/operations/operations_lease_release_store.go|8064de5ad2689fb1
 runtime/infrastructure/persistence/database/operations/operations_result_artifact_store.go|087abc5d6178bad3

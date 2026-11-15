@@ -188,6 +188,26 @@ func uploadTestObjects() []definitionmodel.ObjectSchema {
 	}
 }
 
+func TestUploadHonorsExplicitFieldLimitAboveDefault(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "uploader", WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
+	handler := uploadTestHandler(t, principal)
+	objects := uploadTestObjects()
+	objects[0].Fields[0].Config["max_size_bytes"] = 25 << 20
+	records := runtimetestkit.NewRuntimeServices(t.Context(), runtimetestkit.RuntimeServicesConfig{ProjectKey: "large-uploads", SchemaVersion: "1", Objects: objects})
+	handler.UseAccess(uploadapplication.NewUploadAccessApplicationService(records.Applications().Schema, records.Applications().Audit, uploadTestRecordQuery{}))
+	response := httptest.NewRecorder()
+	request := multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "log.txt", bytes.Repeat([]byte{'x'}, 6<<20))
+	defer func() {
+		if request.MultipartForm != nil {
+			_ = request.MultipartForm.RemoveAll()
+		}
+	}()
+	handler.uploadFile(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("configured field limit ignored: status=%d code=%s", response.Code, response.Header().Get("X-Error-Code"))
+	}
+}
+
 func uploadTestRole(permissions ...string) accessfixture.Bundle {
 	role := accessfixture.Bundle{Permissions: permissions}
 	for _, permission := range permissions {

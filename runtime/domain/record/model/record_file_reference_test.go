@@ -48,6 +48,7 @@ func TestRecordFileReferenceRejectsUnknownFieldsMIMEAndInvalidPolicy(t *testing.
 		t.Fatalf("closed reference error=%v", err)
 	}
 	for _, invalid := range []definitionmodel.FieldSchema{
+		{Key: "file", Type: RecordFileFieldType, Config: map[string]any{"max_size_bytes": RecordFileMaximumSizeBytes + 1}},
 		{Key: "single", Type: RecordFileFieldType, Config: map[string]any{"max_files": 2}},
 		{Key: "list", Type: RecordFileListFieldType, Config: map[string]any{"max_files": 101}},
 		{Key: "file", Type: RecordFileFieldType, Unique: true},
@@ -58,6 +59,19 @@ func TestRecordFileReferenceRejectsUnknownFieldsMIMEAndInvalidPolicy(t *testing.
 		if _, err := RecordFileFieldPolicyFor(invalid); err == nil {
 			t.Fatalf("invalid policy passed: %#v", invalid)
 		}
+	}
+}
+
+func TestRecordFilePolicyAllowsExplicitCustomerAttachmentLimitWithoutChangingDefault(t *testing.T) {
+	field := definitionmodel.FieldSchema{Key: "attachments", Type: RecordFileListFieldType}
+	policy, err := RecordFileFieldPolicyFor(field)
+	if err != nil || policy.MaxSizeBytes != 5<<20 {
+		t.Fatalf("default policy changed: %+v %v", policy, err)
+	}
+	field.Config = map[string]any{"max_size_bytes": 25 << 20}
+	policy, err = RecordFileFieldPolicyFor(field)
+	if err != nil || policy.MaxSizeBytes != 25<<20 {
+		t.Fatalf("explicit attachment limit rejected: %+v %v", policy, err)
 	}
 }
 

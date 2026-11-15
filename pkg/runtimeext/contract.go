@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v64"
-	ContractSHA256  = "1bd00328b8d148b2fb34fe94b8562193ed44969cffae6961c1f5bc439ffcd3f7"
+	ContractVersion = "runtimeext-v65"
+	ContractSHA256  = "cf261ef1eb6c55c5014443a9be5ccb76d7c4d27bb8eeb2c1d4f35202f3623a53"
 )
 
-const contractDefinitionV60 = `runtimeext-v64
+const contractDefinitionV60 = `runtimeext-v65
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -49,6 +49,11 @@ FileOperationOpenVerified=open_verified
 IssueFileDownload(context.Context,ActionExecution,FileDownloadRequest)(FileDownloadTicket,error)
 FileOperationIssueDownload=issue_download
 CreateDerivedFile(context.Context,ActionExecution,DerivedFileRequest)(DerivedFileEvidence,error)
+IngestUploadedFile(context.Context,ActionExecution,UploadedFileRequest)(FileVerificationEvidence,error)
+InspectUploadedFile(context.Context,ActionExecution,UploadedFileInspection)(FileVerificationEvidence,error)
+FileOperationIngestUpload=ingest_upload
+FileOperationInspectUpload=inspect_upload
+UploadedFileSemantics=declared_action_grants|exact_file_field_policy|runtime_workspace_and_uploader|native_stream_not_serialized|expected_sha256_and_size|immutable_idempotent_content|durable_pending_scan|no_fabricated_clean|same_subject_inspection
 FileOperationCreateDerived=create_derived
 RunBusinessJob(context.Context,ActionExecution,BusinessJobRequest)(BusinessJobReceipt,error)
 FileOperationRunJob=run_business_job
@@ -164,7 +169,7 @@ AcceptanceFixtureContract=runtime-acceptance-fixture-v2|workspace_code
 
 func contractStructTypes() []reflect.Type {
 	structs := []any{
-		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, KnowledgeFileReadRequest{}, KnowledgeFileEvidence{}, KnowledgeFileBindingRequest{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
+		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, UploadedFileRequest{}, UploadedFileInspection{}, KnowledgeFileReadRequest{}, KnowledgeFileEvidence{}, KnowledgeFileBindingRequest{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
 		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
 		AccountErasureCapability{}, AccountErasureStageRequest{}, AccountErasureGetRequest{}, AccountErasureReceipt{},

@@ -128,6 +128,14 @@ type DerivedFileExecution interface {
 	CreateDerivedFile(context.Context, DerivedFileRequest) (DerivedFileEvidence, error)
 }
 
+// UploadedFileExecution accepts external bytes into the existing durable scan
+// queue. It never creates a clean verdict. Both operations require explicit
+// Action grants and a declared Runtime file field.
+type UploadedFileExecution interface {
+	IngestUploadedFile(context.Context, UploadedFileRequest) (FileVerificationEvidence, error)
+	InspectUploadedFile(context.Context, UploadedFileInspection) (FileVerificationEvidence, error)
+}
+
 // KnowledgeFileExecution exposes only metadata reads and durable resource
 // binding for files owned by the independent Knowledge service. Runtime
 // derives the caller authority; project handlers cannot choose a Runtime,
@@ -213,6 +221,22 @@ func CreateDerivedFile(ctx context.Context, execution ActionExecution, request D
 	return creator.CreateDerivedFile(ctx, request)
 }
 
+func IngestUploadedFile(ctx context.Context, execution ActionExecution, request UploadedFileRequest) (FileVerificationEvidence, error) {
+	owner, ok := execution.(UploadedFileExecution)
+	if !ok {
+		return FileVerificationEvidence{}, &BusinessError{Class: BusinessErrorUnavailable, Code: "backend.upload.ingest_unavailable", Message: "Runtime scanned upload ingestion is unavailable"}
+	}
+	return owner.IngestUploadedFile(ctx, request)
+}
+
+func InspectUploadedFile(ctx context.Context, execution ActionExecution, request UploadedFileInspection) (FileVerificationEvidence, error) {
+	owner, ok := execution.(UploadedFileExecution)
+	if !ok {
+		return FileVerificationEvidence{}, &BusinessError{Class: BusinessErrorUnavailable, Code: "backend.upload.inspect_unavailable", Message: "Runtime upload inspection is unavailable"}
+	}
+	return owner.InspectUploadedFile(ctx, request)
+}
+
 func ReadKnowledgeFile(ctx context.Context, execution ActionExecution, request KnowledgeFileReadRequest) (KnowledgeFileEvidence, error) {
 	reader, ok := execution.(KnowledgeFileExecution)
 	if !ok {
@@ -286,6 +310,26 @@ type DerivedFileRequest struct {
 	Filename       string
 	ContentType    string
 	Content        io.Reader
+}
+
+// Content is a process-local stream. A ProjectHTTP typed native input must tag
+// its stream json:"-" and include size/hash/name/type in the serialized payload
+// so Action receipts never persist bytes and changed upload identities conflict.
+type UploadedFileRequest struct {
+	IdempotencyKey string
+	ObjectKey      string
+	FieldKey       string
+	Filename       string
+	ContentType    string
+	ContentSHA256  string
+	Size           int64
+	Content        io.Reader
+}
+
+type UploadedFileInspection struct {
+	FileID    string
+	ObjectKey string
+	FieldKey  string
 }
 
 type DerivedFileEvidence struct {

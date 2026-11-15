@@ -115,12 +115,14 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				}
 				return records.identityProjection.FindUser(ctx, identitysdk.UserLookup{UserID: identitysdk.SubjectID(userID)})
 			},
-			VerifyFileClean:   records.verifyFileClean,
-			OpenVerifiedFile:  records.openVerifiedFile,
-			IssueFileDownload: records.issueFileDownload,
-			CreateDerivedFile: records.createDerivedFile,
-			ReadKnowledgeFile: records.readKnowledgeFile,
-			BindKnowledgeFile: records.bindKnowledgeFile,
+			VerifyFileClean:     records.verifyFileClean,
+			OpenVerifiedFile:    records.openVerifiedFile,
+			IssueFileDownload:   records.issueFileDownload,
+			CreateDerivedFile:   records.createDerivedFile,
+			IngestUploadedFile:  records.ingestUploadedFile,
+			InspectUploadedFile: records.inspectUploadedFile,
+			ReadKnowledgeFile:   records.readKnowledgeFile,
+			BindKnowledgeFile:   records.bindKnowledgeFile,
 			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				if records.recordTimerService == nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindInternal, "backend.business_job.unavailable", nil, nil)

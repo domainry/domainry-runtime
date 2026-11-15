@@ -47,6 +47,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	deploymentrepository "github.com/domainry/domainry-runtime/runtime/domain/deployment/repository"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	reportcontract "github.com/domainry/domainry-runtime/runtime/domain/report/contract"
@@ -152,6 +153,8 @@ type runtimeAssembly struct {
 	openVerifiedFile                    func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	issueFileDownload                   func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	createDerivedFile                   func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	ingestUploadedFile                  func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileRequest, recordmodel.RecordFileFieldPolicy) (runtimeext.FileVerificationEvidence, error)
+	inspectUploadedFile                 func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileInspection) (runtimeext.FileVerificationEvidence, error)
 	readKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
 	bindKnowledgeFile                   func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	validateFileReferences              func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error

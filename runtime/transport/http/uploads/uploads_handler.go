@@ -25,7 +25,7 @@ import (
 )
 
 const maxUploadBytes = 5 << 20
-const maxUploadRequestBytes = maxUploadBytes + (1 << 20)
+const maxUploadRequestBytes = recordmodel.RecordFileMaximumSizeBytes + (1 << 20)
 
 var errUploadTooLarge = errors.New("upload exceeds configured file limit")
 

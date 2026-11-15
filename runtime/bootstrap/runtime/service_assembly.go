@@ -47,6 +47,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordrepository "github.com/domainry/domainry-runtime/runtime/domain/record/repository"
 	blobstore "github.com/domainry/domainry-runtime/runtime/infrastructure/blobstore"
 	runtimeauditmodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/auditmodule"
@@ -505,6 +506,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var openVerifiedFile func(context.Context, string, runtimeext.VerifiedFileRequest) (runtimeext.VerifiedFile, error)
 	var issueFileDownload func(context.Context, string, runtimeext.Principal, runtimeext.FileDownloadRequest) (runtimeext.FileDownloadTicket, error)
 	var createDerivedFile func(context.Context, string, principalmodel.Principal, runtimeext.DerivedFileRequest) (runtimeext.DerivedFileEvidence, error)
+	var ingestUploadedFile func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileRequest, recordmodel.RecordFileFieldPolicy) (runtimeext.FileVerificationEvidence, error)
+	var inspectUploadedFile func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileInspection) (runtimeext.FileVerificationEvidence, error)
 	var readKnowledgeFile func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
 	var bindKnowledgeFile func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
 	var validateFileReferences func(context.Context, definitionmodel.ObjectSchema, map[string]any, principalmodel.Principal) error
@@ -513,6 +516,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 		openVerifiedFile = fileCapabilities.OpenVerified
 		issueFileDownload = fileCapabilities.IssueDownload
 		createDerivedFile = fileCapabilities.CreateDerived
+		ingestUploadedFile = fileCapabilities.IngestUploaded
+		inspectUploadedFile = fileCapabilities.InspectUploaded
 		validateFileReferences = fileCapabilities.ValidateRecordReferences
 	}
 	if len(extensionRegistries) > 0 && extensionRegistries[0].knowledgeFiles != nil {
@@ -596,6 +601,8 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			OpenVerifiedFile:                    openVerifiedFile,
 			IssueFileDownload:                   issueFileDownload,
 			CreateDerivedFile:                   createDerivedFile,
+			IngestUploadedFile:                  ingestUploadedFile,
+			InspectUploadedFile:                 inspectUploadedFile,
 			ReadKnowledgeFile:                   readKnowledgeFile,
 			BindKnowledgeFile:                   bindKnowledgeFile,
 			ValidateFileReferences:              validateFileReferences,

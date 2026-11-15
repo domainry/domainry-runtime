@@ -28,7 +28,9 @@ func TestUploadRequestLimitPrefixAndWriterFailures(t *testing.T) {
 	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a"}}, uploadTestRole("document.update"))
 	handler := uploadTestHandler(t, principal)
 	response := httptest.NewRecorder()
-	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "huge.bin", bytes.Repeat([]byte{'x'}, maxUploadRequestBytes+1)))
+	// The default field remains 5 MiB even when the host supports explicitly
+	// configured larger fields. Exercise its 1 MiB multipart overhead ceiling.
+	handler.uploadFile(response, multipartUploadRequest(t, "/uploads?object_key=document&field_key=file_url", "huge.bin", bytes.Repeat([]byte{'x'}, maxUploadBytes+(1<<20)+1)))
 	if response.Code != http.StatusRequestEntityTooLarge || response.Header().Get("X-Error-Code") != "backend.upload.file_too_large" {
 		t.Fatalf("request limit status=%d code=%q", response.Code, response.Header().Get("X-Error-Code"))
 	}
