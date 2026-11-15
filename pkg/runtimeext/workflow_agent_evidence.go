@@ -1,10 +1,16 @@
 package runtimeext
 
-import "context"
+import (
+	"context"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
+)
 
 const WorkflowReadAgentTaskEvidenceOperation = "read_agent_task_evidence"
 const WorkflowAgentTaskEvidenceUnavailableErrorCode = "backend.action.agent_task_evidence_unavailable"
 const WorkflowAgentTaskEvidenceDeniedErrorCode = "backend.action.agent_task_evidence_denied"
+
+type WorkflowAgentKnowledgeEvidence = agentmodel.AgentTaskKnowledgeEvidence
+type WorkflowAgentKnowledgeCitationEvidence = agentmodel.AgentTaskKnowledgeCitationEvidence
 
 // No caller-selected Workspace, Process or Task run ID is accepted. Runtime
 // binds the read to the current Workflow Action and its exact target record.
@@ -16,15 +22,17 @@ type WorkflowAgentTaskEvidenceRequest struct {
 }
 
 type WorkflowAgentToolEvidence struct {
-	Ref            string `json:"ref"`
-	Tool           string `json:"tool"`
-	Status         string `json:"status"`
-	InputSHA256    string `json:"input_sha256,omitempty"`
-	OutputSHA256   string `json:"output_sha256,omitempty"`
-	ErrorCode      string `json:"error_code,omitempty"`
-	StartedAt      int64  `json:"started_at,omitempty"`
-	FinishedAt     int64  `json:"finished_at,omitempty"`
-	DurationMillis int64  `json:"duration_ms,omitempty"`
+	// A source reference receipt, never a current Knowledge access grant.
+	Knowledge      *WorkflowAgentKnowledgeEvidence `json:"knowledge,omitempty"`
+	Ref            string                          `json:"ref"`
+	Tool           string                          `json:"tool"`
+	Status         string                          `json:"status"`
+	InputSHA256    string                          `json:"input_sha256,omitempty"`
+	OutputSHA256   string                          `json:"output_sha256,omitempty"`
+	ErrorCode      string                          `json:"error_code,omitempty"`
+	StartedAt      int64                           `json:"started_at,omitempty"`
+	FinishedAt     int64                           `json:"finished_at,omitempty"`
+	DurationMillis int64                           `json:"duration_ms,omitempty"`
 }
 
 // This is owner-proven execution metadata, never model output. It deliberately

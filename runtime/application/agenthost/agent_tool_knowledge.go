@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -13,8 +14,13 @@ import (
 // grants. The adapter must authorize the live library/document and revalidate
 // its result before releasing a normalized projection to the Task.
 type AgentToolKnowledgePort interface {
-	SearchAgentKnowledge(context.Context, string, string, principalmodel.Principal) (any, error)
-	ReadAgentKnowledge(context.Context, string, string, principalmodel.Principal) (any, error)
+	SearchAgentKnowledge(context.Context, string, string, principalmodel.Principal) (AgentToolKnowledgeResult, error)
+	ReadAgentKnowledge(context.Context, string, string, principalmodel.Principal) (AgentToolKnowledgeResult, error)
+}
+
+type AgentToolKnowledgeResult struct {
+	Output    any
+	Knowledge *agentmodel.AgentTaskKnowledgeEvidence
 }
 
 func agentKnowledgeToolInput(tool string, input map[string]any) (string, string, error) {

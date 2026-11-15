@@ -351,7 +351,8 @@ func (h runtimeAgentTaskHost) InvokeTaskTool(ctx context.Context, request agentm
 		Tool: request.Tool, Input: request.Input, IdempotencyKey: request.IdempotencyKey,
 	})
 	return agentmodulehost.TaskToolResult{
-		Status: result.Status, Tool: result.Tool, Output: result.Output, Proposal: result.Proposal, Authorization: result.Authorization,
+		Knowledge: result.Knowledge.Clone(),
+		Status:    result.Status, Tool: result.Tool, Output: result.Output, Proposal: result.Proposal, Authorization: result.Authorization,
 	}, err
 }
 

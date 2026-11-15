@@ -29,3 +29,11 @@ current Task budget and failed terminal receipts. Product code must retain
 actual retrieval references and versions; model-authored citations are not
 permission grants. Display or later customer release needs the current
 Knowledge authorization and product audience policy.
+
+## Trusted completion references
+
+The Knowledge adapter also produces a separate typed `AgentTaskKnowledgeEvidence` from its already reauthorized result. The Task host passes that receipt to Agent outside model-visible output. Agent SDK v0.1.59 / Agent v0.1.100 retain it in the same fenced tool call; raw model JSON cannot populate it.
+
+The Workflow completion snapshot projects the receipt on `WorkflowAgentToolEvidence.Knowledge`, under the existing exact Workflow/Process/record/actor grant. Runtimeext v64 includes the reference schema in its contract digest. Only executed Knowledge search/fetch tools with a valid, bounded receipt can project references. Replayed completion callbacks cannot replace the saved document/version references. A later authorized Action read rejects malformed or wrongly attached receipts.
+
+References contain library, citation/document/page/chunk/record identities, versions, content/source revision hashes and scope. They contain no title, excerpt, URL, provider raw data, credentials or permission bundle. No-match searches retain an empty collection. This is evidence of a prior authorized tool result, never a durable grant to read that source; current Knowledge and product audience authorization still govern later display or customer release.

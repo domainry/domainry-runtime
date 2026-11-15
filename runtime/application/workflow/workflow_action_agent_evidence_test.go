@@ -127,3 +127,49 @@ func TestFailedWorkflowCompletionCommitDoesNotPublishEvidence(t *testing.T) {
 		t.Fatal("uncommitted execution released", proof, err)
 	}
 }
+
+func TestWorkflowEvidenceRetainsOnlyTrustedKnowledgeReferenceReceipts(t *testing.T) {
+	at := time.Now().UTC()
+	receipt := &agentmodel.AgentTaskKnowledgeEvidence{LibraryID: "library-a", Operation: "search", ScopeSHA256: strings.Repeat("a", 64), Citations: []agentmodel.AgentTaskKnowledgeCitationEvidence{{ID: "citation-a", Provider: "knowledge", DocumentID: "doc-a", DocumentVersion: 4, ChunkID: "chunk-a"}}}
+	completion := WorkflowAgentTaskCompletion{Evidence: agentmodel.AgentTaskExecutionEvidence{ToolInvocations: []agentmodel.AgentTaskToolInvocationEvidence{{Ref: "tool-a", Tool: agentsdk.AgentToolKnowledgeSearch, Status: "executed", InputHash: "input-hash", OutputHash: "output-hash", Knowledge: receipt}}}}
+	proof := projectWorkflowAgentTaskEvidence(completion, "analyze", "knowledge", "1", at)
+	if len(proof.Tools) != 1 || proof.Tools[0].Knowledge == nil || proof.Tools[0].Knowledge.Citations[0].DocumentVersion != 4 {
+		t.Fatal("trusted receipt missing", proof)
+	}
+	receipt.Citations[0].DocumentID = "changed"
+	if proof.Tools[0].Knowledge.Citations[0].DocumentID != "doc-a" {
+		t.Fatal("completion aliases projected receipt")
+	}
+	for _, test := range []struct{ tool, status string }{{agentsdk.AgentToolGetRecord, "executed"}, {agentsdk.AgentToolKnowledgeSearch, "failed"}, {agentsdk.AgentToolKnowledgeRead, "executed"}} {
+		completion.Evidence.ToolInvocations[0].Tool = test.tool
+		completion.Evidence.ToolInvocations[0].Status = test.status
+		projected := projectWorkflowAgentTaskEvidence(completion, "analyze", "knowledge", "1", at)
+		if projected.Tools[0].Knowledge != nil {
+			t.Fatal("invalid receipt promoted", projected)
+		}
+	}
+}
+
+func TestKnowledgeReceiptSurvivesWorkflowCommitAndCannotBeReplacedByCallbackReplay(t *testing.T) {
+	s, repo, state, completion, scope, request := workflowEvidenceFixture(t)
+	tool := &completion.Evidence.ToolInvocations[0]
+	tool.Tool = agentsdk.AgentToolKnowledgeRead
+	tool.Knowledge = &agentmodel.AgentTaskKnowledgeEvidence{LibraryID: "library-a", Operation: "fetch", ScopeSHA256: strings.Repeat("a", 64), Citations: []agentmodel.AgentTaskKnowledgeCitationEvidence{{ID: "citation-a", Provider: "knowledge", DocumentID: "doc-a", DocumentVersion: 7}}}
+	persistWorkflowEvidenceFixture(t, s, repo, state, completion)
+	proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || proof.Tools[0].Knowledge == nil || proof.Tools[0].Knowledge.Citations[0].DocumentVersion != 7 {
+		t.Fatal("durable receipt missing", proof, err)
+	}
+	tool.Knowledge.Citations[0].DocumentID = "other"
+	if err = s.CompleteAgentTask(t.Context(), completion); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || replay.Tools[0].Knowledge.Citations[0].DocumentID != "doc-a" {
+		t.Fatal("callback replaced citation receipt", replay, err)
+	}
+	scope.ExecutionUserID = "foreign"
+	if r, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || r.Available {
+		t.Fatal("foreign caller read knowledge receipt", r, err)
+	}
+}

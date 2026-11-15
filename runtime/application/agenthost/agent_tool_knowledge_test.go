@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentsdk "github.com/domainry/domainry-agent-sdk"
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
@@ -29,19 +30,27 @@ type knowledgeGatewayProbe struct {
 	wait           bool
 }
 
-func (p *knowledgeGatewayProbe) SearchAgentKnowledge(ctx context.Context, library, value string, principal principalmodel.Principal) (any, error) {
+func probeKnowledgeReceipt(library, value string) *agentmodel.AgentTaskKnowledgeEvidence {
+	operation := "search"
+	if value == "doc-a" {
+		operation = "fetch"
+	}
+	return &agentmodel.AgentTaskKnowledgeEvidence{LibraryID: library, Operation: operation, ScopeSHA256: strings.Repeat("a", 64), Citations: []agentmodel.AgentTaskKnowledgeCitationEvidence{}}
+}
+
+func (p *knowledgeGatewayProbe) SearchAgentKnowledge(ctx context.Context, library, value string, principal principalmodel.Principal) (AgentToolKnowledgeResult, error) {
 	p.calls++
 	p.library, p.value, p.principal = library, value, principal
 	if p.wait {
 		<-ctx.Done()
-		return nil, ctx.Err()
+		return AgentToolKnowledgeResult{}, ctx.Err()
 	}
 	if p.output != nil {
-		return p.output, nil
+		return AgentToolKnowledgeResult{Output: p.output, Knowledge: probeKnowledgeReceipt(library, value)}, nil
 	}
-	return map[string]any{"citations": []any{}}, nil
+	return AgentToolKnowledgeResult{Output: map[string]any{"citations": []any{}}, Knowledge: probeKnowledgeReceipt(library, value)}, nil
 }
-func (p *knowledgeGatewayProbe) ReadAgentKnowledge(ctx context.Context, library, value string, principal principalmodel.Principal) (any, error) {
+func (p *knowledgeGatewayProbe) ReadAgentKnowledge(ctx context.Context, library, value string, principal principalmodel.Principal) (AgentToolKnowledgeResult, error) {
 	return p.SearchAgentKnowledge(ctx, library, value, principal)
 }
 

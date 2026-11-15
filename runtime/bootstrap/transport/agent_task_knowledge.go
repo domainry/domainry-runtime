@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	agentmodel "github.com/domainry/domainry-agent-sdk/state"
 	"github.com/domainry/domainry-foundation/apperror"
 	knowledgesdk "github.com/domainry/domainry-knowledge-sdk"
 	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
@@ -38,18 +39,18 @@ type agentTaskKnowledgeResult struct {
 	Citations   []knowledgesdk.Citation `json:"citations"`
 }
 
-func (a agentTaskKnowledgeAdapter) SearchAgentKnowledge(ctx context.Context, libraryID, query string, p principalmodel.Principal) (any, error) {
+func (a agentTaskKnowledgeAdapter) SearchAgentKnowledge(ctx context.Context, libraryID, query string, p principalmodel.Principal) (agentapplication.AgentToolKnowledgeResult, error) {
 	return a.retrieve(ctx, "search", libraryID, query, "", p)
 }
-func (a agentTaskKnowledgeAdapter) ReadAgentKnowledge(ctx context.Context, libraryID, documentID string, p principalmodel.Principal) (any, error) {
+func (a agentTaskKnowledgeAdapter) ReadAgentKnowledge(ctx context.Context, libraryID, documentID string, p principalmodel.Principal) (agentapplication.AgentToolKnowledgeResult, error) {
 	return a.retrieve(ctx, "fetch", libraryID, "", documentID, p)
 }
-func (a agentTaskKnowledgeAdapter) retrieve(ctx context.Context, operation, libraryID, query, documentID string, p principalmodel.Principal) (any, error) {
+func (a agentTaskKnowledgeAdapter) retrieve(ctx context.Context, operation, libraryID, query, documentID string, p principalmodel.Principal) (agentapplication.AgentToolKnowledgeResult, error) {
 	if a.source == nil || strings.TrimSpace(a.runtimeID) == "" {
-		return nil, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_unavailable", nil, nil)
+		return agentapplication.AgentToolKnowledgeResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_unavailable", nil, nil)
 	}
 	if !p.Known || p.WorkspaceID == "" || p.UserID == "" || p.RoleKey == "" {
-		return nil, apperror.New(apperror.KindForbidden, "agent.tool.knowledge_identity_denied", nil, nil)
+		return agentapplication.AgentToolKnowledgeResult{}, apperror.New(apperror.KindForbidden, "agent.tool.knowledge_identity_denied", nil, nil)
 	}
 	authority := knowledgesdk.Authority{Known: true, RuntimeID: a.runtimeID, WorkspaceID: p.WorkspaceID, UserID: p.UserID, RoleKey: p.RoleKey}
 	var result knowledgesdk.Result
@@ -60,22 +61,29 @@ func (a agentTaskKnowledgeAdapter) retrieve(ctx context.Context, operation, libr
 		result, err = a.source.ReadLibraryKnowledge(ctx, libraryID, documentID, authority)
 	}
 	if err != nil {
-		return nil, taskKnowledgeError(err)
+		return agentapplication.AgentToolKnowledgeResult{}, taskKnowledgeError(err)
 	}
 	if result.LibraryID != libraryID || result.Operation != operation || result.Query != query || result.DocumentID != documentID || result.ScopeSHA256 == "" || len(result.Citations) > 20 {
-		return nil, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
+		return agentapplication.AgentToolKnowledgeResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
 	}
 	if err = a.source.RevalidateKnowledge(ctx, result, authority); err != nil {
-		return nil, taskKnowledgeError(err)
+		return agentapplication.AgentToolKnowledgeResult{}, taskKnowledgeError(err)
 	}
 	out := agentTaskKnowledgeResult{LibraryID: libraryID, Operation: operation, Query: query, DocumentID: documentID, ScopeSHA256: result.ScopeSHA256, Citations: make([]knowledgesdk.Citation, 0, len(result.Citations))}
 	for _, citation := range result.Citations {
 		if citation.LibraryID != libraryID || citation.ID == "" || citation.DocumentID == "" || citation.Operation != operation || documentID != "" && citation.DocumentID != documentID {
-			return nil, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
+			return agentapplication.AgentToolKnowledgeResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
 		}
 		out.Citations = append(out.Citations, citation)
 	}
-	return out, nil
+	receipt := &agentmodel.AgentTaskKnowledgeEvidence{LibraryID: libraryID, Operation: operation, ScopeSHA256: result.ScopeSHA256, Citations: make([]agentmodel.AgentTaskKnowledgeCitationEvidence, 0, len(result.Citations))}
+	for _, citation := range result.Citations {
+		receipt.Citations = append(receipt.Citations, agentmodel.AgentTaskKnowledgeCitationEvidence{ID: citation.ID, Provider: citation.Provider, KBID: citation.KBID, DocumentID: citation.DocumentID, RecordID: citation.RecordID, ChunkID: citation.ChunkID, DocumentVersion: citation.DocumentVersion, PageID: citation.PageID, PageVersion: citation.PageVersion, ContentSHA256: citation.ContentSHA256, SourceRevision: citation.SourceRevision})
+	}
+	if receipt.Validate() != nil {
+		return agentapplication.AgentToolKnowledgeResult{}, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
+	}
+	return agentapplication.AgentToolKnowledgeResult{Output: out, Knowledge: receipt}, nil
 }
 
 func taskKnowledgeError(err error) error {

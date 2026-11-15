@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	ContractVersion = "runtimeext-v63"
-	ContractSHA256  = "3fe01edb54a555ee6265fe2dd87fa527751be3da2d92f5ce3af4ecd49bd93fbc"
+	ContractVersion = "runtimeext-v64"
+	ContractSHA256  = "1bd00328b8d148b2fb34fe94b8562193ed44969cffae6961c1f5bc439ffcd3f7"
 )
 
-const contractDefinitionV60 = `runtimeext-v63
+const contractDefinitionV60 = `runtimeext-v64
 PackagePath=github.com/domainry/domainry-runtime/pkg/runtimeext
 Handler[Capabilities,Input,Output](context.Context,Capabilities,Input)(Output,error)
 CapabilityFactory[Capabilities](ActionExecution)(Capabilities,error)
@@ -72,6 +72,7 @@ WorkflowGrantDeniedErrorCode=backend.action.workflow_grant_denied
 WorkflowAgentTaskEvidenceExecution.ReadWorkflowAgentTaskEvidence(context.Context,WorkflowAgentTaskEvidenceRequest)(WorkflowAgentTaskEvidence,error)
 ReadWorkflowAgentTaskEvidence(context.Context,ActionExecution,WorkflowAgentTaskEvidenceRequest)(WorkflowAgentTaskEvidence,error)
 WorkflowAgentTaskEvidenceSemantics=explicit_named_workflow_grant|current_workflow_action_only|exact_workspace_process_target_and_actor|runtime_completion_snapshot|latest_task_iteration|no_run_id_input|no_model_or_provider_payload|utc_milliseconds
+WorkflowAgentKnowledgeEvidenceSemantics=trusted_tool_host_only|same_fenced_tool_receipt|bounded_reference_metadata|no_text_urls_or_grants|current_knowledge_authorization_required
 WorkflowStartSemantics=registered_workflow_with_instance_approval_route|descriptor_workflow_start_grant|synchronous_route_validation|same_action_uow|starting_process_and_route_steps_and_intent|activation_by_committed_intent
 StageNotification(context.Context,ActionExecution,NotificationIntent)(NotificationReceipt,error)
 StageNotificationBatch(context.Context,ActionExecution,[]NotificationIntent)([]NotificationReceipt,error)
@@ -177,7 +178,7 @@ func contractStructTypes() []reflect.Type {
 		Predicate{}, Arithmetic{}, RecordMutation{}, RecordMutationResult{}, ConditionalUpdateManyExactCoverage{}, ConditionalUpdateManyRequest{}, ConditionalUpdateManyResult{},
 		DurableIntent{}, DurableIntentReceipt{}, BusinessError{}, ProjectExtensions{}, ProjectDefinitions{}, ReportDefinition{}, PublicResourceDefinition{}, NotificationNativePushTargetDefinition{}, ProjectDefinitionIdentity{},
 		NotificationVariable{}, NotificationIntent{}, NotificationReceipt{},
-		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{}, WorkflowAgentTaskEvidenceRequest{}, WorkflowAgentTaskEvidence{}, WorkflowAgentToolEvidence{},
+		WorkflowGrant{}, WorkflowRouteStep{}, WorkflowStart{}, WorkflowStartReceipt{}, WorkflowWithdrawal{}, WorkflowWithdrawalReceipt{}, WorkflowAgentTaskEvidenceRequest{}, WorkflowAgentTaskEvidence{}, WorkflowAgentToolEvidence{}, WorkflowAgentKnowledgeEvidence{}, WorkflowAgentKnowledgeCitationEvidence{},
 	}
 	types := make([]reflect.Type, 0, len(structs))
 	for _, value := range structs {

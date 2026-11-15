@@ -81,11 +81,12 @@ type AgentToolInvocationRequest struct {
 }
 
 type AgentToolInvocationResult struct {
-	Status        string                                `json:"status"`
-	Tool          string                                `json:"tool"`
-	Output        any                                   `json:"output,omitempty"`
-	Proposal      any                                   `json:"proposal,omitempty"`
-	Authorization agentmodel.AgentAuthorizationEvidence `json:"authorization"`
+	Knowledge     *agentmodel.AgentTaskKnowledgeEvidence `json:"-"`
+	Status        string                                 `json:"status"`
+	Tool          string                                 `json:"tool"`
+	Output        any                                    `json:"output,omitempty"`
+	Proposal      any                                    `json:"proposal,omitempty"`
+	Authorization agentmodel.AgentAuthorizationEvidence  `json:"authorization"`
 }
 
 func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocationRequest) (result AgentToolInvocationResult, err error) {
@@ -145,10 +146,28 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 		if inputErr != nil {
 			return result, inputErr
 		}
+		var knowledge AgentToolKnowledgeResult
 		if request.Tool == agentsdk.AgentToolKnowledgeSearch {
-			result.Output, err = g.dependencies.Knowledge.SearchAgentKnowledge(ctx, libraryID, value, authorization.Principal)
+			knowledge, err = g.dependencies.Knowledge.SearchAgentKnowledge(ctx, libraryID, value, authorization.Principal)
 		} else {
-			result.Output, err = g.dependencies.Knowledge.ReadAgentKnowledge(ctx, libraryID, value, authorization.Principal)
+			knowledge, err = g.dependencies.Knowledge.ReadAgentKnowledge(ctx, libraryID, value, authorization.Principal)
+		}
+		if err == nil {
+			operation := "search"
+			if request.Tool == agentsdk.AgentToolKnowledgeRead {
+				operation = "fetch"
+			}
+			if knowledge.Knowledge == nil || knowledge.Knowledge.Validate() != nil || knowledge.Knowledge.LibraryID != libraryID || knowledge.Knowledge.Operation != operation {
+				return result, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
+			}
+			if operation == "fetch" {
+				for _, c := range knowledge.Knowledge.Citations {
+					if c.DocumentID != value {
+						return result, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_result_invalid", nil, nil)
+					}
+				}
+			}
+			result.Output, result.Knowledge = knowledge.Output, knowledge.Knowledge.Clone()
 		}
 		result.Status = "executed"
 	case AgentToolQueryRecords:
