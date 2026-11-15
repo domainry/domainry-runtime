@@ -9,8 +9,17 @@ import (
 	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
+	appschemaservice "github.com/domainry/domainry-runtime/runtime/domain/appschema/service"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
+
+// Exercise the actual source-owned visibility policy, not a prefiltered stub.
+type knowledgeProjectedSchema struct{ *agentSchemaProviderStub }
+
+func (p knowledgeProjectedSchema) SchemaForPrincipal(_ context.Context, principal principalmodel.Principal) appschemamodel.ApplicationSchemaSnapshot {
+	return appschemaservice.SnapshotForPrincipal(p.full, principal)
+}
 
 type knowledgeGatewayProbe struct {
 	calls          int
@@ -40,6 +49,8 @@ func knowledgeGatewayFixture(t *testing.T) (*AgentToolGateway, *knowledgeGateway
 	t.Helper()
 	auth, initiator, schema, directory := agentAuthorizationFixture()
 	tools := []string{agentsdk.AgentToolKnowledgeSearch, agentsdk.AgentToolKnowledgeRead}
+	auth.schema = knowledgeProjectedSchema{schema}
+	schema.full.AgentTasks[0].AllowedObjects = nil
 	schema.full.Agents[0].Tools = tools
 	schema.full.Skills[0].AllowedTools = tools
 	schema.full.AgentTasks[0].SideEffectMode = agentsdk.AgentTaskSideEffectAnalysisOnly

@@ -21,7 +21,7 @@ An authorized no-match search remains an explicit empty citation collection.
 
 Knowledge must be installed through its public Module/Remote boundary and must
 provide library-aware retrieval. Default unscoped search is never a fallback.
-Existing Agents do not gain these tools automatically. Services must have the
+The principal schema keeps these two explicitly declared tools visible to authenticated identities even when the Task declares no project Objects. They do not require an unrelated `integration.tool.*` grant: the live Knowledge library/document check remains the resource authority. Existing Agents do not gain these tools automatically. Services must have the
 specific Knowledge resource grants needed for their actual workload.
 
 The Agent owner continues to own the Task tool-call ledger, lease fencing,

@@ -245,6 +245,10 @@ func visibleAgentToolsForPrincipal(tools []string, principal principalmodel.Prin
 
 func agentToolAllowedForPrincipal(tool string, principal principalmodel.Principal, visibleObjects map[string]bool) bool {
 	switch strings.TrimSpace(tool) {
+	case agentsdk.AgentToolKnowledgeSearch, agentsdk.AgentToolKnowledgeRead:
+		// Knowledge tools have no project Object or Integration grant. Their
+		// library/document authority is checked by Knowledge on every host call.
+		return principal.Known
 	case "listObjects", "listFields", "searchRecords", "getRecord", "list_objects", "list_fields", "search_records", "query_records", "get_record":
 		return len(visibleObjects) > 0
 	case "createRecord", "create_record":

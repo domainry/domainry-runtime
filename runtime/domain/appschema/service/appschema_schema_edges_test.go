@@ -196,3 +196,28 @@ func TestVisibilityPermissionAndToolHelperEdges(t *testing.T) {
 		t.Fatalf("intersection=%v", got)
 	}
 }
+
+func TestKnowledgeTaskToolVisibilityKeepsResourceAuthorizationIndependent(t *testing.T) {
+	principal := principalmodel.Principal{Principal: identitysdk.Principal{Known: true}}
+	tools := []string{agentsdk.AgentToolKnowledgeSearch, agentsdk.AgentToolKnowledgeRead}
+	for _, tool := range tools {
+		if !agentToolAllowedForPrincipal(tool, principal, nil) {
+			t.Fatal("Knowledge read was mistaken for a project Object or Integration grant", tool)
+		}
+		if agentToolAllowedForPrincipal(tool, principalmodel.Principal{}, nil) {
+			t.Fatal("anonymous Knowledge tool was exposed", tool)
+		}
+	}
+	if agentToolAllowedForPrincipal("knowledge_delete", principal, nil) || agentToolAllowedForPrincipal(agentsdk.AgentToolGetRecord, principal, nil) || agentToolAllowedForPrincipal("external", principal, nil) {
+		t.Fatal("Knowledge visibility widened another tool")
+	}
+	source := appschemamodel.ApplicationSchemaSnapshot{
+		Skills:     []agentsdk.SkillSchema{{Key: "support.lookup", AllowedTools: tools}},
+		Agents:     []agentsdk.AgentSchema{{Key: "support.reader", Tools: tools, SkillKeys: []string{"support.lookup"}}},
+		AgentTasks: []agentsdk.AgentTaskDefinition{{Key: "support.search", AgentKey: "support.reader", Enabled: true, SideEffectMode: agentsdk.AgentTaskSideEffectAnalysisOnly}},
+	}
+	visible := SnapshotForPrincipal(source, principal)
+	if len(visible.Skills) != 1 || len(visible.Agents) != 1 || len(visible.AgentTasks) != 1 || len(visible.Agents[0].Tools) != 2 || len(visible.Skills[0].AllowedTools) != 2 || len(visible.AgentTasks[0].AllowedObjects) != 0 || len(visible.AgentTasks[0].AllowedActions) != 0 {
+		t.Fatal("library-only Task disappeared or acquired project scope", visible)
+	}
+}
