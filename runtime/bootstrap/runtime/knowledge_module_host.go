@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	knowledgecontract "github.com/domainry/domainry-knowledge-sdk/contract"
@@ -43,7 +44,7 @@ type runtimeKnowledgeOwner struct {
 
 func openRuntimeKnowledge(ctx context.Context, runtimeID string, application identitysdk.ApplicationScope, store *persistence.RuntimeStore, principals identitysdk.PrincipalResolver, projection identitysdk.Projection, records *recordapplication.RecordApplicationService, factory knowledgemodulehost.Factory, configured knowledgecontract.Options) (owner runtimeKnowledgeOwner, err error) {
 	if factory == nil {
-		return runtimeKnowledgeOwner{}, nil
+		return standaloneKnowledge(configured)
 	}
 	authority, err := knowledgehost.New(runtimeID, application, principals, projection, records)
 	if err != nil {
@@ -87,4 +88,31 @@ func openRuntimeKnowledge(ctx context.Context, runtimeID string, application ide
 	}
 	closeOnError = false
 	return runtimeKnowledgeOwner{binding: binding, service: service, retrieval: retrieval}, nil
+}
+
+// A process may select a scoped retrieval port without selecting Knowledge
+// persistence, management HTTP, document workers or a second identity policy.
+// The trusted project adapter owns its external connection; Runtime still
+// derives the Agent authority and validates every tool result and receipt.
+func standaloneKnowledge(configured knowledgecontract.Options) (runtimeKnowledgeOwner, error) {
+	source := configured.Knowledge
+	configured.Knowledge = nil
+	if !reflect.DeepEqual(configured, knowledgecontract.Options{}) {
+		return runtimeKnowledgeOwner{}, fmt.Errorf("Knowledge module options require an explicit Knowledge Factory")
+	}
+	if source == nil {
+		return runtimeKnowledgeOwner{}, nil
+	}
+	scoped, ok := source.(knowledgecontract.LibraryKnowledge)
+	if !ok {
+		return runtimeKnowledgeOwner{}, fmt.Errorf("standalone Knowledge retrieval requires the library-scoped public port")
+	}
+	value := reflect.ValueOf(scoped)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if value.IsNil() {
+			return runtimeKnowledgeOwner{}, fmt.Errorf("standalone Knowledge retrieval is nil")
+		}
+	}
+	return runtimeKnowledgeOwner{retrieval: scoped}, nil
 }

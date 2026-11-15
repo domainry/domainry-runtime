@@ -72,6 +72,9 @@ type Options struct {
 	// KnowledgeOptionsFactory assembles deployment-selected storage and provider
 	// ports after Runtime has resolved its durable Runtime and Workspace IDs.
 	// Runtime supplies Identity and record authorization ports itself.
+	// With no KnowledgeFactory, only Options.Knowledge is accepted and it must
+	// implement contract.LibraryKnowledge. This installs scoped retrieval for
+	// Agent tools without Knowledge storage, management HTTP or document workers.
 	KnowledgeOptionsFactory func(string, string) (knowledgecontract.Options, error)
 	// KnowledgeFiles is the independent generic file service used by governed
 	// project handlers. Runtime always derives its authority from the active
