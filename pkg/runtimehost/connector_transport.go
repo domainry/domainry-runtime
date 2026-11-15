@@ -183,18 +183,17 @@ func (t *connectorTransport) RoundTripHTTP(ctx context.Context, request connecto
 	if limit < 1 || limit > maxConnectorHTTPResponseBytes {
 		return connector.HTTPResponse{}, fmt.Errorf("Connector HTTP response limit must be between 1 and %d bytes", maxConnectorHTTPResponseBytes)
 	}
-	body, err := injectConnectorSecretForm(request.Headers, request.Body, request.SecretForm)
-	if err != nil {
-		return connector.HTTPResponse{}, err
-	}
-	body, err = injectConnectorSecretJSON(request.Headers, body, request.SecretJSON)
+	body, err := connectorHTTPRequestBody(request)
 	if err != nil {
 		return connector.HTTPResponse{}, err
 	}
 	requestContext := telemetry.WithHTTPClientOperation(ctx, "connector.http.round_trip")
-	httpRequest, err := http.NewRequestWithContext(requestContext, strings.TrimSpace(request.Method), strings.TrimSpace(request.URL), bytes.NewReader(body))
+	httpRequest, err := http.NewRequestWithContext(requestContext, strings.TrimSpace(request.Method), strings.TrimSpace(request.URL), body)
 	if err != nil {
 		return connector.HTTPResponse{}, fmt.Errorf("build Connector HTTP request: %w", err)
+	}
+	if request.Content != nil {
+		httpRequest.ContentLength = request.ContentLength
 	}
 	if err := injectConnectorSecretQuery(httpRequest.URL, request.SecretQuery); err != nil {
 		return connector.HTTPResponse{}, err
@@ -229,6 +228,30 @@ func (t *connectorTransport) RoundTripHTTP(ctx context.Context, request connecto
 		return connector.HTTPResponse{}, fmt.Errorf("Connector HTTP response exceeds %d bytes", limit)
 	}
 	return connector.HTTPResponse{StatusCode: response.StatusCode, Headers: cloneHTTPHeaders(response.Header), Body: responseBody}, nil
+}
+
+// Content is an SDK-owned binary stream, distinct from mutable JSON/form Body.
+// The producer owns its hash validation; net/http enforces the declared length.
+// Do not materialize large file transfers or apply secret-body rewriting to it.
+func connectorHTTPRequestBody(request connector.HTTPRequest) (io.Reader, error) {
+	if request.Content != nil {
+		if len(request.Body) != 0 || len(request.SecretForm) != 0 || len(request.SecretJSON) != 0 || request.ContentLength < 1 || !connector.ValidSHA256(request.ContentSHA256) {
+			return nil, errors.New("Connector HTTP content requires one stream with valid length and identity")
+		}
+		return request.Content, nil
+	}
+	if request.ContentLength != 0 || request.ContentSHA256 != "" {
+		return nil, errors.New("Connector HTTP content metadata requires a stream")
+	}
+	body, err := injectConnectorSecretForm(request.Headers, request.Body, request.SecretForm)
+	if err != nil {
+		return nil, err
+	}
+	body, err = injectConnectorSecretJSON(request.Headers, body, request.SecretJSON)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(body), nil
 }
 
 func injectConnectorSecretHeaders(headers http.Header, secrets map[string][]string) error {
