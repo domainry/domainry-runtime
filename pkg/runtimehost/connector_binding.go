@@ -357,6 +357,7 @@ func knowledgeDocumentResult(document knowledgesdk.KnowledgeDocument) KnowledgeD
 	return KnowledgeDocumentResult{
 		ID: document.ID, LibraryID: document.LibraryID, Filename: document.Filename, ContentType: document.ContentType,
 		Bytes: document.Bytes, SHA256: document.SHA256, State: document.State, IndexStatus: document.IndexStatus,
+		ContentVersion: document.ContentVersion, IndexGeneration: document.IndexGeneration, ProjectionKind: document.ProjectionKind, OriginPageID: document.OriginPageID, OriginPageVersion: document.OriginPageVersion,
 		ErrorCode: document.ErrorCode, Revision: document.Revision, UpdatedAt: document.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
 	}
 }

@@ -99,17 +99,22 @@ type KnowledgeLibraryResult struct {
 // only. Project handlers never receive Knowledge storage references or remote
 // datasource credentials.
 type KnowledgeDocumentResult struct {
-	ID          string
-	LibraryID   string
-	Filename    string
-	ContentType string
-	Bytes       int64
-	SHA256      string
-	State       string
-	IndexStatus string
-	ErrorCode   string
-	Revision    int64
-	UpdatedAt   string
+	ID                string
+	LibraryID         string
+	Filename          string
+	ContentType       string
+	Bytes             int64
+	SHA256            string
+	ContentVersion    int64
+	IndexGeneration   int64
+	ProjectionKind    string
+	OriginPageID      string
+	OriginPageVersion int64
+	State             string
+	IndexStatus       string
+	ErrorCode         string
+	Revision          int64
+	UpdatedAt         string
 }
 
 // ConnectorGateway is visible only to project composition. Action Handlers

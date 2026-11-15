@@ -23,8 +23,8 @@ require (
 	github.com/domainry/domainry-identity-sdk v0.1.45
 	github.com/domainry/domainry-integration v0.1.61
 	github.com/domainry/domainry-integration-sdk v0.1.28
-	github.com/domainry/domainry-knowledge v0.1.105
-	github.com/domainry/domainry-knowledge-sdk v0.1.44
+	github.com/domainry/domainry-knowledge v0.1.111
+	github.com/domainry/domainry-knowledge-sdk v0.1.45
 	github.com/domainry/domainry-lifecycle v0.1.45
 	github.com/domainry/domainry-lifecycle-sdk v0.1.33
 	github.com/domainry/domainry-metadata v0.1.40
