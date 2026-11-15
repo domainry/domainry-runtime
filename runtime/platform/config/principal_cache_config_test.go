@@ -17,11 +17,12 @@ func TestIdentityPrincipalCacheConfigFromEnvironment(t *testing.T) {
 	t.Setenv("PRINCIPAL_CACHE_BACKEND", "redis")
 	t.Setenv("PRINCIPAL_CACHE_TTL", "5m")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_URL", "redis://localhost:6379/3")
+	t.Setenv("PRINCIPAL_CACHE_REDIS_CA_CERT_FILE", "/run/redis-tls/ca.crt")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_PREFIX", "tenant:principal:")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", "3s")
 	t.Setenv("PRINCIPAL_CACHE_REDIS_CLUSTER", "true")
 	cfg := FromEnv()
-	if cfg.PrincipalCacheBackend != "redis" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisURL != "redis://localhost:6379/3" || cfg.PrincipalCacheRedisPrefix != "tenant:principal:" || cfg.PrincipalCacheRedisConnectTimeout != 3*time.Second || !cfg.PrincipalCacheRedisCluster {
+	if cfg.PrincipalCacheBackend != "redis" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisURL != "redis://localhost:6379/3" || cfg.PrincipalCacheRedisCACertFile != "/run/redis-tls/ca.crt" || cfg.PrincipalCacheRedisPrefix != "tenant:principal:" || cfg.PrincipalCacheRedisConnectTimeout != 3*time.Second || !cfg.PrincipalCacheRedisCluster {
 		t.Fatalf("config=%#v", cfg)
 	}
 }
@@ -35,6 +36,7 @@ func TestIdentityPrincipalCacheConfigValidation(t *testing.T) {
 		{PrincipalCacheBackend: "local", PrincipalCacheTTL: -time.Second},
 		{PrincipalCacheBackend: "redis", PrincipalCacheTTL: 5 * time.Minute, PrincipalCacheRedisConnectTimeout: time.Second},
 		{PrincipalCacheBackend: "redis", PrincipalCacheTTL: 5 * time.Minute, PrincipalCacheRedisURL: "redis://localhost:6379"},
+		{PrincipalCacheBackend: "redis", PrincipalCacheTTL: 5 * time.Minute, PrincipalCacheRedisURL: "redis://localhost:6379", PrincipalCacheRedisCACertFile: "/run/redis-tls/ca.crt", PrincipalCacheRedisConnectTimeout: time.Second},
 		{PrincipalCacheBackend: "unknown", PrincipalCacheTTL: 5 * time.Minute},
 	} {
 		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "PRINCIPAL_CACHE") {

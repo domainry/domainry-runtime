@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/ratelimit"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisconnect"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -36,8 +37,8 @@ type RateLimiter struct {
 	prefix string
 }
 
-func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration) (*RateLimiter, error) {
-	options, err := redis.ParseURL(strings.TrimSpace(rawURL))
+func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration, caCertFile string) (*RateLimiter, error) {
+	options, err := redisconnect.ParseURL(rawURL, caCertFile, "rate-limit")
 	if err != nil {
 		return nil, fmt.Errorf("parse rate-limit Redis URL: %w", err)
 	}

@@ -14,6 +14,7 @@ import (
 
 	identity "github.com/domainry/domainry-identity-sdk/authorization"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisconnect"
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/redisdiagnostics"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -106,13 +107,13 @@ type Cache struct {
 	prefix string
 }
 
-func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration, cluster ...bool) (*Cache, error) {
+func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration, caCertFile string, cluster ...bool) (*Cache, error) {
 	if connectTimeout <= 0 {
 		return nil, errors.New("principal-cache Redis connect timeout must be positive")
 	}
 	var client redis.UniversalClient
 	if len(cluster) > 0 && cluster[0] {
-		options, err := redis.ParseClusterURL(strings.TrimSpace(rawURL))
+		options, err := redisconnect.ParseClusterURL(rawURL, caCertFile, "principal-cache")
 		if err != nil {
 			return nil, fmt.Errorf("parse principal-cache Redis cluster URL: %w", err)
 		}
@@ -121,7 +122,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 		options.WriteTimeout = connectTimeout
 		client = redis.NewClusterClient(options)
 	} else {
-		options, err := redis.ParseURL(strings.TrimSpace(rawURL))
+		options, err := redisconnect.ParseURL(rawURL, caCertFile, "principal-cache")
 		if err != nil {
 			return nil, fmt.Errorf("parse principal-cache Redis URL: %w", err)
 		}

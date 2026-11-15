@@ -71,14 +71,14 @@ func TestRateLimiterInputAndKeyContract(t *testing.T) {
 
 func TestOpenValidatesAndPingsRedis(t *testing.T) {
 	server := miniredis.RunT(t)
-	limiter, err := Open(t.Context(), "redis://"+server.Addr()+"/0", "", time.Second)
+	limiter, err := Open(t.Context(), "redis://"+server.Addr()+"/0", "", time.Second, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := limiter.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Open(t.Context(), "://bad", "", time.Second); err == nil {
+	if _, err := Open(t.Context(), "://bad", "", time.Second, ""); err == nil {
 		t.Fatal("invalid URL accepted")
 	}
 }

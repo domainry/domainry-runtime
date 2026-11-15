@@ -24,7 +24,7 @@ func openSharedRateLimiter(ctx context.Context, cfg config.Config, store *persis
 		if strings.TrimSpace(cfg.RateLimitRedisURL) == "" {
 			return nil, fmt.Errorf("RATE_LIMIT_REDIS_URL is required when RATE_LIMIT_BACKEND=redis")
 		}
-		return ratelimitredis.Open(ctx, cfg.RateLimitRedisURL, cfg.RateLimitRedisPrefix, cfg.RateLimitRedisConnectTimeout)
+		return ratelimitredis.Open(ctx, cfg.RateLimitRedisURL, cfg.RateLimitRedisPrefix, cfg.RateLimitRedisConnectTimeout, cfg.RateLimitRedisCACertFile)
 	default:
 		return nil, fmt.Errorf("unsupported RATE_LIMIT_BACKEND %q", cfg.RateLimitBackend)
 	}

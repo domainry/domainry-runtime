@@ -60,11 +60,13 @@ type Config struct {
 	HTTPAPIKeyRateLimitPerMinute            int
 	RateLimitBackend                        string
 	RateLimitRedisURL                       string
+	RateLimitRedisCACertFile                string
 	RateLimitRedisPrefix                    string
 	RateLimitRedisConnectTimeout            time.Duration
 	PrincipalCacheBackend                   string
 	PrincipalCacheTTL                       time.Duration
 	PrincipalCacheRedisURL                  string
+	PrincipalCacheRedisCACertFile           string
 	PrincipalCacheRedisPrefix               string
 	PrincipalCacheRedisConnectTimeout       time.Duration
 	PrincipalCacheRedisCluster              bool
@@ -257,11 +259,13 @@ func FromEnv() Config {
 		HTTPAPIKeyRateLimitPerMinute:                    intEnv("HTTP_API_KEY_RATE_LIMIT_PER_MINUTE", 600),
 		RateLimitBackend:                                env("RATE_LIMIT_BACKEND", "database"),
 		RateLimitRedisURL:                               strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_URL")),
+		RateLimitRedisCACertFile:                        strings.TrimSpace(os.Getenv("RATE_LIMIT_REDIS_CA_CERT_FILE")),
 		RateLimitRedisPrefix:                            env("RATE_LIMIT_REDIS_PREFIX", "domainry:ratelimit:v1:"),
 		RateLimitRedisConnectTimeout:                    durationEnv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", 2*time.Second),
 		PrincipalCacheBackend:                           env("PRINCIPAL_CACHE_BACKEND", "local"),
 		PrincipalCacheTTL:                               durationEnv("PRINCIPAL_CACHE_TTL", identityprincipal.DefaultMaxCacheTTL),
 		PrincipalCacheRedisURL:                          strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
+		PrincipalCacheRedisCACertFile:                   strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_CA_CERT_FILE")),
 		PrincipalCacheRedisPrefix:                       env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
 		PrincipalCacheRedisConnectTimeout:               durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
 		PrincipalCacheRedisCluster:                      boolEnv("PRINCIPAL_CACHE_REDIS_CLUSTER", false),

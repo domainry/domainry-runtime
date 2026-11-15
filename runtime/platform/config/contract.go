@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"sort"
@@ -300,6 +301,9 @@ func (c Config) Validate() error {
 		if c.RateLimitRedisConnectTimeout <= 0 {
 			return errors.New("RATE_LIMIT_REDIS_CONNECT_TIMEOUT must be positive")
 		}
+		if err := validateRedisCAFile("RATE_LIMIT", c.RateLimitRedisURL, c.RateLimitRedisCACertFile); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND %q", c.RateLimitBackend)
 	}
@@ -315,6 +319,9 @@ func (c Config) Validate() error {
 		}
 		if c.PrincipalCacheRedisConnectTimeout <= 0 {
 			return errors.New("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT must be positive")
+		}
+		if err := validateRedisCAFile("PRINCIPAL_CACHE", c.PrincipalCacheRedisURL, c.PrincipalCacheRedisCACertFile); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported PRINCIPAL_CACHE_BACKEND %q", c.PrincipalCacheBackend)
@@ -436,6 +443,20 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.MigrationDir) == "" || strings.TrimSpace(c.UploadDir) == "" {
 		return fmt.Errorf("migration and upload paths are required")
+	}
+	return nil
+}
+
+func validateRedisCAFile(prefix, rawURL, caCertFile string) error {
+	if strings.TrimSpace(caCertFile) == "" {
+		return nil
+	}
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return fmt.Errorf("%s_REDIS_URL is invalid: %w", prefix, err)
+	}
+	if parsed.Scheme != "rediss" {
+		return fmt.Errorf("%s_REDIS_CA_CERT_FILE requires %s_REDIS_URL to use rediss://", prefix, prefix)
 	}
 	return nil
 }

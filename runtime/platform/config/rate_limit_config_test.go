@@ -9,10 +9,11 @@ import (
 func TestRateLimitConfigFromEnvironment(t *testing.T) {
 	t.Setenv("RATE_LIMIT_BACKEND", "redis")
 	t.Setenv("RATE_LIMIT_REDIS_URL", "redis://localhost:6379/2")
+	t.Setenv("RATE_LIMIT_REDIS_CA_CERT_FILE", "/run/redis-tls/ca.crt")
 	t.Setenv("RATE_LIMIT_REDIS_PREFIX", "tenant:rate:")
 	t.Setenv("RATE_LIMIT_REDIS_CONNECT_TIMEOUT", "3s")
 	cfg := FromEnv()
-	if cfg.RateLimitBackend != "redis" || cfg.RateLimitRedisURL != "redis://localhost:6379/2" || cfg.RateLimitRedisPrefix != "tenant:rate:" || cfg.RateLimitRedisConnectTimeout != 3*time.Second {
+	if cfg.RateLimitBackend != "redis" || cfg.RateLimitRedisURL != "redis://localhost:6379/2" || cfg.RateLimitRedisCACertFile != "/run/redis-tls/ca.crt" || cfg.RateLimitRedisPrefix != "tenant:rate:" || cfg.RateLimitRedisConnectTimeout != 3*time.Second {
 		t.Fatalf("config=%#v", cfg)
 	}
 }
@@ -27,6 +28,7 @@ func TestRateLimitConfigValidation(t *testing.T) {
 	for _, cfg := range []Config{
 		{RateLimitBackend: "redis", RateLimitRedisConnectTimeout: time.Second},
 		{RateLimitBackend: "redis", RateLimitRedisURL: "redis://localhost:6379"},
+		{RateLimitBackend: "redis", RateLimitRedisURL: "redis://localhost:6379", RateLimitRedisCACertFile: "/run/redis-tls/ca.crt", RateLimitRedisConnectTimeout: time.Second},
 		{RateLimitBackend: "unknown"},
 	} {
 		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "RATE_LIMIT_") {
