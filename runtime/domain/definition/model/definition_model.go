@@ -98,7 +98,8 @@ type ObjectSchema struct {
 	Validations []ValidationSchema                 `json:"validations,omitempty"`
 	// AuthorizationParent makes this append-only dependent object inherit its
 	// parent's read scope. Internal creates require an authorized parent plan
-	// in the same Action; no source predicate is copied onto this object.
+	// in the same Action and inherit that parent's organization. The creating
+	// actor remains the owner user/audit actor; no source ACL predicate is copied.
 	AuthorizationParent *ObjectAuthorizationParent `json:"authorization_parent,omitempty"`
 	// Capabilities is the source declaration for the generic record API.
 	// Nil means the Runtime standard set; a non-nil value can only remove

@@ -243,9 +243,24 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	candidate := recordmodel.Record{RecordID: recordID, Data: data}
 	recordpolicy.RecordApplyOwnerDefault(&candidate, principal)
+	ownedParentID := ""
+	if object.AuthorizationParent != nil {
+		owner, err := recordOwnedEffectParent(ctx, object, data, principal)
+		if err != nil {
+			return recordCreatePlannedMutation{}, err
+		}
+		ownedParentID = owner.RecordID
+		candidate.OwnerOrgID = owner.OwnerOrgID
+	}
 	if invocation, ok := recordmutation.MutationInvocationFromContext(ctx); ok && invocation.Source == transactionmodel.MutationSourceAction {
 		if targetOrganizationID := strings.TrimSpace(invocation.TargetOrganizationID); targetOrganizationID != "" {
-			candidate.OwnerOrgID = targetOrganizationID
+			if object.AuthorizationParent != nil {
+				if candidate.OwnerOrgID != targetOrganizationID {
+					return recordCreatePlannedMutation{}, ownedRecordEffectDenied()
+				}
+			} else {
+				candidate.OwnerOrgID = targetOrganizationID
+			}
 		}
 	}
 	if s.dependencies.CanWriteCandidate != nil {
@@ -290,6 +305,15 @@ func (s *RecordCreateApplicationService) planCreate(ctx context.Context, objectK
 	}
 	if err := recordValidateOwnedEffectCandidate(ctx, object, data, principal); err != nil {
 		return recordCreatePlannedMutation{}, err
+	}
+	if object.AuthorizationParent != nil {
+		owner, err := recordOwnedEffectParent(ctx, object, data, principal)
+		if err != nil {
+			return recordCreatePlannedMutation{}, err
+		}
+		if owner.RecordID != ownedParentID || owner.OwnerOrgID != candidate.OwnerOrgID {
+			return recordCreatePlannedMutation{}, ownedRecordEffectDenied()
+		}
 	}
 	if s.dependencies.ValidateFiles != nil {
 		if err := s.dependencies.ValidateFiles(ctx, object, data, principal); err != nil {

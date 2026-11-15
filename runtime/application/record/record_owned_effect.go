@@ -10,6 +10,7 @@ import (
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
@@ -104,15 +105,22 @@ func recordValidateOwnedEffectCandidate(ctx context.Context, object definitionmo
 	if object.AuthorizationParent == nil {
 		return nil
 	}
+	_, err := recordOwnedEffectParent(ctx, object, data, principal)
+	return err
+}
+
+// The same canonical parent plan that authorizes the derived create also owns
+// its organization. Caller metadata is never an ownership source for a child.
+func recordOwnedEffectParent(ctx context.Context, object definitionmodel.ObjectSchema, data map[string]any, principal principalmodel.Principal) (recordmodel.Record, error) {
 	parent := object.AuthorizationParent
 	ownerID, valid := data[parent.RelationField].(string)
 	ownerID = strings.TrimSpace(ownerID)
 	owner, found := recordservice.RecordPlannedRelations(ctx)[parent.ObjectKey][ownerID]
 	invocation, actionOwned := recordmutation.MutationInvocationFromContext(ctx)
 	if !valid || ownerID == "" || !found || owner.RecordID != ownerID || owner.Deleted || principal.WorkspaceID == "" || owner.WorkspaceID != principal.WorkspaceID || !actionOwned || invocation.Source != transactionmodel.MutationSourceAction || len(invocation.EffectAuthority[object.Key]) == 0 {
-		return ownedRecordEffectDenied()
+		return recordmodel.Record{}, ownedRecordEffectDenied()
 	}
-	return nil
+	return owner, nil
 }
 
 func ownedRecordEffectDenied() error {
