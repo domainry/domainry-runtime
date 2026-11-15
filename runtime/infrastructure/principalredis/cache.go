@@ -1,4 +1,5 @@
-// Package principalredis stores bounded Identity principal snapshots in Redis.
+// Package principalredis coordinates bounded process-local Identity principal
+// caches through non-sensitive Redis expiry and invalidation markers.
 package principalredis
 
 import (
@@ -8,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	DefaultPrefix        = "domainry:identity:principal:v1:"
-	cacheContractVersion = "domainry-principal-cache-v1"
+	DefaultPrefix        = "domainry:identity:principal:v2:"
+	cacheContractVersion = "domainry-principal-cache-marker-v2"
 )
 
 var setEntryScript = redis.NewScript(`
@@ -44,53 +44,9 @@ redis.call('DEL', KEYS[1])
 return #entries
 `)
 
-type cacheEnvelope struct {
-	ContractVersion string             `json:"contract_version"`
-	ExpiresAt       int64              `json:"expires_at"`
-	Principal       identity.Principal `json:"principal"`
-	AccessBundle    *cacheAccessBundle `json:"access_bundle"`
-}
-
-type cacheAccessBundle identity.AccessBundle
-
-func (value cacheAccessBundle) MarshalJSON() ([]byte, error) {
-	type bundleAlias cacheAccessBundle
-	raw, err := json.Marshal(bundleAlias(value))
-	if err != nil {
-		return nil, err
-	}
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &document); err != nil {
-		return nil, err
-	}
-	document["expires_at"], err = json.Marshal(value.ExpiresAt.UTC().UnixMilli())
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(document)
-}
-
-func (value *cacheAccessBundle) UnmarshalJSON(raw []byte) error {
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &document); err != nil {
-		return err
-	}
-	var expiresAt int64
-	if err := json.Unmarshal(document["expires_at"], &expiresAt); err != nil {
-		return fmt.Errorf("decode principal-cache access bundle expiry: %w", err)
-	}
-	document["expires_at"] = json.RawMessage(strconv.Quote(time.UnixMilli(expiresAt).UTC().Format(time.RFC3339Nano)))
-	normalized, err := json.Marshal(document)
-	if err != nil {
-		return err
-	}
-	type bundleAlias cacheAccessBundle
-	var decoded bundleAlias
-	if err := json.Unmarshal(normalized, &decoded); err != nil {
-		return err
-	}
-	*value = cacheAccessBundle(decoded)
-	return nil
+type cacheMarker struct {
+	ContractVersion string `json:"contract_version"`
+	ExpiresAt       int64  `json:"expires_at"`
 }
 
 type credentialLookup struct {
@@ -99,12 +55,15 @@ type credentialLookup struct {
 	SubjectKey      string `json:"subject_key"`
 }
 
-// Cache stores only non-secret Principal and AccessBundle state. Redis owns
-// physical expiration while Resolver still enforces the signed token and
-// logical snapshot expiry on every read.
+// Cache keeps Principal and AccessBundle state only in process memory. Redis
+// stores opaque hashes, expiry markers, and subject invalidation indexes so a
+// replica can reject a stale local snapshot without persisting permission
+// bodies, bearer credentials, cookies, or refresh tokens in shared hot state.
 type Cache struct {
-	client redis.UniversalClient
-	prefix string
+	client           redis.UniversalClient
+	prefix           string
+	local            identityprincipal.Cache
+	localCredentials identityprincipal.CredentialCache
 }
 
 func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration, caCertFile string, cluster ...bool) (*Cache, error) {
@@ -135,7 +94,7 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 	pingCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	if err := client.Ping(pingCtx).Err(); err != nil {
-		_ = client.Close()
+		_ = cache.Close()
 		return nil, fmt.Errorf("connect principal-cache Redis: %w", err)
 	}
 	return cache, nil
@@ -147,7 +106,12 @@ func New(client redis.UniversalClient, prefix string) *Cache {
 	if prefix == "" {
 		prefix = DefaultPrefix
 	}
-	return &Cache{client: client, prefix: prefix}
+	local := identityprincipal.NewMemoryCache()
+	localCredentials, ok := local.(identityprincipal.CredentialCache)
+	if !ok {
+		panic("identity principal memory cache must implement credential caching")
+	}
+	return &Cache{client: client, prefix: prefix, local: local, localCredentials: localCredentials}
 }
 
 func (cache *Cache) Get(ctx context.Context, key identityprincipal.CacheKey, now time.Time) (identityprincipal.CacheEntry, bool, error) {
@@ -157,29 +121,43 @@ func (cache *Cache) Get(ctx context.Context, key identityprincipal.CacheKey, now
 	if cache == nil || cache.client == nil {
 		return identityprincipal.CacheEntry{}, false, errors.New("principal-cache Redis client is required")
 	}
-	return cache.readEntry(ctx, cache.entryKey(key), now)
+	markerExpiry, found, err := cache.readMarker(ctx, cache.entryKey(key), now)
+	if err != nil {
+		return identityprincipal.CacheEntry{}, false, err
+	}
+	if !found {
+		_ = cache.local.Delete(ctx, key)
+		return identityprincipal.CacheEntry{}, false, nil
+	}
+	entry, found, err := cache.local.Get(ctx, key, now)
+	if err != nil || !found {
+		return entry, found, err
+	}
+	if entry.ExpiresAt.UTC().UnixMilli() != markerExpiry.UTC().UnixMilli() {
+		_ = cache.local.Delete(ctx, key)
+		return identityprincipal.CacheEntry{}, false, nil
+	}
+	return entry, true, nil
 }
 
-func (cache *Cache) readEntry(ctx context.Context, redisKey string, now time.Time) (identityprincipal.CacheEntry, bool, error) {
+func (cache *Cache) readMarker(ctx context.Context, redisKey string, now time.Time) (time.Time, bool, error) {
 	encoded, err := cache.client.Get(ctx, redisKey).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return identityprincipal.CacheEntry{}, false, nil
+		return time.Time{}, false, nil
 	}
 	if err != nil {
-		return identityprincipal.CacheEntry{}, false, fmt.Errorf("read Redis principal cache: %w", err)
+		return time.Time{}, false, fmt.Errorf("read Redis principal-cache marker: %w", err)
 	}
-	var envelope cacheEnvelope
-	if err := json.Unmarshal(encoded, &envelope); err != nil {
+	var marker cacheMarker
+	if err := json.Unmarshal(encoded, &marker); err != nil {
 		_ = cache.client.Del(ctx, redisKey).Err()
-		return identityprincipal.CacheEntry{}, false, fmt.Errorf("decode Redis principal cache: %w", err)
+		return time.Time{}, false, fmt.Errorf("decode Redis principal-cache marker: %w", err)
 	}
-	if envelope.ContractVersion != cacheContractVersion || envelope.AccessBundle == nil || now.UTC().UnixMilli() >= envelope.ExpiresAt {
+	if marker.ContractVersion != cacheContractVersion || now.UTC().UnixMilli() >= marker.ExpiresAt {
 		_ = cache.client.Del(ctx, redisKey).Err()
-		return identityprincipal.CacheEntry{}, false, nil
+		return time.Time{}, false, nil
 	}
-	bundle := identity.AccessBundle(*envelope.AccessBundle)
-	envelope.Principal.AccessBundle = &bundle
-	return identityprincipal.CacheEntry{Principal: envelope.Principal, ExpiresAt: time.UnixMilli(envelope.ExpiresAt).UTC()}, true, nil
+	return time.UnixMilli(marker.ExpiresAt).UTC(), true, nil
 }
 
 func (cache *Cache) Set(ctx context.Context, key identityprincipal.CacheKey, entry identityprincipal.CacheEntry, now time.Time) error {
@@ -192,27 +170,26 @@ func (cache *Cache) Set(ctx context.Context, key identityprincipal.CacheKey, ent
 	if entry.Principal.AccessBundle == nil {
 		return errors.New("principal-cache AccessBundle is required")
 	}
-	ttl := entry.ExpiresAt.Sub(now)
-	if ttl <= 0 {
+	if !entry.ExpiresAt.After(now) {
 		return cache.Delete(ctx, key)
 	}
-	bundle := cacheAccessBundle(*entry.Principal.AccessBundle)
-	envelope := cacheEnvelope{
-		ContractVersion: cacheContractVersion,
-		ExpiresAt:       entry.ExpiresAt.UTC().UnixMilli(),
-		Principal:       entry.Principal,
-		AccessBundle:    &bundle,
+	if err := cache.writeMarker(ctx, cache.entryKey(key), cache.subjectKey(key.SubjectID, key.WorkspaceID), entry.ExpiresAt, now); err != nil {
+		return err
 	}
-	encoded, err := json.Marshal(envelope)
-	if err != nil {
-		return fmt.Errorf("encode Redis principal cache: %w", err)
-	}
-	ttlMillis := ttl.Milliseconds()
+	return cache.local.Set(ctx, key, entry, now)
+}
+
+func (cache *Cache) writeMarker(ctx context.Context, entryKey, subjectKey string, expiresAt, now time.Time) error {
+	ttlMillis := expiresAt.Sub(now).Milliseconds()
 	if ttlMillis < 1 {
 		ttlMillis = 1
 	}
-	if err := setEntryScript.Run(ctx, cache.client, []string{cache.entryKey(key), cache.subjectKey(key.SubjectID, key.WorkspaceID)}, encoded, ttlMillis).Err(); err != nil {
-		return fmt.Errorf("write Redis principal cache: %w", err)
+	encoded, err := json.Marshal(cacheMarker{ContractVersion: cacheContractVersion, ExpiresAt: expiresAt.UTC().UnixMilli()})
+	if err != nil {
+		return fmt.Errorf("encode Redis principal-cache marker: %w", err)
+	}
+	if err := setEntryScript.Run(ctx, cache.client, []string{entryKey, subjectKey}, encoded, ttlMillis).Err(); err != nil {
+		return fmt.Errorf("write Redis principal-cache marker: %w", err)
 	}
 	return nil
 }
@@ -228,10 +205,12 @@ func (cache *Cache) Delete(ctx context.Context, key identityprincipal.CacheKey) 
 	pipe := cache.client.TxPipeline()
 	pipe.Del(ctx, entryKey)
 	pipe.SRem(ctx, cache.subjectKey(key.SubjectID, key.WorkspaceID), entryKey)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return fmt.Errorf("delete Redis principal cache: %w", err)
+	_, redisErr := pipe.Exec(ctx)
+	localErr := cache.local.Delete(ctx, key)
+	if redisErr != nil {
+		redisErr = fmt.Errorf("delete Redis principal-cache marker: %w", redisErr)
 	}
-	return nil
+	return errors.Join(redisErr, localErr)
 }
 
 func (cache *Cache) Invalidate(ctx context.Context, subject identity.SubjectID, workspace identity.WorkspaceID) error {
@@ -241,10 +220,12 @@ func (cache *Cache) Invalidate(ctx context.Context, subject identity.SubjectID, 
 	if cache == nil || cache.client == nil {
 		return errors.New("principal-cache Redis client is required")
 	}
-	if err := invalidateSubjectScript.Run(ctx, cache.client, []string{cache.subjectKey(subject, workspace)}).Err(); err != nil {
-		return fmt.Errorf("invalidate Redis principal cache: %w", err)
+	redisErr := invalidateSubjectScript.Run(ctx, cache.client, []string{cache.subjectKey(subject, workspace)}).Err()
+	localErr := cache.local.Invalidate(ctx, subject, workspace)
+	if redisErr != nil {
+		redisErr = fmt.Errorf("invalidate Redis principal-cache markers: %w", redisErr)
 	}
-	return nil
+	return errors.Join(redisErr, localErr)
 }
 
 func (cache *Cache) GetCredential(ctx context.Context, key identityprincipal.CredentialCacheKey, now time.Time) (identityprincipal.CacheEntry, bool, error) {
@@ -257,27 +238,36 @@ func (cache *Cache) GetCredential(ctx context.Context, key identityprincipal.Cre
 	lookupKey := cache.credentialLookupKey(key)
 	encoded, err := cache.client.Get(ctx, lookupKey).Bytes()
 	if errors.Is(err, redis.Nil) {
+		_ = cache.localCredentials.DeleteCredential(ctx, key)
 		return identityprincipal.CacheEntry{}, false, nil
 	}
 	if err != nil {
 		return identityprincipal.CacheEntry{}, false, fmt.Errorf("read Redis credential-cache lookup: %w", err)
 	}
-	var lookup credentialLookup
-	if err := json.Unmarshal(encoded, &lookup); err != nil || lookup.ContractVersion != cacheContractVersion || !strings.HasPrefix(lookup.EntryKey, cache.prefix) || !strings.HasPrefix(lookup.SubjectKey, cache.prefix) {
+	lookup, err := cache.decodeCredentialLookup(encoded)
+	if err != nil {
 		_ = cache.client.Del(ctx, lookupKey).Err()
-		if err != nil {
-			return identityprincipal.CacheEntry{}, false, fmt.Errorf("decode Redis credential-cache lookup: %w", err)
-		}
-		return identityprincipal.CacheEntry{}, false, nil
+		_ = cache.localCredentials.DeleteCredential(ctx, key)
+		return identityprincipal.CacheEntry{}, false, err
 	}
-	entry, found, err := cache.readEntry(ctx, lookup.EntryKey, now)
+	markerExpiry, found, err := cache.readMarker(ctx, lookup.EntryKey, now)
 	if err != nil {
 		return identityprincipal.CacheEntry{}, false, err
 	}
 	if !found {
 		_ = cache.client.Del(ctx, lookupKey).Err()
+		_ = cache.localCredentials.DeleteCredential(ctx, key)
+		return identityprincipal.CacheEntry{}, false, nil
 	}
-	return entry, found, nil
+	entry, found, err := cache.localCredentials.GetCredential(ctx, key, now)
+	if err != nil || !found {
+		return entry, found, err
+	}
+	if entry.ExpiresAt.UTC().UnixMilli() != markerExpiry.UTC().UnixMilli() {
+		_ = cache.localCredentials.DeleteCredential(ctx, key)
+		return identityprincipal.CacheEntry{}, false, nil
+	}
+	return entry, true, nil
 }
 
 func (cache *Cache) SetCredential(ctx context.Context, key identityprincipal.CredentialCacheKey, entry identityprincipal.CacheEntry, now time.Time) error {
@@ -299,20 +289,10 @@ func (cache *Cache) SetCredential(ctx context.Context, key identityprincipal.Cre
 	if ttl <= 0 {
 		return cache.DeleteCredential(ctx, key)
 	}
-	bundle := cacheAccessBundle(*entry.Principal.AccessBundle)
-	envelope := cacheEnvelope{ContractVersion: cacheContractVersion, ExpiresAt: entry.ExpiresAt.UTC().UnixMilli(), Principal: entry.Principal, AccessBundle: &bundle}
-	encoded, err := json.Marshal(envelope)
-	if err != nil {
-		return fmt.Errorf("encode Redis credential cache: %w", err)
-	}
 	entryKey := cache.credentialEntryKey(key, subject, workspace)
 	subjectKey := cache.subjectKey(subject, workspace)
-	ttlMillis := ttl.Milliseconds()
-	if ttlMillis < 1 {
-		ttlMillis = 1
-	}
-	if err := setEntryScript.Run(ctx, cache.client, []string{entryKey, subjectKey}, encoded, ttlMillis).Err(); err != nil {
-		return fmt.Errorf("write Redis credential cache: %w", err)
+	if err := cache.writeMarker(ctx, entryKey, subjectKey, entry.ExpiresAt, now); err != nil {
+		return err
 	}
 	lookup, err := json.Marshal(credentialLookup{ContractVersion: cacheContractVersion, EntryKey: entryKey, SubjectKey: subjectKey})
 	if err != nil {
@@ -321,7 +301,7 @@ func (cache *Cache) SetCredential(ctx context.Context, key identityprincipal.Cre
 	if err := cache.client.Set(ctx, cache.credentialLookupKey(key), lookup, ttl).Err(); err != nil {
 		return fmt.Errorf("write Redis credential-cache lookup: %w", err)
 	}
-	return nil
+	return cache.localCredentials.SetCredential(ctx, key, entry, now)
 }
 
 func (cache *Cache) DeleteCredential(ctx context.Context, key identityprincipal.CredentialCacheKey) error {
@@ -334,33 +314,45 @@ func (cache *Cache) DeleteCredential(ctx context.Context, key identityprincipal.
 	lookupKey := cache.credentialLookupKey(key)
 	encoded, err := cache.client.Get(ctx, lookupKey).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return nil
+		return cache.localCredentials.DeleteCredential(ctx, key)
 	}
 	if err != nil {
 		return fmt.Errorf("read Redis credential-cache lookup for deletion: %w", err)
 	}
-	var lookup credentialLookup
-	if err := json.Unmarshal(encoded, &lookup); err != nil || lookup.ContractVersion != cacheContractVersion || !strings.HasPrefix(lookup.EntryKey, cache.prefix) || !strings.HasPrefix(lookup.SubjectKey, cache.prefix) {
-		_ = cache.client.Del(ctx, lookupKey).Err()
-		if err != nil {
-			return fmt.Errorf("decode Redis credential-cache lookup for deletion: %w", err)
-		}
-		return nil
+	lookup, decodeErr := cache.decodeCredentialLookup(encoded)
+	if decodeErr != nil {
+		redisErr := cache.client.Del(ctx, lookupKey).Err()
+		localErr := cache.localCredentials.DeleteCredential(ctx, key)
+		return errors.Join(decodeErr, redisErr, localErr)
 	}
-	_, err = cache.client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+	_, redisErr := cache.client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.Del(ctx, lookupKey)
 		pipe.Del(ctx, lookup.EntryKey)
 		pipe.SRem(ctx, lookup.SubjectKey, lookup.EntryKey)
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("delete Redis credential cache: %w", err)
+	localErr := cache.localCredentials.DeleteCredential(ctx, key)
+	if redisErr != nil {
+		redisErr = fmt.Errorf("delete Redis credential-cache marker: %w", redisErr)
 	}
-	return nil
+	return errors.Join(redisErr, localErr)
+}
+
+func (cache *Cache) decodeCredentialLookup(encoded []byte) (credentialLookup, error) {
+	var lookup credentialLookup
+	if err := json.Unmarshal(encoded, &lookup); err != nil {
+		return credentialLookup{}, fmt.Errorf("decode Redis credential-cache lookup: %w", err)
+	}
+	if lookup.ContractVersion != cacheContractVersion ||
+		!strings.HasPrefix(lookup.EntryKey, cache.prefix) ||
+		!strings.HasPrefix(lookup.SubjectKey, cache.prefix) {
+		return credentialLookup{}, errors.New("decode Redis credential-cache lookup: invalid contract or key scope")
+	}
+	return lookup, nil
 }
 
 func (cache *Cache) entryKey(key identityprincipal.CacheKey) string {
-	return cache.subjectPrefix(key.SubjectID, key.WorkspaceID) + "entry:" + digest(string(key.AuthorizationRevision), key.TokenID)
+	return cache.subjectPrefix(key.SubjectID, key.WorkspaceID) + "entry:" + digest(string(key.AuthorizationRevision), key.ScopeRevision, key.TokenID)
 }
 
 func (cache *Cache) subjectKey(subject identity.SubjectID, workspace identity.WorkspaceID) string {
@@ -390,10 +382,18 @@ func digest(parts ...string) string {
 }
 
 func (cache *Cache) Close() error {
-	if cache == nil || cache.client == nil {
+	if cache == nil {
 		return nil
 	}
-	return cache.client.Close()
+	var localErr error
+	if closer, ok := cache.local.(interface{ Close() error }); ok {
+		localErr = closer.Close()
+	}
+	var redisErr error
+	if cache.client != nil {
+		redisErr = cache.client.Close()
+	}
+	return errors.Join(localErr, redisErr)
 }
 
 var _ identityprincipal.Cache = (*Cache)(nil)

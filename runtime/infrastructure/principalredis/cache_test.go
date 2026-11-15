@@ -11,7 +11,7 @@ import (
 	redis "github.com/redis/go-redis/v9"
 )
 
-func TestCacheRoundTripPreservesAccessBundleAndExpiry(t *testing.T) {
+func TestCacheRoundTripKeepsAccessBundleLocalAndRedisMarkerBounded(t *testing.T) {
 	server := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
@@ -38,8 +38,10 @@ func TestCacheRoundTripPreservesAccessBundleAndExpiry(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(value, "access-token") {
-				t.Fatalf("Redis cache exposed an access token: %q", value)
+			for _, forbidden := range []string{"access-token", "workspace-1", "user-1", "orders", "access_bundle", "function_grants", "data_policies"} {
+				if strings.Contains(value, forbidden) {
+					t.Fatalf("Redis marker exposed principal or permission material %q: %q", forbidden, value)
+				}
 			}
 		}
 	}
@@ -50,6 +52,50 @@ func TestCacheRoundTripPreservesAccessBundleAndExpiry(t *testing.T) {
 	server.FastForward(time.Minute)
 	if _, found, err := cache.Get(t.Context(), key, now.Add(5*time.Minute)); err != nil || found {
 		t.Fatalf("cache read extended absolute expiry: found=%v err=%v", found, err)
+	}
+}
+
+func TestCacheDoesNotSharePermissionBodiesAcrossProcesses(t *testing.T) {
+	server := miniredis.RunT(t)
+	firstClient := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	secondClient := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	first := New(firstClient, "test:principal:")
+	second := New(secondClient, "test:principal:")
+	t.Cleanup(func() {
+		_ = first.Close()
+		_ = second.Close()
+	})
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	key := identityprincipal.CacheKey{WorkspaceID: "workspace-1", SubjectID: "user-1", AuthorizationRevision: "revision-1", ScopeRevision: "scope-1", TokenID: "token-1"}
+	entry := cacheTestEntry(now.Add(5 * time.Minute))
+	if err := first.Set(t.Context(), key, entry, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := second.Get(t.Context(), key, now); err != nil || found {
+		t.Fatalf("a separate process reconstructed permission state from Redis: found=%v err=%v", found, err)
+	}
+	if err := second.Set(t.Context(), key, entry, now); err != nil {
+		t.Fatal(err)
+	}
+	if resolved, found, err := second.Get(t.Context(), key, now); err != nil || !found || !resolved.Principal.HasPermission("orders.read") {
+		t.Fatalf("second process local cache was not populated: found=%v err=%v resolved=%#v", found, err, resolved)
+	}
+	for _, redisKey := range server.Keys() {
+		value, err := server.Get(redisKey)
+		if err != nil {
+			continue
+		}
+		for _, forbidden := range []string{"workspace-1", "user-1", "orders", "revision-1", "scope-1", "token-1", "function_grants", "data_policies"} {
+			if strings.Contains(value, forbidden) {
+				t.Fatalf("Redis value %q exposed shared permission material %q: %q", redisKey, forbidden, value)
+			}
+		}
+	}
+	if err := first.Invalidate(t.Context(), "user-1", "workspace-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, err := second.Get(t.Context(), key, now); err != nil || found {
+		t.Fatalf("cross-process invalidation did not reject the local snapshot: found=%v err=%v", found, err)
 	}
 }
 
@@ -112,12 +158,32 @@ func TestCredentialCacheRoundTripAndSubjectInvalidation(t *testing.T) {
 		if strings.Contains(redisKey, string(key)) || strings.Contains(redisKey, "workspace-1") || strings.Contains(redisKey, "user-1") {
 			t.Fatalf("Redis credential cache exposed raw key material in %q", redisKey)
 		}
+		value, err := server.Get(redisKey)
+		if err != nil {
+			continue
+		}
+		for _, forbidden := range []string{"workspace-1", "user-1", "orders", "function_grants", "data_policies"} {
+			if strings.Contains(value, forbidden) {
+				t.Fatalf("Redis credential marker exposed principal or permission material %q: %q", forbidden, value)
+			}
+		}
 	}
 	if err := cache.Invalidate(t.Context(), "user-1", "workspace-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := cache.GetCredential(t.Context(), key, now); err != nil || found {
 		t.Fatalf("invalidated credential remained found=%v err=%v", found, err)
+	}
+}
+
+func TestCacheKeySeparatesScopeRevisions(t *testing.T) {
+	cache := New(redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"}), "test:principal:")
+	t.Cleanup(func() { _ = cache.Close() })
+	first := identityprincipal.CacheKey{WorkspaceID: "workspace-1", SubjectID: "user-1", AuthorizationRevision: "revision-1", ScopeRevision: "scope-1", TokenID: "token-1"}
+	second := first
+	second.ScopeRevision = "scope-2"
+	if cache.entryKey(first) == cache.entryKey(second) {
+		t.Fatal("scope revisions collided in the Redis marker key")
 	}
 }
 

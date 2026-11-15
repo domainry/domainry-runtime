@@ -266,7 +266,7 @@ func FromEnv() Config {
 		PrincipalCacheTTL:                               durationEnv("PRINCIPAL_CACHE_TTL", identityprincipal.DefaultMaxCacheTTL),
 		PrincipalCacheRedisURL:                          strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_URL")),
 		PrincipalCacheRedisCACertFile:                   strings.TrimSpace(os.Getenv("PRINCIPAL_CACHE_REDIS_CA_CERT_FILE")),
-		PrincipalCacheRedisPrefix:                       env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v1:"),
+		PrincipalCacheRedisPrefix:                       env("PRINCIPAL_CACHE_REDIS_PREFIX", "domainry:identity:principal:v2:"),
 		PrincipalCacheRedisConnectTimeout:               durationEnv("PRINCIPAL_CACHE_REDIS_CONNECT_TIMEOUT", 2*time.Second),
 		PrincipalCacheRedisCluster:                      boolEnv("PRINCIPAL_CACHE_REDIS_CLUSTER", false),
 		CapacityGlobalInFlight:                          intEnv("CAPACITY_GLOBAL_IN_FLIGHT", 256),

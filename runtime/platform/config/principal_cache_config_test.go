@@ -8,7 +8,7 @@ import (
 
 func TestIdentityPrincipalCacheConfigDefaultsToLocalFiveMinutes(t *testing.T) {
 	cfg := FromEnv()
-	if cfg.PrincipalCacheBackend != "local" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisPrefix != "domainry:identity:principal:v1:" {
+	if cfg.PrincipalCacheBackend != "local" || cfg.PrincipalCacheTTL != 5*time.Minute || cfg.PrincipalCacheRedisPrefix != "domainry:identity:principal:v2:" {
 		t.Fatalf("config=%#v", cfg)
 	}
 }
