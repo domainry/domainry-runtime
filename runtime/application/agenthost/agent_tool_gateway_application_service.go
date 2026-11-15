@@ -57,6 +57,7 @@ type AgentToolGatewayDependencies struct {
 	Queries       AgentToolQueryPort
 	Actions       AgentToolActionPort
 	Risk          AgentToolRiskPolicy
+	Knowledge     AgentToolKnowledgePort
 	RateLimiter   ratelimit.Limiter
 }
 
@@ -136,6 +137,20 @@ func (g *AgentToolGateway) Invoke(ctx context.Context, request AgentToolInvocati
 		defer cancel()
 	}
 	switch request.Tool {
+	case agentsdk.AgentToolKnowledgeSearch, agentsdk.AgentToolKnowledgeRead:
+		if g.dependencies.Knowledge == nil {
+			return result, apperror.New(apperror.KindUnavailable, "agent.tool.knowledge_unavailable", nil, nil)
+		}
+		libraryID, value, inputErr := agentKnowledgeToolInput(request.Tool, request.Input)
+		if inputErr != nil {
+			return result, inputErr
+		}
+		if request.Tool == agentsdk.AgentToolKnowledgeSearch {
+			result.Output, err = g.dependencies.Knowledge.SearchAgentKnowledge(ctx, libraryID, value, authorization.Principal)
+		} else {
+			result.Output, err = g.dependencies.Knowledge.ReadAgentKnowledge(ctx, libraryID, value, authorization.Principal)
+		}
+		result.Status = "executed"
 	case AgentToolQueryRecords:
 		if g.dependencies.Queries == nil {
 			return result, apperror.New(apperror.KindUnavailable, "agent.tool.query_unavailable", nil, nil)

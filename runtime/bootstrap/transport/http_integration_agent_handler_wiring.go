@@ -63,6 +63,7 @@ type AgentApplicationHostDependencies struct {
 	ConversationCodeRuntime   agentsdk.ConversationCodeRuntime
 	ConversationCodingRuntime agentsdk.ConversationCodingRuntime
 	ConversationToolsFactory  toolsdk.ConversationToolFactory
+	TaskKnowledge             AgentTaskKnowledgeSource
 }
 
 // BindAgentApplicationHost closes Agent's application boundary before Runtime
@@ -93,6 +94,7 @@ func BindAgentApplicationHost(dependencies AgentApplicationHostDependencies) err
 		Authorization: applications.AgentAuthorization, Credentials: credentials,
 		Queries: agentTaskToolQueryAdapter{records: applications.Records}, Actions: agentTaskToolActionAdapter{actions: applications.Actions},
 		Risk: agentTaskToolRiskAdapter{actions: applications.Actions}, RateLimiter: dependencies.RateLimiter,
+		Knowledge: agentTaskKnowledgeAdapter{source: dependencies.TaskKnowledge, runtimeID: dependencies.RuntimeID},
 	})
 	interactive := runtimeAgentInteractiveHost{
 		authorization: applications.AgentAuthorization, tools: tools, workflows: applications.Workflows,
@@ -196,6 +198,7 @@ func (a *httpServerAssembly) bindAgentApplicationHost() {
 		IdentityIssuer:           a.dependencies.IdentityBinding.Descriptor().Issuer,
 		NotificationEvents:       a.dependencies.Records.NotificationEventPublisher(),
 		ConversationToolsFactory: a.dependencies.ConversationToolsFactory,
+		TaskKnowledge:            TaskKnowledgeSource(a.dependencies.KnowledgeSearch),
 	}); err != nil {
 		panic(err.Error())
 	}

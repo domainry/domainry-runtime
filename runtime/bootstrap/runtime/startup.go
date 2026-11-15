@@ -441,6 +441,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		ConversationCodeRuntime:   startupOptions.ConversationCodeRuntime,
 		ConversationCodingRuntime: startupOptions.ConversationCodingRuntime,
 		ConversationToolsFactory:  startupOptions.ConversationToolsFactory,
+		TaskKnowledge:             transportbootstrap.TaskKnowledgeSource(knowledgeOwner.retrieval),
 	}))
 	if agentBinding != nil && agentBinding.Descriptor().HasCapability(agentsdk.CapabilityScheduledConversationTask) {
 		conversations, ok := agentBinding.(agentsdk.ConversationBinding)

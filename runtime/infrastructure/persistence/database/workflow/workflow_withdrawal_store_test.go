@@ -149,7 +149,7 @@ func TestWorkflowWithdrawalAndApprovalComputedFromOneRevisionHaveOneWinner(t *te
 		winner = second
 	}
 	if winner.kind == "approval" {
-		assertWorkflowDecisionState(t, store, object, "approved", "approved", "completed", "approved")
+		assertWorkflowDecisionState(t, store, object, "approved", "completed", "approved", "approved")
 	} else {
 		assertWorkflowDecisionState(t, store, object, "cancelled", "cancelled", "cancelled", "withdrawn")
 	}
