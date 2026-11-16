@@ -74,7 +74,11 @@ func (a agentTaskToolQueryAdapter) expandRelations(ctx context.Context, objectKe
 		}
 		items = append(items, map[string]any{"record": record, "relations": related})
 	}
-	return map[string]any{"items": items, "page": page.Page, "page_size": page.PageSize, "total": page.Total, "has_next": page.HasNext}, nil
+	result := map[string]any{"items": items, "page": page.Page, "page_size": page.PageSize, "total": page.Total, "has_next": page.HasNext}
+	if page.NextAfterID != "" {
+		result["next_after_id"] = page.NextAfterID
+	}
+	return result, nil
 }
 
 type agentRelationRequest struct {
@@ -85,6 +89,15 @@ type agentRelationRequest struct {
 
 func decodeAgentRecordQuery(raw map[string]any, scope agentapplication.AgentToolFieldScope) (recordmodel.RecordListQuery, []agentRelationRequest, error) {
 	query := recordmodel.RecordListQuery{Page: agentToolInt(raw["page"], 1), PageSize: agentToolInt(raw["page_size"], 20), Search: strings.TrimSpace(fmt.Sprint(raw["search"])), Filters: agentToolMapValue(raw["filters"])}
+	if value := raw["after_id"]; value != nil {
+		cursor, ok := value.(string)
+		if !ok {
+			return query, nil, apperror.New(apperror.KindBadRequest, "agent.tool.query_invalid", nil, nil)
+		}
+		// The Record service owns cursor validity, ordering and row authorization.
+		// Forward its opaque next_after_id without replacing that policy here.
+		query.AfterID = strings.TrimSpace(cursor)
+	}
 	if query.Page < 1 {
 		return query, nil, apperror.New(apperror.KindBadRequest, "agent.tool.query_invalid", nil, nil)
 	}
