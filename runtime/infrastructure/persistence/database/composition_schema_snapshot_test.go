@@ -31,7 +31,6 @@ import (
 	runtimeschema "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/schema"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
-	todomodule "github.com/domainry/domainry-todo/module"
 )
 
 type schemaComposition string
@@ -109,8 +108,6 @@ func openCompositionSchemaStore(t *testing.T, composition schemaComposition) *Ru
 		applyORMMigrations(t, store, knowledgemodule.MigrationOwner, mustMigrations(t, knowledgeMigrations, err))
 		recordMigrations, err := knowledgemodule.RecordSchemaMigrations(store.SQLRenderer)
 		applyORMMigrations(t, store, knowledgemodule.RecordMigrationOwner, mustMigrations(t, recordMigrations, err))
-		todoMigrations, err := todomodule.SchemaMigrations(store.SQLRenderer)
-		applyORMMigrations(t, store, todomodule.MigrationOwner, mustMigrations(t, todoMigrations, err))
 	}
 	return store
 }
@@ -225,7 +222,7 @@ func expectedCompositionTables(t *testing.T, composition schemaComposition) []st
 		appendOwned(integrationmodule.SchemaOwnership(), notificationmodule.SchemaOwnership(), lifecyclemodule.SchemaOwnership(), schedulermodule.SchemaOwnership(), dataexchangemodule.SchemaOwnership(), reportmodule.SchemaOwnership())
 	}
 	if composition == fullAgentComposition {
-		appendOwned(agentmodule.SchemaOwnership(), knowledgemodule.SchemaOwnership(), todomodule.SchemaOwnership())
+		appendOwned(agentmodule.SchemaOwnership(), knowledgemodule.SchemaOwnership())
 	}
 	sort.Strings(tables)
 	for index := 1; index < len(tables); index++ {
@@ -238,7 +235,7 @@ func expectedCompositionTables(t *testing.T, composition schemaComposition) []st
 
 func TestCompositionSnapshotCountsRemainStable(t *testing.T) {
 	for composition, want := range map[schemaComposition]int{
-		minimalComposition: 44, fullNoAgentComposition: 88, fullAgentComposition: 159,
+		minimalComposition: 44, fullNoAgentComposition: 88, fullAgentComposition: 158,
 	} {
 		if got := len(expectedCompositionTables(t, composition)); got != want {
 			t.Fatalf("%s target table count=%d want=%d", composition, got, want)

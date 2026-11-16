@@ -19,11 +19,10 @@ func TestProjectMainCompilesUsingOnlyGeneratedCompositionAndRuntimehost(t *testi
 		repositoryRoot,
 		externalRoot,
 		"example.com/domainry-project",
-		"github.com/domainry/domainry-connectors",
-		"github.com/domainry/domainry-integration",
-		"github.com/domainry/domainry-knowledge-sdk",
-		"github.com/domainry/domainry-monitoring",
-		"github.com/domainry/domainry-scheduler",
+		map[string]string{
+			"github.com/domainry/domainry-connectors": "v0.1.30",
+			"github.com/domainry/domainry-monitoring": "v0.1.35",
+		},
 	)
 
 	compositionDir := filepath.Join(externalRoot, "generated", "composition")
@@ -90,9 +89,6 @@ func TestProjectMainCompilesUsingSaaSFactoryWithoutIdentityModule(t *testing.T) 
 		repositoryRoot,
 		externalRoot,
 		"example.com/domainry-saas-project",
-		"github.com/domainry/domainry-integration",
-		"github.com/domainry/domainry-knowledge-sdk",
-		"github.com/domainry/domainry-scheduler",
 	)
 
 	compositionDir := filepath.Join(externalRoot, "generated", "composition")
@@ -152,7 +148,7 @@ func externalProjectRepositoryRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 }
 
-func writePinnedExternalProjectGoMod(t *testing.T, repositoryRoot, externalRoot, modulePath string, additionalWorkspaceModules ...string) {
+func writePinnedExternalProjectGoMod(t *testing.T, repositoryRoot, externalRoot, modulePath string, additionalModules ...map[string]string) {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(repositoryRoot, "go.mod"))
 	if err != nil {
@@ -172,7 +168,6 @@ func writePinnedExternalProjectGoMod(t *testing.T, repositoryRoot, externalRoot,
 	if err := generated.AddRequire("github.com/domainry/domainry-runtime", "v0.0.0"); err != nil {
 		t.Fatal(err)
 	}
-	replaced := map[string]struct{}{}
 	for _, requirement := range pinned.Require {
 		if requirement.Indirect || requirement.Mod.Path == "github.com/domainry/domainry-runtime" || !strings.HasPrefix(requirement.Mod.Path, "github.com/domainry/") {
 			continue
@@ -180,29 +175,18 @@ func writePinnedExternalProjectGoMod(t *testing.T, repositoryRoot, externalRoot,
 		if err := generated.AddRequire(requirement.Mod.Path, requirement.Mod.Version); err != nil {
 			t.Fatal(err)
 		}
-		workspacePath := filepath.Join(filepath.Dir(repositoryRoot), strings.TrimPrefix(requirement.Mod.Path, "github.com/domainry/"))
-		if info, statErr := os.Stat(workspacePath); statErr == nil && info.IsDir() {
-			if err := generated.AddReplace(requirement.Mod.Path, "", workspacePath, ""); err != nil {
+	}
+	// Test consumers use the published dependency versions, independent of
+	// unrelated sibling checkouts on the developer's machine.
+	for _, modules := range additionalModules {
+		for path, version := range modules {
+			if err := generated.AddRequire(path, version); err != nil {
 				t.Fatal(err)
 			}
-			replaced[requirement.Mod.Path] = struct{}{}
 		}
 	}
-	for _, workspaceModule := range additionalWorkspaceModules {
-		if _, exists := replaced[workspaceModule]; exists {
-			continue
-		}
-		workspacePath := filepath.Join(filepath.Dir(repositoryRoot), strings.TrimPrefix(workspaceModule, "github.com/domainry/"))
-		if info, statErr := os.Stat(workspacePath); statErr != nil || !info.IsDir() {
-			continue
-		}
-		if err := generated.AddRequire(workspaceModule, "v0.0.0"); err != nil {
-			t.Fatal(err)
-		}
-		if err := generated.AddReplace(workspaceModule, "", workspacePath, ""); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// Only Runtime itself is under test; dependencies remain package based.
+
 	if err := generated.AddReplace("github.com/domainry/domainry-runtime", "", repositoryRoot, ""); err != nil {
 		t.Fatal(err)
 	}

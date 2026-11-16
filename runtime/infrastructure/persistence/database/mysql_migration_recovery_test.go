@@ -28,7 +28,6 @@ import (
 	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/mysql"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
 	schedulermodule "github.com/domainry/domainry-scheduler/module"
-	todomodule "github.com/domainry/domainry-todo/module"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
@@ -88,8 +87,6 @@ func currentMySQLMigrationGroups(t *testing.T) map[string][]ormmigration.Migrati
 	checkMySQLMigrationGroup(t, groups, "agent", err)
 	groups["knowledge"], err = knowledgemodule.SchemaMigrations(renderer)
 	checkMySQLMigrationGroup(t, groups, "knowledge", err)
-	groups["todo"], err = todomodule.SchemaMigrations(renderer)
-	checkMySQLMigrationGroup(t, groups, "todo", err)
 	dataExchange, err := dataexchangemodule.SchemaMigrations("mysql", "")
 	if err != nil {
 		t.Fatal(err)
