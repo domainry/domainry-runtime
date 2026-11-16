@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
 	github.com/aws/smithy-go v1.28.1
 	github.com/creack/pty v1.1.24
-	github.com/domainry/domainry-agent v0.1.101
+	github.com/domainry/domainry-agent v0.1.102
 	github.com/domainry/domainry-agent-sdk v0.1.59
 	github.com/domainry/domainry-audit v0.1.46
 	github.com/domainry/domainry-audit-sdk v0.1.22
