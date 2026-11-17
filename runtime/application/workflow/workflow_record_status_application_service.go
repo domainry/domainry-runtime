@@ -19,7 +19,7 @@ type RecordWorkflowStatus struct {
 	StartedAt, UpdatedAt, CompletedAt         int64
 }
 
-var recordWorkflowErrorCode = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,159}$`)
+var workflowMetadataErrorCode = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,159}$`)
 
 func (s *WorkflowApplicationService) ReadRecordWorkflow(ctx context.Context, principal principalmodel.Principal, objectKey, recordID, workflowKey string) (RecordWorkflowStatus, error) {
 	if err := workflowAuthorizeQuery(principal); err != nil {
@@ -82,7 +82,7 @@ func (s *WorkflowApplicationService) ReadRecordWorkflow(ctx context.Context, pri
 	errorCode := ""
 	if p.Status == "failed" || p.Status == "configuration_error" {
 		errorCode = p.ErrorCode
-		if errorCode != "" && !recordWorkflowErrorCode.MatchString(errorCode) {
+		if errorCode != "" && !workflowMetadataErrorCode.MatchString(errorCode) {
 			return RecordWorkflowStatus{}, internalError("record Workflow error code invalid", nil)
 		}
 	}

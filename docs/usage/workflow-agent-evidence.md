@@ -56,3 +56,20 @@ Consumers keep persisted business state separate from execution state. A failed
 process may coexist with a pending result record, and a successful Task does not
 prove its result Action committed. This API cannot rerun a Task, repair state,
 route work, or authorize any administrative recovery operation.
+
+## Preparation failures
+
+The additive `runtimeext-v66` contract distinguishes a failed Task preparation
+from a Native Task completion. A persisted source node stopped during dispatch
+may return `Available=false` with `PreparationFailure`: exact Workflow/process,
+node and planned Task identity, safe error code and UTC Unix-millisecond stop
+time. There is no Task run reference, model, tool ledger or completion outcome.
+This records a preparation stop without claiming a Native Task was created or
+completed; an uncertain start still requires reconciliation by its owner.
+
+Only the source Task node's declared `OnError=error_branch` continuation may
+read this projection. Current Workflow Action/target/workspace checks still
+apply. Missing/corrupt stop metadata or a successful/foreign continuation fails
+closed. Task dispatch errors and invalid start results follow that error branch
+only after the failed node was durably saved. Failure persistence errors and
+`OnError=fail` continue to fail the Workflow; no result write is fabricated.

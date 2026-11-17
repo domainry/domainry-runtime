@@ -109,8 +109,8 @@ func TestWorkflowEvidenceMissingCompletionStaysUnavailable(t *testing.T) {
 		t.Fatal("waiting Task fabricated receipt", proof, err)
 	}
 	r.nodes["process"][0].Status = "configuration_error"
-	if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err != nil || proof.Available || proof.TaskRunID != "" {
-		t.Fatal("failed preparation fabricated receipt", proof, err)
+	if proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || proof.Available || proof.TaskRunID != "" || proof.PreparationFailure != nil {
+		t.Fatal("incomplete preparation stop fabricated evidence", proof, err)
 	}
 }
 

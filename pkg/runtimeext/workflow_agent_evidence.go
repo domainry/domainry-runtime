@@ -38,22 +38,37 @@ type WorkflowAgentToolEvidence struct {
 // This is owner-proven execution metadata, never model output. It deliberately
 // excludes task input/output, provider content, credentials and grant bundles.
 type WorkflowAgentTaskEvidence struct {
-	Available        bool                        `json:"available"`
-	TaskRunID        string                      `json:"task_run_id,omitempty"`
-	ProcessID        string                      `json:"process_id,omitempty"`
-	NodeID           string                      `json:"node_id,omitempty"`
-	NodeInstanceID   string                      `json:"node_instance_id,omitempty"`
-	TaskKey          string                      `json:"task_key,omitempty"`
-	TaskVersion      string                      `json:"task_version,omitempty"`
-	AgentKey         string                      `json:"agent_key,omitempty"`
-	Model            string                      `json:"model,omitempty"`
-	Status           string                      `json:"status,omitempty"`
-	Outcome          string                      `json:"outcome,omitempty"`
-	ErrorCode        string                      `json:"error_code,omitempty"`
-	ExecutionUserID  string                      `json:"execution_user_id,omitempty"`
-	ExecutionRoleKey string                      `json:"execution_role_key,omitempty"`
-	CompletedAt      int64                       `json:"completed_at,omitempty"`
-	Tools            []WorkflowAgentToolEvidence `json:"tools,omitempty"`
+	PreparationFailure *WorkflowAgentTaskPreparationFailure `json:"preparation_failure,omitempty"`
+	Available          bool                                 `json:"available"`
+	TaskRunID          string                               `json:"task_run_id,omitempty"`
+	ProcessID          string                               `json:"process_id,omitempty"`
+	NodeID             string                               `json:"node_id,omitempty"`
+	NodeInstanceID     string                               `json:"node_instance_id,omitempty"`
+	TaskKey            string                               `json:"task_key,omitempty"`
+	TaskVersion        string                               `json:"task_version,omitempty"`
+	AgentKey           string                               `json:"agent_key,omitempty"`
+	Model              string                               `json:"model,omitempty"`
+	Status             string                               `json:"status,omitempty"`
+	Outcome            string                               `json:"outcome,omitempty"`
+	ErrorCode          string                               `json:"error_code,omitempty"`
+	ExecutionUserID    string                               `json:"execution_user_id,omitempty"`
+	ExecutionRoleKey   string                               `json:"execution_role_key,omitempty"`
+	CompletedAt        int64                                `json:"completed_at,omitempty"`
+	Tools              []WorkflowAgentToolEvidence          `json:"tools,omitempty"`
+}
+
+// PreparationFailure proves a stopped Workflow node, not a Native Task run.
+// A planned run ID is deliberately absent: preparation may fail before the
+// Agent owner creates any Task, tool ledger or model request.
+type WorkflowAgentTaskPreparationFailure struct {
+	WorkflowKey    string `json:"workflow_key"`
+	ProcessID      string `json:"process_id"`
+	NodeID         string `json:"node_id"`
+	NodeInstanceID string `json:"node_instance_id"`
+	TaskKey        string `json:"task_key"`
+	TaskVersion    string `json:"task_version"`
+	ErrorCode      string `json:"error_code"`
+	StoppedAt      int64  `json:"stopped_at"`
 }
 
 type WorkflowAgentTaskEvidenceExecution interface {

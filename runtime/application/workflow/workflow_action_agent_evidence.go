@@ -76,7 +76,25 @@ func (s *WorkflowApplicationService) ReadActionAgentTaskEvidence(ctx context.Con
 	raw, present := selected.Input[workflowAgentEvidenceKey]
 	if !present {
 		if selected.Status == "configuration_error" || selected.Status == "error" {
-			return runtimeext.WorkflowAgentTaskEvidence{}, nil
+			stopped, parseErr := time.Parse(time.RFC3339Nano, selected.CompletedAt)
+			if parseErr != nil || stopped.IsZero() || !workflowMetadataErrorCode.MatchString(selected.ErrorCode) || selected.NodeInstanceID == "" {
+				return unavailable()
+			}
+			// This is not a completed Task receipt. Only the declared error
+			// continuation of this source node may consume its preparation cause.
+			errorEdge := false
+			for _, edge := range process.DefinitionSnapshot.Graph.Edges {
+				if edge.Source == request.NodeID && edge.Target == scope.CurrentNodeID && edge.Branch == "error" {
+					errorEdge = true
+				}
+			}
+			if source.Contract.AgentTask.OnError != "error_branch" || !errorEdge {
+				return denied()
+			}
+			return runtimeext.WorkflowAgentTaskEvidence{PreparationFailure: &runtimeext.WorkflowAgentTaskPreparationFailure{
+				WorkflowKey: process.WorkflowKey, ProcessID: process.ProcessID, NodeID: request.NodeID, NodeInstanceID: selected.NodeInstanceID,
+				TaskKey: request.TaskKey, TaskVersion: request.TaskVersion, ErrorCode: selected.ErrorCode, StoppedAt: stopped.UTC().UnixMilli(),
+			}}, nil
 		}
 		return unavailable()
 	}

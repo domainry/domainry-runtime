@@ -84,11 +84,21 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 		Contract: contract, Input: input, Initiator: principal,
 	})
 	if err != nil {
-		e.failPreparedAgentTaskNode(ctx, instance, serviceErrorCode(err))
+		if saveErr := e.failPreparedAgentTaskNode(ctx, instance, serviceErrorCode(err)); saveErr != nil {
+			return "", false, saveErr
+		}
+		if contract.OnError == "error_branch" {
+			return "error", false, nil
+		}
 		return "", false, err
 	}
 	if result.Status != agentsdk.ProviderRunAccepted && result.Status != agentsdk.ProviderRunRunning {
-		e.failPreparedAgentTaskNode(ctx, instance, "backend.workflow.agent_task_start_invalid")
+		if saveErr := e.failPreparedAgentTaskNode(ctx, instance, "backend.workflow.agent_task_start_invalid"); saveErr != nil {
+			return "", false, saveErr
+		}
+		if contract.OnError == "error_branch" {
+			return "error", false, nil
+		}
 		return "", false, internalError("start Agent Task", fmt.Errorf("Agent capability returned status %q", result.Status))
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -102,14 +112,17 @@ func (e *WorkflowProcessEngine) executeAgentTaskNode(ctx context.Context, proces
 	return "waiting", true, nil
 }
 
-func (e *WorkflowProcessEngine) failPreparedAgentTaskNode(ctx context.Context, instance workflowmodel.WorkflowNodeInstance, code string) {
+func (e *WorkflowProcessEngine) failPreparedAgentTaskNode(ctx context.Context, instance workflowmodel.WorkflowNodeInstance, code string) error {
 	if e == nil || e.runtime == nil || e.runtime.dependencies.Processes == nil {
-		return
+		return internalError("save Agent Task preparation failure", nil)
 	}
 	instance.Status = "configuration_error"
 	instance.ErrorCode = strings.TrimSpace(code)
 	instance.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	_ = e.runtime.dependencies.Processes.UpdateNode(ctx, instance.WorkspaceID, instance)
+	if err := e.runtime.dependencies.Processes.UpdateNode(ctx, instance.WorkspaceID, instance); err != nil {
+		return internalError("save Agent Task preparation failure", err)
+	}
+	return nil
 }
 
 func workflowAgentTaskIdentity(processID, nodeID string, iteration int) (string, string) {
