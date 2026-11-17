@@ -16,9 +16,9 @@ const DevIntegrationSecret = "dev-generated-integration-secret-change-me"
 const DevAuditExportTokenKey = "dev-generated-audit-export-token-change-me"
 
 type Config struct {
-	RuntimeVersion                          string
+	RuntimeVersion string
 	// RuntimeInstanceID is the stable Runtime/application scope shared by replicas.
-	RuntimeInstanceID                       string
+	RuntimeInstanceID string
 	// RuntimeWorkerID is the unique process identity used for leases and instance drain.
 	RuntimeWorkerID                         string
 	ProductBrandName                        string
@@ -220,7 +220,7 @@ func FromEnv() Config {
 	return Config{
 		RuntimeVersion:                                  env("DOMAINRY_RUNTIME_VERSION", "dev"),
 		RuntimeInstanceID:                               strings.TrimSpace(os.Getenv("RUNTIME_INSTANCE_ID")),
-		RuntimeWorkerID:                                 strings.TrimSpace(os.Getenv("RUNTIME_WORKER_ID")),
+		RuntimeWorkerID:                                 strings.TrimSpace(os.Getenv("DOMAINRY_INSTANCE_ID")),
 		ProductBrandName:                                productbrand.NameFromEnvironment(),
 		Environment:                                     environment,
 		LogLevel:                                        env("LOG_LEVEL", "info"),

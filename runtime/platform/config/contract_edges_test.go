@@ -11,6 +11,7 @@ import (
 func TestConfigContractTypedSettersAndCollectionParsers(t *testing.T) {
 	for field, want := range map[string]string{
 		"AuditExportTokenKey": "AUDIT_EXPORT_TOKEN_KEY", "HTTPReadTimeout": "HTTP_READ_TIMEOUT", "WorkerPollInterval": "WORKER_POLL_INTERVAL",
+		"RuntimeWorkerID":                                "DOMAINRY_INSTANCE_ID",
 		"CORSAllowedOrigins":                             "CORS_ALLOWED_ORIGINS",
 		"HTTPAPIKeyRateLimitPerMinute":                   "HTTP_API_KEY_RATE_LIMIT_PER_MINUTE",
 		"IntegrationHealthGoogleHTTP429HourLimit":        "INTEGRATION_HEALTH_GOOGLE_HTTP_429_HOUR_LIMIT",
