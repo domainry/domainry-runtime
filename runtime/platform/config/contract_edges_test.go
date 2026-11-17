@@ -236,8 +236,16 @@ func TestConfigLoadAcceptsSourceOwnedModuleEnvironment(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
 	t.Setenv("AUTH_ISSUER", "https://enterprise.verdent.test")
+	t.Setenv("DATABASE_BOOTSTRAP_RESOURCE", "knowledge-database")
+	t.Setenv("DATABASE_BOOTSTRAP_REVISION", "revision-1")
+	t.Setenv("DATABASE_BOOTSTRAP_TIMEOUT", "15m")
 	t.Setenv("IDENTITY_APPLICATION_SERVICE_CREDENTIALS", "workspace-a/verdent-knowledge=source-owned-workspace-secret")
 	t.Setenv("IDENTITY_APPLICATION_PERMISSION_OWNERS", "workspace-a/verdent-knowledge=module:knowledge|project:verdent_knowledge")
+	t.Setenv("IDENTITY_CLIENT_SECRET", "source-owned-client-secret")
+	t.Setenv("IDENTITY_COOKIE_NAME", "verdent_knowledge_refresh")
+	t.Setenv("IDENTITY_COOKIE_SECURE", "true")
+	t.Setenv("IDENTITY_ENDPOINT", "https://enterprise.verdent.test")
+	t.Setenv("IDENTITY_ISSUER", "https://enterprise.verdent.test")
 	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_CREDENTIALS", "verdent-knowledge#global-index=source-owned-secret")
 	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_POLICIES", "verdent-knowledge=audience:domainry-runtime|grant:enterprise.knowledge.index_target")
 	t.Setenv("IDENTITY_GLOBAL_BROWSER_APPLICATIONS", "verdent-knowledge=https://knowledge.verdent.test/auth/callback")
@@ -257,13 +265,21 @@ func TestConfigLoadAcceptsSourceOwnedModuleEnvironment(t *testing.T) {
 	}
 }
 
-func TestConfigLoadStillRejectsMisspelledIntegrationQuotaEnvironment(t *testing.T) {
-	t.Setenv("APP_ENV", "development")
-	t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
-	t.Setenv("INTEGRATION_GOOGLE_QUOTA_PROJET_ID", "project-a")
+func TestConfigLoadStillRejectsMisspelledSourceOwnedModuleEnvironment(t *testing.T) {
+	for _, name := range []string{
+		"DATABASE_BOOTSTRAP_REVISON",
+		"IDENTITY_COOKIE_SECUR",
+		"INTEGRATION_GOOGLE_QUOTA_PROJET_ID",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("APP_ENV", "development")
+			t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
+			t.Setenv(name, "invalid-source-owned-name")
 
-	if _, _, err := Load(); err == nil || !strings.Contains(err.Error(), "INTEGRATION_GOOGLE_QUOTA_PROJET_ID") {
-		t.Fatalf("misspelled source-owned Integration configuration error=%v", err)
+			if _, _, err := Load(); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("misspelled source-owned module configuration error=%v", err)
+			}
+		})
 	}
 }
 
