@@ -70,6 +70,24 @@ func (s *FileDownloadTicketService) Issue(ctx context.Context, workspaceID, user
 }
 
 func (s *FileDownloadTicketService) Authorize(ctx context.Context, token, workspaceID, userID, authorizationRevision, fileID string) (FileDownloadTicketClaims, error) {
+	claims, err := s.Authenticate(ctx, token, fileID)
+	if err != nil {
+		return FileDownloadTicketClaims{}, err
+	}
+	if claims.WorkspaceID != strings.TrimSpace(workspaceID) || claims.UserID != strings.TrimSpace(userID) ||
+		claims.AuthorizationRevision != strings.TrimSpace(authorizationRevision) {
+		return FileDownloadTicketClaims{}, invalidFileDownloadTicket()
+	}
+	return claims, nil
+}
+
+// Authenticate validates a signed Action download ticket without requiring a
+// second browser session credential. The ticket itself is the short-lived,
+// exact-file capability: workspace, actor, authorization revision, record
+// binding, file identity and expiry are all covered by the HMAC. Callers that
+// already have an authenticated Principal should continue to use Authorize so
+// the current request identity is also compared with the signed claims.
+func (s *FileDownloadTicketService) Authenticate(ctx context.Context, token, fileID string) (FileDownloadTicketClaims, error) {
 	if err := ctx.Err(); err != nil {
 		return FileDownloadTicketClaims{}, err
 	}
@@ -104,9 +122,7 @@ func (s *FileDownloadTicketService) Authorize(ctx context.Context, token, worksp
 		return FileDownloadTicketClaims{}, invalidFileDownloadTicket()
 	}
 	now := s.clock().UTC().Unix()
-	if claims.ExpiresAtUnix <= now || claims.ExpiresAtUnix > now+int64(fileDownloadTicketLifetime/time.Second) ||
-		claims.WorkspaceID != strings.TrimSpace(workspaceID) || claims.UserID != strings.TrimSpace(userID) ||
-		claims.AuthorizationRevision != strings.TrimSpace(authorizationRevision) || claims.FileID != strings.TrimSpace(fileID) {
+	if claims.ExpiresAtUnix <= now || claims.ExpiresAtUnix > now+int64(fileDownloadTicketLifetime/time.Second) || claims.FileID != strings.TrimSpace(fileID) {
 		return FileDownloadTicketClaims{}, invalidFileDownloadTicket()
 	}
 	return claims, nil

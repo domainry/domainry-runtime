@@ -21,6 +21,7 @@ import (
 )
 
 type principalContextKey struct{}
+type signedRequestPrincipalContextKey struct{}
 
 func requestWithPrincipal(r *http.Request, principal principalmodel.Principal) *http.Request {
 	principal = principal.WithAuthorizationEvaluationTime(time.Now().UTC())
@@ -28,6 +29,16 @@ func requestWithPrincipal(r *http.Request, principal principalmodel.Principal) *
 	ctx = requestcontext.WithWorkspaceID(ctx, principal.WorkspaceID)
 	ctx = requestcontext.WithActorID(ctx, principal.UserID)
 	return r.WithContext(ctx)
+}
+
+func requestWithSignedPrincipal(r *http.Request, principal principalmodel.Principal) *http.Request {
+	authenticated := requestWithResolvedIdentity(r, principal)
+	return authenticated.WithContext(context.WithValue(authenticated.Context(), signedRequestPrincipalContextKey{}, true))
+}
+
+func signedRequestPrincipal(r *http.Request) bool {
+	value, _ := r.Context().Value(signedRequestPrincipalContextKey{}).(bool)
+	return value
 }
 
 func principalFromContext(r *http.Request) (principalmodel.Principal, bool) {
@@ -186,6 +197,9 @@ func (s *HTTPRouter) principalFromRequest(r *http.Request) principalmodel.Princi
 		principal.RequestID = requestID
 		if workspaceID != "" && !strings.EqualFold(workspaceID, "default") {
 			principal.WorkspaceID = workspaceID
+		}
+		if signedRequestPrincipal(r) {
+			return principal.WithAuthorizationEvaluationTime(time.Now().UTC())
 		}
 		return s.principalWithBusinessProfile(principal, r)
 	}

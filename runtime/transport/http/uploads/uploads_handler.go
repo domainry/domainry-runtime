@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/entityid"
+	identitysdk "github.com/domainry/domainry-identity-sdk"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
 	uploadapplication "github.com/domainry/domainry-runtime/runtime/application/upload"
@@ -84,6 +85,46 @@ func (h *UploadsHandler) UseAccess(access *uploadapplication.UploadAccessApplica
 	if access != nil {
 		h.access = access
 	}
+}
+
+// AuthenticateSignedRequest implements Runtime's generic signed-request
+// authentication boundary for exact Action download tickets. It deliberately
+// recognizes no upload, scan, ordinary record download, or non-upload route.
+func (h *UploadsHandler) AuthenticateSignedRequest(request *http.Request) (principalmodel.Principal, bool, error) {
+	if request == nil || request.Method != http.MethodGet || request.URL == nil {
+		return principalmodel.Principal{}, false, nil
+	}
+	token := strings.TrimSpace(request.URL.Query().Get("download_ticket"))
+	if token == "" {
+		return principalmodel.Principal{}, false, nil
+	}
+	fileID, recognized := signedDownloadFileID(request.URL.Path)
+	if !recognized {
+		return principalmodel.Principal{}, false, nil
+	}
+	claims, err := h.tickets.Authenticate(request.Context(), token, fileID)
+	if err != nil {
+		return principalmodel.Principal{}, true, err
+	}
+	return principalmodel.Principal{
+		Principal: identitysdk.Principal{
+			ContractVersion: identitysdk.PrincipalContextContractVersion,
+			Known:           true, WorkspaceID: claims.WorkspaceID, UserID: claims.UserID,
+		},
+		BusinessAuthorizationRevision: claims.AuthorizationRevision,
+	}, true, nil
+}
+
+func signedDownloadFileID(path string) (string, bool) {
+	const prefix = "/uploads/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	fileID := strings.TrimSpace(strings.TrimPrefix(path, prefix))
+	if fileID == "" || fileID == "." || fileID == ".." || strings.Contains(fileID, "/") {
+		return "", false
+	}
+	return fileID, true
 }
 
 type uploadResponse struct {

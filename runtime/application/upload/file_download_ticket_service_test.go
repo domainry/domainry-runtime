@@ -28,6 +28,10 @@ func TestFileDownloadTicketBindsCallerFileRecordAndExpiry(t *testing.T) {
 		t.Fatalf("ticket=%+v", ticket)
 	}
 	token := strings.TrimPrefix(ticket.ProtectedDownload, "/uploads/opaque-file?download_ticket=")
+	signedClaims, err := service.Authenticate(t.Context(), token, "opaque-file")
+	if err != nil || signedClaims.WorkspaceID != "workspace-a" || signedClaims.UserID != "user-a" || signedClaims.AuthorizationRevision != "auth-7" {
+		t.Fatalf("standalone signed claims=%+v err=%v", signedClaims, err)
+	}
 	claims, err := service.Authorize(t.Context(), token, "workspace-a", "user-a", "auth-7", "opaque-file")
 	if err != nil || claims.ObjectKey != request.Binding.ObjectKey || claims.RecordID != request.Binding.RecordID || claims.FieldKey != request.Binding.FileIDField {
 		t.Fatalf("claims=%+v err=%v", claims, err)
@@ -45,8 +49,17 @@ func TestFileDownloadTicketBindsCallerFileRecordAndExpiry(t *testing.T) {
 	if _, err := service.Authorize(t.Context(), token+"x", "workspace-a", "user-a", "auth-7", "opaque-file"); apperror.CodeOf(err) != "backend.upload.download_ticket_invalid" {
 		t.Fatalf("tampered ticket err=%v", err)
 	}
+	if _, err := service.Authenticate(t.Context(), token+"x", "opaque-file"); apperror.CodeOf(err) != "backend.upload.download_ticket_invalid" {
+		t.Fatalf("standalone tampered ticket err=%v", err)
+	}
+	if _, err := service.Authenticate(t.Context(), token, "other-file"); apperror.CodeOf(err) != "backend.upload.download_ticket_invalid" {
+		t.Fatalf("standalone cross-file ticket err=%v", err)
+	}
 	now = ticket.ExpiresAt
 	if _, err := service.Authorize(t.Context(), token, "workspace-a", "user-a", "auth-7", "opaque-file"); apperror.CodeOf(err) != "backend.upload.download_ticket_invalid" {
 		t.Fatalf("expired ticket err=%v", err)
+	}
+	if _, err := service.Authenticate(t.Context(), token, "opaque-file"); apperror.CodeOf(err) != "backend.upload.download_ticket_invalid" {
+		t.Fatalf("standalone expired ticket err=%v", err)
 	}
 }

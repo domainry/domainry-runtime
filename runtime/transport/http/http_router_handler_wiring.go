@@ -3,6 +3,10 @@ package http
 func UseHandlers(router *HTTPRouter, handlers HTTPRouterHandlers) *HTTPRouter {
 	router.recordHTTP = handlers.Records
 	router.uploadHTTP = handlers.Uploads
+	router.signedRequestAuth = nil
+	if handlers.Uploads != nil {
+		router.signedRequestAuth = handlers.Uploads
+	}
 	router.discoveryHTTP = handlers.Discovery
 	router.workflowHTTP = handlers.Workflows
 	router.automationHTTP = handlers.Automation

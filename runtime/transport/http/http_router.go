@@ -55,6 +55,7 @@ type HTTPRouter struct {
 	identityAuthentication          IdentityRequestMiddleware
 	identityPrincipal               IdentityPrincipalProjection
 	integrationAuth                 IntegrationAuthenticationPrincipalProvider
+	signedRequestAuth               SignedRequestAuthenticator
 	securityAudit                   SecurityAuditAppender
 	runtimeHealth                   DeploymentRuntimeHealthProvider
 	runtimeReadiness                DeploymentRuntimeReadinessProvider

@@ -212,6 +212,30 @@ func (s *HTTPRouter) withAuth(routes *http.ServeMux, next http.Handler) http.Han
 			}
 			return
 		}
+		if s.signedRequestAuth != nil {
+			principal, presented, err := s.signedRequestAuth.AuthenticateSignedRequest(r)
+			if presented {
+				if err != nil {
+					s.appendSecurityAudit(r, "auth_signed_request_denied", "Signed request authentication failed", map[string]any{"path": r.URL.Path, "method": r.Method, "reason": valueOrDefault(apperror.CodeOf(err), "signed_request_invalid")})
+					writeServiceError(w, r, err)
+					return
+				}
+				if !principal.Known || strings.TrimSpace(principal.WorkspaceID) == "" || strings.TrimSpace(principal.UserID) == "" {
+					writeError(w, r, http.StatusForbidden, "auth.signed_request_invalid")
+					return
+				}
+				if !s.admitAuthenticatedWorkspace(w, r, principal) {
+					return
+				}
+				if !authenticatedWorkspaceMatchesRequest(principal, r) {
+					writeError(w, r, http.StatusForbidden, "backend.workspace_scope_mismatch")
+					return
+				}
+				s.appendSecurityAuditForPrincipal(r, principal, "auth_signed_request_authenticated", "Signed request authenticated", map[string]any{"path": r.URL.Path, "method": r.Method})
+				next.ServeHTTP(w, requestWithSignedPrincipal(r, principal))
+				return
+			}
+		}
 		if r.Method == http.MethodOptions || resolved.found && (resolved.definition.Authorization.Strategy == actioncontract.AuthorizationAnonymous || resolved.definition.Authorization.Strategy == actioncontract.AuthorizationSigned) || policy.fallback {
 			next.ServeHTTP(w, r)
 			return

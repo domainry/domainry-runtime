@@ -133,6 +133,14 @@ type DeploymentRuntimeReadinessProvider interface {
 	MigrationReadiness(context.Context) error
 }
 
+// SignedRequestAuthenticator resolves a narrowly scoped, self-contained
+// request capability before ordinary session/API-key authentication. An
+// implementation must return presented=false for every route it does not own
+// and must derive the Principal exclusively from verified signed claims.
+type SignedRequestAuthenticator interface {
+	AuthenticateSignedRequest(*http.Request) (principalmodel.Principal, bool, error)
+}
+
 type HTTPRouterDependencies struct {
 	IdentityAuthentication    IdentityRequestMiddleware
 	IdentityPrincipal         IdentityPrincipalProjection

@@ -564,11 +564,25 @@ func TestServeUploadedFileAcceptsExactActionDownloadTicketWithoutNativeRecordGra
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodGet, ticket.ProtectedDownload, nil)
+	signedPrincipal, presented, err := handler.AuthenticateSignedRequest(request)
+	if err != nil || !presented || !signedPrincipal.Known || signedPrincipal.WorkspaceID != "workspace-a" || signedPrincipal.UserID != principal.UserID || signedPrincipal.EffectiveAuthorizationRevision() != principal.EffectiveAuthorizationRevision() {
+		t.Fatalf("signed principal=%#v presented=%v err=%v", signedPrincipal, presented, err)
+	}
+	handler.principal = func(*http.Request) principalmodel.Principal { return signedPrincipal }
 	request.SetPathValue("fileID", "opaque-document-file")
 	response := httptest.NewRecorder()
 	handler.serveUploadedFile(response, request)
 	if response.Code != http.StatusOK || response.Body.String() != "authorized bytes" {
 		t.Fatalf("ticket download status=%d body=%q code=%q", response.Code, response.Body.String(), response.Header().Get("X-Error-Code"))
+	}
+	for _, target := range []string{
+		"/uploads/opaque-document-file/scan?download_ticket=forged",
+		"/records/document?download_ticket=forged",
+	} {
+		_, recognized, authErr := handler.AuthenticateSignedRequest(httptest.NewRequest(http.MethodGet, target, nil))
+		if recognized || authErr != nil {
+			t.Fatalf("non-download route %q was recognized: presented=%v err=%v", target, recognized, authErr)
+		}
 	}
 
 	other := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{Known: true, UserID: "other-member", WorkspaceID: "workspace-a"}}, uploadTestRole("document.read"))
