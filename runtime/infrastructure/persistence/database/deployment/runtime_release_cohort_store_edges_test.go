@@ -359,6 +359,37 @@ func TestRuntimeReleaseHeartbeatStages(t *testing.T) {
 	closeDB()
 }
 
+func TestRuntimeReleaseHeartbeatRetriesExpectedCoordinationConflicts(t *testing.T) {
+	now := time.Now().UTC()
+	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: "instance", CombinationSHA256: "hash", Generation: 1}
+	cohortRow := releaseSQLQueryStep{columns: releaseColumns(3), rows: [][]driver.Value{{"hash", "{}", int64(1)}}}
+	futureRow := releaseSQLQueryStep{columns: []string{"expiry"}, rows: [][]driver.Value{{now.Add(time.Minute).UnixMilli()}}}
+	store, closeDB := scriptedReleaseStore(&releaseSQLState{
+		beginErrs:  []error{errors.New("database is locked"), nil},
+		execSteps:  []releaseSQLExecStep{{rows: 1}, {rows: 1}},
+		querySteps: []releaseSQLQueryStep{cohortRow, futureRow},
+	})
+	defer closeDB()
+	next, err := store.HeartbeatRuntimeRelease(t.Context(), lease, now, time.Minute)
+	if err != nil || !next.ExpiresAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("retried heartbeat=%#v err=%v", next, err)
+	}
+
+	exhausted, closeExhausted := scriptedReleaseStore(&releaseSQLState{beginErr: errors.New("database is locked")})
+	defer closeExhausted()
+	if _, err := exhausted.HeartbeatRuntimeRelease(t.Context(), lease, now, time.Minute); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseAdmission) {
+		t.Fatalf("retry exhaustion error=%v", err)
+	}
+
+	cancelled, closeCancelled := scriptedReleaseStore(&releaseSQLState{beginErr: errors.New("database is locked")})
+	defer closeCancelled()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := cancelled.HeartbeatRuntimeRelease(ctx, lease, now, time.Minute); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled retry error=%v", err)
+	}
+}
+
 func TestRuntimeReleaseReleaseAndSQLHelpers(t *testing.T) {
 	store, closeDB := scriptedReleaseStore(&releaseSQLState{execSteps: []releaseSQLExecStep{{err: errReleaseSQL}}})
 	if err := store.ReleaseRuntimeRelease(t.Context(), deploymentmodel.RuntimeReleaseCohortLease{}); err != errReleaseSQL {

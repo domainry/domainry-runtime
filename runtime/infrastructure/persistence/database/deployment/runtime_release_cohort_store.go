@@ -16,6 +16,8 @@ import (
 
 const activeRuntimeReleaseCohort = "active"
 
+const runtimeReleaseCoordinationAttempts = 8
+
 var _ deploymentrepository.RuntimeReleaseCohortRepository = RuntimeReleaseCohortStore{}
 
 type RuntimeReleaseCohortStore struct {
@@ -50,20 +52,27 @@ func (s RuntimeReleaseCohortStore) ClaimRuntimeRelease(ctx context.Context, clai
 	if s.store == nil || s.store.DB() == nil {
 		return deploymentmodel.RuntimeReleaseCohortLease{}, fmt.Errorf("%w: release cohort store is unavailable", deploymentmodel.ErrRuntimeReleaseAdmission)
 	}
-	for attempt := 0; attempt < 8; attempt++ {
+	for attempt := 0; attempt < runtimeReleaseCoordinationAttempts; attempt++ {
 		lease, err := s.claim(ctx, claim)
 		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseConflict) || !s.store.IsCoordinationRetryableError(err) {
 			return lease, err
 		}
-		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return deploymentmodel.RuntimeReleaseCohortLease{}, ctx.Err()
-		case <-timer.C:
+		if err := waitRuntimeReleaseCoordinationRetry(ctx, attempt); err != nil {
+			return deploymentmodel.RuntimeReleaseCohortLease{}, err
 		}
 	}
 	return deploymentmodel.RuntimeReleaseCohortLease{}, fmt.Errorf("%w: release cohort serialization retry exhausted", deploymentmodel.ErrRuntimeReleaseAdmission)
+}
+
+func waitRuntimeReleaseCoordinationRetry(ctx context.Context, attempt int) error {
+	timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s RuntimeReleaseCohortStore) claim(ctx context.Context, claim deploymentmodel.RuntimeReleaseCohortClaim) (deploymentmodel.RuntimeReleaseCohortLease, error) {
@@ -254,6 +263,22 @@ func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *s
 }
 
 func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+	if s.store == nil || s.store.DB() == nil {
+		return lease, fmt.Errorf("%w: release cohort store is unavailable", deploymentmodel.ErrRuntimeReleaseAdmission)
+	}
+	for attempt := 0; attempt < runtimeReleaseCoordinationAttempts; attempt++ {
+		next, err := s.heartbeatRuntimeRelease(ctx, lease, now, duration)
+		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) || !s.store.IsCoordinationRetryableError(err) {
+			return next, err
+		}
+		if err := waitRuntimeReleaseCoordinationRetry(ctx, attempt); err != nil {
+			return lease, err
+		}
+	}
+	return lease, fmt.Errorf("%w: release cohort heartbeat serialization retry exhausted", deploymentmodel.ErrRuntimeReleaseAdmission)
+}
+
+func (s RuntimeReleaseCohortStore) heartbeatRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error) {
 	tx, err := s.store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return lease, err

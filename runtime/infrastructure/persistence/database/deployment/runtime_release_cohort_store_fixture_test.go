@@ -30,6 +30,7 @@ func scriptedReleaseStore(state *releaseSQLState) (RuntimeReleaseCohortStore, fu
 
 type releaseSQLState struct {
 	beginErr, commitErr error
+	beginErrs           []error
 	execSteps           []releaseSQLExecStep
 	querySteps          []releaseSQLQueryStep
 }
@@ -63,6 +64,13 @@ type releaseSQLConn struct{ state *releaseSQLState }
 func (*releaseSQLConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
 func (*releaseSQLConn) Close() error                        { return nil }
 func (c *releaseSQLConn) Begin() (driver.Tx, error) {
+	if len(c.state.beginErrs) > 0 {
+		err := c.state.beginErrs[0]
+		c.state.beginErrs = c.state.beginErrs[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
 	if c.state.beginErr != nil {
 		return nil, c.state.beginErr
 	}
