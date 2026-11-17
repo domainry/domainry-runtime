@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
@@ -48,7 +49,10 @@ func (s *FileCapabilityService) IngestUploaded(ctx context.Context, workspaceID 
 		return runtimeext.FileVerificationEvidence{}, uploadAccessError(apperror.KindBadRequest, "backend.upload.mime_type_denied")
 	}
 	identity := sha256.Sum256([]byte(strings.Join([]string{workspaceID, principal.UserID, request.IdempotencyKey, request.ObjectKey, request.FieldKey}, "\x00")))
-	fileID := "uploaded_" + hex.EncodeToString(identity[:16])
+	fileID, err := entityid.Derive("art", "runtime.uploaded-file", workspaceID, principal.UserID, request.IdempotencyKey, request.ObjectKey, request.FieldKey)
+	if err != nil {
+		return runtimeext.FileVerificationEvidence{}, err
+	}
 	nonce := [16]byte{}
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return runtimeext.FileVerificationEvidence{}, err
@@ -89,11 +93,18 @@ func (s *FileCapabilityService) IngestUploaded(ctx context.Context, workspaceID 
 	if _, err := s.blobs.Commit(ctx, runtimefile.BlobCommitRequest{WorkspaceID: workspaceID, StageKey: staged.BlobKey, BlobKey: storageName, ContentSHA256: digest, Size: request.Size}); err != nil {
 		return runtimeext.FileVerificationEvidence{}, err
 	}
+	artifactRegistered := false
+	defer func() {
+		if !artifactRegistered {
+			_ = s.blobs.Delete(context.WithoutCancel(ctx), workspaceID, storageName)
+		}
+	}()
 	artifact := lifecyclecontract.UploadArtifact{ArtifactID: fileID, WorkspaceID: workspaceID, ObjectKey: request.ObjectKey, FieldKey: request.FieldKey, Filename: storageName, ContentType: contentType, SHA256: digest, Size: request.Size, CreatedAt: s.clock().UTC()}
-	if err := s.subjects.Ensure(ctx, artifact, principal); err != nil {
+	if err := s.store.RegisterUpload(ctx, artifact); err != nil {
 		return runtimeext.FileVerificationEvidence{}, err
 	}
-	if err := s.store.RegisterUpload(ctx, artifact); err != nil {
+	artifactRegistered = true
+	if err := s.subjects.Ensure(ctx, artifact, principal); err != nil {
 		return runtimeext.FileVerificationEvidence{}, err
 	}
 	return s.InspectUploaded(ctx, workspaceID, principal, runtimeext.UploadedFileInspection{FileID: fileID, ObjectKey: request.ObjectKey, FieldKey: request.FieldKey})

@@ -6,11 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -72,6 +75,9 @@ func TestIncomingUploadRequiresRealScanBeforeRecordBinding(t *testing.T) {
 	if err != nil || upload.Status != lifecyclecontract.FileScanPending || upload.ScanReceipt != "" || store.registerCalls != 1 {
 		t.Fatalf("upload fabricated a verdict: %+v %v", upload, err)
 	}
+	if err := entityid.Validate("art", upload.FileID); err != nil {
+		t.Fatalf("upload returned non-canonical Artifact ID %q: %v", upload.FileID, err)
+	}
 	if _, err := service.VerifyClean(t.Context(), owner.WorkspaceID, runtimeext.FileVerificationRequest{FileID: upload.FileID, ContentSHA256: upload.ContentSHA256}); err == nil {
 		t.Fatal("pending bytes were accepted as clean")
 	}
@@ -111,6 +117,47 @@ func TestIncomingUploadRequiresRealScanBeforeRecordBinding(t *testing.T) {
 		if result, err := service.InspectUploaded(t.Context(), workspace, peer, request); err == nil || result.FileID != "" {
 			t.Fatalf("foreign scan evidence escaped (%s): %+v %v", change, result, err)
 		}
+	}
+}
+
+func TestIncomingUploadRegistrationFailureLeavesNoSubjectOrBlob(t *testing.T) {
+	store := uploadedFileStore{&fileCapabilityStoreStub{evidence: map[string]lifecyclecontract.FileScanEvidence{}, registerErr: errors.New("register failed")}}
+	blobRoot := t.TempDir()
+	blobs, err := blobstore.NewLocalStore(blobRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewFileCapabilityService(store, NewFileScanReceiptVerifier(store, bytes.Repeat([]byte("k"), 32)), blobs, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjects := uploadSubjectMemory{}
+	service.BindUploadSubjects(NewUploadSubjectRegistry(subjects))
+	owner := uploadAccessPrincipal("asset.ingest")
+	policy, err := recordmodel.RecordFileFieldPolicyFor(definitionmodel.FieldSchema{Key: "attachment", Type: recordmodel.RecordFileFieldType, Config: map[string]any{"allowed_mime_types": []any{"text/plain"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.IngestUploaded(t.Context(), owner.WorkspaceID, owner, incomingRequest("customer log"), policy); err == nil || err.Error() != "register failed" {
+		t.Fatalf("registration failure=%v", err)
+	}
+	if len(subjects) != 0 {
+		t.Fatalf("failed registration left upload subject bindings: %#v", subjects)
+	}
+	files := 0
+	if err := filepath.Walk(blobRoot, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !info.IsDir() {
+			files++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if files != 0 {
+		t.Fatalf("failed registration left %d blob files", files)
 	}
 }
 

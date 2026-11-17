@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	"github.com/domainry/domainry-runtime/pkg/runtimefile"
@@ -192,7 +193,10 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 		}
 	}
 	identity := sha256.Sum256([]byte(strings.Join([]string{workspaceID, idempotencyKey, strings.TrimSpace(request.ObjectKey), strings.TrimSpace(request.FieldKey)}, "\x00")))
-	fileID := "derived_" + hex.EncodeToString(identity[:16])
+	fileID, err := entityid.Derive("art", "runtime.derived-file", workspaceID, idempotencyKey, request.ObjectKey, request.FieldKey)
+	if err != nil {
+		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_identity_failed: %w", err)
+	}
 	stageNonce := [16]byte{}
 	if _, err := rand.Read(stageNonce[:]); err != nil {
 		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_storage_unavailable: %w", err)
@@ -241,12 +245,20 @@ func (s *FileCapabilityService) CreateDerived(ctx context.Context, workspaceID s
 		}
 		return runtimeext.DerivedFileEvidence{}, fmt.Errorf("backend.upload.derived_file_save_failed: %w", err)
 	}
+	newArtifact := errors.Is(lookupErr, sql.ErrNoRows)
+	artifactRegistered := !newArtifact
+	defer func() {
+		if !artifactRegistered {
+			_ = s.blobs.Delete(context.WithoutCancel(ctx), workspaceID, storageName)
+		}
+	}()
 	now := s.clock().UTC()
 	artifact := lifecyclecontract.UploadArtifact{ArtifactID: fileID, WorkspaceID: workspaceID, ObjectKey: strings.TrimSpace(request.ObjectKey), FieldKey: strings.TrimSpace(request.FieldKey), Filename: storageName, ContentType: contentType, SHA256: digest, Size: size, CreatedAt: now}
-	if errors.Is(lookupErr, sql.ErrNoRows) {
+	if newArtifact {
 		if err := s.store.RegisterUpload(ctx, artifact); err != nil {
 			return runtimeext.DerivedFileEvidence{}, err
 		}
+		artifactRegistered = true
 	}
 	scan := lifecyclecontract.FileScanEvidence{ArtifactID: fileID, WorkspaceID: workspaceID, Filename: storageName, ContentType: contentType, ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: digest, Size: size, Status: lifecyclecontract.FileScanClean, Provider: "domainry-derived-file-v1", EvidenceRef: "derived:sha256:" + digest, ScannedAt: now}
 	if err := s.store.RecordFileScan(ctx, scan); err != nil {

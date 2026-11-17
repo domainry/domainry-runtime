@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/entityid"
 	lifecycleaccess "github.com/domainry/domainry-lifecycle-sdk/access"
 	lifecyclecontract "github.com/domainry/domainry-lifecycle-sdk/contract"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -29,6 +30,7 @@ type fileCapabilityStoreStub struct {
 	mu            sync.Mutex
 	evidence      map[string]lifecyclecontract.FileScanEvidence
 	registerCalls int
+	registerErr   error
 }
 
 func derivedFileSystemPrincipal() principalmodel.Principal {
@@ -115,6 +117,9 @@ func (s *fileCapabilityStoreStub) RegisterUpload(_ context.Context, artifact lif
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.registerCalls++
+	if s.registerErr != nil {
+		return s.registerErr
+	}
 	s.evidence[artifact.WorkspaceID+"\x00"+artifact.ArtifactID] = lifecyclecontract.FileScanEvidence{
 		ArtifactID: artifact.ArtifactID, WorkspaceID: artifact.WorkspaceID, Filename: artifact.Filename, ContentType: artifact.ContentType,
 		ObjectKey: artifact.ObjectKey, FieldKey: artifact.FieldKey, SHA256: artifact.SHA256, Size: artifact.Size, Status: lifecyclecontract.FileScanPending,
@@ -166,6 +171,9 @@ func TestFileCapabilityCreateDerivedIsImmutableAndIdempotent(t *testing.T) {
 	}
 	if first.FileID == "" || first.ScanReceipt == "" || first.Status != lifecyclecontract.FileScanClean || first.ProtectedDownload == "" || store.registerCalls != 1 {
 		t.Fatalf("first=%+v register calls=%d", first, store.registerCalls)
+	}
+	if err := entityid.Validate("art", first.FileID); err != nil {
+		t.Fatalf("derived file returned non-canonical Artifact ID %q: %v", first.FileID, err)
 	}
 	request.Content = bytes.NewReader([]byte("derived-pdf"))
 	second, err := service.CreateDerived(t.Context(), "workspace-a", derivedFileSystemPrincipal(), request)
