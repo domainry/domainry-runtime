@@ -232,9 +232,15 @@ func TestConfigSourceFilesAndUnknownWarning(t *testing.T) {
 	}
 }
 
-func TestConfigLoadAcceptsSourceOwnedIntegrationQuotaEnvironment(t *testing.T) {
+func TestConfigLoadAcceptsSourceOwnedModuleEnvironment(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("CONFIG_UNKNOWN_POLICY", "error")
+	t.Setenv("AUTH_ISSUER", "https://enterprise.verdent.test")
+	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_CREDENTIALS", "verdent-knowledge#global-index=source-owned-secret")
+	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_POLICIES", "verdent-knowledge=audience:domainry-runtime|grant:enterprise.knowledge.index_target")
+	t.Setenv("IDENTITY_GLOBAL_BROWSER_APPLICATIONS", "verdent-knowledge=https://knowledge.verdent.test/auth/callback")
+	t.Setenv("IDENTITY_GLOBAL_BROWSER_CREDENTIALS", "verdent-knowledge=source-owned-browser-secret")
+	t.Setenv("IDENTITY_GLOBAL_CATALOG_SOURCE_OWNERS", "verdent-knowledge=module:knowledge|project:verdent_knowledge")
 	t.Setenv("INTEGRATION_GOOGLE_QUOTA_PROJECT_ID", "project-a")
 	t.Setenv("INTEGRATION_GOOGLE_QUOTA_SERVICES", "gmail.googleapis.com")
 	t.Setenv("INTEGRATION_GOOGLE_QUOTA_CREDENTIALS_FILE", "/run/secrets/google-quota.json")
@@ -245,7 +251,7 @@ func TestConfigLoadAcceptsSourceOwnedIntegrationQuotaEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(snapshot.Warnings) != 0 {
-		t.Fatalf("source-owned Integration configuration warnings=%#v", snapshot.Warnings)
+		t.Fatalf("source-owned module configuration warnings=%#v", snapshot.Warnings)
 	}
 }
 
