@@ -216,6 +216,7 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		engine := newProjectEngine(
 			recordApplication,
 			records.Applications().Actions,
+			records.Applications().Workflows,
 			projectActionAssuranceApplication(dependencies, records.Applications().Actions),
 			accountReads,
 			accountWrites,

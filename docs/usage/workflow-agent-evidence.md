@@ -36,3 +36,23 @@ Product code may persist this projection alongside its business result in the
 same Action transaction. It must continue to enforce its own Case revision,
 valid outcomes and visibility policy. Historical runs without this snapshot
 are not backfilled or treated as evidence-complete.
+
+## Record-scoped execution status
+
+Project HTTP can use `runtimeengine.RecordWorkflowReader.ReadRecordWorkflow`
+with an exact object, record and Workflow key when a result Action could not
+commit. This separate read projection returns only whether one process exists,
+its reference, lifecycle, safe error code and UTC Unix-millisecond instants.
+It never exposes variables, definitions, Task input/output or recovery commands.
+
+The current identity must have read access to the target object and record.
+Runtime repeats that check after the bounded process lookup; ordinary record
+readers do not need Workflow operations permissions. Workspace, object, record
+and Workflow key must all match the process. Two matching processes produce an
+ambiguity error, not an arbitrarily selected attempt. Missing state is reported
+as `Found=false`; read failures must not be interpreted as execution failures.
+
+Consumers keep persisted business state separate from execution state. A failed
+process may coexist with a pending result record, and a successful Task does not
+prove its result Action committed. This API cannot rerun a Task, repair state,
+route work, or authorize any administrative recovery operation.

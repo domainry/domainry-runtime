@@ -17,6 +17,7 @@ import (
 	actionapplication "github.com/domainry/domainry-runtime/runtime/application/action"
 	recordapplication "github.com/domainry/domainry-runtime/runtime/application/record"
 	recordmutation "github.com/domainry/domainry-runtime/runtime/application/recordmutation"
+	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
@@ -27,6 +28,7 @@ type projectEngine struct {
 	records       *recordapplication.RecordApplicationService
 	actions       *actionapplication.ActionApplicationService
 	assurance     *actionapplication.ActionAssuranceApplicationService
+	workflows     *workflowapplication.WorkflowApplicationService
 	accountReads  integrationsdk.ConnectionAccountReads
 	accountWrites integrationsdk.ConnectionAccountWrites
 	identityUsers identitysdk.Projection
@@ -45,6 +47,7 @@ type KnowledgeLibrarySearchSource interface {
 func newProjectEngine(
 	records *recordapplication.RecordApplicationService,
 	actions *actionapplication.ActionApplicationService,
+	workflows *workflowapplication.WorkflowApplicationService,
 	assurance *actionapplication.ActionAssuranceApplicationService,
 	accountReads integrationsdk.ConnectionAccountReads,
 	accountWrites integrationsdk.ConnectionAccountWrites,
@@ -53,7 +56,7 @@ func newProjectEngine(
 	runtimeID string,
 	principal func(context.Context) (principalmodel.Principal, bool),
 ) runtimeengine.Engine {
-	return &projectEngine{records: records, actions: actions, assurance: assurance, accountReads: accountReads, accountWrites: accountWrites, identityUsers: identityUsers, knowledge: knowledge, runtimeID: strings.TrimSpace(runtimeID), principal: principal}
+	return &projectEngine{records: records, actions: actions, workflows: workflows, assurance: assurance, accountReads: accountReads, accountWrites: accountWrites, identityUsers: identityUsers, knowledge: knowledge, runtimeID: strings.TrimSpace(runtimeID), principal: principal}
 }
 
 func (e *projectEngine) SearchKnowledgeLibrary(ctx context.Context, libraryID, query string) (runtimeengine.KnowledgeSearchResult, error) {
