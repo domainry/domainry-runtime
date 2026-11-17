@@ -246,6 +246,7 @@ func TestConfigLoadAcceptsSourceOwnedModuleEnvironment(t *testing.T) {
 	t.Setenv("IDENTITY_COOKIE_SECURE", "true")
 	t.Setenv("IDENTITY_ENDPOINT", "https://enterprise.verdent.test")
 	t.Setenv("IDENTITY_ISSUER", "https://enterprise.verdent.test")
+	t.Setenv("IDENTITY_INSTANCE_ID", "runtime-pod-a")
 	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_CREDENTIALS", "verdent-knowledge#global-index=source-owned-secret")
 	t.Setenv("IDENTITY_GLOBAL_APPLICATION_SERVICE_POLICIES", "verdent-knowledge=audience:domainry-runtime|grant:enterprise.knowledge.index_target")
 	t.Setenv("IDENTITY_GLOBAL_BROWSER_APPLICATIONS", "verdent-knowledge=https://knowledge.verdent.test/auth/callback")
@@ -269,6 +270,7 @@ func TestConfigLoadStillRejectsMisspelledSourceOwnedModuleEnvironment(t *testing
 	for _, name := range []string{
 		"DATABASE_BOOTSTRAP_REVISON",
 		"IDENTITY_COOKIE_SECUR",
+		"IDENTITY_INSTANCE_IDENT",
 		"INTEGRATION_GOOGLE_QUOTA_PROJET_ID",
 	} {
 		t.Run(name, func(t *testing.T) {
