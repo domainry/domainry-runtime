@@ -18,3 +18,17 @@ func TestProductionWorkerDependenciesCannotEnableFaultInjection(t *testing.T) {
 		t.Fatalf("missing injectable dependency: %#v", dependencies)
 	}
 }
+
+func TestRuntimeWorkerIdentityIsProcessScoped(t *testing.T) {
+	first, err := newRuntimeWorkerDependencies("pod-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newRuntimeWorkerDependencies("pod-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.WorkerID.String() != "pod-a" || second.WorkerID.String() != "pod-b" || first.WorkerID == second.WorkerID {
+		t.Fatalf("worker identities=%q,%q", first.WorkerID, second.WorkerID)
+	}
+}

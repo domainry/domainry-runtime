@@ -102,7 +102,7 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		startupOptions.BlobStore, err = blobstore.NewLocalStore(uploadDirectory)
 		mustCompleteRuntimeStartup(err)
 	}
-	workerDependencies, err := newRuntimeWorkerDependencies(cfg.RuntimeInstanceID)
+	workerDependencies, err := newRuntimeWorkerDependencies(cfg.RuntimeWorkerID)
 	mustCompleteRuntimeStartup(err)
 	var releaseCohort *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
 	releaseAdmission := &deploymentapplication.RuntimeReleaseAdmission{}

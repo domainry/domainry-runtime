@@ -28,5 +28,8 @@ func normalizeRuntimeConfigWithHostname(cfg config.Config, hostname func() (stri
 		}
 		cfg.RuntimeInstanceID = "runtime-" + strings.TrimSpace(name) + "-" + strings.TrimPrefix(strings.TrimSpace(cfg.Port), ":")
 	}
+	if strings.TrimSpace(cfg.RuntimeWorkerID) == "" {
+		cfg.RuntimeWorkerID = cfg.RuntimeInstanceID
+	}
 	return cfg
 }

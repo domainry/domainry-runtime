@@ -26,3 +26,15 @@ func TestNormalizeRuntimeConfigDoesNotInferDevelopmentIdentityHeaders(t *testing
 		t.Fatal("development Identity headers must require explicit configuration")
 	}
 }
+
+func TestNormalizeRuntimeConfigSeparatesStableRuntimeScopeFromWorkerIdentity(t *testing.T) {
+	cfg := NormalizeConfig(config.Config{RuntimeInstanceID: "runtime-scope", RuntimeWorkerID: "pod-a"})
+	if cfg.RuntimeInstanceID != "runtime-scope" || cfg.RuntimeWorkerID != "pod-a" {
+		t.Fatalf("Runtime identities=%#v", cfg)
+	}
+
+	fallback := NormalizeConfig(config.Config{RuntimeInstanceID: "single-node"})
+	if fallback.RuntimeWorkerID != "single-node" {
+		t.Fatalf("single-node worker identity=%q", fallback.RuntimeWorkerID)
+	}
+}
