@@ -15,6 +15,7 @@ import (
 
 func TestConnectorWebSocketTransportUsesGovernedFramedSession(t *testing.T) {
 	receivedAuthorization := make(chan string, 1)
+	receivedCloseCode := make(chan websocket.StatusCode, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		receivedAuthorization <- request.Header.Get("Authorization")
 		connection, err := websocket.Accept(writer, request, nil)
@@ -25,7 +26,8 @@ func TestConnectorWebSocketTransportUsesGovernedFramedSession(t *testing.T) {
 		messageType, message, err := connection.Read(request.Context())
 		if err == nil {
 			_ = connection.Write(request.Context(), messageType, append([]byte("echo:"), message...))
-			_, _, _ = connection.Read(request.Context())
+			_, _, err = connection.Read(request.Context())
+			receivedCloseCode <- websocket.CloseStatus(err)
 		}
 	}))
 	defer server.Close()
@@ -49,8 +51,11 @@ func TestConnectorWebSocketTransportUsesGovernedFramedSession(t *testing.T) {
 	}
 	closeContext, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	if err := session.Close(closeContext); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := session.Close(closeContext, connector.WebSocketClose{Code: 4000, Reason: "resume"}); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
+	}
+	if code := <-receivedCloseCode; code != 4000 {
+		t.Fatalf("provider close code=%d, want 4000", code)
 	}
 }
 
@@ -108,10 +113,45 @@ func TestConnectorWebSocketReceiveCancellationAndCloseAreBounded(t *testing.T) {
 	}
 	closeContext, cancelClose := context.WithTimeout(context.Background(), time.Second)
 	defer cancelClose()
-	if err := session.Close(closeContext); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+	if err := session.Close(closeContext, connector.WebSocketClose{Code: 1000}); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
-	if err := session.Close(closeContext); err != nil {
+	if err := session.Close(closeContext, connector.WebSocketClose{Code: 1000}); err != nil {
 		t.Fatalf("idempotent close error=%v", err)
+	}
+}
+
+func TestConnectorWebSocketOpeningContextOwnsSessionLifetime(t *testing.T) {
+	accepted := make(chan struct{})
+	disconnected := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(writer, request, nil)
+		if err != nil {
+			return
+		}
+		close(accepted)
+		defer close(disconnected)
+		defer connection.CloseNow()
+		_, _, _ = connection.Read(request.Context())
+	}))
+	defer server.Close()
+	transport := newConnectorTransport().(connector.WebSocketTransport)
+	ownerContext, cancelOwner := context.WithCancel(t.Context())
+	session, err := transport.OpenWebSocket(ownerContext, connector.WebSocketRequest{URL: strings.Replace(server.URL, "http://", "ws://", 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-accepted
+	cancelOwner()
+	select {
+	case <-disconnected:
+	case <-time.After(time.Second):
+		t.Fatal("opening context cancellation did not close the owned WebSocket")
+	}
+	if err := session.Send(t.Context(), connector.WebSocketMessage{Type: connector.WebSocketMessageText, Data: []byte("after-cancel")}); err == nil || !strings.Contains(err.Error(), "session is closed") {
+		t.Fatalf("send after owner cancellation error=%v", err)
+	}
+	if err := session.Close(t.Context(), connector.WebSocketClose{Code: 1000}); err != nil {
+		t.Fatalf("close after owner cancellation error=%v", err)
 	}
 }

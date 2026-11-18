@@ -59,7 +59,11 @@ func (a *Runtime) runControlledWorker(ctx context.Context, owner string, start f
 				childCancel()
 			}
 			if childDone != nil {
-				waitForControlledWorker(childDone, 5*time.Second)
+				// Do not report this supervisor as stopped while its owned worker is
+				// still alive. Runtime.stopWorkers already owns the bounded process
+				// shutdown deadline; hiding a stuck child here would let bindings and
+				// stores close underneath a leaked stream goroutine.
+				<-childDone
 			}
 			return
 		case <-childDone:
@@ -68,13 +72,6 @@ func (a *Runtime) runControlledWorker(ctx context.Context, owner string, start f
 			reconcile()
 			poll.Reset(pollInterval)
 		}
-	}
-}
-
-func waitForControlledWorker(done <-chan struct{}, timeout time.Duration) {
-	select {
-	case <-done:
-	case <-time.After(timeout):
 	}
 }
 

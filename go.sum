@@ -98,8 +98,8 @@ github.com/domainry/domainry-audit v0.1.46 h1:6aXdTNyUxJdcbOZ4tikqdSctUKPy8NgfiJ
 github.com/domainry/domainry-audit v0.1.46/go.mod h1:E3j/pWAwWtyRbVMMWxvZXezeDCmXwEHg+I1OWzPeSlA=
 github.com/domainry/domainry-audit-sdk v0.1.22 h1:Cind+f8oFw6ws6AlCAMgdt+FyPh+CPd2h8x3GjPYXzY=
 github.com/domainry/domainry-audit-sdk v0.1.22/go.mod h1:nmJ5DC8qnaPl17wlRCLZO/+hIPCO/rSIM13PkvII0i8=
-github.com/domainry/domainry-connector-sdk v0.1.23 h1:baSC+aCmAsBF6/09dw7DacZ+REiDtBVhqiRmYlk++50=
-github.com/domainry/domainry-connector-sdk v0.1.23/go.mod h1:LsCzwqpnRePkfLgutaU6XTnXbrOSFXf1UaguVYh3wCY=
+github.com/domainry/domainry-connector-sdk v0.1.24 h1:4p3uVLEkIm7E8qA+YWgkOCycJo82Tb7GERyingicT+I=
+github.com/domainry/domainry-connector-sdk v0.1.24/go.mod h1:LsCzwqpnRePkfLgutaU6XTnXbrOSFXf1UaguVYh3wCY=
 github.com/domainry/domainry-connectors v0.1.32 h1:+ywrO7jco8WdvQV8isU5gXa76R3yjS3Mas0SqA4wHQk=
 github.com/domainry/domainry-connectors v0.1.32/go.mod h1:MsQAC1gKokudQnLjf0L8xbYGoL40xEKWqXNr968O7RA=
 github.com/domainry/domainry-data-exchange v0.3.41 h1:vLI8xKHc9QCC58SoavjDskf2IMpsQJK8H/LxyGsRTe8=

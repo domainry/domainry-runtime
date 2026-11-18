@@ -18,6 +18,7 @@ import (
 const (
 	defaultConnectorWebSocketMessageBytes = int64(1 << 20)
 	maxConnectorWebSocketMessageBytes     = int64(40 << 20)
+	defaultConnectorWebSocketCloseTimeout = 5 * time.Second
 )
 
 func (t *connectorTransport) OpenWebSocket(ctx context.Context, request connector.WebSocketRequest) (session connector.WebSocketSession, returnErr error) {
@@ -67,7 +68,9 @@ func (t *connectorTransport) OpenWebSocket(ctx context.Context, request connecto
 		return nil, err
 	}
 	connection.SetReadLimit(limit)
-	return &connectorWebSocketSession{connection: connection, limit: limit}, nil
+	owned := &connectorWebSocketSession{connection: connection, limit: limit}
+	owned.bindContext(ctx)
+	return owned, nil
 }
 
 func connectorWebSocketHeaders(public, secrets map[string][]string) (http.Header, error) {
@@ -113,6 +116,27 @@ type connectorWebSocketSession struct {
 	mu         sync.Mutex
 	connection *websocket.Conn
 	limit      int64
+	stopOwner  func() bool
+}
+
+// bindContext makes the opening context the hard lifetime boundary for the
+// upgraded connection. Providers still close sessions explicitly so peers can
+// observe a normal close frame, but a missed error path cannot leave a socket,
+// reader goroutine or resolved credential snapshot alive after its owner has
+// been cancelled.
+func (s *connectorWebSocketSession) bindContext(ctx context.Context) {
+	if s == nil {
+		return
+	}
+	stop := context.AfterFunc(ctx, s.closeNow)
+	s.mu.Lock()
+	if s.connection == nil {
+		s.mu.Unlock()
+		stop()
+		return
+	}
+	s.stopOwner = stop
+	s.mu.Unlock()
 }
 
 func (s *connectorWebSocketSession) currentConnection() *websocket.Conn {
@@ -122,6 +146,27 @@ func (s *connectorWebSocketSession) currentConnection() *websocket.Conn {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.connection
+}
+
+func (s *connectorWebSocketSession) takeConnection() (*websocket.Conn, func() bool) {
+	if s == nil {
+		return nil, nil
+	}
+	s.mu.Lock()
+	connection, stop := s.connection, s.stopOwner
+	s.connection, s.stopOwner = nil, nil
+	s.mu.Unlock()
+	return connection, stop
+}
+
+func (s *connectorWebSocketSession) closeNow() {
+	connection, stop := s.takeConnection()
+	if stop != nil {
+		stop()
+	}
+	if connection != nil {
+		_ = connection.CloseNow()
+	}
 }
 
 func (s *connectorWebSocketSession) Send(ctx context.Context, message connector.WebSocketMessage) (returnErr error) {
@@ -170,33 +215,39 @@ func (s *connectorWebSocketSession) Receive(ctx context.Context) (message connec
 	return connector.WebSocketMessage{Type: typeValue, Data: data}, nil
 }
 
-func (s *connectorWebSocketSession) Close(ctx context.Context) (returnErr error) {
+func (s *connectorWebSocketSession) Close(ctx context.Context, request connector.WebSocketClose) (returnErr error) {
 	started := time.Now()
 	defer func() {
-		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureHTTPClient, "connector.websocket", "close", nil, nil, started, returnErr)
+		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureHTTPClient, "connector.websocket", "close", map[string]any{"close_code": request.Code}, nil, started, returnErr)
 	}()
-	if s == nil {
-		return nil
+	if err := request.Validate(); err != nil {
+		return err
 	}
-	s.mu.Lock()
-	connection := s.connection
-	s.connection = nil
-	s.mu.Unlock()
+	connection, stop := s.takeConnection()
+	if stop != nil {
+		stop()
+	}
 	if connection == nil {
 		return nil
 	}
-	if err := ctx.Err(); err != nil {
+	if ctx == nil {
+		_ = connection.CloseNow()
+		return errors.New("Connector WebSocket close context is required")
+	}
+	closeContext, cancelClose := context.WithTimeout(ctx, defaultConnectorWebSocketCloseTimeout)
+	defer cancelClose()
+	if err := closeContext.Err(); err != nil {
 		_ = connection.CloseNow()
 		return err
 	}
 	done := make(chan error, 1)
-	go func() { done <- connection.Close(websocket.StatusNormalClosure, "") }()
+	go func() { done <- connection.Close(websocket.StatusCode(request.Code), request.Reason) }()
 	select {
 	case err := <-done:
 		return err
-	case <-ctx.Done():
+	case <-closeContext.Done():
 		_ = connection.CloseNow()
-		return ctx.Err()
+		return closeContext.Err()
 	}
 }
 

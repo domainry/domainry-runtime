@@ -202,6 +202,60 @@ func TestControlledInstanceDrainWaitsForInFlightTick(t *testing.T) {
 	}
 }
 
+func TestControlledWorkerDoesNotHideAChildThatHasNotReleasedResources(t *testing.T) {
+	store, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "worker-resource-release.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.EnsureRuntimeSchema(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	workerID, _ := workerplatform.NewWorkerID("instance-resource-release")
+	runtime := &Runtime{store: store, worker: workerplatform.NewDependencies(workerID), operationsControlPollInterval: time.Minute}
+	childStarted := make(chan struct{})
+	childCancelled := make(chan struct{})
+	releaseChild := make(chan struct{})
+	runtime.startControlledWorker(t.Context(), "integration_provider_stream", func(ctx context.Context) <-chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			close(childStarted)
+			<-ctx.Done()
+			close(childCancelled)
+			<-releaseChild
+		}()
+		return done
+	})
+
+	runtime.workersMu.Lock()
+	cancel := runtime.workerCancels[0]
+	supervisorDone := runtime.workerDone[0]
+	runtime.workersMu.Unlock()
+	select {
+	case <-childStarted:
+	case <-time.After(time.Second):
+		t.Fatal("child did not start")
+	}
+	cancel()
+	select {
+	case <-childCancelled:
+	case <-time.After(time.Second):
+		t.Fatal("child was not cancelled")
+	}
+	select {
+	case <-supervisorDone:
+		t.Fatal("supervisor reported completion before the child released its resources")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(releaseChild)
+	select {
+	case <-supervisorDone:
+	case <-time.After(time.Second):
+		t.Fatal("supervisor did not complete after the child released its resources")
+	}
+}
+
 func operationsTestWorker(starts, stops *atomic.Int32) func(context.Context) <-chan struct{} {
 	return func(ctx context.Context) <-chan struct{} {
 		starts.Add(1)
