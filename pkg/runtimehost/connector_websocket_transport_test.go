@@ -2,6 +2,7 @@ package runtimehost
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,7 +49,7 @@ func TestConnectorWebSocketTransportUsesGovernedFramedSession(t *testing.T) {
 	}
 	closeContext, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
-	if err := session.Close(closeContext); err != nil {
+	if err := session.Close(closeContext); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
 }
@@ -69,5 +70,48 @@ func TestConnectorWebSocketTransportFailsClosed(t *testing.T) {
 		if _, err := transport.OpenWebSocket(t.Context(), request); err == nil {
 			t.Fatalf("accepted request=%+v", request)
 		}
+	}
+}
+
+func TestConnectorWebSocketReceiveCancellationAndCloseAreBounded(t *testing.T) {
+	accepted := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		connection, err := websocket.Accept(writer, request, nil)
+		if err != nil {
+			return
+		}
+		close(accepted)
+		defer connection.CloseNow()
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	transport := newConnectorTransport().(connector.WebSocketTransport)
+	session, err := transport.OpenWebSocket(t.Context(), connector.WebSocketRequest{URL: strings.Replace(server.URL, "http://", "ws://", 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-accepted
+	receiveContext, cancelReceive := context.WithCancel(t.Context())
+	received := make(chan error, 1)
+	go func() {
+		_, err := session.Receive(receiveContext)
+		received <- err
+	}()
+	cancelReceive()
+	select {
+	case err := <-received:
+		if err == nil {
+			t.Fatal("cancelled receive returned no error")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled receive did not return")
+	}
+	closeContext, cancelClose := context.WithTimeout(context.Background(), time.Second)
+	defer cancelClose()
+	if err := session.Close(closeContext); err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if err := session.Close(closeContext); err != nil {
+		t.Fatalf("idempotent close error=%v", err)
 	}
 }

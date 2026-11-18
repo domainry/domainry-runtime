@@ -10,19 +10,20 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
 	github.com/aws/smithy-go v1.28.1
+	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/domainry/domainry-agent v0.1.102
 	github.com/domainry/domainry-agent-sdk v0.1.59
 	github.com/domainry/domainry-audit v0.1.46
 	github.com/domainry/domainry-audit-sdk v0.1.22
-	github.com/domainry/domainry-connector-sdk v0.1.22
+	github.com/domainry/domainry-connector-sdk v0.1.23
 	github.com/domainry/domainry-data-exchange v0.3.41
 	github.com/domainry/domainry-data-exchange-sdk v0.3.22
 	github.com/domainry/domainry-foundation v0.2.25
 	github.com/domainry/domainry-identity v0.2.84
 	github.com/domainry/domainry-identity-sdk v0.1.45
-	github.com/domainry/domainry-integration v0.1.61
-	github.com/domainry/domainry-integration-sdk v0.1.28
+	github.com/domainry/domainry-integration v0.1.63
+	github.com/domainry/domainry-integration-sdk v0.1.30
 	github.com/domainry/domainry-knowledge v0.1.112
 	github.com/domainry/domainry-knowledge-sdk v0.1.46
 	github.com/domainry/domainry-lifecycle v0.1.45
@@ -74,7 +75,6 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect

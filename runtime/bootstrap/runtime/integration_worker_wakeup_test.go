@@ -25,6 +25,11 @@ type wakeupTestAdapter struct{ handler http.Handler }
 
 type wakeupTestWorkers struct{ integrationsdk.LocalWorkers }
 
+func (wakeupTestWorkers) RunProviderStreams(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 func (wakeupTestAdapter) ContractVersion() string { return modulehttp.ContractVersion }
 func (wakeupTestAdapter) Owner() string           { return "integration" }
 func (wakeupTestAdapter) Name() string            { return "integration_product" }

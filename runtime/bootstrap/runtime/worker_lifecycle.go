@@ -38,6 +38,7 @@ func StartWorkers(ctx context.Context, runtime *Runtime) {
 	runtime.StartIntegrationEventWorker(ctx)
 	runtime.StartPublicationHandoffWorker(ctx)
 	runtime.startConnectorProviderBackgroundWorker(ctx)
+	runtime.startConnectorProviderStreamWorker(ctx)
 	runtime.startIntegrationInvocationReconciliationWorker(ctx)
 	runtime.startIntegrationCredentialExpiryWorker(ctx)
 	runtime.startIntegrationHealthAlertWorker(ctx)
@@ -236,6 +237,20 @@ func (a *Runtime) startConnectorProviderBackgroundWorker(ctx context.Context) {
 		return
 	}
 	a.startIntegrationOwnerLoop(ctx, "integration_provider", "Integration Provider worker failed", a.integrationWorkers.ProcessDueProviderTasks)
+}
+
+func (a *Runtime) startConnectorProviderStreamWorker(ctx context.Context) {
+	if a == nil || a.integrationWorkers == nil {
+		return
+	}
+	a.startControlledWorker(ctx, "integration_provider_stream", func(workerCtx context.Context) <-chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = a.integrationWorkers.RunProviderStreams(workerCtx)
+		}()
+		return done
+	})
 }
 
 func (a *Runtime) startIntegrationInvocationReconciliationWorker(ctx context.Context) {

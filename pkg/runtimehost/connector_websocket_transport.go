@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -109,8 +110,18 @@ func connectorWebSocketLoopback(host string) bool {
 }
 
 type connectorWebSocketSession struct {
+	mu         sync.Mutex
 	connection *websocket.Conn
 	limit      int64
+}
+
+func (s *connectorWebSocketSession) currentConnection() *websocket.Conn {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.connection
 }
 
 func (s *connectorWebSocketSession) Send(ctx context.Context, message connector.WebSocketMessage) (returnErr error) {
@@ -120,7 +131,8 @@ func (s *connectorWebSocketSession) Send(ctx context.Context, message connector.
 			"message_type": string(message.Type), "message_bytes": len(message.Data),
 		}, nil, started, returnErr)
 	}()
-	if s == nil || s.connection == nil {
+	connection := s.currentConnection()
+	if connection == nil {
 		return errors.New("Connector WebSocket session is closed")
 	}
 	if int64(len(message.Data)) > s.limit {
@@ -130,7 +142,7 @@ func (s *connectorWebSocketSession) Send(ctx context.Context, message connector.
 	if err != nil {
 		return err
 	}
-	return s.connection.Write(ctx, messageType, message.Data)
+	return connection.Write(ctx, messageType, message.Data)
 }
 
 func (s *connectorWebSocketSession) Receive(ctx context.Context) (message connector.WebSocketMessage, returnErr error) {
@@ -140,10 +152,11 @@ func (s *connectorWebSocketSession) Receive(ctx context.Context) (message connec
 			"message_type": string(message.Type), "message_bytes": len(message.Data),
 		}, started, returnErr)
 	}()
-	if s == nil || s.connection == nil {
+	connection := s.currentConnection()
+	if connection == nil {
 		return message, errors.New("Connector WebSocket session is closed")
 	}
-	messageType, data, err := s.connection.Read(ctx)
+	messageType, data, err := connection.Read(ctx)
 	if err != nil {
 		return message, err
 	}
@@ -162,16 +175,29 @@ func (s *connectorWebSocketSession) Close(ctx context.Context) (returnErr error)
 	defer func() {
 		recordConnectorDependency(ctx, telemetry.DiagnosticFeatureHTTPClient, "connector.websocket", "close", nil, nil, started, returnErr)
 	}()
-	if s == nil || s.connection == nil {
+	if s == nil {
 		return nil
 	}
+	s.mu.Lock()
 	connection := s.connection
 	s.connection = nil
+	s.mu.Unlock()
+	if connection == nil {
+		return nil
+	}
 	if err := ctx.Err(); err != nil {
 		_ = connection.CloseNow()
 		return err
 	}
-	return connection.Close(websocket.StatusNormalClosure, "")
+	done := make(chan error, 1)
+	go func() { done <- connection.Close(websocket.StatusNormalClosure, "") }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		_ = connection.CloseNow()
+		return ctx.Err()
+	}
 }
 
 func connectorWebSocketMessageType(messageType connector.WebSocketMessageType) (websocket.MessageType, error) {
