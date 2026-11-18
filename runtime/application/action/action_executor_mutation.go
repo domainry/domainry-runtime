@@ -326,7 +326,7 @@ func (e *businessActionExecution) withPlannedRelationRecords(ctx context.Context
 		record.RecordID = recordID
 		records[objectKey][recordID] = record
 	}
-	return recordservice.RecordWithPlannedRelations(ctx, records)
+	return recordservice.RecordWithAuthorizedPlannedRelations(ctx, records)
 }
 
 func plannedRelationRecordIdentity(commit transactionmodel.RecordMutationCommit) (string, string, bool) {

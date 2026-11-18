@@ -254,6 +254,39 @@ func TestRelationValidatorAcceptsOnlyAlreadyPlannedAccessibleBatchRelations(t *t
 	assertRecordAppError(t, err, apperror.KindBadRequest, "backend.relation.record_missing", map[string]string{"field": "customer_id", "object": "customer"})
 }
 
+func TestRelationValidatorAcceptsAuthorizedEarlierActionPlanWithoutIndependentRead(t *testing.T) {
+	decision := definitionmodel.ObjectSchema{Key: "case_routing_decision"}
+	escalation := definitionmodel.ObjectSchema{Key: "case_routing_escalation", Fields: []definitionmodel.FieldSchema{{
+		Key: "source_decision", Type: "relation", Validation: definitionmodel.FieldValidation{Target: decision.Key},
+	}}}
+	accessChecks := 0
+	validator := NewRecordRelationValidator(RecordRelationValidationDependencies{
+		Repository: &relationRepositoryProbe{},
+		Object: func(_ context.Context, key string) (definitionmodel.ObjectSchema, bool) {
+			return decision, key == decision.Key
+		},
+		CanAccessRecord: func(principalmodel.Principal, definitionmodel.ObjectSchema, recordmodel.Record) bool {
+			accessChecks++
+			return false
+		},
+	})
+	ctx := RecordWithAuthorizedPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{
+		decision.Key: {"decision-1": {RecordID: "decision-1"}},
+	})
+	if err := validator.Validate(ctx, escalation, map[string]any{"source_decision": "decision-1"}, principalmodel.Principal{}); err != nil {
+		t.Fatalf("authorized earlier Action plan rejected: %v", err)
+	}
+	if accessChecks != 0 {
+		t.Fatalf("authorized staged relation performed %d independent read checks", accessChecks)
+	}
+
+	ordinary := RecordWithPlannedRelations(t.Context(), map[string]map[string]recordmodel.Record{
+		decision.Key: {"decision-1": {RecordID: "decision-1"}},
+	})
+	err := validator.Validate(ordinary, escalation, map[string]any{"source_decision": "decision-1"}, principalmodel.Principal{})
+	assertRecordAppError(t, err, apperror.KindForbidden, "backend.record.outside_scope", nil)
+}
+
 func TestPlannedRelationContextHandlesNilAndEmptyInputs(t *testing.T) {
 	if ctx := RecordWithPlannedRelations(nil, map[string]map[string]recordmodel.Record{
 		"customer": {"customer-1": {RecordID: "customer-1"}},

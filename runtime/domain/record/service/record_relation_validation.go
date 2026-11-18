@@ -34,6 +34,7 @@ type RecordRelationValidator struct {
 }
 
 type recordPlannedRelationsContextKey struct{}
+type recordAuthorizedPlannedRelationsContextKey struct{}
 type recordPlannedIdentityUsersContextKey struct{}
 
 // RecordWithPlannedIdentityUsers marks exact Identity users that a trusted
@@ -82,6 +83,40 @@ func RecordWithPlannedRelations(ctx context.Context, records map[string]map[stri
 	return context.WithValue(ctx, recordPlannedRelationsContextKey{}, cloned)
 }
 
+// RecordWithAuthorizedPlannedRelations exposes records whose canonical
+// mutation plans were already authorized earlier in the same Action unit of
+// work. A later mutation may reference those exact staged records without a
+// second independent read grant: the records do not exist outside the unit of
+// work yet, and the successful plans are the authority for this intra-Action
+// relation only.
+func RecordWithAuthorizedPlannedRelations(ctx context.Context, records map[string]map[string]recordmodel.Record) context.Context {
+	ctx = RecordWithPlannedRelations(ctx, records)
+	if ctx == nil || len(records) == 0 {
+		return ctx
+	}
+	authorized := make(map[string]map[string]bool, len(records))
+	for objectKey, values := range records {
+		objectKey = strings.TrimSpace(objectKey)
+		if objectKey == "" {
+			continue
+		}
+		for recordID, record := range values {
+			recordID = strings.TrimSpace(recordID)
+			if recordID == "" || record.Deleted || strings.TrimSpace(record.RecordID) != recordID {
+				continue
+			}
+			if authorized[objectKey] == nil {
+				authorized[objectKey] = map[string]bool{}
+			}
+			authorized[objectKey][recordID] = true
+		}
+	}
+	if len(authorized) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, recordAuthorizedPlannedRelationsContextKey{}, authorized)
+}
+
 func recordPlannedRelation(ctx context.Context, objectKey, recordID string) (recordmodel.Record, bool) {
 	if ctx == nil {
 		return recordmodel.Record{}, false
@@ -89,6 +124,14 @@ func recordPlannedRelation(ctx context.Context, objectKey, recordID string) (rec
 	records, _ := ctx.Value(recordPlannedRelationsContextKey{}).(map[string]map[string]recordmodel.Record)
 	record, found := records[strings.TrimSpace(objectKey)][strings.TrimSpace(recordID)]
 	return record, found
+}
+
+func recordAuthorizedPlannedRelation(ctx context.Context, objectKey, recordID string) bool {
+	if ctx == nil {
+		return false
+	}
+	authorized, _ := ctx.Value(recordAuthorizedPlannedRelationsContextKey{}).(map[string]map[string]bool)
+	return authorized[strings.TrimSpace(objectKey)][strings.TrimSpace(recordID)]
 }
 
 // RecordPlannedRelations returns a defensive copy of records already staged in
@@ -178,6 +221,9 @@ func (s *RecordRelationValidator) Validate(ctx context.Context, object definitio
 			return recordServiceError(apperror.KindBadRequest, "backend.relation.target_unavailable", nil, "field", field.Key, "object", target)
 		}
 		if record, found := recordPlannedRelation(ctx, target, recordID); found {
+			if recordAuthorizedPlannedRelation(ctx, target, recordID) {
+				continue
+			}
 			allowed, err := s.canAccess(ctx, principal, targetObject, record)
 			if err != nil {
 				return err
