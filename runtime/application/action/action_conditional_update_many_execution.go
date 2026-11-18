@@ -47,7 +47,7 @@ func (e *businessActionExecution) ConditionalUpdateMany(ctx context.Context, req
 	if err != nil {
 		return runtimeext.ConditionalUpdateManyResult{}, err
 	}
-	readPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, request.ObjectKey)
+	readPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, request.ObjectKey, e.dependencies.ObjectForKey)
 	page, err := e.dependencies.ListRecords(txCtx, request.ObjectKey, recordmodel.RecordListQuery{
 		Page: 1, PageSize: request.ExpectedCount, SkipTotal: true,
 		FilterExpression:         filterExpression,

@@ -42,7 +42,7 @@ func (e *businessActionExecution) lockAccountErasureRecord(ctx context.Context, 
 	if e.dependencies.GetRecordForUpdate == nil {
 		return recordmodel.Record{}, missingExecutorPort("get_account_erasure_record_for_update")
 	}
-	principal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, object)
+	principal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, object, e.dependencies.ObjectForKey)
 	record, err := e.dependencies.GetRecordForUpdate(ctx, object, id, principal)
 	if err != nil {
 		return recordmodel.Record{}, err

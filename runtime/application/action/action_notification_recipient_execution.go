@@ -21,7 +21,7 @@ func (e *businessActionExecution) ResolveRecordNotificationRecipient(ctx context
 		if e.dependencies.GetRecord == nil {
 			return "", missingExecutorPort("get_record")
 		}
-		principal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, objectKey)
+		principal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, objectKey, e.dependencies.ObjectForKey)
 		var err error
 		record, err = e.dependencies.GetRecord(e.unitOfWork.executionContext(ctx), objectKey, recordID, principal)
 		if err != nil {

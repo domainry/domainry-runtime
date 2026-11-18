@@ -98,7 +98,7 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 			if err != nil {
 				return runtimeext.IdentityHandlerDeliveryResult{}, err
 			}
-			authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, request.ProfileBinding.ObjectKey)
+			authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, request.ProfileBinding.ObjectKey, e.dependencies.ObjectForKey)
 			profile, err := e.dependencies.GetRecordForUpdate(txCtx, request.ProfileBinding.ObjectKey, request.ProfileBinding.ProfileID, authorizationPrincipal)
 			if err != nil {
 				return runtimeext.IdentityHandlerDeliveryResult{}, err

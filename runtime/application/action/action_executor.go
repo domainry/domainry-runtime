@@ -354,7 +354,7 @@ func (e *businessActionExecution) QueryRecords(ctx context.Context, query runtim
 	if !actionEffectAllows(e.action.EffectSet, query.ObjectKey, false) {
 		return runtimeext.RecordQueryResult{}, apperror.New(apperror.KindForbidden, "backend.action.effect_authority_denied", nil, map[string]string{"object": query.ObjectKey})
 	}
-	authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, query.ObjectKey)
+	authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, query.ObjectKey, e.dependencies.ObjectForKey)
 	ownerOrganizationID := ""
 	if query.StoreOrganization != nil {
 		var err error

@@ -26,11 +26,11 @@ func TestActionReadOnlyReferencePreservesCallerAccessWithoutWideningWrites(t *te
 		Read:  []definitionmodel.ActionObjectEffect{{ObjectKey: "member"}, {ObjectKey: "store"}},
 		Write: []definitionmodel.ActionObjectEffect{{ObjectKey: "member"}},
 	}
-	storePrincipal := actionReadEffectAuthorizationPrincipal(principal, effects, action, "store")
+	storePrincipal := actionReadEffectAuthorizationPrincipal(principal, effects, action, "store", nil)
 	if !recordpolicy.RecordCanAccess(storePrincipal, definitionmodel.ObjectSchema{Key: "store"}, recordmodel.Record{OwnerUserID: "store-manager"}) {
 		t.Fatal("an owner-scoped enrollment cannot read a public store already readable by its caller")
 	}
-	memberPrincipal := actionReadEffectAuthorizationPrincipal(principal, effects, action, "member")
+	memberPrincipal := actionReadEffectAuthorizationPrincipal(principal, effects, action, "member", nil)
 	if recordpolicy.RecordCanAccess(memberPrincipal, definitionmodel.ObjectSchema{Key: "member"}, recordmodel.Record{OwnerUserID: "another-member"}) {
 		t.Fatal("broad caller CRUD read widened the Action's writable member scope")
 	}
@@ -41,7 +41,7 @@ func TestActionReadOnlyReferencePreservesCallerAccessWithoutWideningWrites(t *te
 	bundle := *principal.AccessBundle
 	bundle.FunctionGrants = append(append([]identitysdk.FunctionGrant(nil), bundle.FunctionGrants...), identitysdk.FunctionGrant{Resource: "store", Action: "read", Effect: identitysdk.EffectDeny})
 	denied.AccessBundle = &bundle
-	deniedPrincipal := actionReadEffectAuthorizationPrincipal(denied, effects, action, "store")
+	deniedPrincipal := actionReadEffectAuthorizationPrincipal(denied, effects, action, "store", nil)
 	if recordpolicy.RecordCanAccess(deniedPrincipal, definitionmodel.ObjectSchema{Key: "store"}, recordmodel.Record{OwnerUserID: "member-user"}) {
 		t.Fatal("an explicit reference read denial was bypassed")
 	}

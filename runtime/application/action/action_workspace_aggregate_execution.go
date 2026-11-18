@@ -71,7 +71,7 @@ func (e *businessActionExecution) CrossWorkspaceAggregate(ctx context.Context, r
 	if !definitionmodel.EffectiveObjectCapabilities(object).Read {
 		return fail(apperror.KindForbidden, "backend.action.cross_workspace_aggregate_object_read_denied", "denied", nil)
 	}
-	authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, grant.ObjectKey)
+	authorizationPrincipal := actionReadEffectAuthorizationPrincipal(e.invocation.Principal, e.action.EffectSet, e.action, grant.ObjectKey, e.dependencies.ObjectForKey)
 	if err := validateWorkspaceAggregateFields(grant, object, authorizationPrincipal); err != nil {
 		return fail(apperror.KindForbidden, "backend.action.cross_workspace_aggregate_field_denied", "denied", err)
 	}
