@@ -76,6 +76,8 @@ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UF
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cloudwego/base64x v0.1.6 h1:t11wG9AECkCDk5fMSoxmufanudBtJ+/HemLstXDLI2M=
 github.com/cloudwego/base64x v0.1.6/go.mod h1:OFcloc187FXDaYHvrNIjxSe8ncn0OOM8gEHfghB2IPU=
+github.com/coder/websocket v1.8.15 h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=
+github.com/coder/websocket v1.8.15/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
 github.com/coreos/go-oidc/v3 v3.20.0 h1:EtE0WIBHk03N+DqGkY4+UONzzZHk7amKt6IyNd7OsZE=
 github.com/coreos/go-oidc/v3 v3.20.0/go.mod h1:DYCf24+ncYi+XkIH97GY1+dqoRlbaSI26KVTCI9SrY4=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
@@ -98,6 +100,8 @@ github.com/domainry/domainry-audit-sdk v0.1.22 h1:Cind+f8oFw6ws6AlCAMgdt+FyPh+CP
 github.com/domainry/domainry-audit-sdk v0.1.22/go.mod h1:nmJ5DC8qnaPl17wlRCLZO/+hIPCO/rSIM13PkvII0i8=
 github.com/domainry/domainry-connector-sdk v0.1.21 h1:Rx5AJQUKj/BkjzUKKJWw8+ZBxPS3AnFJeP48bISyAmI=
 github.com/domainry/domainry-connector-sdk v0.1.21/go.mod h1:LsCzwqpnRePkfLgutaU6XTnXbrOSFXf1UaguVYh3wCY=
+github.com/domainry/domainry-connector-sdk v0.1.22 h1:V9fAM1HU0YiCUztfC4Te6s/sx8lXZZxfdb4c7bUvaMQ=
+github.com/domainry/domainry-connector-sdk v0.1.22/go.mod h1:LsCzwqpnRePkfLgutaU6XTnXbrOSFXf1UaguVYh3wCY=
 github.com/domainry/domainry-connectors v0.1.28 h1:E6rkyvV0P5ouesvmEP985Gt+Q72ZE5UOwsgcngbjpOk=
 github.com/domainry/domainry-connectors v0.1.28/go.mod h1:AXS1mmk1F1M3QmAggvCQUZ4yQsNfHQ5jFmdexy9vSEc=
 github.com/domainry/domainry-data-exchange v0.3.41 h1:vLI8xKHc9QCC58SoavjDskf2IMpsQJK8H/LxyGsRTe8=

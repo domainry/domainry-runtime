@@ -36,8 +36,9 @@ const (
 )
 
 type connectorTransport struct {
-	httpClient    *http.Client
-	processPolicy ConnectorProcessPolicy
+	httpClient      *http.Client
+	webSocketClient *http.Client
+	processPolicy   ConnectorProcessPolicy
 }
 
 func newConnectorTransport() connector.Transport {
@@ -50,7 +51,8 @@ func newConnectorTransportWithProcessPolicy(policy ConnectorProcessPolicy) conne
 		httpClient: telemetry.InstrumentHTTPClientWithOptions(httpClient, "domainry.runtime.connector.http", telemetry.HTTPClientInstrumentationOptions{
 			DisableDiagnosticContent: true,
 		}),
-		processPolicy: policy,
+		webSocketClient: httpClient,
+		processPolicy:   policy,
 	}
 }
 

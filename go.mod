@@ -15,7 +15,7 @@ require (
 	github.com/domainry/domainry-agent-sdk v0.1.59
 	github.com/domainry/domainry-audit v0.1.46
 	github.com/domainry/domainry-audit-sdk v0.1.22
-	github.com/domainry/domainry-connector-sdk v0.1.21
+	github.com/domainry/domainry-connector-sdk v0.1.22
 	github.com/domainry/domainry-data-exchange v0.3.41
 	github.com/domainry/domainry-data-exchange-sdk v0.3.22
 	github.com/domainry/domainry-foundation v0.2.25
@@ -74,6 +74,7 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/coreos/go-oidc/v3 v3.20.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
