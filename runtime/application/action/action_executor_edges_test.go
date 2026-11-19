@@ -266,6 +266,47 @@ func TestBusinessHandlerExecutorRecordAndCanonicalCommitEdges(t *testing.T) {
 	}
 }
 
+func TestBusinessHandlerExecutorReloadsResultWithPublishedReadEffectAuthority(t *testing.T) {
+	action := definitionmodel.ActionSchema{
+		Key:       "booking.reserve",
+		ObjectKey: "booking",
+		EffectSet: &definitionmodel.ActionEffectSet{
+			Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking"}},
+		},
+	}
+	handler := actionExecutorEdgeHandler{
+		descriptor: actionTestHandlerDescriptor(action.Key, []runtimeext.ActionObjectCapability{{ObjectKey: "booking", Operations: []string{"read"}}}),
+		output:     json.RawMessage(`{"accepted":true}`),
+	}
+	governed := actionExecutorEdgeGoverned(handler, action)
+	governed.invocation.RecordID = "booking-1"
+	original := governed.invocation.Principal
+
+	var captured principalmodel.Principal
+	executor := newActionTestBusinessHandlerExecutor(BusinessHandlerExecutionDependencies{
+		GetRecord: func(_ context.Context, objectKey, recordID string, principal principalmodel.Principal) (recordmodel.Record, error) {
+			captured = principal
+			if objectKey != "booking" || recordID != "booking-1" {
+				t.Fatalf("reload target=%s/%s", objectKey, recordID)
+			}
+			if !principal.HasExactPermission("booking.read") {
+				t.Fatalf("reload permissions=%v", principal.PermissionKeys())
+			}
+			return recordmodel.Record{RecordID: recordID}, nil
+		},
+	})
+	result, err := executor.execute(t.Context(), governed)
+	if err != nil || result.Record == nil || result.Record.RecordID != "booking-1" {
+		t.Fatalf("result=%+v error=%v", result, err)
+	}
+	if captured.AccessBundle == nil {
+		t.Fatal("result reload did not receive derived execution authority")
+	}
+	if original.HasPermission("booking.read") || governed.invocation.Principal.HasPermission("booking.read") {
+		t.Fatal("result reload mutated the original invocation principal")
+	}
+}
+
 func TestBusinessActionQueryEdges(t *testing.T) {
 	readAction := definitionmodel.ActionSchema{EffectSet: &definitionmodel.ActionEffectSet{Read: []definitionmodel.ActionObjectEffect{{ObjectKey: "booking"}}}}
 	execution := &businessActionExecution{action: readAction, unitOfWork: newActionTestUnitOfWork()}

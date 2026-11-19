@@ -24,7 +24,14 @@ func (e *businessActionExecution) resolveInvocationRecord(ctx context.Context, o
 	if e.dependencies.GetRecord == nil {
 		return recordmodel.Record{}, missingExecutorPort("get_record")
 	}
-	return e.dependencies.GetRecord(e.unitOfWork.executionContext(ctx), objectKey, recordID, e.invocation.Principal)
+	authorizationPrincipal := actionReadEffectAuthorizationPrincipal(
+		e.invocation.Principal,
+		e.action.EffectSet,
+		e.action,
+		objectKey,
+		e.dependencies.ObjectForKey,
+	)
+	return e.dependencies.GetRecord(e.unitOfWork.executionContext(ctx), objectKey, recordID, authorizationPrincipal)
 }
 
 func (e *businessActionExecution) singleMutatedRecord(objectKey string) (recordmodel.Record, bool) {
