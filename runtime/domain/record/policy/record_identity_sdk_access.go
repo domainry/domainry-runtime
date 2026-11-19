@@ -71,7 +71,20 @@ func RecordCanReadObjectFieldForPrincipal(principal principalmodel.Principal, ob
 	if allowed, _, handled := RecordSDKReadableField(principal, object.Key, field.Key); handled {
 		return allowed
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, "read")
+	return principal.SystemScope.Valid() && principal.Allows(RecordReadAuthorizationObjectKey(object), "read")
+}
+
+// RecordReadAuthorizationObjectKey returns the resource that owns row-level
+// read authority for an object. Dependent records deliberately have no
+// independent read ACL: both SDK principals and Runtime system principals
+// must authorize them through the declared parent.
+func RecordReadAuthorizationObjectKey(object definitionmodel.ObjectSchema) string {
+	if object.AuthorizationParent != nil {
+		if parentKey := strings.TrimSpace(object.AuthorizationParent.ObjectKey); parentKey != "" {
+			return parentKey
+		}
+	}
+	return strings.TrimSpace(object.Key)
 }
 
 func RecordCanWriteObjectFieldForPrincipal(principal principalmodel.Principal, object definitionmodel.ObjectSchema, field definitionmodel.FieldSchema) bool {

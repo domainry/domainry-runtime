@@ -18,7 +18,7 @@ func RecordCanAccess(principal principalmodel.Principal, object definitionmodel.
 	if allowed, handled := RecordSDKAllowsRecord(principal, object, "read", record); handled {
 		return allowed
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, "read")
+	return principal.SystemScope.Valid() && principal.Allows(RecordReadAuthorizationObjectKey(object), "read")
 }
 
 func RecordApplyOwnerDefault(record *recordmodel.Record, principal principalmodel.Principal) {

@@ -1,13 +1,58 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
+
+func TestDependentReadUsesParentCapabilityForSystemPrincipal(t *testing.T) {
+	parent := definitionmodel.ObjectSchema{Key: "channel_thread"}
+	child := definitionmodel.ObjectSchema{
+		Key: "channel_thread_participant",
+		Fields: []definitionmodel.FieldSchema{{
+			Key: "channel_thread", Type: "relation", Required: true,
+			Validation: definitionmodel.FieldValidation{Target: parent.Key},
+		}},
+		AuthorizationParent: &definitionmodel.ObjectAuthorizationParent{ObjectKey: parent.Key, RelationField: "channel_thread"},
+	}
+	principal := principalmodel.NewSystemPrincipal(
+		"integration-owner",
+		principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "execute verified integration event"),
+		parent.Key+".read",
+	)
+	principal.WorkspaceID = "workspace"
+	policy := NewRecordQueryPolicyDomainService(RecordQueryPolicyDependencies{Objects: func() []definitionmodel.ObjectSchema {
+		return []definitionmodel.ObjectSchema{parent, child}
+	}})
+
+	if _, err := policy.ObjectForAction(principal, child.Key, "read"); err != nil {
+		t.Fatalf("parent-authorized system read rejected: %v", err)
+	}
+	query := policy.NormalizeListQuery(child, recordmodel.RecordListQuery{}, principal)
+	if query.AuthorizationMode != recordmodel.RecordQueryAuthorizationUnrestricted || query.ScopeExpression != nil {
+		t.Fatalf("dependent system query authorization=%q scope=%+v", query.AuthorizationMode, query.ScopeExpression)
+	}
+	if !policy.CanAccessRecord(principal, child, recordmodel.Record{RecordID: "participant-1"}) {
+		t.Fatal("dependent record was removed by the result visibility check")
+	}
+	allowed, err := policy.CanAccessPersistedRecordScope(context.Background(), principal, child, recordmodel.Record{RecordID: "participant-1"}, false)
+	if err != nil || !allowed {
+		t.Fatalf("dependent persisted read allowed=%v err=%v", allowed, err)
+	}
+	allowed, err = policy.CanAccessRecordAction(context.Background(), principal, child, recordmodel.Record{RecordID: "participant-1"}, "read")
+	if err != nil || !allowed {
+		t.Fatalf("dependent action read allowed=%v err=%v", allowed, err)
+	}
+	if principal.HasPermission(child.Key + ".read") {
+		t.Fatal("dependent object received an independent system capability")
+	}
+}
 
 func TestDependentReadScopeUsesParentNotChildOwner(t *testing.T) {
 	parent := definitionmodel.ObjectSchema{Key: "deal", Fields: []definitionmodel.FieldSchema{{Key: "owner", Type: "user"}}}

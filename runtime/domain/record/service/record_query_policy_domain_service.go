@@ -41,7 +41,7 @@ func (s *RecordQueryPolicyDomainService) ObjectForAction(principal principalmode
 	}
 	permissionObjectKey := objectKey
 	if object.AuthorizationParent != nil && normalizeSDKScopeAction(action) == "read" {
-		permissionObjectKey = object.AuthorizationParent.ObjectKey
+		permissionObjectKey = recordpolicy.RecordReadAuthorizationObjectKey(object)
 	}
 	if allowed, handled := recordpolicy.RecordSDKAllowsObjectAction(principal, permissionObjectKey, action); handled {
 		if !allowed {
@@ -104,7 +104,11 @@ func (s *RecordQueryPolicyDomainService) NormalizeListQueryForAction(object defi
 		query.ScopeExpression = expression
 		return query
 	}
-	if principal.SystemScope.Valid() && principal.Allows(object.Key, action) {
+	permissionObjectKey := object.Key
+	if action == "read" {
+		permissionObjectKey = recordpolicy.RecordReadAuthorizationObjectKey(object)
+	}
+	if principal.SystemScope.Valid() && principal.Allows(permissionObjectKey, action) {
 		query.AuthorizationMode = recordmodel.RecordQueryAuthorizationUnrestricted
 		query.ScopeExpression = nil
 		return query
@@ -116,10 +120,7 @@ func (s *RecordQueryPolicyDomainService) NormalizeListQueryForAction(object defi
 }
 
 func (s *RecordQueryPolicyDomainService) CanAccessRecord(principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) bool {
-	if principal.AccessBundle != nil {
-		return recordpolicy.RecordCanAccess(principal, object, record)
-	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, "read")
+	return recordpolicy.RecordCanAccess(principal, object, record)
 }
 
 func (s *RecordQueryPolicyDomainService) CanWriteRecordScope(principal principalmodel.Principal, object definitionmodel.ObjectSchema, data map[string]any) bool {
@@ -147,7 +148,12 @@ func (s *RecordQueryPolicyDomainService) CanAccessRecordAction(ctx context.Conte
 	if principal.AccessBundle != nil {
 		return s.canAccessSDKRecordScope(ctx, principal, object, record, normalizeSDKScopeAction(action))
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, normalizeSDKScopeAction(action)), nil
+	action = normalizeSDKScopeAction(action)
+	permissionObjectKey := object.Key
+	if action == "read" {
+		permissionObjectKey = recordpolicy.RecordReadAuthorizationObjectKey(object)
+	}
+	return principal.SystemScope.Valid() && principal.Allows(permissionObjectKey, action), nil
 }
 
 // MutationScopeExpression compiles the exact Action's Identity predicate for
@@ -183,7 +189,11 @@ func (s *RecordQueryPolicyDomainService) CanAccessPersistedRecordScope(ctx conte
 	if write {
 		action = "update"
 	}
-	return principal.SystemScope.Valid() && principal.Allows(object.Key, action), nil
+	permissionObjectKey := object.Key
+	if !write {
+		permissionObjectKey = recordpolicy.RecordReadAuthorizationObjectKey(object)
+	}
+	return principal.SystemScope.Valid() && principal.Allows(permissionObjectKey, action), nil
 }
 
 func (s *RecordQueryPolicyDomainService) canAccessSDKRecordScope(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record, action string) (bool, error) {
