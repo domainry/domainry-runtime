@@ -25,7 +25,7 @@ func TestAuthorizationActionDefinitionOwnsDedicatedPermissionWithoutInventingHTT
 	if definition.HTTP != nil || len(definition.NonHTTP) != 1 || definition.NonHTTP[0].InvocationKey != schema.Key {
 		t.Fatalf("bindings=%#v HTTP=%#v", definition.NonHTTP, definition.HTTP)
 	}
-	if definition.Permission == nil || definition.Permission.Key != schema.Key {
+	if definition.Permission == nil || definition.Permission.Key != schema.Key || definition.Permission.ScopeKind != actioncontract.PermissionScopeRecord || definition.Permission.ObjectKey != schema.ObjectKey {
 		t.Fatalf("permission=%#v", definition.Permission)
 	}
 	if len(definition.ApprovalPolicies) != 2 || definition.IdempotencyDecision != "caller_key_required" || definition.RiskLevel != actioncontract.RiskCritical || definition.AuditClass != "business_action" || definition.AuditEvent != schema.AuditEvent {
@@ -40,6 +40,22 @@ func TestAuthorizationActionDefinitionOwnsDedicatedPermissionWithoutInventingHTT
 	}
 	if resolved, ok := registry.ResolveNonHTTP("runtime_action", schema.Key); !ok || resolved.Key != schema.Key {
 		t.Fatalf("resolved=%#v ok=%v", resolved, ok)
+	}
+}
+
+func TestAuthorizationActionDefinitionMakesObjectActionPermissionDataScoped(t *testing.T) {
+	schema := definitionmodel.ActionSchema{
+		Key: "department_profile.provision", ObjectKey: "department_profile", Label: "Provision department", Kind: definitionmodel.ActionKindObjectOperation,
+	}
+	definition, err := AuthorizationActionDefinition(schema, AuthorizationContractContext{
+		Owner: "application:organization", CapabilityKey: "department_profile", CapabilityLabel: "Department profile",
+		PermissionCategory: "Organization", Exposures: []actioncontract.Exposure{actioncontract.ExposurePublic},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.Permission == nil || definition.Permission.ScopeKind != actioncontract.PermissionScopeRecord || definition.Permission.ObjectKey != schema.ObjectKey {
+		t.Fatalf("permission=%#v", definition.Permission)
 	}
 }
 

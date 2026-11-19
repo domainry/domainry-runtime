@@ -51,7 +51,9 @@ func AuthorizationActionDefinition(schema definitionmodel.ActionSchema, context 
 		Permission: &actioncontract.PermissionDefinition{
 			Key: permissionKey, Owner: owner, ResourceKey: resourceKey, OperationKey: operationKey,
 			Label: label, Category: strings.TrimSpace(context.PermissionCategory),
-			GrantMode: actioncontract.PermissionGrantMode(schema.PermissionGrantMode), LifecycleStatus: permissionLifecycle,
+			GrantMode: actioncontract.PermissionGrantMode(schema.PermissionGrantMode),
+			ScopeKind: actioncontract.PermissionScopeRecord, ObjectKey: strings.TrimSpace(schema.ObjectKey),
+			LifecycleStatus: permissionLifecycle,
 		},
 		EffectClass: actioncontract.EffectWrite, RiskLevel: actioncontract.RiskLevel(actionmodel.ActionRiskLevel(schema)),
 		AssuranceRequired: actionmodel.ActionAssuranceMethods(schema), ApprovalPolicies: actionApprovalPolicies(schema),

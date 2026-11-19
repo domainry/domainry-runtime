@@ -67,3 +67,26 @@ func TestRuntimeOwnedRecordTimerPermissionsUseStableRuntimeOwner(t *testing.T) {
 		t.Fatalf("business object permission owner=%q permission=%#v", customer.Owner, customer.Permission)
 	}
 }
+
+func TestAuthoredBusinessActionPermissionRetainsItsObjectDataScope(t *testing.T) {
+	registry, err := BuildAuthorizationRegistry(AuthorizationRegistryInput{
+		ApplicationKey: "support",
+		Snapshot: appschemamodel.ApplicationSchemaSnapshot{
+			Objects: []definitionmodel.ObjectSchema{{Key: "case_orchestration_turn"}},
+			Actions: []definitionmodel.ActionSchema{{
+				Key: "case_orchestration_turn.authorize_skill", ObjectKey: "case_orchestration_turn",
+				Label: "Authorize skill", Kind: definitionmodel.ActionKindRecordOperation,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, ok := registry.Definition("case_orchestration_turn.authorize_skill")
+	if !ok || definition.Permission == nil {
+		t.Fatalf("definition=%#v found=%v", definition, ok)
+	}
+	if definition.Permission.ScopeKind != actioncontract.PermissionScopeRecord || definition.Permission.ObjectKey != "case_orchestration_turn" {
+		t.Fatalf("permission=%#v", definition.Permission)
+	}
+}
