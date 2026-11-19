@@ -195,7 +195,7 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				if records.workflowApplicationService == nil {
 					return runtimeext.WorkflowAgentTaskEvidence{}, apperror.New(apperror.KindUnavailable, runtimeext.WorkflowAgentTaskEvidenceUnavailableErrorCode, nil, nil)
 				}
-				return records.workflowApplicationService.ReadActionAgentTaskEvidence(ctx, request, workflowapplication.WorkflowActionAgentEvidenceScope{WorkspaceID: invocation.Principal.WorkspaceID, ProcessID: invocation.ProcessID, CurrentNodeID: invocation.NodeID, CurrentActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID, ExecutionUserID: invocation.Principal.UserID, ExecutionRoleKey: invocation.Principal.RoleKey})
+				return records.workflowApplicationService.ReadActionAgentTaskEvidence(ctx, request, workflowapplication.WorkflowActionAgentEvidenceScope{WorkspaceID: invocation.Principal.WorkspaceID, ProcessID: invocation.ProcessID, CurrentNodeID: invocation.NodeID, CurrentActionKey: invocation.ActionKey, ObjectKey: invocation.ObjectKey, RecordID: invocation.RecordID})
 			},
 			StageWorkflowStart: func(ctx context.Context, request workflowmodel.WorkflowRouteStartRequest, principal principalmodel.Principal) (transactionmodel.WorkflowStartCommit, error) {
 				if records.workflowApplicationService == nil {

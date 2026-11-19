@@ -3,12 +3,13 @@ package workflow
 import (
 	"context"
 	"encoding/json"
-	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"strings"
 	"time"
 
+	agentsdk "github.com/domainry/domainry-agent-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
+	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 	workflowpolicy "github.com/domainry/domainry-runtime/runtime/domain/workflow/policy"
 )
@@ -17,7 +18,25 @@ const workflowAgentEvidenceKey = "_runtime_agent_task_evidence"
 
 // Constructed only from an already-authorized Workflow Action invocation.
 type WorkflowActionAgentEvidenceScope struct {
-	WorkspaceID, ProcessID, CurrentNodeID, CurrentActionKey, ObjectKey, RecordID, ExecutionUserID, ExecutionRoleKey string
+	WorkspaceID, ProcessID, CurrentNodeID, CurrentActionKey, ObjectKey, RecordID string
+}
+
+func workflowAgentEvidenceContinuationAllowed(graph *definitionmodel.WorkflowGraphSchema, sourceNodeID, targetNodeID, outcome string) bool {
+	if graph == nil {
+		return false
+	}
+	sourceNodeID = strings.TrimSpace(sourceNodeID)
+	targetNodeID = strings.TrimSpace(targetNodeID)
+	outcome = strings.ToLower(strings.TrimSpace(outcome))
+	if sourceNodeID == "" || targetNodeID == "" || outcome == "" {
+		return false
+	}
+	for _, edge := range graph.Edges {
+		if strings.TrimSpace(edge.Source) == sourceNodeID && strings.TrimSpace(edge.Target) == targetNodeID && strings.ToLower(strings.TrimSpace(edge.Branch)) == outcome {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *WorkflowApplicationService) ReadActionAgentTaskEvidence(ctx context.Context, request runtimeext.WorkflowAgentTaskEvidenceRequest, scope WorkflowActionAgentEvidenceScope) (runtimeext.WorkflowAgentTaskEvidence, error) {
@@ -27,7 +46,7 @@ func (s *WorkflowApplicationService) ReadActionAgentTaskEvidence(ctx context.Con
 	unavailable := func() (runtimeext.WorkflowAgentTaskEvidence, error) {
 		return runtimeext.WorkflowAgentTaskEvidence{}, apperror.New(apperror.KindUnavailable, runtimeext.WorkflowAgentTaskEvidenceUnavailableErrorCode, nil, nil)
 	}
-	for _, v := range []string{request.WorkflowKey, request.NodeID, request.TaskKey, request.TaskVersion, scope.WorkspaceID, scope.ProcessID, scope.CurrentNodeID, scope.CurrentActionKey, scope.ObjectKey, scope.RecordID, scope.ExecutionUserID, scope.ExecutionRoleKey} {
+	for _, v := range []string{request.WorkflowKey, request.NodeID, request.TaskKey, request.TaskVersion, scope.WorkspaceID, scope.ProcessID, scope.CurrentNodeID, scope.CurrentActionKey, scope.ObjectKey, scope.RecordID} {
 		if strings.TrimSpace(v) == "" || len(v) > 255 {
 			return denied()
 		}
@@ -82,13 +101,7 @@ func (s *WorkflowApplicationService) ReadActionAgentTaskEvidence(ctx context.Con
 			}
 			// This is not a completed Task receipt. Only the declared error
 			// continuation of this source node may consume its preparation cause.
-			errorEdge := false
-			for _, edge := range process.DefinitionSnapshot.Graph.Edges {
-				if edge.Source == request.NodeID && edge.Target == scope.CurrentNodeID && edge.Branch == "error" {
-					errorEdge = true
-				}
-			}
-			if source.Contract.AgentTask.OnError != "error_branch" || !errorEdge {
+			if source.Contract.AgentTask.OnError != "error_branch" || !workflowAgentEvidenceContinuationAllowed(process.DefinitionSnapshot.Graph, request.NodeID, scope.CurrentNodeID, "error") {
 				return denied()
 			}
 			return runtimeext.WorkflowAgentTaskEvidence{PreparationFailure: &runtimeext.WorkflowAgentTaskPreparationFailure{
@@ -107,7 +120,7 @@ func (s *WorkflowApplicationService) ReadActionAgentTaskEvidence(ctx context.Con
 		return unavailable()
 	}
 	runID, _ := selected.Input["agent_task_run_id"].(string)
-	if !evidence.Available || evidence.TaskRunID == "" || evidence.TaskRunID != runID || evidence.ProcessID != scope.ProcessID || evidence.NodeID != request.NodeID || evidence.NodeInstanceID != selected.NodeInstanceID || evidence.TaskKey != request.TaskKey || evidence.TaskVersion != request.TaskVersion || evidence.ExecutionUserID != scope.ExecutionUserID || evidence.ExecutionRoleKey != scope.ExecutionRoleKey || evidence.CompletedAt <= 0 || len(evidence.Tools) > 128 || selected.CompletedAt == "" || selected.Status == "waiting" {
+	if !evidence.Available || evidence.TaskRunID == "" || evidence.TaskRunID != runID || evidence.ProcessID != scope.ProcessID || evidence.NodeID != request.NodeID || evidence.NodeInstanceID != selected.NodeInstanceID || evidence.TaskKey != request.TaskKey || evidence.TaskVersion != request.TaskVersion || strings.TrimSpace(evidence.ExecutionUserID) == "" || len(evidence.ExecutionUserID) > 255 || strings.TrimSpace(evidence.ExecutionRoleKey) == "" || len(evidence.ExecutionRoleKey) > 255 || evidence.CompletedAt <= 0 || len(evidence.Tools) > 128 || selected.CompletedAt == "" || selected.Status == "waiting" || !workflowAgentEvidenceContinuationAllowed(process.DefinitionSnapshot.Graph, request.NodeID, scope.CurrentNodeID, evidence.Outcome) {
 		return denied()
 	}
 	for _, tool := range evidence.Tools {

@@ -16,14 +16,14 @@ import (
 
 func workflowEvidenceFixture(t *testing.T) (*WorkflowApplicationService, *workflowExecutionProcessStub, *workflowAgentTaskStateStub, WorkflowAgentTaskCompletion, WorkflowActionAgentEvidenceScope, runtimeext.WorkflowAgentTaskEvidenceRequest) {
 	t.Helper()
-	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", WorkflowKey: "case.decide", ObjectKey: "turn", RecordID: "turn-a", Status: "waiting", Variables: map[string]any{}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "decide", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "support.decide", TaskVersion: "1", AllowedOutcomes: []string{"success", "error"}}}}, {ID: "save", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.save"}}}}}}}
+	process := workflowmodel.WorkflowProcessInstance{ProcessID: "process", WorkspaceID: "workspace", WorkflowKey: "case.decide", ObjectKey: "turn", RecordID: "turn-a", Status: "waiting", Variables: map[string]any{}, DefinitionSnapshot: definitionmodel.WorkflowSchema{Graph: &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "decide", Type: "agent_task", Contract: &definitionmodel.WorkflowNodeContract{AgentTask: &definitionmodel.WorkflowAgentTaskNodeContract{TaskKey: "support.decide", TaskVersion: "1", AllowedOutcomes: []string{"success", "error"}}}}, {ID: "save", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.save"}}}}, Edges: []definitionmodel.WorkflowGraphEdge{{Source: "decide", Target: "save", Branch: "success"}, {Source: "decide", Target: "save", Branch: "error"}}}}}
 	node := workflowmodel.WorkflowNodeInstance{NodeInstanceID: "source-node", NodeID: "decide", NodeType: "agent_task", ProcessID: "process", WorkspaceID: "workspace", Iteration: 1, Status: "waiting", Input: map[string]any{"agent_task_run_id": "owner-run"}}
 	repo := &workflowExecutionProcessStub{processes: map[string]workflowmodel.WorkflowProcessInstance{"process": process}, nodes: map[string][]workflowmodel.WorkflowNodeInstance{"process": {node}}}
 	state := &workflowAgentTaskStateStub{}
 	service := NewWorkflowApplicationService(WorkflowDependencies{Processes: repo, Decisions: state})
 	at := time.UnixMilli(1794700000123).UTC()
 	complete := WorkflowAgentTaskCompletion{WorkspaceID: "workspace", ProcessID: "process", NodeInstanceID: "source-node", TaskRunID: "owner-run", TaskKey: "support.decide", TaskVersion: "1", Status: "succeeded", Outcome: "success", Output: map[string]any{"provider_secret": "never-release-provider-payload"}, Identity: agentsdk.ExecutionIdentity{Execution: agentsdk.PrincipalReference{UserID: "agent", RoleKey: "agent_service"}}, Evidence: agentmodel.AgentTaskExecutionEvidence{AgentKey: "support.agent", Model: "deepseek", Usage: map[string]any{"private": "never-release-usage"}, ToolInvocations: []agentmodel.AgentTaskToolInvocationEvidence{{Ref: "tool-a", Tool: agentsdk.AgentToolGetRecord, Status: "executed", InputHash: "input-sha", OutputHash: "output-sha", StartedAt: at, FinishedAt: &at}}}}
-	scope := WorkflowActionAgentEvidenceScope{WorkspaceID: "workspace", ProcessID: "process", CurrentNodeID: "save", CurrentActionKey: "turn.save", ObjectKey: "turn", RecordID: "turn-a", ExecutionUserID: "agent", ExecutionRoleKey: "agent_service"}
+	scope := WorkflowActionAgentEvidenceScope{WorkspaceID: "workspace", ProcessID: "process", CurrentNodeID: "save", CurrentActionKey: "turn.save", ObjectKey: "turn", RecordID: "turn-a"}
 	request := runtimeext.WorkflowAgentTaskEvidenceRequest{WorkflowKey: "case.decide", NodeID: "decide", TaskKey: "support.decide", TaskVersion: "1"}
 	return service, repo, state, complete, scope, request
 }
@@ -71,10 +71,6 @@ func TestWorkflowEvidenceCannotReadOtherScopeOrOlderTaskIteration(t *testing.T) 
 		s.RecordID = "other"
 	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
 		s.ObjectKey = "other"
-	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
-		s.ExecutionUserID = "other"
-	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
-		s.ExecutionRoleKey = "other"
 	}, func(s *WorkflowActionAgentEvidenceScope, _ *runtimeext.WorkflowAgentTaskEvidenceRequest) {
 		s.CurrentActionKey = "other"
 	}, func(_ *WorkflowActionAgentEvidenceScope, r *runtimeext.WorkflowAgentTaskEvidenceRequest) {
@@ -168,8 +164,45 @@ func TestKnowledgeReceiptSurvivesWorkflowCommitAndCannotBeReplacedByCallbackRepl
 	if err != nil || replay.Tools[0].Knowledge.Citations[0].DocumentID != "doc-a" {
 		t.Fatal("callback replaced citation receipt", replay, err)
 	}
-	scope.ExecutionUserID = "foreign"
-	if r, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || r.Available {
-		t.Fatal("foreign caller read knowledge receipt", r, err)
+}
+
+func TestWorkflowEvidenceRequiresDeclaredOutcomeContinuationInsteadOfSharedIdentity(t *testing.T) {
+	s, repo, state, completion, scope, request := workflowEvidenceFixture(t)
+	persistWorkflowEvidenceFixture(t, s, repo, state, completion)
+
+	proof, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || proof.ExecutionUserID != "agent" || proof.ExecutionRoleKey != "agent_service" {
+		t.Fatal("successor could not read separately-owned Agent receipt", proof, err)
+	}
+
+	process := repo.processes[scope.ProcessID]
+	process.DefinitionSnapshot.Graph.Nodes = append(process.DefinitionSnapshot.Graph.Nodes, definitionmodel.WorkflowGraphNode{ID: "other", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.other"}}})
+	repo.processes[scope.ProcessID] = process
+	scope.CurrentNodeID = "other"
+	scope.CurrentActionKey = "turn.other"
+	if got, readErr := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); readErr == nil || got.Available {
+		t.Fatal("unrelated Action read Agent receipt", got, readErr)
+	}
+
+	scope.CurrentNodeID = "save"
+	scope.CurrentActionKey = "turn.save"
+	process = repo.processes[scope.ProcessID]
+	process.DefinitionSnapshot.Graph.Edges[0].Branch = "manual_review"
+	repo.processes[scope.ProcessID] = process
+	if got, readErr := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); readErr == nil || got.Available {
+		t.Fatal("mismatched outcome branch read Agent receipt", got, readErr)
+	}
+}
+
+func TestWorkflowEvidenceRejectsMissingExecutionIdentity(t *testing.T) {
+	s, repo, state, completion, scope, request := workflowEvidenceFixture(t)
+	persistWorkflowEvidenceFixture(t, s, repo, state, completion)
+	raw, ok := repo.nodes[scope.ProcessID][0].Input[workflowAgentEvidenceKey].(map[string]any)
+	if !ok {
+		t.Fatal("durable evidence is not an object")
+	}
+	raw["execution_user_id"] = ""
+	if got, err := s.ReadActionAgentTaskEvidence(t.Context(), request, scope); err == nil || got.Available {
+		t.Fatal("receipt without execution identity accepted", got, err)
 	}
 }
