@@ -14,9 +14,11 @@ import (
 // the Handler may query, while the transient execution principal receives only
 // the parent's read authority used by Record policy.
 //
-// Read-only references may use the caller's existing read scope. Objects in
-// the write effect retain the source Action's scope, even when the caller has
-// broader generic read access.
+// Read-only references may use the caller's existing read scope. Independent
+// objects in the write effect retain the source Action's scope, even when the
+// caller has broader generic read access. A dependent object's read scope is
+// always its authorization parent's live read scope: owned writes are guarded
+// separately by an earlier authorized canonical parent mutation plan.
 func actionReadEffectAuthorizationPrincipal(principal principalmodel.Principal, set *definitionmodel.ActionEffectSet, action definitionmodel.ActionSchema, objectKey string, objectForKey func(string) (definitionmodel.ObjectSchema, bool)) principalmodel.Principal {
 	if !actionEffectAllows(set, objectKey, false) {
 		return principal
@@ -26,10 +28,14 @@ func actionReadEffectAuthorizationPrincipal(principal principalmodel.Principal, 
 	if authorizationObjectKey == "" {
 		return principal
 	}
-	if !actionEffectAllows(set, objectKey, true) && principal.HasPermission(authorizationObjectKey+".read") {
+	isAuthorizationDependent := authorizationObjectKey != objectKey
+	if principal.HasPermission(authorizationObjectKey+".read") && (isAuthorizationDependent || !actionEffectAllows(set, objectKey, true)) {
 		// A member-owned mutation may reference a publicly readable store or
 		// product. Replacing that independent read scope with owner would hide
-		// valid references. This borrows no authority the caller did not have.
+		// valid references. A dependent object likewise has no independent ACL:
+		// its parent read is the complete read authority, while its mutation path
+		// still requires a canonical parent plan. This borrows no authority the
+		// caller did not have.
 		return principal
 	}
 	authorized := principal

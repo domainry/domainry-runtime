@@ -81,6 +81,54 @@ func TestActionReadEffectAuthorizationUsesOnlyAuthorizationParentACL(t *testing.
 	}
 }
 
+func TestActionWritableDependentReadPreservesCallerParentScope(t *testing.T) {
+	parent := definitionmodel.ObjectSchema{Key: "channel_thread"}
+	child := definitionmodel.ObjectSchema{
+		Key: "channel_thread_participant",
+		Fields: []definitionmodel.FieldSchema{{
+			Key: "channel_thread", Type: "relation", Required: true,
+			Validation: definitionmodel.FieldValidation{Target: parent.Key},
+		}},
+		AuthorizationParent: &definitionmodel.ObjectAuthorizationParent{ObjectKey: parent.Key, RelationField: "channel_thread"},
+	}
+	objects := map[string]definitionmodel.ObjectSchema{parent.Key: parent, child.Key: child}
+	objectForKey := func(key string) (definitionmodel.ObjectSchema, bool) {
+		object, found := objects[key]
+		return object, found
+	}
+	action := definitionmodel.ActionSchema{Key: "interaction.ingest_channel_message", ObjectKey: "interaction"}
+	effects := &definitionmodel.ActionEffectSet{
+		Read:  []definitionmodel.ActionObjectEffect{{ObjectKey: child.Key}},
+		Write: []definitionmodel.ActionObjectEffect{{ObjectKey: child.Key}},
+	}
+	action.EffectSet = effects
+	principal := accessfixture.Attach(
+		principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "support-agent"}},
+		accessfixture.Bundle{
+			Permissions: []string{action.Key, parent.Key + ".read"},
+			DataPolicies: []accessfixture.DataPolicyFixture{
+				{ObjectKey: "interaction", Action: "ingest_channel_message", Scope: identitysdk.DataScopeOwner, Write: true},
+				{ObjectKey: parent.Key, Action: "read", Scope: identitysdk.DataScopeAll, Read: true},
+			},
+		},
+	)
+
+	authorized := actionReadEffectAuthorizationPrincipal(principal, effects, action, child.Key, objectForKey)
+	policy := recordservice.NewRecordQueryPolicyDomainService(recordservice.RecordQueryPolicyDependencies{
+		Objects: func() []definitionmodel.ObjectSchema { return []definitionmodel.ObjectSchema{parent, child} },
+	})
+	query := policy.NormalizeListQuery(child, recordmodel.RecordListQuery{}, authorized)
+	if query.AuthorizationMode != recordmodel.RecordQueryAuthorizationPredicate || query.ScopeExpression == nil {
+		t.Fatalf("dependent query authorization=%q scope=%+v", query.AuthorizationMode, query.ScopeExpression)
+	}
+	if query.ScopeExpression.Operator != "exists" {
+		t.Fatalf("caller parent scope was replaced by source Action scope: %+v", query.ScopeExpression)
+	}
+	if authorized.HasPermission(child.Key + ".read") {
+		t.Fatal("dependent object received an independent read ACL")
+	}
+}
+
 func TestActionReadEffectAuthorizationParentSupportsSystemPrincipal(t *testing.T) {
 	parent := definitionmodel.ObjectSchema{Key: "support_case"}
 	child := definitionmodel.ObjectSchema{Key: "case_thread_link", AuthorizationParent: &definitionmodel.ObjectAuthorizationParent{ObjectKey: parent.Key, RelationField: "support_case"}}
