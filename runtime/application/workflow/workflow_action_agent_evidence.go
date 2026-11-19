@@ -31,9 +31,27 @@ func workflowAgentEvidenceContinuationAllowed(graph *definitionmodel.WorkflowGra
 	if sourceNodeID == "" || targetNodeID == "" || outcome == "" {
 		return false
 	}
+	frontier := make([]string, 0, 1)
 	for _, edge := range graph.Edges {
-		if strings.TrimSpace(edge.Source) == sourceNodeID && strings.TrimSpace(edge.Target) == targetNodeID && strings.ToLower(strings.TrimSpace(edge.Branch)) == outcome {
+		if strings.TrimSpace(edge.Source) == sourceNodeID && strings.ToLower(strings.TrimSpace(edge.Branch)) == outcome {
+			frontier = append(frontier, strings.TrimSpace(edge.Target))
+		}
+	}
+	visited := map[string]bool{sourceNodeID: true}
+	for len(frontier) > 0 {
+		current := frontier[0]
+		frontier = frontier[1:]
+		if current == targetNodeID {
 			return true
+		}
+		if current == "" || visited[current] {
+			continue
+		}
+		visited[current] = true
+		for _, edge := range graph.Edges {
+			if strings.TrimSpace(edge.Source) == current {
+				frontier = append(frontier, strings.TrimSpace(edge.Target))
+			}
 		}
 	}
 	return false

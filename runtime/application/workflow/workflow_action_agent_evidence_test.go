@@ -174,8 +174,18 @@ func TestWorkflowEvidenceRequiresDeclaredOutcomeContinuationInsteadOfSharedIdent
 	if err != nil || proof.ExecutionUserID != "agent" || proof.ExecutionRoleKey != "agent_service" {
 		t.Fatal("successor could not read separately-owned Agent receipt", proof, err)
 	}
-
 	process := repo.processes[scope.ProcessID]
+	process.DefinitionSnapshot.Graph.Nodes = append(process.DefinitionSnapshot.Graph.Nodes, definitionmodel.WorkflowGraphNode{ID: "dispatch", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.dispatch"}}})
+	process.DefinitionSnapshot.Graph.Edges = append(process.DefinitionSnapshot.Graph.Edges, definitionmodel.WorkflowGraphEdge{Source: "save", Target: "dispatch", Branch: "success"})
+	repo.processes[scope.ProcessID] = process
+	scope.CurrentNodeID = "dispatch"
+	scope.CurrentActionKey = "turn.dispatch"
+	proof, err = s.ReadActionAgentTaskEvidence(t.Context(), request, scope)
+	if err != nil || !proof.Available {
+		t.Fatal("downstream continuation could not read Agent receipt", proof, err)
+	}
+
+	process = repo.processes[scope.ProcessID]
 	process.DefinitionSnapshot.Graph.Nodes = append(process.DefinitionSnapshot.Graph.Nodes, definitionmodel.WorkflowGraphNode{ID: "other", Type: "action", Contract: &definitionmodel.WorkflowNodeContract{Action: &definitionmodel.WorkflowBusinessActionNodeContract{ActionKey: "turn.other"}}})
 	repo.processes[scope.ProcessID] = process
 	scope.CurrentNodeID = "other"
