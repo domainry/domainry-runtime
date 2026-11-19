@@ -33,14 +33,15 @@ func WorkflowPrepareTriggerIntents(ctx context.Context, workflows map[string]def
 			return nil, nil, &apperror.AppError{Kind: apperror.KindBadRequest, Code: "backend.workflow.graph_v2_required", Params: map[string]string{"workflow": strings.TrimSpace(workflow.Key)}}
 		}
 		payload := WorkflowPayloadForRecordChange(objectKey, record, before, trigger)
+		initiatingUserID, initiatingRoleKey := workflowTriggerBusinessInitiator(principal)
 		if principal.RequestID != "" {
 			payload["request_id"] = principal.RequestID
 		}
-		if principal.UserID != "" {
-			payload["initiating_user_id"] = principal.UserID
+		if initiatingUserID != "" {
+			payload["initiating_user_id"] = initiatingUserID
 		}
-		if principal.RoleKey != "" {
-			payload["initiating_role_key"] = principal.RoleKey
+		if initiatingRoleKey != "" {
+			payload["initiating_role_key"] = initiatingRoleKey
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		executionID, err := entityid.New("wfexec")
@@ -51,7 +52,7 @@ func WorkflowPrepareTriggerIntents(ctx context.Context, workflows map[string]def
 			ExecutionID: executionID, WorkflowKey: workflow.Key, Name: workflow.Name, Trigger: trigger,
 			Status: "pending", ActionType: "workflow_graph", Action: workflowpolicy.WorkflowCloneMap(workflow.Action), Payload: payload,
 			Result: map[string]any{"transactional_intent": true}, ObjectKey: objectKey, RecordID: record.RecordID,
-			ActorID: principal.UserID, RunAs: workflowpolicy.WorkflowRunAs(workflow), IdempotencyKey: workflowpolicy.WorkflowIdempotencyKey(workflow, payload),
+			ActorID: initiatingUserID, RunAs: workflowpolicy.WorkflowRunAs(workflow), IdempotencyKey: workflowpolicy.WorkflowIdempotencyKey(workflow, payload),
 			Attempt: 0, MaxAttempts: workflowpolicy.WorkflowMaxAttempts(workflow), Message: "workflow.message.queued", CreatedAt: now, UpdatedAt: now,
 		}
 		intents = append(intents, intent)
@@ -60,4 +61,19 @@ func WorkflowPrepareTriggerIntents(ctx context.Context, workflows map[string]def
 	sort.Slice(intents, func(i, j int) bool { return intents[i].WorkflowKey < intents[j].WorkflowKey })
 	sort.Slice(summaries, func(i, j int) bool { return summaries[i].WorkflowKey < summaries[j].WorkflowKey })
 	return intents, summaries, nil
+}
+
+// A governed Workflow workload is execution infrastructure, not the business
+// initiator of a record change. When one Workflow mutates a record that starts
+// another Workflow, preserve the original business subject carried by the
+// workload lineage. The original role is deliberately not inferred from the
+// workload service role; Identity selects the subject's current role again
+// when the durable intent is claimed.
+func workflowTriggerBusinessInitiator(principal principalmodel.Principal) (string, string) {
+	if principal.Workload != nil {
+		if initiator := strings.TrimSpace(string(principal.Workload.InitiatorSubjectID)); initiator != "" {
+			return initiator, ""
+		}
+	}
+	return strings.TrimSpace(principal.UserID), strings.TrimSpace(principal.RoleKey)
 }

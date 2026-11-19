@@ -66,6 +66,17 @@ func TestPrepareTriggerIntentsCancellationFilteringValidationAndPrincipalProject
 	if err != nil || len(intents) != 1 || intents[0].Payload["initiating_user_id"] != "user" || intents[0].Payload["initiating_role_key"] != "operator" {
 		t.Fatalf("intents=%v err=%v", intents, err)
 	}
+	workflowPrincipal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		UserID: "workflow:outer", RoleKey: "outer_service",
+		Workload: &identitysdk.WorkflowWorkloadPrincipalContext{InitiatorSubjectID: "user"},
+	}}, accessfixture.Bundle{Key: "outer_service"})
+	intents, _, err = WorkflowPrepareTriggerIntents(t.Context(), valid, "order", recordmodel.Record{RecordID: "order-1", Data: map[string]any{}}, nil, workflowPrincipal, "record_updated:order")
+	if err != nil || len(intents) != 1 || intents[0].ActorID != "user" || intents[0].Payload["initiating_user_id"] != "user" {
+		t.Fatalf("nested workflow intents=%v err=%v", intents, err)
+	}
+	if _, exists := intents[0].Payload["initiating_role_key"]; exists {
+		t.Fatalf("nested workflow leaked service role into initiator identity: %v", intents[0].Payload)
+	}
 	intents, _, err = WorkflowPrepareTriggerIntents(t.Context(), valid, "order", recordmodel.Record{RecordID: "order-1", Data: map[string]any{}}, nil, principalmodel.Principal{}, "record_updated:order")
 	if err != nil || len(intents) != 1 {
 		t.Fatalf("minimal intents=%v err=%v", intents, err)
