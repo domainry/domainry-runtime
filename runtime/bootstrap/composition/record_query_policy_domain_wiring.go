@@ -11,6 +11,7 @@ import (
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
+	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 	recordservice "github.com/domainry/domainry-runtime/runtime/domain/record/service"
 	transactionmodel "github.com/domainry/domainry-runtime/runtime/domain/transaction/model"
 )
@@ -24,7 +25,7 @@ func (a recordQueryPolicyAdapter) canAccessRecord(principal principalmodel.Princ
 }
 
 func (a recordQueryPolicyAdapter) canAccessPersistedRecord(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema, record recordmodel.Record) (bool, error) {
-	authorized, err := relationReadEffectPrincipal(ctx, principal, object.Key)
+	authorized, err := relationReadEffectPrincipal(ctx, principal, object)
 	if err != nil {
 		return false, err
 	}
@@ -94,16 +95,17 @@ type recordApplicationRuntimeAdapter struct{ records *runtimeAssembly }
 // relationReadEffectPrincipal authorizes relation validation with the read
 // effect explicitly delegated by the source Action. The derived principal is
 // local to this check, so ordinary record browsing keeps the caller's scope.
-func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.Principal, objectKey string) (principalmodel.Principal, error) {
+func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.Principal, object definitionmodel.ObjectSchema) (principalmodel.Principal, error) {
 	invocation, ok := recordmutation.MutationInvocationFromContext(ctx)
 	if !ok || invocation.Source != transactionmodel.MutationSourceAction {
 		return principal, nil
 	}
-	objectKey = strings.TrimSpace(objectKey)
+	objectKey := strings.TrimSpace(object.Key)
 	if !invocation.ReadEffectAuthority[objectKey] {
 		return principal, nil
 	}
-	if len(invocation.EffectAuthority[objectKey]) == 0 && principal.HasPermission(objectKey+".read") {
+	authorizationObjectKey := recordpolicy.RecordReadAuthorizationObjectKey(object)
+	if len(invocation.EffectAuthority[objectKey]) == 0 && principal.HasPermission(authorizationObjectKey+".read") {
 		// A read-only Action reference may use the caller's independent read
 		// scope. Projecting the source Action's write predicate onto a public
 		// reference would reject records the caller already reads legitimately.
@@ -114,10 +116,10 @@ func relationReadEffectPrincipal(ctx context.Context, principal principalmodel.P
 		if !principal.SystemScope.Valid() || !principal.HasExactPermission(permission) {
 			return principal, nil
 		}
-		return principal.WithExactSystemCapabilities(objectKey + ".read"), nil
+		return principal.WithExactSystemCapabilities(authorizationObjectKey + ".read"), nil
 	}
 	bundle, err := identitysdk.DeriveExecutionAccess(*principal.AccessBundle, identitysdk.ExecutionGrant{
-		Resource: identitysdk.ResourceType(objectKey), Action: identitysdk.Action("read"),
+		Resource: identitysdk.ResourceType(authorizationObjectKey), Action: identitysdk.Action("read"),
 		SourceResource: identitysdk.ResourceType(invocation.ActionResource), SourceAction: identitysdk.Action(invocation.ActionOperation),
 	}, principal.AuthorizationEvaluationTime())
 	if err != nil {

@@ -55,6 +55,33 @@ func TestRelationReadOnlyActionReferenceUsesCallerScope(t *testing.T) {
 	}
 }
 
+func TestRelationReadEffectUsesAuthorizationParentForDependentTarget(t *testing.T) {
+	principal := accessfixture.Attach(principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: "workspace", UserID: "workflow-agent",
+	}}, accessfixture.Bundle{
+		Permissions:  []string{"case_orchestration_turn.dispatch"},
+		DataPolicies: accessfixture.DataPoliciesForPermissions([]string{"case_orchestration_turn.dispatch"}, auth.DataScopeAll),
+	})
+	invocation := recordmutation.MutationInvocation{
+		Source:              transactionmodel.MutationSourceAction,
+		ActionResource:      "case_orchestration_turn",
+		ActionOperation:     "dispatch",
+		ReadEffectAuthority: map[string]bool{"case_orchestration_turn": true},
+		EffectAuthority:     map[string][]string{"case_orchestration_turn": {"*"}},
+	}
+	turn := definitionmodel.ObjectSchema{
+		Key:                 "case_orchestration_turn",
+		AuthorizationParent: &definitionmodel.ObjectAuthorizationParent{ObjectKey: "support_case", RelationField: "support_case"},
+	}
+	authorized, err := relationReadEffectPrincipal(recordmutation.WithMutationInvocation(t.Context(), invocation), principal, turn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !authorized.HasPermission("support_case.read") || authorized.HasPermission("case_orchestration_turn.read") {
+		t.Fatalf("dependent relation used the child ACL instead of its authorization parent: permissions=%v", authorized.PermissionKeys())
+	}
+}
+
 func TestRelationReadEffectScope(t *testing.T) {
 	own := auth.Predicate{Fact: "id", Operator: auth.OperatorEqual, Value: "private-booking"}
 	workflow := auth.Predicate{Fact: "id", Operator: auth.OperatorEqual, Value: "workflow-booking"}
@@ -109,7 +136,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 	t.Run("explicit action read replaces browse scope without mutating caller", func(t *testing.T) {
 		principal := makePrincipal()
 		original := filter(principal)
-		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, object)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -123,7 +150,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 
 	t.Run("ordinary read remains private", func(t *testing.T) {
 		principal := makePrincipal()
-		authorized, err := relationReadEffectPrincipal(context.Background(), principal, "booking")
+		authorized, err := relationReadEffectPrincipal(context.Background(), principal, object)
 		if err != nil || authorized.AccessBundle != principal.AccessBundle {
 			t.Fatal("ordinary scope changed", err)
 		}
@@ -131,7 +158,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 
 	t.Run("undeclared reference does not inherit authority", func(t *testing.T) {
 		principal := makePrincipal()
-		authorized, err := relationReadEffectPrincipal(actionContext, principal, "member")
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, definitionmodel.ObjectSchema{Key: "member"})
 		if err != nil || authorized.AccessBundle != principal.AccessBundle {
 			t.Fatal("undeclared reference gained authority", err)
 		}
@@ -142,7 +169,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 		other := invocation
 		other.ActionOperation = "cancel"
 		other.ReadEffectAuthority = nil
-		authorized, err := relationReadEffectPrincipal(recordmutation.WithMutationInvocation(context.Background(), other), principal, "booking")
+		authorized, err := relationReadEffectPrincipal(recordmutation.WithMutationInvocation(context.Background(), other), principal, object)
 		if err != nil || authorized.AccessBundle != principal.AccessBundle {
 			t.Fatal("unrelated action gained authority", err)
 		}
@@ -151,7 +178,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 	t.Run("explicit function deny stays denied", func(t *testing.T) {
 		principal := makePrincipal()
 		principal.AccessBundle.FunctionGrants = append(principal.AccessBundle.FunctionGrants, auth.FunctionGrant{Resource: "booking", Action: "read", Effect: auth.EffectDeny})
-		if _, err := relationReadEffectPrincipal(actionContext, principal, "booking"); err == nil {
+		if _, err := relationReadEffectPrincipal(actionContext, principal, object); err == nil {
 			t.Fatal("explicit deny was bypassed")
 		}
 	})
@@ -159,7 +186,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 	t.Run("target record deny remains in derived bundle", func(t *testing.T) {
 		principal := makePrincipal()
 		principal.AccessBundle.DataPolicies = append(principal.AccessBundle.DataPolicies, auth.DataPolicy{Key: "deny-workflow", Resource: "booking", Action: "read", Effect: auth.EffectDeny, Predicate: workflow})
-		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, object)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +199,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 	t.Run("invalid source authority fails closed", func(t *testing.T) {
 		principal := makePrincipal()
 		principal.AccessBundle.FunctionGrants = principal.AccessBundle.FunctionGrants[:2]
-		if _, err := relationReadEffectPrincipal(actionContext, principal, "booking"); err == nil {
+		if _, err := relationReadEffectPrincipal(actionContext, principal, object); err == nil {
 			t.Fatal("missing source authority was accepted")
 		}
 	})
@@ -183,7 +210,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"),
 			"booking.manage_booking_lifecycle",
 		)
-		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, object)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +232,7 @@ func TestRelationReadEffectScope(t *testing.T) {
 			principalmodel.NewSystemScope(principalmodel.SystemScopeRuntimeGlobal, "record timer dispatch"),
 			"another.action",
 		)
-		authorized, err := relationReadEffectPrincipal(actionContext, principal, "booking")
+		authorized, err := relationReadEffectPrincipal(actionContext, principal, object)
 		if err != nil || authorized.HasExactPermission("booking.read") {
 			t.Fatal("untrusted system caller gained the declared relation read", err)
 		}
