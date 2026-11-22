@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatamodulehost "github.com/domainry/domainry-metadata-sdk/modulehost"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	projectmodel "github.com/domainry/domainry-runtime/runtime/domain/project/model"
@@ -284,6 +285,44 @@ func TestRemoteWorkspaceProvisionHonorsConfiguredCredentialRotationPolicy(t *tes
 	}
 	if result.MustChangePassword || result.CredentialDelivery != workspaceprovisionmodel.CredentialDelivered || result.InitialPassword == "" {
 		t.Fatalf("result=%+v", result)
+	}
+}
+
+func TestWorkspaceProvisionPublishesIntegrationMappingsAtomically(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	repository := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy)
+	initial, err := repository.Initialize(t.Context(), validWorkspaceRequest("initialize-integration-mappings"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe.claimed = false
+	request := validWorkspaceRequest("secondary-integration-mappings")
+	request.WorkspaceCode = "secondary"
+	request.AdminLoginID = "secondary@example.test"
+	publicationErr := errors.New("Integration rejected the snapshot")
+	var scopes []string
+	repository.ConfigureIntegrationEventMappingPublication(func(ctx context.Context, workspaceID string) error {
+		tx, ok := metadatamodulehost.ExecutorFromContext(ctx, nil).(*sql.Tx)
+		if !ok || tx == nil || workspaceID == initial.WorkspaceID || workspaceID != probe.request.WorkspaceID {
+			t.Fatalf("Integration was not bound to the new workspace transaction: workspace=%q", workspaceID)
+		}
+		scopes = append(scopes, workspaceID)
+		return publicationErr
+	})
+	if _, err := repository.Provision(t.Context(), request); !errors.Is(err, publicationErr) {
+		t.Fatalf("expected the Integration publication error, got %v", err)
+	}
+	for _, table := range []string{"_workspaces", workspaceProvisioningReceiptTable, "identity_provision_probe"} {
+		assertRowCount(t, store, table, 1)
+	}
+	publicationErr = nil
+	provisioned, err := repository.Provision(t.Context(), request)
+	if err != nil || len(scopes) != 2 || scopes[1] != provisioned.WorkspaceID {
+		t.Fatalf("retry workspace=%q scopes=%v error=%v", provisioned.WorkspaceID, scopes, err)
+	}
+	replay, err := repository.Provision(t.Context(), request)
+	if err != nil || !replay.Replayed || replay.WorkspaceID != provisioned.WorkspaceID || len(scopes) != 2 {
+		t.Fatalf("replay workspace=%q scopes=%v error=%v", replay.WorkspaceID, scopes, err)
 	}
 }
 

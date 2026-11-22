@@ -22,11 +22,12 @@ import (
 // this state, so a replaced or disabled workflow cannot keep using an old
 // workload binding after a metadata reload.
 type WorkflowWorkloadReleaseState struct {
-	mu           sync.RWMutex
-	configured   bool
-	application  identitysdk.ApplicationScope
-	bindings     map[string]identitysdk.WorkflowWorkloadBinding
-	supplemental map[string]identitysdk.WorkflowWorkloadBindingSpec
+	mu              sync.RWMutex
+	configured      bool
+	application     identitysdk.ApplicationScope
+	bindings        map[string]identitysdk.WorkflowWorkloadBinding
+	supplemental    map[string]identitysdk.WorkflowWorkloadBindingSpec
+	ensureWorkspace func(context.Context, string) error
 }
 
 func (s *WorkflowWorkloadReleaseState) Configured() bool {
@@ -181,6 +182,13 @@ func (s *WorkflowApplicationService) ConfigureWorkflowWorkloadIdentity(binding i
 	return nil
 }
 
+// ConfigureWorkflowWorkspaceCatalog supplies Runtime's active workspace
+// inventory for workload publication and scheduled execution.
+func (s *WorkflowApplicationService) ConfigureWorkflowWorkspaceCatalog(catalog func(context.Context) ([]string, error)) {
+	s.workloadWorkspaceCatalog = catalog
+	s.workloadReleases.ensureWorkspace = s.ensureWorkspaceWorkloadRelease
+}
+
 func workflowWorkloadActionKeys(workflow definitionmodel.WorkflowSchema) []string {
 	keys := map[string]struct{}{}
 	if workflow.Graph != nil {
@@ -245,6 +253,8 @@ func workflowWorkloadReleaseRequest(application identitysdk.ApplicationScope, wo
 }
 
 func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx context.Context, workflows map[string]definitionmodel.WorkflowSchema) error {
+	s.workloadPublicationMu.Lock()
+	defer s.workloadPublicationMu.Unlock()
 	request, err := workflowWorkloadReleaseRequest(s.workloadApplication, workflows, s.workloadReleases.supplementalBindings())
 	if err != nil {
 		return err
@@ -253,21 +263,83 @@ func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx con
 		s.workloadReleases.store(s.workloadApplication, nil)
 		return nil
 	}
+	installationID := string(s.workloadApplication.WorkspaceID)
+	workspaceIDs := []string{installationID}
+	if s.workloadWorkspaceCatalog != nil {
+		workspaceIDs, err = s.workloadWorkspaceCatalog(ctx)
+		if err != nil {
+			return fmt.Errorf("list workspaces for workload publication: %w", err)
+		}
+	}
+	if !slices.Contains(workspaceIDs, installationID) {
+		return fmt.Errorf("installation workspace missing from the workload publication catalog")
+	}
+	previous := s.workloadReleases.requestForRestore()
+	published := make(map[string]struct{}, len(workspaceIDs))
+	var appliedWorkspaces []string
+	var installationBindings []identitysdk.WorkflowWorkloadBinding
+	for _, workspaceID := range workspaceIDs {
+		if _, found := published[workspaceID]; found {
+			continue
+		}
+		request.Application.WorkspaceID = identitysdk.WorkspaceID(workspaceID)
+		result, applied, err := s.applyWorkflowWorkloadBindings(ctx, request)
+		if applied {
+			appliedWorkspaces = append(appliedWorkspaces, workspaceID)
+		}
+		if err != nil {
+			restoreErr := s.restoreWorkspaceWorkloads(context.WithoutCancel(ctx), previous, appliedWorkspaces)
+			return errors.Join(fmt.Errorf("publish workload release in workspace %q: %w", workspaceID, err), restoreErr)
+		}
+		if workspaceID == installationID {
+			installationBindings = result
+		}
+		published[workspaceID] = struct{}{}
+	}
+	s.workloadWorkspaces = published
+	s.workloadReleases.store(s.workloadApplication, installationBindings)
+	return nil
+}
+
+func (s *WorkflowApplicationService) ensureWorkspaceWorkloadRelease(ctx context.Context, workspaceID string) error {
+	s.workloadPublicationMu.Lock()
+	defer s.workloadPublicationMu.Unlock()
+	if _, published := s.workloadWorkspaces[workspaceID]; published {
+		return nil
+	}
+	workspaces, err := s.workloadWorkspaceCatalog(ctx)
+	if err != nil {
+		return fmt.Errorf("verify active workspace for workload publication: %w", err)
+	}
+	if !slices.Contains(workspaces, workspaceID) {
+		return apperror.New(apperror.KindForbidden, "backend.workflow.workload_workspace_inactive", nil, nil)
+	}
+	request := s.workloadReleases.requestForRestore()
+	request.Application.WorkspaceID = identitysdk.WorkspaceID(workspaceID)
+	if _, _, err := s.applyWorkflowWorkloadBindings(ctx, request); err != nil {
+		return err
+	}
+	s.workloadWorkspaces[workspaceID] = struct{}{}
+	return nil
+}
+
+func (s *WorkflowApplicationService) applyWorkflowWorkloadBindings(ctx context.Context, request identitysdk.ApplyWorkflowWorkloadBindingsRequest) ([]identitysdk.WorkflowWorkloadBinding, bool, error) {
 	if err := request.Validate(); err != nil {
-		return fmt.Errorf("validate workload release: %w", err)
+		return nil, false, fmt.Errorf("validate workload release: %w", err)
 	}
 	if s.workloads == nil {
-		return apperror.New(apperror.KindUnavailable, "backend.workflow.workload_identity_unavailable", nil, nil)
+		return nil, false, apperror.New(apperror.KindUnavailable, "backend.workflow.workload_identity_unavailable", nil, nil)
 	}
 	if s.principals == nil {
-		return apperror.New(apperror.KindUnavailable, "backend.workflow.execution_principal_unavailable", nil, nil)
+		return nil, false, apperror.New(apperror.KindUnavailable, "backend.workflow.execution_principal_unavailable", nil, nil)
 	}
+	ctx = requestcontext.WithWorkspaceID(ctx, string(request.Application.WorkspaceID))
 	result, err := s.workloads.ApplyWorkflowWorkloadBindings(ctx, request)
 	if err != nil {
-		return fmt.Errorf("apply workflow workload release: %w", err)
+		return nil, false, fmt.Errorf("apply workflow workload release: %w", err)
 	}
 	if len(result.Bindings) != len(request.Bindings) {
-		return s.failWorkflowWorkloadSynchronization(ctx, apperror.New(apperror.KindConflict, "backend.workflow.workload_release_incomplete", nil, nil))
+		return nil, true, apperror.New(apperror.KindConflict, "backend.workflow.workload_release_incomplete", nil, nil)
 	}
 	expectedByWorkflow := make(map[string]identitysdk.WorkflowWorkloadBindingSpec, len(request.Bindings))
 	for _, expected := range request.Bindings {
@@ -278,27 +350,26 @@ func (s *WorkflowApplicationService) synchronizeWorkflowWorkloadBindings(ctx con
 		expected, found := expectedByWorkflow[binding.WorkflowKey]
 		_, duplicate := seen[binding.WorkflowKey]
 		if !found || duplicate || binding.Application != request.Application || binding.SubjectID != identitysdk.WorkflowWorkloadSubjectID(binding.WorkflowKey) || binding.DefinitionVersionID != expected.DefinitionVersionID || binding.DefinitionVersion != expected.DefinitionVersion || binding.RoleKey != expected.RoleKey || !slices.Equal(binding.ActionKeys, expected.ActionKeys) || binding.ReleaseID != request.ReleaseID || binding.ReleaseDigest != request.ReleaseDigest || binding.Status != identitysdk.WorkflowWorkloadBindingActive {
-			return s.failWorkflowWorkloadSynchronization(ctx, apperror.New(apperror.KindConflict, "backend.workflow.workload_release_mismatch", nil, map[string]string{"workflow": binding.WorkflowKey}))
+			return nil, true, apperror.New(apperror.KindConflict, "backend.workflow.workload_release_mismatch", nil, map[string]string{"workflow": binding.WorkflowKey})
 		}
 		seen[binding.WorkflowKey] = struct{}{}
 		resolution := identitysdk.WorkflowWorkloadResolution{
 			WorkflowKey: binding.WorkflowKey, DefinitionVersionID: binding.DefinitionVersionID, DefinitionVersion: binding.DefinitionVersion,
 			ReleaseID: binding.ReleaseID, ReleaseDigest: binding.ReleaseDigest,
 		}
-		resolved, resolveErr := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, string(request.Application.WorkspaceID)), identitysdk.PrincipalResolutionRequest{
+		resolved, resolveErr := s.principals.Resolve(ctx, identitysdk.PrincipalResolutionRequest{
 			SubjectID: identitysdk.WorkflowWorkloadSubjectID(binding.WorkflowKey), RoleKey: binding.RoleKey, Workload: &resolution,
 		})
 		if resolveErr != nil {
-			return s.failWorkflowWorkloadSynchronization(ctx, fmt.Errorf("resolve workflow workload %s: %w", binding.WorkflowKey, resolveErr))
+			return nil, true, fmt.Errorf("resolve workflow workload %s: %w", binding.WorkflowKey, resolveErr)
 		}
 		resolved.Principal.AccessBundle = &resolved.AccessBundle
 		principal := principalmodel.NewPrincipalFromIdentity(resolved.Principal, "")
 		if !principal.Known || principal.WorkspaceID != string(request.Application.WorkspaceID) || principal.UserID != string(binding.SubjectID) || principal.RoleKey != binding.RoleKey || principal.Workload == nil || principal.Workload.WorkflowKey != binding.WorkflowKey || principal.Workload.DefinitionVersionID != binding.DefinitionVersionID || principal.Workload.DefinitionVersion != binding.DefinitionVersion || principal.Workload.ReleaseID != binding.ReleaseID || principal.Workload.ReleaseDigest != binding.ReleaseDigest || !principal.HasAllPermissions(binding.ActionKeys) {
-			return s.failWorkflowWorkloadSynchronization(ctx, apperror.New(apperror.KindForbidden, "backend.workflow.workload_preflight_denied", nil, map[string]string{"workflow": binding.WorkflowKey, "role": binding.RoleKey}))
+			return nil, true, apperror.New(apperror.KindForbidden, "backend.workflow.workload_preflight_denied", nil, map[string]string{"workflow": binding.WorkflowKey, "role": binding.RoleKey})
 		}
 	}
-	s.workloadReleases.store(request.Application, result.Bindings)
-	return nil
+	return result.Bindings, true, nil
 }
 
 // SynchronizeManagedWorkloadBindings publishes non-Workflow workload
@@ -353,11 +424,15 @@ func (s *WorkflowApplicationService) ReplaceManagedWorkloadBindings(bindings []M
 	return func() { s.workloadReleases.replaceSupplementalBindings(previous) }, nil
 }
 
-func (s *WorkflowApplicationService) failWorkflowWorkloadSynchronization(ctx context.Context, cause error) error {
-	if restoreErr := s.RestoreWorkflowWorkloadBindings(context.WithoutCancel(ctx)); restoreErr != nil {
-		return errors.Join(cause, fmt.Errorf("restore previous workflow workload release: %w", restoreErr))
+func (s *WorkflowApplicationService) restoreWorkspaceWorkloads(ctx context.Context, request identitysdk.ApplyWorkflowWorkloadBindingsRequest, workspaces []string) error {
+	var failures []error
+	for _, workspaceID := range workspaces {
+		request.Application.WorkspaceID = identitysdk.WorkspaceID(workspaceID)
+		if _, err := s.workloads.ApplyWorkflowWorkloadBindings(requestcontext.WithWorkspaceID(ctx, workspaceID), request); err != nil {
+			failures = append(failures, fmt.Errorf("restore previous workload release in workspace %q: %w", workspaceID, err))
+		}
 	}
-	return cause
+	return errors.Join(failures...)
 }
 
 // RestoreWorkflowWorkloadBindings reapplies the last locally committed release.
@@ -366,10 +441,19 @@ func (s *WorkflowApplicationService) RestoreWorkflowWorkloadBindings(ctx context
 	if s == nil || s.workloads == nil || s.workloadReleases == nil {
 		return nil
 	}
+	s.workloadPublicationMu.Lock()
+	defer s.workloadPublicationMu.Unlock()
 	request := s.workloadReleases.requestForRestore()
 	if !request.Application.WorkspaceID.Valid() || !request.Application.ApplicationKey.Valid() {
 		request.Application = s.workloadApplication
 	}
-	_, err := s.workloads.ApplyWorkflowWorkloadBindings(ctx, request)
-	return err
+	workspaces := make([]string, 0, len(s.workloadWorkspaces))
+	for id := range s.workloadWorkspaces {
+		workspaces = append(workspaces, id)
+	}
+	if len(workspaces) == 0 {
+		workspaces = append(workspaces, string(request.Application.WorkspaceID))
+	}
+	slices.Sort(workspaces)
+	return s.restoreWorkspaceWorkloads(ctx, request, workspaces)
 }

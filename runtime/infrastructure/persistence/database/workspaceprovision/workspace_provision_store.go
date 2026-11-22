@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/entityid"
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
+	metadatamodulehost "github.com/domainry/domainry-metadata-sdk/modulehost"
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-orm/recordschema"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -44,6 +45,7 @@ type WorkspaceProvisionStore struct {
 	rolePolicy                           WorkspaceBootstrapRolePolicyEvidence
 	remoteInitialAdminMustChangePassword bool
 	participant                          runtimeext.WorkspaceBootstrapParticipant
+	publishIntegrationEventMappings      func(context.Context, string) error
 	acceptanceFixtureProvisioner         identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner
 	acceptanceFixtureRequest             identitysdk.WorkspaceAcceptanceFixtureRequest
 	acceptanceFixturesConfigured         bool
@@ -136,6 +138,12 @@ func (store *WorkspaceProvisionStore) ConfigureRemoteInitialCredentialRotation(r
 	if store != nil {
 		store.remoteInitialAdminMustChangePassword = required
 	}
+}
+
+// ConfigureIntegrationEventMappingPublication binds the embedded Integration
+// publisher to the Runtime workspace transaction.
+func (store *WorkspaceProvisionStore) ConfigureIntegrationEventMappingPublication(publish func(context.Context, string) error) {
+	store.publishIntegrationEventMappings = publish
 }
 
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
@@ -284,6 +292,11 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	result.AdminLoginID = identityReceipt.InitialAdminLoginID
 	if err = store.insertApplicationBootstrap(ctx, tx, request.ApplicationBootstrap, result); err != nil {
 		return workspaceprovisionmodel.Result{}, err
+	}
+	if store.publishIntegrationEventMappings != nil {
+		if err = store.publishIntegrationEventMappings(metadatamodulehost.WithExecutor(ctx, tx), result.WorkspaceID); err != nil {
+			return workspaceprovisionmodel.Result{}, err
+		}
 	}
 	if err = store.insertConfigurationAndReceipt(ctx, tx, request, result, identityReceipt, fingerprint); err != nil {
 		return workspaceprovisionmodel.Result{}, err

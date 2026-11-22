@@ -57,6 +57,11 @@ func (r *WorkflowPrincipalResolver) ResolveWorkflowPrincipalForExecution(ctx con
 		if !found {
 			return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workflow.workload_release_not_active", nil, map[string]string{"workflow": strings.TrimSpace(workflow.Key), "role": runAs})
 		}
+		if r.releases.ensureWorkspace != nil {
+			if err := r.releases.ensureWorkspace(ctx, strings.TrimSpace(initiator.WorkspaceID)); err != nil {
+				return principalmodel.Principal{}, err
+			}
+		}
 		workload.TaskID = strings.TrimSpace(execution.TaskID)
 		workload.SourceEventID = strings.TrimSpace(execution.SourceEventID)
 		initiatorSubjectID := strings.TrimSpace(execution.InitiatorSubjectID)

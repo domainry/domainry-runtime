@@ -11,6 +11,7 @@ import (
 
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/domainry/domainry-foundation/apperror"
@@ -38,6 +39,9 @@ type WorkflowApplicationService struct {
 	workloads                 identitysdk.WorkflowWorkloadIdentity
 	workloadApplication       identitysdk.ApplicationScope
 	workloadReleases          *WorkflowWorkloadReleaseState
+	workloadPublicationMu     sync.Mutex
+	workloadWorkspaceCatalog  func(context.Context) ([]string, error)
+	workloadWorkspaces        map[string]struct{}
 	schema                    WorkflowSchemaProvider
 	schemaMap                 func(context.Context) map[string]definitionmodel.ObjectSchema
 	recordReader              WorkflowRecordReader

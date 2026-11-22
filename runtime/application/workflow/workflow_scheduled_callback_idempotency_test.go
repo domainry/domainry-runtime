@@ -2,14 +2,53 @@ package workflow
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/domainry/domainry-foundation/idempotency"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
+	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
 )
+
+func TestScheduledWorkflowUsesActiveWorkspaceCatalogOnlyForInstallationCallback(t *testing.T) {
+	now := time.Date(2026, time.September, 7, 4, 5, 6, 0, time.UTC)
+	workflow := definitionmodel.WorkflowSchema{
+		Key: "reconcile", Name: "Reconcile", Enabled: true,
+		TriggerContract: &definitionmodel.WorkflowTriggerContract{Type: "scheduled"},
+		Graph:           &definitionmodel.WorkflowGraphSchema{Version: 2, Nodes: []definitionmodel.WorkflowGraphNode{{ID: "start", Type: "trigger"}}},
+	}
+	worker := &workflowCommittedIntentWorkerEdgeStub{
+		workflowExecutionWorkerStub: workflowExecutionWorkerStub{executions: map[string]workflowmodel.WorkflowExecution{}},
+		claim: workflowmodel.WorkflowExecutionClaimResult{Decision: idempotency.DecisionAcquired, Receipt: workflowmodel.WorkflowExecutionReceipt{
+			OperationID: "receipt", WorkflowKey: workflow.Key, LeaseOwner: "worker", FencingToken: 1,
+		}},
+	}
+	service := workflowRecordExecutionService(worker, workflow)
+	service.workloadWorkspaceCatalog = func(context.Context) ([]string, error) { return []string{"workspace-a", "workspace-b"}, nil }
+	system := principalmodel.NewSystemPrincipal("scheduler", principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "scheduled callback"))
+	system.WorkspaceID = "workspace-a"
+	result, err := service.ProcessDueWorkflowExecutionsForScheduledWindowWithKey(t.Context(), "scheduled:reconcile", now, 1, system, "window")
+	if err != nil || result.Processed != 2 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	var scopes []string
+	for _, request := range worker.claimRequests {
+		scopes = append(scopes, request.Receipt.WorkspaceID)
+	}
+	if !slices.Equal(scopes, []string{"workspace-a", "workspace-b"}) ||
+		worker.claimRequests[0].Receipt.IdempotencyKey != worker.claimRequests[1].Receipt.IdempotencyKey {
+		t.Fatalf("unexpected scoped claims: %+v", worker.claimRequests)
+	}
+	operator := workflowExecutionPrincipal()
+	operator.WorkspaceID = "workspace-a"
+	if result, err := service.ProcessDueWorkflowExecutionsForScheduledWindowWithKey(t.Context(), "scheduled:reconcile", now, 1, operator, "workspace-window"); err != nil || result.Processed != 1 ||
+		len(worker.claimRequests) != 3 || worker.claimRequests[2].Receipt.WorkspaceID != "workspace-a" {
+		t.Fatalf("workspace operation escaped its scope: result=%+v claims=%+v error=%v", result, worker.claimRequests, err)
+	}
+}
 
 func TestScheduledCallbackKeyClosesWorkflowReceiptCrashWindow(t *testing.T) {
 	now := time.Date(2026, time.September, 7, 4, 5, 6, 0, time.UTC)

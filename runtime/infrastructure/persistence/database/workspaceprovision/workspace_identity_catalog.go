@@ -14,6 +14,20 @@ import (
 // Identity. The database belongs to one installation; only its initial row
 // carries initial_installation_identity. A foreign initial marker is excluded.
 func ActiveIdentityWorkspaces(ctx context.Context, store *database.RuntimeStore, reference string) ([]string, error) {
+	predicate := query.Equal("status", "active")
+	if reference != "" {
+		predicate = query.And(predicate, query.Or(query.Equal("workspace_id", reference), query.Equal("canonical_code", reference)))
+	}
+	return listInstallationWorkspaceIDs(ctx, store, predicate)
+}
+
+// DefinitionPublicationWorkspaces includes suspended workspaces so activation
+// resumes on the current definitions after a deployment.
+func DefinitionPublicationWorkspaces(ctx context.Context, store *database.RuntimeStore) ([]string, error) {
+	return listInstallationWorkspaceIDs(ctx, store, query.Or(query.Equal("status", "active"), query.Equal("status", "suspended")))
+}
+
+func listInstallationWorkspaceIDs(ctx context.Context, store *database.RuntimeStore, predicate query.Predicate) ([]string, error) {
 	if _, found, err := LoadInstallation(ctx, store); err != nil {
 		return nil, err
 	} else if !found {
@@ -23,10 +37,7 @@ func ActiveIdentityWorkspaces(ctx context.Context, store *database.RuntimeStore,
 	if err != nil {
 		return nil, err
 	}
-	predicate := query.And(query.Equal("status", "active"), query.Or(query.IsNull("initial_installation_identity"), query.Equal("initial_installation_identity", installationID)))
-	if reference != "" {
-		predicate = query.And(predicate, query.Or(query.Equal("workspace_id", reference), query.Equal("canonical_code", reference)))
-	}
+	predicate = query.And(predicate, query.Or(query.IsNull("initial_installation_identity"), query.Equal("initial_installation_identity", installationID)))
 	statement, arguments, err := query.NewSelectBuilder(store.RuntimeRenderer(), "_workspaces").Columns("workspace_id").Where(predicate).OrderBy(query.Ascending("id")).Build()
 	if err != nil {
 		return nil, err

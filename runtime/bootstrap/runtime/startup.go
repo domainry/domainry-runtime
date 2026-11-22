@@ -212,7 +212,16 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	)
 	if integrationOwner.Requirements != nil {
 		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeConnections(ctx, composition.IntegrationConnectionRequirements(projectDefinitions.IntegrationConnections)))
-		mustCompleteRuntimeStartup(integrationOwner.Requirements.SynchronizeEventMappings(ctx, composition.IntegrationEventMappingRequirements(projectIntegrations.EventMappings)))
+		if len(projectDefinitions.IntegrationMappings) != 0 {
+			workspaces := []string{cfg.IdentityWorkspaceID}
+			if integrationDeploymentMode(integrationOwner.Binding) == integrationsdk.DeploymentModeModule {
+				workspaces, err = workspaceprovisionpersistence.DefinitionPublicationWorkspaces(ctx, store)
+				mustCompleteRuntimeStartup(err)
+			}
+			for _, workspaceID := range workspaces {
+				mustCompleteRuntimeStartup(composition.SynchronizeWorkspaceIntegrationEventMappings(ctx, integrationOwner.Requirements, projectDefinitions.IntegrationMappings, workspaceID))
+			}
+		}
 	}
 	templateID := projectModel.ProjectKey
 	reportNotificationActions := &runtimeNotificationActionAuthorizerBinding{}
@@ -385,6 +394,11 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(records.Applications().Workflows.ConfigureWorkflowWorkloadIdentity(identityBinding, identitysdk.ApplicationScope{
 		WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(cfg.IdentityWorkspaceID)), ApplicationKey: identitysdk.ApplicationKey(strings.TrimSpace(cfg.IdentityAudience)),
 	}))
+	if identityBinding.Descriptor().Mode == identitysdk.DeploymentModeModule {
+		records.Applications().Workflows.ConfigureWorkflowWorkspaceCatalog(func(ctx context.Context) ([]string, error) {
+			return workspaceprovisionpersistence.ActiveIdentityWorkspaces(ctx, store, "")
+		})
+	}
 	knowledgeOwner, err := openRuntimeKnowledge(
 		ctx,
 		cfg.RuntimeInstanceID,

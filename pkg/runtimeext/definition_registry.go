@@ -245,10 +245,8 @@ func validateProjectDefinitions(input ProjectDefinitions) (frozenProjectDefiniti
 	for _, value := range input.IntegrationMappings {
 		key := strings.TrimSpace(value.Key)
 		value.Key = key
-		// Project definitions are deployment-neutral. Runtime binds the actual
-		// installation Workspace immediately before synchronizing the mappings
-		// with Integration; allowing a source-owned Workspace here would freeze a
-		// deploy-time identity into the product binary.
+		// Runtime publishes deployment-neutral mappings in each workspace scope.
+		// A workspace ID in the source would freeze a deployment identity.
 		if strings.TrimSpace(value.WorkspaceID) != "" {
 			return result, fmt.Errorf("%w: integration mapping %s: workspace_id must be empty in project definitions", ErrProjectDefinitionInvalid, key)
 		}

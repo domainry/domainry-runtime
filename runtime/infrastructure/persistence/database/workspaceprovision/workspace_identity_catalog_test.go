@@ -3,6 +3,7 @@ package workspaceprovision
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/domainry/domainry-orm/query"
@@ -48,6 +49,10 @@ func TestIdentityCatalogResolvesOnlyActiveLocalWorkspaces(t *testing.T) {
 		_, err = ResolveActiveIdentityWorkspace(t.Context(), store, "public-b")
 		if (err == nil) != (status == "active") {
 			t.Fatalf("status %s resolved incorrectly: %v", status, err)
+		}
+		workspaces, err := DefinitionPublicationWorkspaces(t.Context(), store)
+		if err != nil || !slices.Equal(workspaces, []string{"physical-a", "physical-b"}) {
+			t.Fatalf("definition publication for %s: workspaces=%v error=%v", status, workspaces, err)
 		}
 	}
 	insertWorkspaceAdministrationFixture(t, store.DB(), "foreign-id", "foreign-code", "Foreign", "another-installation", now)

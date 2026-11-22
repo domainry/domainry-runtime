@@ -130,6 +130,42 @@ func TestWorkflowWorkloadReleaseSynchronizesAndCarriesExecutionLineage(t *testin
 	}
 }
 
+func TestWorkflowWorkloadPublicationScopesExistingAndNewWorkspaces(t *testing.T) {
+	workloads := &workflowWorkloadIdentityTestStub{}
+	principals := &workflowWorkloadPrincipalTestStub{permissions: []string{"payment.notify", "payment.remind", "payment.settle"}}
+	state := NewWorkflowWorkloadReleaseState()
+	application := identitysdk.ApplicationScope{WorkspaceID: "workspace-a", ApplicationKey: "runtime"}
+	state.configure(application)
+	service := &WorkflowApplicationService{workloads: workloads, workloadApplication: application, workloadReleases: state, principals: principals}
+	workspaceIDs := []string{"workspace-a", "workspace-b"}
+	service.ConfigureWorkflowWorkspaceCatalog(func(context.Context) ([]string, error) { return workspaceIDs, nil })
+	workflow := workflowWorkloadReleaseTestDefinition()
+	if err := service.synchronizeWorkflowWorkloadBindings(t.Context(), map[string]definitionmodel.WorkflowSchema{workflow.Key: workflow}); err != nil {
+		t.Fatal(err)
+	}
+	if len(workloads.requests) != 2 || workloads.requests[0].Application.WorkspaceID != "workspace-a" ||
+		workloads.requests[1].Application.WorkspaceID != "workspace-b" || workloads.requests[0].ReleaseDigest != workloads.requests[1].ReleaseDigest {
+		t.Fatalf("publication scopes=%+v", workloads.requests)
+	}
+
+	workspaceIDs = append(workspaceIDs, "workspace-c")
+	resolver := NewWorkflowPrincipalResolver(principals, state)
+	for _, id := range []string{"workspace-b", "workspace-c", "workspace-c"} {
+		initiator := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: id, UserID: "operator"}}
+		resolved, err := resolver.ResolveWorkflowPrincipal(t.Context(), workflow, initiator)
+		if err != nil || resolved.WorkspaceID != id {
+			t.Fatalf("workspace=%q resolved=%q error=%v", id, resolved.WorkspaceID, err)
+		}
+	}
+	unknown := principalmodel.Principal{Principal: identitysdk.Principal{Known: true, WorkspaceID: "unknown", UserID: "operator"}}
+	if _, err := resolver.ResolveWorkflowPrincipal(t.Context(), workflow, unknown); apperror.CodeOf(err) != "backend.workflow.workload_workspace_inactive" {
+		t.Fatalf("unknown scope resolved: %v", err)
+	}
+	if len(workloads.requests) != 3 || workloads.requests[2].Application.WorkspaceID != "workspace-c" {
+		t.Fatalf("unexpected workload publications: %+v", workloads.requests)
+	}
+}
+
 func TestManagedWorkloadSharesAtomicReleaseAndResolvesExactAuthorizationVersion(t *testing.T) {
 	workload := &workflowWorkloadIdentityTestStub{}
 	principals := &workflowWorkloadPrincipalTestStub{permissions: []string{"order.expire"}}

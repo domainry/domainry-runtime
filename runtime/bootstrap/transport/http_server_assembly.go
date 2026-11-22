@@ -279,6 +279,16 @@ func (a *httpServerAssembly) wireWorkspaceProvisioning(ctx context.Context) {
 		a.dependencies.WorkspaceRolePolicy,
 	)
 	repository.ConfigureRemoteInitialCredentialRotation(a.dependencies.Config.AuthInitialCredentialRotationRequired)
+	integration := a.dependencies.IntegrationBinding
+	if integration != nil && integration.Descriptor().Mode == integrationsdk.DeploymentModeModule {
+		mappings := a.dependencies.ProjectExtensions.ProjectDefinitions().IntegrationMappings
+		if len(mappings) > 0 {
+			owner := integration.Requirements()
+			repository.ConfigureIntegrationEventMappingPublication(func(ctx context.Context, workspaceID string) error {
+				return composition.SynchronizeWorkspaceIntegrationEventMappings(ctx, owner, mappings, workspaceID)
+			})
+		}
+	}
 	service := workspaceprovisionapplication.NewWorkspaceProvisionApplicationService(repository)
 	installationIdentity, err := a.dependencies.Store.InstallationIdentity(ctx)
 	if err != nil {

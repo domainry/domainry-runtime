@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -23,7 +24,31 @@ func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForScheduledWin
 }
 
 func (s *WorkflowApplicationService) ProcessDueWorkflowExecutionsForScheduledWindowWithKey(ctx context.Context, targetKey string, scheduledFor time.Time, limit int, principal principalmodel.Principal, callbackIdempotencyKey string) (workflowmodel.WorkflowProcessResult, error) {
-	return s.processDueWorkflowExecutions(ctx, targetKey, scheduledFor.UTC(), limit, principal, true, "", strings.TrimSpace(callbackIdempotencyKey))
+	callbackIdempotencyKey = strings.TrimSpace(callbackIdempotencyKey)
+	if s.workloadWorkspaceCatalog == nil || principal.SystemScope.Kind != principalmodel.SystemScopeInstallation || !principal.SystemScope.Valid() || callbackIdempotencyKey == "" {
+		return s.processDueWorkflowExecutions(ctx, targetKey, scheduledFor.UTC(), limit, principal, true, "", callbackIdempotencyKey)
+	}
+	workspaces, err := s.workloadWorkspaceCatalog(ctx)
+	if err != nil {
+		return workflowmodel.WorkflowProcessResult{}, fmt.Errorf("list workspaces for scheduled workflow: %w", err)
+	}
+	var combined workflowmodel.WorkflowProcessResult
+	var failures []error
+	for _, id := range workspaces {
+		if err := ctx.Err(); err != nil {
+			return combined, errors.Join(append(failures, err)...)
+		}
+		scoped := principal
+		scoped.WorkspaceID = id
+		result, err := s.processDueWorkflowExecutions(ctx, targetKey, scheduledFor.UTC(), limit, scoped, true, "", callbackIdempotencyKey)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("run scheduled workflow in workspace %q: %w", id, err))
+			continue
+		}
+		combined.Processed += result.Processed
+		combined.Executions = append(combined.Executions, result.Executions...)
+	}
+	return combined, errors.Join(failures...)
 }
 
 func (s *WorkflowApplicationService) processScheduledWorkflowExecutionsForTarget(ctx context.Context, targetKey string, limit int, principal principalmodel.Principal, now time.Time) ([]workflowmodel.WorkflowExecution, error) {
