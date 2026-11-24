@@ -81,14 +81,11 @@ func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Durati
 		options.WriteTimeout = connectTimeout
 		client = redis.NewClusterClient(options)
 	} else {
-		options, err := redisconnect.ParseURL(rawURL, caCertFile, "principal-cache")
+		redisClient, err := redisconnect.NewClient(rawURL, caCertFile, "principal-cache", connectTimeout)
 		if err != nil {
-			return nil, fmt.Errorf("parse principal-cache Redis URL: %w", err)
+			return nil, fmt.Errorf("configure principal-cache Redis: %w", err)
 		}
-		options.DialTimeout = connectTimeout
-		options.ReadTimeout = connectTimeout
-		options.WriteTimeout = connectTimeout
-		client = redis.NewClient(options)
+		client = redisClient
 	}
 	cache := New(client, prefix)
 	pingCtx, cancel := context.WithTimeout(ctx, connectTimeout)

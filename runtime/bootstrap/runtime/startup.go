@@ -124,9 +124,9 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 		releaseCohort = deploymentapplication.NewDeploymentRuntimeReleaseCohortApplicationService(deploymentpersistence.NewRuntimeReleaseCohortStore(store))
 		releaseLease, err = releaseCohort.Join(ctx, workerDependencies.WorkerID.String(), releaseIdentity, workerDependencies.Clock.Now())
 		mustCompleteRuntimeStartup(err)
-		bootstrapReleaseHeartbeat = startRuntimeReleaseBootstrapHeartbeat(ctx, releaseCohort.HeartbeatInterval(), releaseLease, func(heartbeatCtx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) (deploymentmodel.RuntimeReleaseCohortLease, error) {
-			return releaseCohort.Heartbeat(heartbeatCtx, lease, workerDependencies.Clock.Now())
-		})
+		bootstrapReleaseHeartbeat = startRuntimeReleaseBootstrapHeartbeat(
+			ctx, releaseCohort.HeartbeatInterval(), releaseLease, workerDependencies.Clock.Now, releaseCohort.Heartbeat,
+		)
 	}
 	defer func() {
 		if bootstrapReleaseHeartbeat == nil {

@@ -46,6 +46,7 @@ type WorkspaceProvisionStore struct {
 	remoteInitialAdminMustChangePassword bool
 	participant                          runtimeext.WorkspaceBootstrapParticipant
 	publishIntegrationEventMappings      func(context.Context, string) error
+	stageInitialWorkspaceCredential      func(context.Context, workspaceprovisionmodel.Result) error
 	acceptanceFixtureProvisioner         identitysdk.EmbeddedWorkspaceAcceptanceFixtureProvisioner
 	acceptanceFixtureRequest             identitysdk.WorkspaceAcceptanceFixtureRequest
 	acceptanceFixturesConfigured         bool
@@ -144,6 +145,12 @@ func (store *WorkspaceProvisionStore) ConfigureRemoteInitialCredentialRotation(r
 // publisher to the Runtime workspace transaction.
 func (store *WorkspaceProvisionStore) ConfigureIntegrationEventMappingPublication(publish func(context.Context, string) error) {
 	store.publishIntegrationEventMappings = publish
+}
+
+// ConfigureInitialWorkspaceCredentialStaging prepares an installation-only
+// credential after all database writes and before commit.
+func (store *WorkspaceProvisionStore) ConfigureInitialWorkspaceCredentialStaging(stage func(context.Context, workspaceprovisionmodel.Result) error) {
+	store.stageInitialWorkspaceCredential = stage
 }
 
 func (store *WorkspaceProvisionStore) Provision(ctx context.Context, request workspaceprovisionmodel.Request) (workspaceprovisionmodel.Result, error) {
@@ -300,6 +307,13 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	}
 	if err = store.insertConfigurationAndReceipt(ctx, tx, request, result, identityReceipt, fingerprint); err != nil {
 		return workspaceprovisionmodel.Result{}, err
+	}
+	if initialize && store.stageInitialWorkspaceCredential != nil {
+		credential := result
+		credential.InitialPassword = request.InitialAdminPassword
+		if err = store.stageInitialWorkspaceCredential(ctx, credential); err != nil {
+			return workspaceprovisionmodel.Result{}, fmt.Errorf("stage initial Workspace credential: %w", err)
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return workspaceprovisionmodel.Result{}, err

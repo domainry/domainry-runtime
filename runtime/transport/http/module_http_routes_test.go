@@ -1,16 +1,21 @@
 package http
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	integrationsdk "github.com/domainry/domainry-integration-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/ratelimitredis"
 )
 
 func TestModuleHTTPRouteAuthorizationUsesDeclaredPermissionPolicy(t *testing.T) {
@@ -87,7 +92,7 @@ func TestPermissionedManagementModuleRouteIsPublishedOnPublic(t *testing.T) {
 	}
 }
 
-func TestGuardAuthenticatedModuleHTTPRouteUsesRuntimeAPIKeyPrincipal(t *testing.T) {
+func TestGuardAuthenticatedModuleHTTPRouteUsesListenerRateLimitAndRuntimeAPIKeyPrincipal(t *testing.T) {
 	route := modulehttp.Route{Action: moduleHTTPTestAction("module.resource.read", actioncontract.AuthorizationAuthenticated, true)}
 	registry := actioncontract.NewRegistry()
 	if err := registry.Register(route.Action); err != nil {
@@ -100,33 +105,88 @@ func TestGuardAuthenticatedModuleHTTPRouteUsesRuntimeAPIKeyPrincipal(t *testing.
 	principal.WorkspaceID = "workspace-a"
 	principal.UserID = "service-a"
 	principal.Known = true
+	redis := miniredis.RunT(t)
+	const redisPrefix = "test:hosted-module:"
 	calls := 0
-	router := NewHTTPRouter(HTTPRouterConfig{}, HTTPRouterDependencies{
-		AuthorizationActions: func() *actioncontract.Registry { return registry },
-		IntegrationAuthentication: integrationAuthenticationStub{
-			principal: principal,
-			key:       integrationsdk.APIKey{Key: "module-reader", Scopes: []string{"module.resource.read"}},
-			calls:     &calls,
-		},
-	})
-	guarded, err := router.GuardAuthenticatedModuleHTTPRoute(route, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		resolved, ok := identitysdk.PrincipalFromContext(request.Context())
-		if !ok || resolved.UserID != "service-a" || !resolved.HasPermission("module.resource.read") {
-			t.Fatalf("module route did not receive the API-key principal: %#v", resolved)
+	newHandler := func() http.Handler {
+		t.Helper()
+		limiter, err := ratelimitredis.Open(t.Context(), "redis://"+redis.Addr()+"/0", redisPrefix, 200*time.Millisecond, "")
+		if err != nil {
+			t.Fatal(err)
 		}
-		writer.WriteHeader(http.StatusNoContent)
-	}))
-	if err != nil {
+		t.Cleanup(func() { _ = limiter.Close() })
+		router := NewHTTPRouter(HTTPRouterConfig{
+			ListenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
+				ListenerRouteGroupPublic: {RateLimitPerMinute: 1},
+			},
+		}, HTTPRouterDependencies{
+			RateLimiter:          limiter,
+			AuthorizationActions: func() *actioncontract.Registry { return registry },
+			IntegrationAuthentication: integrationAuthenticationStub{
+				principal: principal,
+				key:       integrationsdk.APIKey{Key: "module-reader", Scopes: []string{"module.resource.read"}},
+				calls:     &calls,
+			},
+		})
+		guarded, err := router.GuardAuthenticatedModuleHTTPRoute(ListenerRouteGroupPublic, route, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			resolved, ok := identitysdk.PrincipalFromContext(request.Context())
+			if !ok || resolved.UserID != "service-a" || !resolved.HasPermission("module.resource.read") {
+				t.Fatalf("module route did not receive the API-key principal: %#v", resolved)
+			}
+			writer.WriteHeader(http.StatusNoContent)
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return guarded
+	}
+	assertResponse := func(handler http.Handler, status int, code string, expectedAuthCalls int) *httptest.ResponseRecorder {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, "/module-resource", nil)
+		request.Header.Set("X-API-Key", "itg_private")
+		request.Header.Set("X-Workspace-ID", "workspace-a")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != status || calls != expectedAuthCalls || !strings.Contains(response.Body.String(), code) {
+			t.Fatalf("status=%d auth calls=%d want status=%d auth calls=%d code=%s body=%s",
+				response.Code, calls, status, expectedAuthCalls, code, response.Body.String())
+		}
+		return response
+	}
+	assertCounter := func(expected string) {
+		t.Helper()
+		key := fmt.Sprintf("%s%x", redisPrefix, sha256.Sum256([]byte("http_listener:public")))
+		value, err := redis.Get(key)
+		if err != nil || value != expected {
+			t.Fatalf("shared Redis counter=%q err=%v want=%s", value, err, expected)
+		}
+	}
+
+	first, second := newHandler(), newHandler()
+	assertResponse(first, http.StatusNoContent, "", 1)
+	assertCounter("1")
+	limited := assertResponse(second, http.StatusTooManyRequests, "capacity.listener_rate_limited", 1)
+	if limited.Header().Get("Retry-After") == "" {
+		t.Fatal("shared limiter did not return Retry-After")
+	}
+	assertCounter("2")
+
+	redis.Close()
+	for _, handler := range []http.Handler{first, second} {
+		response := assertResponse(handler, http.StatusServiceUnavailable, "capacity.listener_rate_limit_unavailable", 1)
+		if response.Header().Get("Retry-After") != "1" {
+			t.Fatalf("Redis outage Retry-After=%q", response.Header().Get("Retry-After"))
+		}
+	}
+
+	if err := redis.Restart(); err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/module-resource", nil)
-	request.Header.Set("X-API-Key", "itg_private")
-	request.Header.Set("X-Workspace-ID", "workspace-a")
-	response := httptest.NewRecorder()
-	guarded.ServeHTTP(response, request)
-	if response.Code != http.StatusNoContent || calls != 1 {
-		t.Fatalf("status=%d calls=%d body=%s", response.Code, calls, response.Body.String())
-	}
+	assertResponse(second, http.StatusTooManyRequests, "capacity.listener_rate_limited", 1)
+	assertCounter("3")
+	redis.FastForward(time.Minute)
+	assertResponse(second, http.StatusNoContent, "", 2)
+	assertCounter("1")
 }
 
 func moduleHTTPTestAction(key string, strategy actioncontract.AuthorizationStrategy, requirePermission bool) actioncontract.ActionDefinition {

@@ -96,6 +96,8 @@ type Runtime struct {
 	releaseCohort              *deploymentapplication.DeploymentRuntimeReleaseCohortApplicationService
 	releaseLease               deploymentmodel.RuntimeReleaseCohortLease
 	releaseAdmission           *deploymentapplication.RuntimeReleaseAdmission
+	releaseWorkersContext      context.Context
+	cancelReleaseWorkers       context.CancelFunc
 	releaseIntegrity           *deploymentapplication.RuntimeReleaseIntegrity
 	releaseMu                  sync.Mutex
 

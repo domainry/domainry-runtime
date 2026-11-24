@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	deploymentapplication "github.com/domainry/domainry-runtime/runtime/application/deployment"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	reportmodel "github.com/domainry/domainry-runtime/runtime/domain/report/model"
@@ -23,6 +25,57 @@ import (
 type contextRuntimeStatusContract interface {
 	Ping(context.Context) error
 	MigrationStatus(context.Context) (deploymentmodel.MigrationStatus, error)
+}
+
+func TestRuntimeStorageReadinessRequiresWritablePostgres(t *testing.T) {
+	dsn := strings.TrimSpace(os.Getenv("RUNTIME_POSTGRES_TEST_DSN"))
+	if dsn == "" {
+		t.Skip("RUNTIME_POSTGRES_TEST_DSN is not configured")
+	}
+	ctx := t.Context()
+	store, err := database.OpenContext(ctx, config.Config{
+		DatabaseDriver:       "postgres",
+		DatabaseDSN:          dsn,
+		DatabaseMaxOpenConns: 1,
+		DatabaseMaxIdleConns: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	db := store.DB()
+	service := deploymentapplication.NewDeploymentRuntimeStatusApplicationService(
+		nil, nil, NewRuntimeStatusStore(store), nil, nil, nil, nil,
+	)
+	if err := service.StorageReadiness(ctx); err != nil {
+		t.Fatalf("writable session was not ready: %v", err)
+	}
+	var originalPID int
+	if err := db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&originalPID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "SET default_transaction_read_only = on"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("a read-only session should still answer ping: %v", err)
+	}
+	if err := service.StorageReadiness(ctx); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("expected read-only session to fail readiness, got %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "RESET default_transaction_read_only"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.StorageReadiness(ctx); err != nil {
+		t.Fatalf("writability restored but storage is not ready: %v", err)
+	}
+	var recoveredPID int
+	if err := db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&recoveredPID); err != nil {
+		t.Fatal(err)
+	}
+	if recoveredPID != originalPID {
+		t.Fatalf("readiness must recover with the same pooled session: original=%d recovered=%d", originalPID, recoveredPID)
+	}
 }
 
 type recordOperationFixture struct {

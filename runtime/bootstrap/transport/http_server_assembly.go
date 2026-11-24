@@ -196,7 +196,6 @@ func AssembleRuntimeHTTPServer(ctx context.Context, dependencies HTTPServerDepen
 		TechnicalMetrics: func(ctx context.Context) string {
 			return runtimeTechnicalOpenMetrics(ctx, dependencies.Store, records.Applications().RuntimeStatus) + runtimeOptionalWorkerMetrics(dependencies.WorkerControl)
 		},
-		WorkerControl:           dependencies.WorkerControl,
 		RuntimeInstanceID:       dependencies.RuntimeInstanceID,
 		OperationsControlState:  runtimeOperationsControlState(dependencies.Store),
 		RuntimeReleaseAdmission: dependencies.ReleaseAdmission,

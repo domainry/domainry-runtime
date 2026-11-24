@@ -353,14 +353,14 @@ func TestRuntimeReleaseHeartbeatStages(t *testing.T) {
 		execSteps: []releaseSQLExecStep{{rows: 1}, {rows: 1}}, querySteps: []releaseSQLQueryStep{cohortRow, futureRow},
 	})
 	next, err := store.HeartbeatRuntimeRelease(t.Context(), lease, now, time.Minute)
-	if err != nil || !next.ExpiresAt.Equal(now.Add(time.Minute)) {
+	if err != nil || !next.ExpiresAt.Equal(now.Add(time.Minute).Truncate(time.Millisecond)) {
 		t.Fatalf("heartbeat=%#v err=%v", next, err)
 	}
 	closeDB()
 }
 
 func TestRuntimeReleaseHeartbeatRetriesExpectedCoordinationConflicts(t *testing.T) {
-	now := time.Now().UTC()
+	now := time.Date(2026, time.November, 20, 1, 0, 0, 123456789, time.UTC)
 	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: "instance", CombinationSHA256: "hash", Generation: 1}
 	cohortRow := releaseSQLQueryStep{columns: releaseColumns(3), rows: [][]driver.Value{{"hash", "{}", int64(1)}}}
 	futureRow := releaseSQLQueryStep{columns: []string{"expiry"}, rows: [][]driver.Value{{now.Add(time.Minute).UnixMilli()}}}
@@ -371,7 +371,7 @@ func TestRuntimeReleaseHeartbeatRetriesExpectedCoordinationConflicts(t *testing.
 	})
 	defer closeDB()
 	next, err := store.HeartbeatRuntimeRelease(t.Context(), lease, now, time.Minute)
-	if err != nil || !next.ExpiresAt.Equal(now.Add(time.Minute)) {
+	if err != nil || !next.ExpiresAt.Equal(now.Add(time.Minute).Truncate(time.Millisecond)) {
 		t.Fatalf("retried heartbeat=%#v err=%v", next, err)
 	}
 
@@ -387,6 +387,46 @@ func TestRuntimeReleaseHeartbeatRetriesExpectedCoordinationConflicts(t *testing.
 	cancel()
 	if _, err := cancelled.HeartbeatRuntimeRelease(ctx, lease, now, time.Minute); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled retry error=%v", err)
+	}
+}
+
+func TestRuntimeReleaseRecoveryKeepsGenerationAndCannotReopenReplacedRelease(t *testing.T) {
+	database := openStoreForGeneratedListTest(t)
+	t.Cleanup(func() { _ = database.Close() })
+	ctx := t.Context()
+	if err := database.EnsureRuntimeSchema(ctx); err != nil {
+		t.Fatal(err)
+	}
+	store := NewRuntimeReleaseCohortStore(database)
+	claim := releaseClaim(time.Now().UTC().Truncate(time.Millisecond))
+	original, err := store.ClaimRuntimeRelease(ctx, claim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterExpiry := original.ExpiresAt.Add(time.Second)
+	if _, err := store.HeartbeatRuntimeRelease(ctx, original, afterExpiry, time.Minute); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseExpired) {
+		t.Fatalf("ordinary heartbeat after expiry = %v", err)
+	}
+	recovered, err := store.RecoverRuntimeRelease(ctx, original, afterExpiry, time.Minute)
+	if err != nil || recovered.InstanceID != original.InstanceID || recovered.Generation != original.Generation ||
+		recovered.CombinationSHA256 != original.CombinationSHA256 || !recovered.ExpiresAt.Equal(afterExpiry.Add(time.Minute)) {
+		t.Fatalf("original generation recovery = %+v, %v", recovered, err)
+	}
+	claim.InstanceID = "replacement"
+	claim.Identity = releaseIdentity("replacement-hash")
+	claim.Now = recovered.ExpiresAt.Add(time.Second)
+	replacement, err := store.ClaimRuntimeRelease(ctx, claim)
+	if err != nil || replacement.Generation <= original.Generation {
+		t.Fatalf("replacement release = %+v, %v", replacement, err)
+	}
+	if _, err := store.RecoverRuntimeRelease(ctx, recovered, claim.Now, time.Minute); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) {
+		t.Fatalf("old generation recovery = %v", err)
+	}
+	if err := store.ReleaseRuntimeRelease(ctx, replacement); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RecoverRuntimeRelease(ctx, replacement, claim.Now, time.Minute); !errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) {
+		t.Fatalf("withdrawn instance recovery = %v", err)
 	}
 }
 

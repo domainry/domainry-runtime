@@ -3,6 +3,7 @@ package deployment
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	sharedoperation "github.com/domainry/domainry-foundation/operation"
 	"github.com/domainry/domainry-orm/query"
 	database "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/postgres"
 )
 
 type RuntimeStatusStore struct {
@@ -243,7 +245,20 @@ func (r RuntimeStatusStore) transitionIdempotencyReceipt(ctx context.Context, wo
 }
 
 func (r RuntimeStatusStore) Ping(ctx context.Context) error {
-	return r.db.PingContext(ctx)
+	if r.store.Driver() != postgres.BackendPostgres {
+		return r.db.PingContext(ctx)
+	}
+	// Check the writer role and the session default on the runtime pool without writing data.
+	var writable bool
+	err := r.db.QueryRowContext(ctx, `SELECT NOT pg_catalog.pg_is_in_recovery()
+		AND NOT pg_catalog.current_setting('default_transaction_read_only')::boolean`).Scan(&writable)
+	if err != nil {
+		return err
+	}
+	if !writable {
+		return errors.New("PostgreSQL runtime connection is read-only")
+	}
+	return nil
 }
 
 func (r RuntimeStatusStore) MigrationStatus(ctx context.Context) (deploymentmodel.MigrationStatus, error) {

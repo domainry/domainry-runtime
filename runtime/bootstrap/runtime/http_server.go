@@ -43,7 +43,7 @@ func BindHTTP(ctx context.Context, runtime *Runtime) *Runtime {
 		Clock:                    runtime.worker.Clock,
 		RuntimeInstanceID:        runtime.worker.WorkerID.String(),
 		ReleaseIdentity:          runtime.releaseIdentity,
-		ReleaseAdmission:         runtime.releaseAdmission.Check,
+		ReleaseAdmission:         runtime.checkRuntimeReleaseAdmission,
 		ReleaseIntegrity:         runtime.releaseIntegrity,
 		ModuleHTTPAdapters:       runtime.ModuleHTTPAdapters(),
 		NotificationInboxActions: runtime.notificationHTTP,
@@ -73,11 +73,11 @@ func (a *Runtime) HostObservabilityMiddleware(group runtimehttp.ListenerRouteGro
 
 // GuardAuthenticatedModuleHTTPRoute lets runtimehost mount an in-process
 // module ahead of Routes() without replacing Runtime authentication semantics.
-func (a *Runtime) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+func (a *Runtime) GuardAuthenticatedModuleHTTPRoute(group runtimehttp.ListenerRouteGroup, route modulehttp.Route, next http.Handler) (http.Handler, error) {
 	if a == nil || a.api == nil {
 		return nil, fmt.Errorf("Runtime HTTP router is unavailable")
 	}
-	return a.api.GuardAuthenticatedModuleHTTPRoute(route, next)
+	return a.api.GuardAuthenticatedModuleHTTPRoute(group, route, next)
 }
 
 // RoutesForListenerGroup is a transport attachment helper. It remains a

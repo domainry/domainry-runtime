@@ -15,6 +15,7 @@ import (
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	runtimetestkit "github.com/domainry/domainry-runtime/runtime/bootstrap/testkit"
+	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
 type moduleServiceVerifierStub struct {
@@ -66,10 +67,14 @@ type moduleAuditRecorderStub struct {
 	err    error
 }
 
-type authenticatedModuleRouteGuardStub struct{ calls []string }
+type authenticatedModuleRouteGuardStub struct {
+	calls  []string
+	groups []runtimehttp.ListenerRouteGroup
+}
 
-func (stub *authenticatedModuleRouteGuardStub) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+func (stub *authenticatedModuleRouteGuardStub) GuardAuthenticatedModuleHTTPRoute(group runtimehttp.ListenerRouteGroup, route modulehttp.Route, next http.Handler) (http.Handler, error) {
 	stub.calls = append(stub.calls, route.Action.Key)
+	stub.groups = append(stub.groups, group)
 	return next, nil
 }
 
@@ -119,14 +124,14 @@ func TestRuntimeModuleHTTPRouteGuardOnlySelectsRuntimeAuthenticatedRoutes(t *tes
 		fallbackCalls = append(fallbackCalls, route.Action.Key)
 		return next, nil
 	}
-	guard := runtimeModuleHTTPRouteGuard(fallback, runtimeGuard, []modulehttp.Adapter{adapter})
+	guard := runtimeModuleHTTPRouteGuard(runtimehttp.ListenerRouteGroupPublic, fallback, runtimeGuard, []modulehttp.Adapter{adapter})
 	for _, route := range []modulehttp.Route{runtimeRoute, runtimeSigned, identityRoute} {
 		if _, err := guard(route, http.NotFoundHandler(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(runtimeGuard.calls) != 1 || runtimeGuard.calls[0] != runtimeRoute.Action.Key {
-		t.Fatalf("Runtime guard calls=%v", runtimeGuard.calls)
+	if len(runtimeGuard.calls) != 1 || runtimeGuard.calls[0] != runtimeRoute.Action.Key || runtimeGuard.groups[0] != runtimehttp.ListenerRouteGroupPublic {
+		t.Fatalf("Runtime guard calls=%v listener groups=%v", runtimeGuard.calls, runtimeGuard.groups)
 	}
 	if len(fallbackCalls) != 2 || fallbackCalls[0] != runtimeSigned.Action.Key || fallbackCalls[1] != identityRoute.Action.Key {
 		t.Fatalf("fallback guard calls=%v", fallbackCalls)

@@ -47,7 +47,7 @@ func (s *HTTPRouter) registerModuleHTTPRoutes(mux *http.ServeMux) {
 // module routes mounted there must use this bridge or they would only see the
 // Identity session middleware and could never receive an Integration API-key
 // principal.
-func (s *HTTPRouter) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
+func (s *HTTPRouter) GuardAuthenticatedModuleHTTPRoute(group ListenerRouteGroup, route modulehttp.Route, next http.Handler) (http.Handler, error) {
 	if s == nil || next == nil {
 		return nil, fmt.Errorf("authenticated module HTTP route guard is incomplete")
 	}
@@ -60,7 +60,13 @@ func (s *HTTPRouter) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, n
 	mux := http.NewServeMux()
 	binding := moduleHTTPRoute{route: route, handler: next, owner: strings.TrimSpace(route.Action.Owner)}
 	mux.Handle(route.Pattern(), s.moduleHTTPRouteHandler(binding))
-	return s.withAuth(mux, s.withActionAuthorization(mux, mux)), nil
+	authorized := s.withAuth(mux, s.withActionAuthorization(mux, mux))
+	policy := s.listenerGroupPolicies[group]
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.allowListenerRateLimit(w, r, group, policy) {
+			authorized.ServeHTTP(w, r)
+		}
+	}), nil
 }
 
 func (s *HTTPRouter) moduleHTTPRouteHandler(binding moduleHTTPRoute) http.Handler {

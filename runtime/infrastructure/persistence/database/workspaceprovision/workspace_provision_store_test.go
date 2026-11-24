@@ -423,6 +423,45 @@ func TestWorkspaceInitializationRollbackCompletesAndLeavesNoAuthorityRows(t *tes
 	}
 }
 
+func TestWorkspaceInitializationRequiresStagingBeforeCommit(t *testing.T) {
+	store, probe := newWorkspaceProvisionTestStore(t)
+	repository := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy)
+	request := validWorkspaceRequest("staged")
+	unavailable := errors.New("private credential store unavailable")
+	repository.ConfigureInitialWorkspaceCredentialStaging(func(context.Context, workspaceprovisionmodel.Result) error {
+		return unavailable
+	})
+	if _, err := repository.Initialize(t.Context(), request); !errors.Is(err, unavailable) {
+		t.Fatalf("stage failure returned %v", err)
+	}
+	for _, table := range []string{"_workspaces", workspaceProvisioningReceiptTable, "identity_provision_probe"} {
+		assertRowCount(t, store, table, 0)
+	}
+	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionRolledBack {
+		t.Fatal("failed staging did not roll back Identity initialization")
+	}
+
+	var staged workspaceprovisionmodel.Result
+	repository.ConfigureInitialWorkspaceCredentialStaging(func(_ context.Context, candidate workspaceprovisionmodel.Result) error {
+		if len(probe.completions) != 1 {
+			t.Error("staging ran after Identity completion")
+		}
+		staged = candidate
+		return nil
+	})
+	probe.claimErr = errors.New("Identity unavailable after commit")
+	result, err := repository.Initialize(t.Context(), request)
+	if err != nil || result.WorkspaceID == "" || result.InitialPassword != "" {
+		t.Fatal("expected a committed Workspace and a private staged credential")
+	}
+	assertRowCount(t, store, "_workspaces", 1)
+	if staged.WorkspaceID != result.WorkspaceID || staged.CanonicalCode != request.WorkspaceCode ||
+		staged.AdminLoginID != probe.request.InitialAdminLoginID ||
+		staged.InitialPassword != request.InitialAdminPassword || !staged.MustChangePassword {
+		t.Fatal("staged credential does not match the committed Workspace")
+	}
+}
+
 func TestWorkspaceProvisionValidationRejectsUntypedOrInvalidCommercialLimits(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
 	request := validWorkspaceRequest("invalid")

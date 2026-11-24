@@ -13,5 +13,7 @@ import (
 type RuntimeReleaseCohortRepository interface {
 	ClaimRuntimeRelease(context.Context, deploymentmodel.RuntimeReleaseCohortClaim) (deploymentmodel.RuntimeReleaseCohortLease, error)
 	HeartbeatRuntimeRelease(context.Context, deploymentmodel.RuntimeReleaseCohortLease, time.Time, time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error)
+	// RecoverRuntimeRelease renews an existing instance only within its original active generation.
+	RecoverRuntimeRelease(context.Context, deploymentmodel.RuntimeReleaseCohortLease, time.Time, time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error)
 	ReleaseRuntimeRelease(context.Context, deploymentmodel.RuntimeReleaseCohortLease) error
 }

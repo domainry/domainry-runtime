@@ -126,7 +126,7 @@ func (s RuntimeReleaseCohortStore) claim(ctx context.Context, claim deploymentmo
 		// already serving instances.
 		leaseCombinationSHA256 = cohort.combinationSHA256
 	}
-	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: claim.InstanceID, CombinationSHA256: leaseCombinationSHA256, Generation: generation, ExpiresAt: claim.Now.Add(claim.LeaseDuration).UTC()}
+	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: claim.InstanceID, CombinationSHA256: leaseCombinationSHA256, Generation: generation, ExpiresAt: claim.Now.Add(claim.LeaseDuration).UTC().Truncate(time.Millisecond)}
 	if err := s.writeInstanceLease(ctx, tx, lease, claim.Now); err != nil {
 		return deploymentmodel.RuntimeReleaseCohortLease{}, err
 	}
@@ -263,12 +263,20 @@ func (s RuntimeReleaseCohortStore) writeInstanceLease(ctx context.Context, tx *s
 }
 
 func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+	return s.updateRuntimeReleaseLease(ctx, lease, now, duration, false)
+}
+
+func (s RuntimeReleaseCohortStore) RecoverRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+	return s.updateRuntimeReleaseLease(ctx, lease, now, duration, true)
+}
+
+func (s RuntimeReleaseCohortStore) updateRuntimeReleaseLease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration, recoverExpired bool) (deploymentmodel.RuntimeReleaseCohortLease, error) {
 	if s.store == nil || s.store.DB() == nil {
 		return lease, fmt.Errorf("%w: release cohort store is unavailable", deploymentmodel.ErrRuntimeReleaseAdmission)
 	}
 	for attempt := 0; attempt < runtimeReleaseCoordinationAttempts; attempt++ {
-		next, err := s.heartbeatRuntimeRelease(ctx, lease, now, duration)
-		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) || !s.store.IsCoordinationRetryableError(err) {
+		next, err := s.writeRuntimeReleaseHeartbeat(ctx, lease, now, duration, recoverExpired)
+		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) || errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseExpired) || !s.store.IsCoordinationRetryableError(err) {
 			return next, err
 		}
 		if err := waitRuntimeReleaseCoordinationRetry(ctx, attempt); err != nil {
@@ -278,7 +286,7 @@ func (s RuntimeReleaseCohortStore) HeartbeatRuntimeRelease(ctx context.Context, 
 	return lease, fmt.Errorf("%w: release cohort heartbeat serialization retry exhausted", deploymentmodel.ErrRuntimeReleaseAdmission)
 }
 
-func (s RuntimeReleaseCohortStore) heartbeatRuntimeRelease(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+func (s RuntimeReleaseCohortStore) writeRuntimeReleaseHeartbeat(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time, duration time.Duration, recoverExpired bool) (deploymentmodel.RuntimeReleaseCohortLease, error) {
 	tx, err := s.store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return lease, err
@@ -304,10 +312,10 @@ func (s RuntimeReleaseCohortStore) heartbeatRuntimeRelease(ctx context.Context, 
 		return lease, err
 	}
 	currentExpiry := time.UnixMilli(expiresAt).UTC()
-	if !currentExpiry.After(now) {
-		return lease, fmt.Errorf("%w: instance=%s lease expired", deploymentmodel.ErrRuntimeReleaseLeaseLost, lease.InstanceID)
+	if !recoverExpired && !currentExpiry.After(now) {
+		return lease, fmt.Errorf("%w: instance=%s", deploymentmodel.ErrRuntimeReleaseLeaseExpired, lease.InstanceID)
 	}
-	next := now.Add(duration).UTC()
+	next := now.Add(duration).UTC().Truncate(time.Millisecond)
 	queryValue, args, buildErr := query.NewUpdateBuilder(s.renderer(), "_release_instances").Set("lease_expires_at", next.UnixMilli()).Set("heartbeat_at", now.UTC().UnixMilli()).Where(leasePredicate).Build()
 	if buildErr != nil {
 		return lease, buildErr

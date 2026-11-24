@@ -10,10 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	redisserver "github.com/alicebob/miniredis/v2/server"
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/ratelimit"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
+	"github.com/domainry/domainry-runtime/runtime/infrastructure/ratelimitredis"
 )
 
 type listenerRateLimiterFunc func(context.Context, string, int, time.Duration) (ratelimit.Decision, error)
@@ -141,6 +144,48 @@ func TestListenerRouteGroupUsesSharedRateLimiterAndFailsClosed(t *testing.T) {
 	failing.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, next).ServeHTTP(unavailable, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
 	if unavailable.Code != http.StatusServiceUnavailable || unavailable.Header().Get("Retry-After") != "1" {
 		t.Fatalf("unavailable status=%d retry=%q", unavailable.Code, unavailable.Header().Get("Retry-After"))
+	}
+}
+
+func TestListenerRouteGroupReturnsRedisUnavailableBeforeRequestDeadline(t *testing.T) {
+	server := miniredis.RunT(t)
+	const redisBudget = 100 * time.Millisecond
+	limiter, err := ratelimitredis.Open(t.Context(), "redis://"+server.Addr()+"/0", "test:rate:", redisBudget, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = limiter.Close() })
+	router := &HTTPRouter{
+		listenerGroupPolicies: map[ListenerRouteGroup]ListenerRouteGroupPolicy{
+			ListenerRouteGroupPublic: {RateLimitPerMinute: 1},
+		},
+		rateLimiter: limiter,
+	}
+	handler := router.withListenerRouteGroupPolicy(ListenerRouteGroupPublic, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	// Model a reachable socket that accepts commands without returning replies.
+	server.Server().SetPreHook(func(_ *redisserver.Peer, command string, _ ...string) bool {
+		return command == "EVALSHA" || command == "EVAL"
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 3*redisBudget)
+	defer cancel()
+	unavailable := httptest.NewRecorder()
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/records/customer", nil)
+	handler.ServeHTTP(unavailable, request)
+	if unavailable.Code != http.StatusServiceUnavailable || unavailable.Header().Get("Retry-After") != "1" ||
+		!strings.Contains(unavailable.Body.String(), "capacity.listener_rate_limit_unavailable") || ctx.Err() != nil {
+		t.Fatalf("status=%d retry=%q body=%s client context=%v", unavailable.Code, unavailable.Header().Get("Retry-After"), unavailable.Body, ctx.Err())
+	}
+
+	server.Server().SetPreHook(nil)
+	for _, want := range []int{http.StatusNoContent, http.StatusTooManyRequests} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/records/customer", nil))
+		if response.Code != want {
+			t.Fatalf("after recovery status=%d, want %d", response.Code, want)
+		}
 	}
 }
 

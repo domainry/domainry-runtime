@@ -151,6 +151,14 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, model proj
 	if hasDevelopmentIdentity {
 		initialization = workspaceprovision.NewWorkspaceInitializationStoreWithParticipantAndAcceptanceFixtures(manager.database, manager.bootstrap, model, participant, fixtures, rolePolicy)
 	}
+	if stager, ok := manager.credentialDelivery.(InitialWorkspaceCredentialStager); ok {
+		initialization.ConfigureInitialWorkspaceCredentialStaging(func(ctx context.Context, prepared workspaceprovisionmodel.Result) error {
+			return stager.StageInitialWorkspaceCredential(ctx, InitialWorkspaceCredential{
+				WorkspaceID: prepared.WorkspaceID, CanonicalCode: prepared.CanonicalCode, LoginID: prepared.AdminLoginID,
+				InitialPassword: prepared.InitialPassword, MustChangePassword: prepared.MustChangePassword,
+			})
+		})
+	}
 	result, err := initialization.Initialize(ctx, request)
 	if err != nil {
 		return fmt.Errorf("initialize first Workspace atomically: %w", err)

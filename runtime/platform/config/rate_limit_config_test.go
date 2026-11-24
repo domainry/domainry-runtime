@@ -43,3 +43,16 @@ func TestRateLimitRedisURLIsSecretConfiguration(t *testing.T) {
 		t.Fatalf("definition=%#v found=%v", definition, ok)
 	}
 }
+
+func TestRedisCAValidationAcceptsSentinelTLSAndRedactsInvalidURL(t *testing.T) {
+	for _, prefix := range []string{"RATE_LIMIT", "PRINCIPAL_CACHE"} {
+		correct := "rediss+sentinel://app:data-secret@redis.internal/0?master_name=mymaster&sentinel_addr=seed.internal:26379"
+		if err := validateRedisCAFile(prefix, correct, "/run/redis-tls/ca.crt"); err != nil {
+			t.Fatal(err)
+		}
+		invalid := "rediss+sentinel://app:data-secret@[redis.internal"
+		if err := validateRedisCAFile(prefix, invalid, "/run/redis-tls/ca.crt"); err == nil || strings.Contains(err.Error(), "data-secret") {
+			t.Fatal("malformed secret URL must fail with a redacted error")
+		}
+	}
+}

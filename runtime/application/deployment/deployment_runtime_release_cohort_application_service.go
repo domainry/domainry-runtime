@@ -55,6 +55,10 @@ func (s *DeploymentRuntimeReleaseCohortApplicationService) Heartbeat(ctx context
 	return s.repository.HeartbeatRuntimeRelease(ctx, lease, now.UTC(), s.leaseDuration)
 }
 
+func (s *DeploymentRuntimeReleaseCohortApplicationService) Recover(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease, now time.Time) (deploymentmodel.RuntimeReleaseCohortLease, error) {
+	return s.repository.RecoverRuntimeRelease(ctx, lease, now.UTC(), s.leaseDuration)
+}
+
 func (s *DeploymentRuntimeReleaseCohortApplicationService) Leave(ctx context.Context, lease deploymentmodel.RuntimeReleaseCohortLease) error {
 	if lease.InstanceID == "" || s == nil || s.repository == nil {
 		return nil

@@ -7,9 +7,10 @@ import (
 )
 
 var ( // Deployment admission failures remain stable across persistence adapters.
-	ErrRuntimeReleaseAdmission = errors.New("runtime release admission failed")
-	ErrRuntimeReleaseConflict  = errors.New("runtime release cohort identity conflict")
-	ErrRuntimeReleaseLeaseLost = errors.New("runtime release cohort lease lost")
+	ErrRuntimeReleaseAdmission    = errors.New("runtime release admission failed")
+	ErrRuntimeReleaseConflict     = errors.New("runtime release cohort identity conflict")
+	ErrRuntimeReleaseLeaseLost    = errors.New("runtime release cohort lease lost")
+	ErrRuntimeReleaseLeaseExpired = errors.New("runtime release cohort lease expired")
 )
 
 type RuntimeReleaseCohortClaim struct {

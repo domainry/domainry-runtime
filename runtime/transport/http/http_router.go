@@ -14,7 +14,6 @@ import (
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/ratelimit"
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 	businesseventapplication "github.com/domainry/domainry-runtime/runtime/application/businessevent"
 	actionservice "github.com/domainry/domainry-runtime/runtime/domain/action/service"
 	capabilitybusiness "github.com/domainry/domainry-runtime/runtime/domain/capability/contract"
@@ -78,7 +77,6 @@ type HTTPRouter struct {
 	runtimeInstanceID               string
 	workspaceProvisionClientID      string
 	workspaceProvisionSigningSecret []byte
-	workerControl                   *workerplatform.Controller
 	businessEvents                  *businesseventapplication.BusinessEventApplicationService
 	businessEventHTTP               *businesseventhttp.BusinessEventsHandler
 	workspaceProvisionHTTP          httpRouteRegistrar
@@ -133,7 +131,7 @@ func NewHTTPRouter(config HTTPRouterConfig, deps HTTPRouterDependencies) *HTTPRo
 		httpMetrics:      NewMemoryHTTPMetricsCollector(defaultHTTPMetricsMaxSeries), serviceKind: BusinessRuntimeServiceKind,
 		productBrandName: productbrand.ResolveName(config.ProductBrandName),
 		healthRegistry:   newRuntimeHealthRegistry(), healthCheckTimeout: config.HealthCheckTimeout, maxJSONBodyBytes: config.MaxJSONBodyBytes,
-		capacityController: controller, requestTimeout: config.RequestTimeout, backpressure: deps.Backpressure, workerControl: deps.WorkerControl,
+		capacityController: controller, requestTimeout: config.RequestTimeout, backpressure: deps.Backpressure,
 		operationsControlState: deps.OperationsControlState, runtimeInstanceID: strings.TrimSpace(deps.RuntimeInstanceID),
 		runtimeReleaseAdmission: deps.RuntimeReleaseAdmission,
 		runtimeReleaseIntegrity: deps.RuntimeReleaseIntegrity,

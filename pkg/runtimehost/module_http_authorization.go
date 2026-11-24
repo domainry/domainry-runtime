@@ -16,15 +16,16 @@ import (
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identityhttpmiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
+	runtimehttp "github.com/domainry/domainry-runtime/runtime/transport/http"
 )
 
 type moduleRouteGuard func(modulehttp.Route, http.Handler, modulehttp.AuditRecorder) (http.Handler, error)
 
 type authenticatedModuleRouteGuard interface {
-	GuardAuthenticatedModuleHTTPRoute(modulehttp.Route, http.Handler) (http.Handler, error)
+	GuardAuthenticatedModuleHTTPRoute(runtimehttp.ListenerRouteGroup, modulehttp.Route, http.Handler) (http.Handler, error)
 }
 
-func runtimeModuleHTTPRouteGuard(fallback moduleRouteGuard, runtime authenticatedModuleRouteGuard, adapters []modulehttp.Adapter) moduleRouteGuard {
+func runtimeModuleHTTPRouteGuard(group runtimehttp.ListenerRouteGroup, fallback moduleRouteGuard, runtime authenticatedModuleRouteGuard, adapters []modulehttp.Adapter) moduleRouteGuard {
 	runtimeActions := map[string]bool{}
 	for _, adapter := range adapters {
 		if adapter == nil {
@@ -36,7 +37,7 @@ func runtimeModuleHTTPRouteGuard(fallback moduleRouteGuard, runtime authenticate
 	}
 	return func(route modulehttp.Route, next http.Handler, audit modulehttp.AuditRecorder) (http.Handler, error) {
 		if runtime != nil && route.Action.Authorization.Strategy == actioncontract.AuthorizationAuthenticated && runtimeActions[strings.TrimSpace(route.Action.Key)] {
-			return runtime.GuardAuthenticatedModuleHTTPRoute(route, next)
+			return runtime.GuardAuthenticatedModuleHTTPRoute(group, route, next)
 		}
 		if fallback == nil {
 			return nil, fmt.Errorf("module HTTP route %q requires a host authorization guard", route.Pattern())

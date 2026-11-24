@@ -11,7 +11,6 @@ import (
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/ratelimit"
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	businesseventcontract "github.com/domainry/domainry-runtime/runtime/domain/businessevent/contract"
 	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
@@ -154,7 +153,6 @@ type HTTPRouterDependencies struct {
 	RuntimeReadiness          DeploymentRuntimeReadinessProvider
 	TechnicalMetrics          TechnicalMetricsProvider
 	Backpressure              func(context.Context) bool
-	WorkerControl             *workerplatform.Controller
 	OperationsControlState    OperationsControlStateProvider
 	RuntimeReleaseAdmission   RuntimeReleaseAdmissionProvider
 	RuntimeReleaseIntegrity   RuntimeReleaseIntegrityProvider

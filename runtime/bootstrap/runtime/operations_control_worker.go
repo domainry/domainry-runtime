@@ -33,6 +33,12 @@ func (a *Runtime) runControlledWorker(ctx context.Context, owner string, start f
 	var childCancel context.CancelFunc
 	var childDone <-chan struct{}
 	reconcile := func() {
+		if a.checkRuntimeReleaseAdmission() != nil {
+			if childCancel != nil {
+				childCancel()
+			}
+			return
+		}
 		controls, err := a.operationsControls(ctx)
 		globalPaused := err != nil || operationsControlActive(controls, operationsmodel.OperationsControlMaintenance, "runtime") ||
 			operationsControlActive(controls, operationsmodel.OperationsControlInstanceDrain, a.worker.WorkerID.String())
@@ -46,9 +52,9 @@ func (a *Runtime) runControlledWorker(ctx context.Context, owner string, start f
 			return
 		}
 		if !paused && childCancel == nil {
-			a.worker.Control.Undrain()
-			childCtx, cancel := context.WithCancel(ctx)
-			childCancel, childDone = cancel, start(childCtx)
+			if childCtx, cancel := a.beginReleaseWorker(ctx); cancel != nil {
+				childCancel, childDone = cancel, start(childCtx)
+			}
 		}
 	}
 	reconcile()
@@ -67,6 +73,7 @@ func (a *Runtime) runControlledWorker(ctx context.Context, owner string, start f
 			}
 			return
 		case <-childDone:
+			childCancel()
 			childCancel, childDone = nil, nil
 		case <-poll.C:
 			reconcile()

@@ -198,6 +198,14 @@ type InitialWorkspaceCredentialDelivery interface {
 	DeliverInitialWorkspaceCredential(context.Context, InitialWorkspaceCredential) (InitialWorkspaceCredentialDeliveryAcknowledgment, error)
 }
 
+// InitialWorkspaceCredentialStager is an optional capability on the startup
+// delivery sink. Stage must persist to a private store before returning nil.
+// A staged credential is usable only after its Workspace ID is observed in
+// the committed database. If initialization rolls back, a retry can replace it.
+type InitialWorkspaceCredentialStager interface {
+	StageInitialWorkspaceCredential(context.Context, InitialWorkspaceCredential) error
+}
+
 type InstallationAdministratorCredential struct {
 	CanonicalWorkspaceCode string `json:"-"`
 	LoginID                string `json:"-"`

@@ -12,6 +12,15 @@ import (
 
 type initialWorkspaceCredentialFileDelivery struct{ path string }
 
+// ValidateInitialWorkspaceCredentialStaging checks the startup-only credential
+// sink for hosts that require durable staging before the database commit.
+func (options *Options) ValidateInitialWorkspaceCredentialStaging() error {
+	if _, ok := options.InitialWorkspaceCredentialDelivery.(InitialWorkspaceCredentialStager); !ok {
+		return errors.New("initial Workspace credential sink does not provide durable staging")
+	}
+	return nil
+}
+
 func NewInitialWorkspaceCredentialFileDelivery(path string) (InitialWorkspaceCredentialDelivery, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {

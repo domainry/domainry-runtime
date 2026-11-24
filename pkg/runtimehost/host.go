@@ -94,7 +94,7 @@ type runtimeModuleAdapterProcess interface {
 }
 
 type runtimeModuleRouteGuardProcess interface {
-	GuardAuthenticatedModuleHTTPRoute(modulehttp.Route, http.Handler) (http.Handler, error)
+	GuardAuthenticatedModuleHTTPRoute(runtimehttp.ListenerRouteGroup, modulehttp.Route, http.Handler) (http.Handler, error)
 }
 
 type runtimeHTTPObservabilityProcess interface {
@@ -115,8 +115,8 @@ func (r bootstrapRuntimeProcess) ModuleHTTPAdapters() []modulehttp.Adapter {
 	return r.Runtime.ModuleHTTPAdapters()
 }
 
-func (r bootstrapRuntimeProcess) GuardAuthenticatedModuleHTTPRoute(route modulehttp.Route, next http.Handler) (http.Handler, error) {
-	return r.Runtime.GuardAuthenticatedModuleHTTPRoute(route, next)
+func (r bootstrapRuntimeProcess) GuardAuthenticatedModuleHTTPRoute(group runtimehttp.ListenerRouteGroup, route modulehttp.Route, next http.Handler) (http.Handler, error) {
+	return r.Runtime.GuardAuthenticatedModuleHTTPRoute(group, route, next)
 }
 
 func (r bootstrapRuntimeProcess) HostObservabilityMiddleware(group runtimehttp.ListenerRouteGroup, next http.Handler) http.Handler {
@@ -572,11 +572,11 @@ func runWithDependencies(options Options, dependencies serverRunDependencies) er
 				moduleAdapters = append(moduleAdapters, options.ProjectHTTPAdapters()...)
 			}
 			mountedModuleCount = len(moduleAdapters)
-			hostGuard := moduleGuard
-			if provider, ok := runtime.(runtimeModuleRouteGuardProcess); ok {
-				hostGuard = runtimeModuleHTTPRouteGuard(moduleGuard, provider, runtimeModuleAdapters)
-			}
 			for group, router := range identityRouters {
+				hostGuard := moduleGuard
+				if provider, ok := runtime.(runtimeModuleRouteGuardProcess); ok {
+					hostGuard = runtimeModuleHTTPRouteGuard(group, moduleGuard, provider, runtimeModuleAdapters)
+				}
 				if err := router.Bind(moduleAdapters, hostGuard); err != nil {
 					return nil, fmt.Errorf("mount module HTTP adapters on %s listener: %w", group, err)
 				}

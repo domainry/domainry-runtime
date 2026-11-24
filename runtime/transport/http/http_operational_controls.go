@@ -7,7 +7,6 @@ import (
 
 	capacityplatform "github.com/domainry/domainry-foundation/capacity"
 	healthplatform "github.com/domainry/domainry-foundation/health"
-	workerplatform "github.com/domainry/domainry-foundation/worker"
 )
 
 func (s *HTTPRouter) withOperationalControls(routes *http.ServeMux, next http.Handler) http.Handler {
@@ -24,7 +23,7 @@ func (s *HTTPRouter) withOperationalControls(routes *http.ServeMux, next http.Ha
 			return
 		}
 		s.healthRegistry.SetMaintenance(maintenance)
-		s.healthRegistry.SetDraining(draining)
+		s.healthRegistry.SetInstanceDraining(draining)
 		if maintenance || draining {
 			w.Header().Set("Retry-After", "5")
 			code := "backend.operations.maintenance_active"
@@ -46,7 +45,7 @@ func (s *HTTPRouter) refreshOperationalState(ctx context.Context) {
 		s.healthRegistry.SetMaintenance(active)
 	}
 	if active, _, err := s.operationsControlState(ctx, "instance_drain", s.runtimeInstanceID); err == nil {
-		s.healthRegistry.SetDraining(active)
+		s.healthRegistry.SetInstanceDraining(active)
 	}
 }
 
@@ -72,8 +71,7 @@ func (s *HTTPRouter) readinessSnapshot(ctx context.Context) healthplatform.Snaps
 			return s.runtimeReadiness.MigrationReadiness(ctx)
 		}},
 		{Name: "drain", Criticality: healthplatform.Critical, Timeout: s.healthCheckTimeout, Run: func(context.Context) error {
-			workerDraining := s.workerControl != nil && s.workerControl.Snapshot().State == workerplatform.ShutdownDraining
-			if !s.healthRegistry.Draining() && !s.healthRegistry.Maintenance() && !workerDraining {
+			if !s.healthRegistry.Draining() && !s.healthRegistry.Maintenance() {
 				return nil
 			}
 			return errors.New("runtime unavailable for new work")

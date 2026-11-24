@@ -28,28 +28,8 @@ func (s *HTTPRouter) withListenerRouteGroupPolicy(group ListenerRouteGroup, next
 		if policy.MaxJSONBodyBytes > 0 && r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, policy.MaxJSONBodyBytes)
 		}
-		if s.rateLimiter != nil && policy.RateLimitPerMinute > 0 && !capacityProbePath(r.URL.Path) {
-			decision, err := s.rateLimiter.Allow(r.Context(), "http_listener:"+string(group), policy.RateLimitPerMinute, time.Minute)
-			if err != nil {
-				w.Header().Set("Retry-After", "1")
-				s.appendSecurityAudit(r, "listener_rate_limit_unavailable", "Runtime listener rate-limit backend unavailable", map[string]any{
-					"group": group, "audit_class": policy.AuditClass,
-				})
-				writeError(w, r, http.StatusServiceUnavailable, "capacity.listener_rate_limit_unavailable")
-				return
-			}
-			if !decision.Allowed {
-				retrySeconds := int64((decision.RetryAfter + time.Second - 1) / time.Second)
-				if retrySeconds < 1 {
-					retrySeconds = 1
-				}
-				w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
-				s.appendSecurityAudit(r, "listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
-					"group": group, "audit_class": policy.AuditClass,
-				})
-				writeError(w, r, http.StatusTooManyRequests, "capacity.listener_rate_limited")
-				return
-			}
+		if !s.allowListenerRateLimit(w, r, group, policy) {
+			return
 		}
 		if controller != nil && !capacityProbePath(r.URL.Path) {
 			principal := s.principalFromRequest(r)
@@ -94,6 +74,34 @@ func (s *HTTPRouter) withListenerRouteGroupPolicy(group ListenerRouteGroup, next
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *HTTPRouter) allowListenerRateLimit(w http.ResponseWriter, r *http.Request, group ListenerRouteGroup, policy ListenerRouteGroupPolicy) bool {
+	if s.rateLimiter == nil || policy.RateLimitPerMinute <= 0 || capacityProbePath(r.URL.Path) {
+		return true
+	}
+	decision, err := s.rateLimiter.Allow(r.Context(), "http_listener:"+string(group), policy.RateLimitPerMinute, time.Minute)
+	if err != nil {
+		w.Header().Set("Retry-After", "1")
+		s.appendSecurityAudit(r, "listener_rate_limit_unavailable", "Runtime listener rate-limit backend unavailable", map[string]any{
+			"group": group, "audit_class": policy.AuditClass,
+		})
+		writeError(w, r, http.StatusServiceUnavailable, "capacity.listener_rate_limit_unavailable")
+		return false
+	}
+	if !decision.Allowed {
+		retrySeconds := int64((decision.RetryAfter + time.Second - 1) / time.Second)
+		if retrySeconds < 1 {
+			retrySeconds = 1
+		}
+		w.Header().Set("Retry-After", strconv.FormatInt(retrySeconds, 10))
+		s.appendSecurityAudit(r, "listener_rate_limited", "Runtime listener rate limit denied", map[string]any{
+			"group": group, "audit_class": policy.AuditClass,
+		})
+		writeError(w, r, http.StatusTooManyRequests, "capacity.listener_rate_limited")
+		return false
+	}
+	return true
 }
 
 func corsOriginAllowed(allowedOrigins []string, origin string) bool {

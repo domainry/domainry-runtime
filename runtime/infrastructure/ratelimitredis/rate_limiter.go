@@ -33,23 +33,21 @@ return {count, ttl}
 // RateLimiter uses one Redis key per fixed-window bucket. Redis owns expiry,
 // so this backend does not write _rate_limit_buckets.
 type RateLimiter struct {
-	client redis.UniversalClient
-	prefix string
+	client         redis.UniversalClient
+	prefix         string
+	commandTimeout time.Duration
 }
 
 func Open(ctx context.Context, rawURL, prefix string, connectTimeout time.Duration, caCertFile string) (*RateLimiter, error) {
-	options, err := redisconnect.ParseURL(rawURL, caCertFile, "rate-limit")
-	if err != nil {
-		return nil, fmt.Errorf("parse rate-limit Redis URL: %w", err)
-	}
 	if connectTimeout <= 0 {
 		return nil, errors.New("rate-limit Redis connect timeout must be positive")
 	}
-	options.DialTimeout = connectTimeout
-	options.ReadTimeout = connectTimeout
-	options.WriteTimeout = connectTimeout
-	client := redis.NewClient(options)
+	client, err := redisconnect.NewClient(rawURL, caCertFile, "rate-limit", connectTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("configure rate-limit Redis: %w", err)
+	}
 	limiter := New(client, prefix)
+	limiter.commandTimeout = connectTimeout
 	pingCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	if err := client.Ping(pingCtx).Err(); err != nil {
@@ -81,6 +79,12 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, limit int, window t
 	}
 	if l == nil || l.client == nil {
 		return ratelimit.Decision{}, errors.New("rate limit Redis client is required")
+	}
+	if l.commandTimeout > 0 {
+		// Pool acquisition, connection setup and script execution share one budget.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, l.commandTimeout)
+		defer cancel()
 	}
 	windowMillis := window.Milliseconds()
 	if windowMillis < 1 {

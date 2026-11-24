@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ type runtimeReleaseBootstrapHeartbeat struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	stopOnce sync.Once
+	clock    func() time.Time
 
 	mu    sync.Mutex
 	lease deploymentmodel.RuntimeReleaseCohortLease
@@ -23,13 +25,14 @@ func startRuntimeReleaseBootstrapHeartbeat(
 	parent context.Context,
 	interval time.Duration,
 	lease deploymentmodel.RuntimeReleaseCohortLease,
-	heartbeat func(context.Context, deploymentmodel.RuntimeReleaseCohortLease) (deploymentmodel.RuntimeReleaseCohortLease, error),
+	clock func() time.Time,
+	heartbeat func(context.Context, deploymentmodel.RuntimeReleaseCohortLease, time.Time) (deploymentmodel.RuntimeReleaseCohortLease, error),
 ) *runtimeReleaseBootstrapHeartbeat {
-	if parent == nil || interval <= 0 || lease.InstanceID == "" || heartbeat == nil {
+	if parent == nil || interval <= 0 || lease.InstanceID == "" || clock == nil || heartbeat == nil {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(parent)
-	keeper := &runtimeReleaseBootstrapHeartbeat{cancel: cancel, done: make(chan struct{}), lease: lease}
+	keeper := &runtimeReleaseBootstrapHeartbeat{cancel: cancel, done: make(chan struct{}), clock: clock, lease: lease}
 	go func() {
 		defer close(keeper.done)
 		ticker := time.NewTicker(interval)
@@ -40,9 +43,9 @@ func startRuntimeReleaseBootstrapHeartbeat(
 				return
 			case <-ticker.C:
 				current := keeper.currentLease()
-				next, err := heartbeat(ctx, current)
+				next, err := renewRuntimeReleaseLease(ctx, current, interval, clock, heartbeat)
 				if err != nil {
-					if ctx.Err() != nil {
+					if ctx.Err() != nil && !errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseLost) {
 						return
 					}
 					keeper.fail(fmt.Errorf("maintain Runtime release cohort during startup: %w", err))
@@ -62,6 +65,11 @@ func (h *runtimeReleaseBootstrapHeartbeat) Stop() (deploymentmodel.RuntimeReleas
 	h.stopOnce.Do(func() {
 		h.cancel()
 		<-h.done
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.err == nil && !h.clock().Before(h.lease.ExpiresAt) {
+			h.err = fmt.Errorf("hand off Runtime release cohort after startup: %w", deploymentmodel.ErrRuntimeReleaseLeaseLost)
+		}
 	})
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -454,10 +454,10 @@ func validateRedisCAFile(prefix, rawURL, caCertFile string) error {
 	}
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
-		return fmt.Errorf("%s_REDIS_URL is invalid: %w", prefix, err)
+		return fmt.Errorf("%s_REDIS_URL is invalid", prefix)
 	}
-	if parsed.Scheme != "rediss" {
-		return fmt.Errorf("%s_REDIS_CA_CERT_FILE requires %s_REDIS_URL to use rediss://", prefix, prefix)
+	if parsed.Scheme != "rediss" && parsed.Scheme != "rediss+sentinel" {
+		return fmt.Errorf("%s_REDIS_CA_CERT_FILE requires %s_REDIS_URL to use rediss:// or rediss+sentinel://", prefix, prefix)
 	}
 	return nil
 }

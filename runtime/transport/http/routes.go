@@ -9,6 +9,8 @@ import (
 
 	healthplatform "github.com/domainry/domainry-foundation/health"
 	"github.com/domainry/domainry-foundation/httpresponse"
+	"github.com/domainry/domainry-foundation/logging"
+	deploymentmodel "github.com/domainry/domainry-runtime/runtime/domain/deployment/model"
 	endpointmodel "github.com/domainry/domainry-runtime/runtime/domain/endpoint/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 )
@@ -104,19 +106,33 @@ func healthAllowed(principal principalmodel.Principal) bool {
 }
 
 func (s *HTTPRouter) live(w http.ResponseWriter, r *http.Request) {
-	// Release admission is intentionally irreversible for a process that may
-	// have lost its cohort lease. Keep ordinary dependency outages out of
-	// liveness, but make this fail-stop state restartable by the orchestrator;
-	// otherwise a drained Pod remains alive and permanently serves only 503s.
-	if s.runtimeReleaseAdmission != nil && s.runtimeReleaseAdmission() != nil {
-		writeError(w, r, http.StatusServiceUnavailable, "runtime.release_cohort_unavailable")
-		return
+	// The process can recover an expired lease if the database still owns the
+	// same generation. A confirmed loss remains terminal and requires restart.
+	if s.runtimeReleaseAdmission != nil {
+		if err := s.runtimeReleaseAdmission(); err != nil && !errors.Is(err, deploymentmodel.ErrRuntimeReleaseLeaseExpired) {
+			writeError(w, r, http.StatusServiceUnavailable, "runtime.release_cohort_unavailable")
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (s *HTTPRouter) ready(w http.ResponseWriter, r *http.Request) {
-	s.writeProbe(w, s.readinessSnapshot(r.Context()))
+	snapshot := s.readinessSnapshot(r.Context())
+	if snapshot.Status == "unavailable" {
+		var failed []map[string]any
+		for _, check := range snapshot.Checks {
+			if check.Criticality == healthplatform.Critical && check.Status == "error" {
+				failed = append(failed, map[string]any{
+					"name": check.Name, "reason": check.LastErrorCode, "duration_ms": check.DurationMS,
+				})
+			}
+		}
+		logging.FromContext(r.Context()).Warn("runtime_readiness_failed", logging.Fields(map[string]any{
+			"checks": failed,
+		})...)
+	}
+	s.writeProbe(w, snapshot)
 }
 
 func (s *HTTPRouter) startup(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +169,7 @@ func (s *HTTPRouter) MarkStartupComplete() {
 
 func (s *HTTPRouter) SetDraining(value bool) {
 	if s != nil && s.healthRegistry != nil {
-		s.healthRegistry.SetDraining(value)
+		s.healthRegistry.SetProcessDraining(value)
 	}
 }
 

@@ -42,3 +42,4 @@ my-crm/frontend/tsconfig.tsbuildinfo
 
 /application-delivery/
 /runtime-releases/
+/.build/

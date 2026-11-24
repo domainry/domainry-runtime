@@ -425,20 +425,18 @@ func (a *Runtime) startRuntimeReleaseHeartbeat(parent context.Context) {
 		return
 	}
 	a.startTrackedWorker(parent, func(ctx context.Context) <-chan struct{} {
-		return workerplatform.StartNamedLoop(ctx, runtimeWorkerIdentity("runtime_release_cohort"), a.releaseCohort.HeartbeatInterval(), func(tickCtx context.Context) (workerplatform.TickResult, error) {
+		interval := a.releaseCohort.HeartbeatInterval()
+		return workerplatform.StartNamedLoop(ctx, runtimeWorkerIdentity("runtime_release_cohort"), interval, func(tickCtx context.Context) (workerplatform.TickResult, error) {
 			if a.releaseAdmission.Check() != nil {
 				return workerplatform.TickResult{}, nil
 			}
-			lease, err := a.releaseCohort.Heartbeat(tickCtx, a.runtimeReleaseLease(), a.worker.Clock.Now())
+			err := a.refreshRuntimeReleaseLease(tickCtx, interval)
 			if err == nil {
-				a.replaceRuntimeReleaseLease(lease)
 				return workerplatform.TickResult{Worked: true, ProcessedCount: 1}, nil
 			}
-			a.releaseAdmission.Fail(err)
-			if a.api != nil {
-				a.api.SetDraining(true)
+			if tickCtx.Err() != nil {
+				return workerplatform.TickResult{}, tickCtx.Err()
 			}
-			a.worker.Control.Drain()
 			return workerplatform.TickResult{Attempt: 1}, err
 		})
 	})
