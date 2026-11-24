@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	dataexchange "github.com/domainry/domainry-data-exchange-sdk"
 	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/mutation"
 	"github.com/domainry/domainry-foundation/requestcontext"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	metadatasdk "github.com/domainry/domainry-metadata-sdk"
@@ -19,6 +21,8 @@ import (
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	recordmodel "github.com/domainry/domainry-runtime/runtime/domain/record/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
+	persistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database"
+	notificationpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/notification"
 	schedulersdk "github.com/domainry/domainry-scheduler-sdk"
 )
 
@@ -94,7 +98,42 @@ type runtimeNotificationCompiler interface {
 	CompileInboxIntent(notificationmodel.NotificationIntent, principalmodel.SystemScope) (notificationmodel.NotificationEvent, error)
 }
 
-func notificationIntentPublisherCallback(publisher notificationIntentPublisher) func(context.Context, notificationmodel.NotificationIntent) error {
+func recordExportNotificationPublisher(store *persistence.RuntimeStore, compile func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error), publisher notificationIntentPublisher) func(context.Context, notificationmodel.NotificationIntent) error {
+	if store.NotificationTransactions() != nil && compile != nil {
+		writer := notificationpersistence.NewInboxEventWriter(store)
+		return func(ctx context.Context, intent notificationmodel.NotificationIntent) error {
+			// Data Exchange restores both identities from the claimed durable job.
+			workspaceID, actorID := requestcontext.WorkspaceID(ctx), requestcontext.ActorID(ctx)
+			if workspaceID == "" || workspaceID != intent.WorkspaceID || actorID == "" ||
+				len(intent.RecipientUserIDs) != 1 || intent.RecipientUserIDs[0] != actorID {
+				return &apperror.AppError{Kind: apperror.KindForbidden, Code: "backend.notification.application_scope_mismatch"}
+			}
+			event, err := compile(intent)
+			if err != nil {
+				return err
+			}
+			tx, err := store.DB().BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			if err := writer.InsertEventTx(ctx, tx, event); err != nil {
+				_ = tx.Rollback()
+				if mutation.IsMutationConflict(err, mutation.MutationConflictUnique) {
+					// A replay can follow a committed notification and an interrupted artifact commit.
+					if count, lookupErr := writer.CommittedCount(ctx, event); lookupErr == nil && count == 1 {
+						return nil
+					}
+				}
+				return err
+			}
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			writer.PublishCommittedEventWakeup(event)
+			return nil
+		}
+	}
 	return func(ctx context.Context, intent notificationmodel.NotificationIntent) error {
 		if publisher == nil {
 			return nil

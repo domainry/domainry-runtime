@@ -584,7 +584,7 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			ReportSnapshotNotificationCommitter: reportSnapshotNotificationCommitter,
 			AutomationNotificationCompiler:      notificationCompiler,
 			AutomationNotificationCommitter:     automationnotification.NewAutomationExecutionNotificationCommitter(store),
-			NotificationIntentPublisher:         notificationIntentPublisherCallback(notificationPublisher),
+			NotificationIntentPublisher:         recordExportNotificationPublisher(store, notificationCompiler, notificationPublisher),
 			NotificationEventPublisher:          notificationEventPublisherCallback(notificationPublisher),
 			AutomationWorker:                    automationpersistence.NewAutomationWorkerStore(store),
 			AutomationExecutions:                automationpersistence.NewAutomationExecutionStore(store),
