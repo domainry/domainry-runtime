@@ -118,7 +118,7 @@ LIMIT 100
 | 在项目中提供 Business Handler | Runtime 只通过稳定 `runtimeext` 注册和调用，并在启动时冻结、计算 Registry hash | 项目可以自由实现领域逻辑，同时不接触 Runtime 内部 Service/Repository |
 | 选择 SQLite、PostgreSQL 或 MySQL | Runtime 和嵌入模块复用宿主方言、事务、迁移锁和唯一 `_schema_migrations`；持久化通过 domainry-orm 渲染 | 开发、单机交付和服务化环境可以选择不同数据库而不复制业务代码 |
 | 提供 source-owned frontend bundle | 前端宿主按项目定义的入口挂载制品；Runtime 只校验制品 hash、archive 安全并提供 `/api`，不识别业务端、管理端或门户端产品壳 | 前端页面、品牌和交互可以完全项目化，后端治理保持不变 |
-| 提供已签名的项目 Runtime 制品 | 启动时校验 binary、Project、Generated SDK、Handler/Connector Registry 和前端 hash；运行中校验 schema/registry 与 release cohort | 错版本、半升级或同库混跑的不兼容实例会在接流量前失败，而不是污染业务数据后才暴露 |
+| 提供已签名的项目 Runtime 制品 | 启动时校验 binary、Project、Generated SDK、Handler/Connector Registry 和前端 hash；运行中校验本进程 schema/registry 完整性与 release cohort lease | 损坏的制品或本进程 registry drift 会在接流量前失败；正常滚动更新的新旧 release identity 可以并行服务 |
 | 提供项目配置与 i18n 扩展 | Runtime 从明确的项目扩展入口加载配置和本地化资源，不要求修改 Runtime 源码 | 同一能力可按项目调整配置、语言和展示文案 |
 
 ### 2.4 这些系统能力如何体现框架灵活性

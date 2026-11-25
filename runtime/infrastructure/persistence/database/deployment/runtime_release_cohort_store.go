@@ -54,7 +54,7 @@ func (s RuntimeReleaseCohortStore) ClaimRuntimeRelease(ctx context.Context, clai
 	}
 	for attempt := 0; attempt < runtimeReleaseCoordinationAttempts; attempt++ {
 		lease, err := s.claim(ctx, claim)
-		if err == nil || errors.Is(err, deploymentmodel.ErrRuntimeReleaseConflict) || !s.store.IsCoordinationRetryableError(err) {
+		if err == nil || !s.store.IsCoordinationRetryableError(err) {
 			return lease, err
 		}
 		if err := waitRuntimeReleaseCoordinationRetry(ctx, attempt); err != nil {
@@ -117,13 +117,9 @@ func (s RuntimeReleaseCohortStore) claim(ctx context.Context, claim deploymentmo
 		if active.CombinationSHA256 != cohort.combinationSHA256 {
 			return deploymentmodel.RuntimeReleaseCohortLease{}, fmt.Errorf("%w: active release identity disagrees with cohort", deploymentmodel.ErrRuntimeReleaseAdmission)
 		}
-		if !active.CohortCompatible(claim.Identity) {
-			return deploymentmodel.RuntimeReleaseCohortLease{}, deploymentmodel.RuntimeReleaseCohortConflict{Active: active, Joining: claim.Identity}
-		}
-		// A cohort lease fences the shared compatibility generation, not the
-		// joining binary's diagnostic release hash. Reuse the active fence so a
-		// version-only rolling join survives the same heartbeat checks as the
-		// already serving instances.
+		// A cohort lease fences the shared liveness generation, not the joining
+		// binary's diagnostic release identity. Reuse the active fence so normal
+		// rolling updates can run old and new releases concurrently.
 		leaseCombinationSHA256 = cohort.combinationSHA256
 	}
 	lease := deploymentmodel.RuntimeReleaseCohortLease{InstanceID: claim.InstanceID, CombinationSHA256: leaseCombinationSHA256, Generation: generation, ExpiresAt: claim.Now.Add(claim.LeaseDuration).UTC().Truncate(time.Millisecond)}

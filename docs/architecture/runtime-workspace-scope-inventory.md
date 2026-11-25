@@ -32,8 +32,9 @@ Registered schema tables:
   implicit tenant scope, and resulting Workspace/company/user identities are
   linked from the operation
 - `_release_cohorts`, `_release_instances` — `installation_scoped`;
-  they coordinate one process release identity across the whole Runtime
-  installation and must never be partitioned by tenant workspace
+  they coordinate one liveness generation across the whole Runtime
+  installation, allow different release identities during rolling updates,
+  and must never be partitioned by tenant workspace
 - `_operations` — explicit discriminator: tenant commands are
   `workspace_scoped`; system-purpose commands are `runtime_global`
 - `_artifacts`, `_artifact_bindings` — `workspace_scoped`; owner and kind

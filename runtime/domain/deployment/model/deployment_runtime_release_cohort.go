@@ -2,13 +2,11 @@ package deploymentmodel
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
 var ( // Deployment admission failures remain stable across persistence adapters.
 	ErrRuntimeReleaseAdmission    = errors.New("runtime release admission failed")
-	ErrRuntimeReleaseConflict     = errors.New("runtime release cohort identity conflict")
 	ErrRuntimeReleaseLeaseLost    = errors.New("runtime release cohort lease lost")
 	ErrRuntimeReleaseLeaseExpired = errors.New("runtime release cohort lease expired")
 )
@@ -26,14 +24,3 @@ type RuntimeReleaseCohortLease struct {
 	Generation        int64
 	ExpiresAt         time.Time
 }
-
-type RuntimeReleaseCohortConflict struct {
-	Active  RuntimeReleaseIdentity
-	Joining RuntimeReleaseIdentity
-}
-
-func (e RuntimeReleaseCohortConflict) Error() string {
-	return fmt.Sprintf("%v: active=%s joining=%s", ErrRuntimeReleaseConflict, e.Active.CombinationSHA256, e.Joining.CombinationSHA256)
-}
-
-func (e RuntimeReleaseCohortConflict) Unwrap() error { return ErrRuntimeReleaseConflict }

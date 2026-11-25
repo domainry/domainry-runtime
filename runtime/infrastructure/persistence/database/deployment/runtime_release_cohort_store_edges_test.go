@@ -289,12 +289,18 @@ func TestRuntimeReleaseClaimBranchStages(t *testing.T) {
 	}
 }
 
-func TestRuntimeReleaseClaimUsesActiveFenceForVersionOnlyRollingJoin(t *testing.T) {
+func TestRuntimeReleaseClaimUsesActiveFenceAcrossRollingReleaseIdentityChanges(t *testing.T) {
 	now := time.Now().UTC()
 	active := releaseIdentity("active-release-hash")
 	active.RuntimeVersion = "v1.2.3"
 	joining := active
 	joining.RuntimeVersion = "v1.2.4"
+	joining.RuntimeextContractVersion = "runtimeext-v2"
+	joining.RuntimeextContractSHA256 = "joining-runtimeext-hash"
+	joining.ConnectorContractVersion = "connector-v2"
+	joining.ConnectorContractSHA256 = "joining-connector-hash"
+	joining.ProjectDefinitionRegistrySHA256 = "joining-project-registry-hash"
+	joining.ConnectorRegistrySHA256 = "joining-connector-registry-hash"
 	joining.CombinationSHA256 = "joining-release-hash"
 	activeJSON, _ := json.Marshal(active)
 	store, closeDB := scriptedReleaseStore(&releaseSQLState{

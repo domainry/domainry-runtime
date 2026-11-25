@@ -7,8 +7,8 @@ import (
 	"fmt"
 )
 
-// RuntimeReleaseIdentityVersion is the canonical Deployment process build/composition
-// identity compared by the shared release-cohort admission gate.
+// RuntimeReleaseIdentityVersion is the canonical Deployment process
+// build/composition identity used for diagnostics and local integrity checks.
 const RuntimeReleaseIdentityVersion = "domainry-runtime-release-identity-v3"
 
 // RuntimeReleaseIdentity binds one Runtime binary to the frozen code-owned
@@ -29,18 +29,6 @@ type RuntimeReleaseIdentity struct {
 
 func (i RuntimeReleaseIdentity) Coordinated() bool {
 	return i.ProjectDefinitionRegistrySHA256 != ""
-}
-
-// CohortCompatible reports whether two releases may serve the same Runtime
-// database concurrently. RuntimeVersion identifies the packaged release for
-// diagnostics, but does not change its database or extension contracts and
-// therefore must not split an otherwise compatible cohort.
-func (i RuntimeReleaseIdentity) CohortCompatible(other RuntimeReleaseIdentity) bool {
-	i.RuntimeVersion = ""
-	i.CombinationSHA256 = ""
-	other.RuntimeVersion = ""
-	other.CombinationSHA256 = ""
-	return i == other
 }
 
 // RuntimeRegistrySHA256 hashes the frozen public descriptor inventory used by
