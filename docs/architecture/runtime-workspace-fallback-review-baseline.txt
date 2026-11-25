@@ -53,6 +53,9 @@
 # fail closed and never select or substitute a Workspace.
 # 2026-11-15 review: S3 stage, commit and object lookup reject an empty
 # Workspace before any store operation; no default Workspace is selected.
+# 2026-11-25 review: workflow execution rejects an empty callback
+# idempotency key together with invalid installation authority; it never
+# selects or substitutes a Workspace.
 runtime/application/action/action_identity_handler_delivery_execution.go|0db3a82169f3df78
 runtime/application/action/action_identity_handler_delivery_execution.go|a22efc6acc55525d
 runtime/application/action/action_invocation_receipt_read.go|887c5c451c24ca0c
@@ -94,6 +97,7 @@ runtime/application/workflow/workflow_agent_capability_completion.go|a0f007c7d60
 runtime/application/workflow/workflow_agent_invocation_application_service.go|a80a54ef2a050bdb
 runtime/application/workflow/workflow_agent_receipt_read.go|3163cd0573c216d4
 runtime/application/workflow/workflow_agent_receipt_read.go|f7281c25559cf6ce
+runtime/application/workflow/workflow_execution_application_service.go|28d80c490a09fb9d
 runtime/application/workflow/workflow_principal_resolver_application_service.go|a7621539cdd54a6e
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f
 runtime/application/workflow/workflow_record_reader_adapter.go|a140e6ec8b49a80f

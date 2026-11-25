@@ -10,10 +10,11 @@ import (
 	"github.com/domainry/domainry-orm/query"
 )
 
-func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, resourceID string) (bool, error) {
+func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, key any) (bool, error) {
 	if e.archives == nil {
 		return false, fmt.Errorf("Lifecycle archive store is unavailable")
 	}
+	resourceID := fmt.Sprint(key)
 	exists, err := e.archives.Archived(ctx, job.WorkspaceID, spec.table, resourceID, policy.Policy.Key)
 	if err != nil {
 		return false, err
@@ -21,7 +22,7 @@ func (e OwnerExecutor) archiveCandidate(ctx context.Context, job lifecyclemodel.
 	if exists {
 		return false, nil
 	}
-	predicate := query.Predicate(query.Equal(spec.idColumn, resourceID))
+	predicate := query.Predicate(query.Equal(spec.idColumn, key))
 	builder := query.NewSelectBuilder(e.renderer, spec.table).Projections(query.Project(query.Star()))
 	if spec.tenantColumn != "" {
 		builder = query.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Projections(query.Project(query.Star()))

@@ -140,18 +140,38 @@ func (e OwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel.Clea
 	if len(specs) == 0 {
 		return lifecyclemodel.CleanupBatchResult{}, fmt.Errorf("no cleanup specification for policy %s", policy.Policy.Key)
 	}
-	result := lifecyclemodel.CleanupBatchResult{Done: true}
-	remaining := batchSize
+	if batchSize <= 0 || batchSize > 1000 {
+		return lifecyclemodel.CleanupBatchResult{}, fmt.Errorf("invalid lifecycle cleanup batch size")
+	}
 	for _, spec := range specs {
 		if spec.tenantColumn == "" && job.WorkspaceID != principalmodel.InstallationWorkspaceID {
-			return result, fmt.Errorf("policy %s is installation scoped", policy.Policy.Key)
+			return lifecyclemodel.CleanupBatchResult{}, fmt.Errorf("policy %s is installation scoped", policy.Policy.Key)
 		}
+	}
+	checkpoint, err := parseCleanupCheckpoint(job.Checkpoint, len(specs))
+	if err != nil {
+		return lifecyclemodel.CleanupBatchResult{}, err
+	}
+	// Keep the eligibility window fixed across leases. A later job can pick
+	// up rows that expire after this one was created.
+	cutoffTime := job.CreatedAt
+	if cutoffTime.IsZero() {
+		cutoffTime = job.UpdatedAt
+	}
+	result := lifecyclemodel.CleanupBatchResult{Checkpoint: job.Checkpoint, Done: true}
+	remaining := batchSize
+	for index := checkpoint.spec; index < len(specs); index++ {
+		spec := specs[index]
 		if remaining <= 0 {
 			result.Done = false
 			break
 		}
-		cutoff := job.UpdatedAt.Add(-lifecycleSpecRetention(policy.Policy, spec))
-		batch, err := e.processSpec(ctx, job, policy, spec, holds, cutoff, remaining)
+		position := cleanupPosition{spec: index}
+		if index == checkpoint.spec {
+			position = checkpoint
+		}
+		cutoff := cutoffTime.Add(-lifecycleSpecRetention(policy.Policy, spec))
+		batch, err := e.processSpec(ctx, job, policy, spec, holds, cutoff, remaining, position)
 		if err != nil {
 			return result, err
 		}
@@ -169,6 +189,7 @@ func (e OwnerExecutor) ProcessBatch(ctx context.Context, job lifecyclemodel.Clea
 		remaining -= int(batch.Scanned)
 		if !batch.Done {
 			result.Done = false
+			break
 		}
 	}
 	return result, nil

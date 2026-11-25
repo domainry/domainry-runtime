@@ -9,14 +9,20 @@ import (
 	"github.com/domainry/domainry-orm/query"
 )
 
-func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, holds []lifecyclemodel.LegalHold, cutoff time.Time, limit int) (lifecyclemodel.CleanupBatchResult, error) {
+func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.CleanupJob, policy lifecyclemodel.PolicyVersion, spec cleanupSpec, holds []lifecyclemodel.LegalHold, cutoff time.Time, limit int, position cleanupPosition) (lifecyclemodel.CleanupBatchResult, error) {
 	const candidateAlias = "candidate"
 	predicate := cleanupPredicate(spec, cutoff, candidateAlias)
+	if position.id != nil {
+		predicate = query.And(predicate, query.Or(
+			query.GreaterThan(spec.timeColumn, position.timestamp),
+			query.And(query.Equal(spec.timeColumn, position.timestamp), query.GreaterThan(spec.idColumn, position.id)),
+		))
+	}
 	builder := query.NewSelectBuilder(e.renderer, spec.table).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	if spec.tenantColumn != "" {
 		builder = query.NewWorkspaceSelectBuilder(e.renderer, spec.table, job.WorkspaceID).Alias(candidateAlias).Columns(spec.idColumn, spec.timeColumn)
 	}
-	queryValue, args, buildErr := builder.Where(predicate).OrderBy(query.Ascending(spec.timeColumn), query.Ascending(spec.idColumn)).Limit(limit).Build()
+	queryValue, args, buildErr := builder.Where(predicate).OrderBy(query.Ascending(spec.timeColumn), query.Ascending(spec.idColumn)).Limit(limit + 1).Build()
 	if buildErr != nil {
 		return lifecyclemodel.CleanupBatchResult{}, buildErr
 	}
@@ -24,55 +30,52 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 	if err != nil {
 		return lifecyclemodel.CleanupBatchResult{}, err
 	}
-	type candidate struct {
-		id        string
-		timestamp any
-	}
-	candidates := []candidate{}
+	defer rows.Close()
+	result := lifecyclemodel.CleanupBatchResult{Done: true}
+	candidates := make([]cleanupPosition, 0, limit)
 	for rows.Next() {
-		var item candidate
+		if len(candidates) == limit {
+			result.Done = false
+			break
+		}
+		item := cleanupPosition{spec: position.spec}
 		if err := rows.Scan(&item.id, &item.timestamp); err != nil {
 			return lifecyclemodel.CleanupBatchResult{}, err
+		}
+		if bytes, ok := item.id.([]byte); ok {
+			item.id = string(bytes)
+		}
+		switch id := item.id.(type) {
+		case int64:
+		case string:
+			if id == "" {
+				return lifecyclemodel.CleanupBatchResult{}, fmt.Errorf("empty lifecycle cleanup candidate ID")
+			}
+		default:
+			return lifecyclemodel.CleanupBatchResult{}, fmt.Errorf("unsupported lifecycle cleanup candidate ID type %T", item.id)
 		}
 		candidates = append(candidates, item)
 	}
 	if err := rows.Err(); err != nil {
-		_ = rows.Close()
 		return lifecyclemodel.CleanupBatchResult{}, err
 	}
-	_ = rows.Close()
-	result := lifecyclemodel.CleanupBatchResult{Done: len(candidates) < limit}
+	if err := rows.Close(); err != nil {
+		return lifecyclemodel.CleanupBatchResult{}, err
+	}
 	for _, candidate := range candidates {
-		if e.archives == nil {
-			return result, fmt.Errorf("Lifecycle archive store is unavailable")
-		}
-		alreadyArchived, archiveLookupErr := e.archives.Archived(ctx, job.WorkspaceID, spec.table, candidate.id, policy.Policy.Key)
-		if archiveLookupErr != nil {
-			return result, archiveLookupErr
-		}
-		if job.Operation == lifecyclemodel.OperationArchive && alreadyArchived {
-			continue
-		}
-		result.Checkpoint = spec.table + ":" + candidate.id
+		id := fmt.Sprint(candidate.id)
+		result.Checkpoint = candidate.checkpoint()
 		result.Scanned++
-		eligibleAt := time.Time{}
-		if spec.unixNanoTime {
-			switch value := candidate.timestamp.(type) {
-			case int64:
-				eligibleAt = time.Unix(0, value).UTC()
-			}
-		} else if value, ok := candidate.timestamp.(int64); ok {
-			eligibleAt = time.UnixMilli(value).UTC()
-		}
+		eligibleAt := lifecycleCandidateTime(candidate.timestamp, spec.unixNanoTime)
 		if result.OldestEligible.IsZero() || eligibleAt.Before(result.OldestEligible) {
 			result.OldestEligible = eligibleAt
 		}
-		if lifecycleHeld(holds, e.owner, spec.table, candidate.id, job.UpdatedAt) {
+		if lifecycleHeld(holds, e.owner, spec.table, id, job.UpdatedAt) {
 			result.Skipped++
 			continue
 		}
 		if job.Operation == lifecyclemodel.OperationPurge {
-			referenced, referenceErr := e.cleanupCandidateReferenced(ctx, job.WorkspaceID, candidate.id, spec.referenceChecks)
+			referenced, referenceErr := e.cleanupCandidateReferenced(ctx, job.WorkspaceID, id, spec.referenceChecks)
 			if referenceErr != nil {
 				return result, referenceErr
 			}
@@ -93,7 +96,7 @@ func (e OwnerExecutor) processSpec(ctx context.Context, job lifecyclemodel.Clean
 			result.Archived++
 		}
 		if len(spec.childCollections) > 0 {
-			childArchived, childPurged, childErr := e.archiveChildCollections(ctx, job, policy, candidate.id, spec.childCollections, job.Operation == lifecyclemodel.OperationPurge)
+			childArchived, childPurged, childErr := e.archiveChildCollections(ctx, job, policy, id, spec.childCollections, job.Operation == lifecyclemodel.OperationPurge)
 			result.Archived, result.Purged = result.Archived+childArchived, result.Purged+childPurged
 			if childErr != nil {
 				result.Failed++
