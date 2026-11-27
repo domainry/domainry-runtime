@@ -25,7 +25,7 @@ func TestWorkspaceIdentityCreationUsesActionTransactionAndOneTimeCredential(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.HandlerDeliveryContractVersionV1, AccessToken: "trusted-token", IdempotencyKey: "execution-identity-1:identity_handler_delivery", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserCreate, User: identitysdk.User{UserID: userID, Name: "Workspace technician", Email: "synthetic@example.invalid"}, LoginMode: identitysdk.HandlerLoginPassword}, RoleKeys: []string{"technician"}}
+	expected := identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.CurrentHandlerDeliveryContractVersion, AccessToken: "trusted-token", IdempotencyKey: "execution-identity-1:identity_handler_delivery", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserCreate, User: identitysdk.User{UserID: userID, Name: "Workspace technician", Email: "synthetic@example.invalid"}, LoginMode: identitysdk.HandlerLoginPassword}, RoleKeys: []string{"technician"}}
 	if !reflect.DeepEqual(delivery.request, expected) {
 		t.Fatalf("unexpected bound request: %#v", delivery.request)
 	}

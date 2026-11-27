@@ -138,6 +138,10 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 			return runtimeext.IdentityHandlerDeliveryResult{}, err
 		}
 	}
+	accessToken, workloadAuthority, err := e.identityHandlerDeliveryAuthority()
+	if err != nil {
+		return runtimeext.IdentityHandlerDeliveryResult{}, err
+	}
 	delivery, err := e.bindIdentityHandlerDelivery(txCtx)
 	if err != nil {
 		return runtimeext.IdentityHandlerDeliveryResult{}, err
@@ -148,9 +152,10 @@ func (e *businessActionExecution) DeliverIdentity(ctx context.Context, request r
 		operation = identitysdk.HandlerUserCreate
 	}
 	sdkRequest := identitysdk.HandlerDeliveryRequest{
-		ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
-		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
-		IdempotencyKey:  e.identity.ExecutionID + ":identity_handler_delivery",
+		ContractVersion:   identitysdk.CurrentHandlerDeliveryContractVersion,
+		AccessToken:       accessToken,
+		WorkloadAuthority: workloadAuthority,
+		IdempotencyKey:    e.identity.ExecutionID + ":identity_handler_delivery",
 		User: identitysdk.HandlerUserMutation{
 			Operation:       operation,
 			User:            toSDKIdentityUser(request.User.User),
@@ -273,10 +278,15 @@ func (e *businessActionExecution) resolveBoundIdentity(ctx context.Context, user
 
 func (e *businessActionExecution) resolveBoundIdentityWithDelivery(ctx context.Context, delivery identitysdk.HandlerDelivery, userID string, selector *runtimeext.IdentityHandlerProfileBindingSelector) (runtimeext.IdentityBoundIdentity, error) {
 	e.boundIdentityCalls++
+	accessToken, workloadAuthority, err := e.identityHandlerDeliveryAuthority()
+	if err != nil {
+		return runtimeext.IdentityBoundIdentity{}, err
+	}
 	sdkRequest := identitysdk.HandlerBoundIdentityRequest{
-		ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
-		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
-		UserID:          userID,
+		ContractVersion:   identitysdk.CurrentHandlerDeliveryContractVersion,
+		AccessToken:       accessToken,
+		WorkloadAuthority: workloadAuthority,
+		UserID:            userID,
 	}
 	if selector != nil {
 		sdkRequest.ProfileBinding = &identitysdk.HandlerProfileBindingSelector{BindingKey: selector.BindingKey, ObjectKey: selector.ObjectKey, ProfileID: selector.ProfileID}
@@ -311,10 +321,8 @@ func (e *businessActionExecution) bindIdentityHandlerDelivery(ctx context.Contex
 	if e.dependencies.BindIdentityHandlerDelivery == nil {
 		return nil, apperror.New(apperror.KindInternal, "identity.handler_delivery_transaction_required", nil, nil)
 	}
-	if strings.TrimSpace(e.requestIdentity.AccessToken) == "" || !e.requestIdentity.Principal.Known ||
-		strings.TrimSpace(e.requestIdentity.Principal.WorkspaceID) != strings.TrimSpace(e.invocation.Principal.WorkspaceID) ||
-		strings.TrimSpace(e.requestIdentity.Principal.UserID) != strings.TrimSpace(e.invocation.Principal.UserID) {
-		return nil, apperror.New(apperror.KindForbidden, "identity.handler_delivery_request_identity_required", nil, nil)
+	if _, _, err := e.identityHandlerDeliveryAuthority(); err != nil {
+		return nil, err
 	}
 	delivery, err := e.dependencies.BindIdentityHandlerDelivery(ctx)
 	if err != nil {
@@ -324,6 +332,37 @@ func (e *businessActionExecution) bindIdentityHandlerDelivery(ctx context.Contex
 		return nil, apperror.New(apperror.KindInternal, "identity.handler_delivery_transaction_required", nil, nil)
 	}
 	return delivery, nil
+}
+
+func (e *businessActionExecution) identityHandlerDeliveryAuthority() (string, *identitysdk.HandlerWorkloadAuthority, error) {
+	accessToken := strings.TrimSpace(e.requestIdentity.AccessToken)
+	if accessToken != "" {
+		if !e.requestIdentity.Principal.Known ||
+			strings.TrimSpace(e.requestIdentity.Principal.WorkspaceID) != strings.TrimSpace(e.invocation.Principal.WorkspaceID) ||
+			strings.TrimSpace(e.requestIdentity.Principal.UserID) != strings.TrimSpace(e.invocation.Principal.UserID) {
+			return "", nil, apperror.New(apperror.KindForbidden, "identity.handler_delivery_request_identity_required", nil, nil)
+		}
+		return accessToken, nil, nil
+	}
+	principal := e.invocation.Principal
+	workload := principal.Workload
+	workflowKey := ""
+	if workload != nil {
+		workflowKey = strings.TrimSpace(workload.WorkflowKey)
+	}
+	if !principal.Known || principal.AccessBundle == nil || workload == nil || workflowKey == "" ||
+		strings.TrimSpace(principal.WorkspaceID) != strings.TrimSpace(e.workspace.ID) ||
+		strings.TrimSpace(principal.UserID) != string(identitysdk.WorkflowWorkloadSubjectID(workflowKey)) ||
+		strings.TrimSpace(principal.RoleKey) == "" || strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 ||
+		strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
+		return "", nil, apperror.New(apperror.KindForbidden, "identity.handler_delivery_request_identity_required", nil, nil)
+	}
+	return "", &identitysdk.HandlerWorkloadAuthority{
+		WorkspaceID: identitysdk.WorkspaceID(strings.TrimSpace(principal.WorkspaceID)), SubjectID: identitysdk.SubjectID(strings.TrimSpace(principal.UserID)), RoleKey: strings.TrimSpace(principal.RoleKey),
+		WorkflowKey: workflowKey, DefinitionVersionID: strings.TrimSpace(workload.DefinitionVersionID), DefinitionVersion: workload.DefinitionVersion,
+		ReleaseID: strings.TrimSpace(workload.ReleaseID), ReleaseDigest: strings.TrimSpace(workload.ReleaseDigest), TaskID: strings.TrimSpace(workload.TaskID),
+		SourceEventID: strings.TrimSpace(workload.SourceEventID), InitiatorSubjectID: workload.InitiatorSubjectID,
+	}, nil
 }
 
 func (e *businessActionExecution) identityOperationGranted(operation runtimeext.IdentityHandlerOperation) bool {

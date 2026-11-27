@@ -92,6 +92,10 @@ func (e *businessActionExecution) StageAccountErasure(ctx context.Context, reque
 		toStringOrEmpty(approval.Data[grant.RequestRequesterField]) != subjectID || subjectID == e.invocation.Principal.UserID {
 		return runtimeext.AccountErasureReceipt{}, apperror.New(apperror.KindForbidden, "backend.account_erasure.subject_request_required", nil, nil)
 	}
+	accessToken, workloadAuthority, err := e.identityHandlerDeliveryAuthority()
+	if err != nil {
+		return runtimeext.AccountErasureReceipt{}, err
+	}
 	delivery, err := e.bindIdentityHandlerDelivery(txCtx)
 	if err != nil {
 		return runtimeext.AccountErasureReceipt{}, err
@@ -118,8 +122,8 @@ func (e *businessActionExecution) StageAccountErasure(ctx context.Context, reque
 	if err != nil {
 		return runtimeext.AccountErasureReceipt{}, normalizeIdentityCapabilityError(err, "backend.account_erasure.stage_failed")
 	}
-	result, err := delivery.DeliverIdentity(txCtx, identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.HandlerDeliveryContractVersionV1,
-		AccessToken: e.requestIdentity.AccessToken, IdempotencyKey: requestID + ":disable", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserDisable,
+	result, err := delivery.DeliverIdentity(txCtx, identitysdk.HandlerDeliveryRequest{ContractVersion: identitysdk.CurrentHandlerDeliveryContractVersion,
+		AccessToken: accessToken, WorkloadAuthority: workloadAuthority, IdempotencyKey: requestID + ":disable", User: identitysdk.HandlerUserMutation{Operation: identitysdk.HandlerUserDisable,
 			User: identitysdk.User{UserID: subjectID, OrgID: e.targetOrganization.ID}, ExpectedVersion: request.ExpectedIdentityVersion},
 		ProfileBinding: &identitysdk.HandlerProfileBindingMutation{BindingKey: grant.ProfileBinding.BindingKey, ObjectKey: grant.ProfileBinding.ObjectKey,
 			ProfileID: request.ProfileID, ExpectedVersion: request.ExpectedBindingVersion, ApprovalID: request.ApprovalID, Reason: "approved account erasure"}})

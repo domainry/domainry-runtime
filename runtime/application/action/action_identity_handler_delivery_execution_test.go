@@ -187,6 +187,42 @@ func TestIdentityBoundIdentityBatchUsesOneActionTransactionAndPreservesOrder(t *
 	}
 }
 
+func TestIdentityHandlerDeliveryCarriesGovernedWorkloadAuthorityWithoutBearer(t *testing.T) {
+	delivery := &identityHandlerDeliveryStub{resolveResult: identitysdk.HandlerBoundIdentity{UserID: "identity-user-1", Active: true, Version: 1}}
+	execution := identityDeliveryTestExecution(t, delivery)
+	execution.identityGrant.Operations = append(execution.identityGrant.Operations, runtimeext.IdentityHandlerResolve)
+	execution.requestIdentity = identitysdk.RequestIdentity{}
+	execution.invocation.Source = actionmodel.ActionSourceWorkflow
+	execution.invocation.Principal = principalmodel.Principal{Principal: identitysdk.Principal{
+		Known: true, WorkspaceID: "workspace-a", UserID: "workflow:directory-sync", RoleKey: "directory_sync_service", AccessBundle: &identitysdk.AccessBundle{},
+		Workload: &identitysdk.WorkflowWorkloadPrincipalContext{
+			WorkflowKey: "directory-sync", DefinitionVersionID: "definition-1", DefinitionVersion: 2,
+			ReleaseID: "release-1", ReleaseDigest: "release-digest", TaskID: "task-1", SourceEventID: "event-1", InitiatorSubjectID: "operator-1",
+		},
+	}}
+
+	resolved, err := execution.ResolveBoundIdentity(t.Context(), "identity-user-1")
+	if err != nil || resolved.UserID != "identity-user-1" {
+		t.Fatalf("resolved=%+v err=%v", resolved, err)
+	}
+	authority := delivery.resolveRequest.WorkloadAuthority
+	if delivery.resolveRequest.AccessToken != "" || authority == nil || authority.WorkspaceID != "workspace-a" || authority.SubjectID != "workflow:directory-sync" ||
+		authority.RoleKey != "directory_sync_service" || authority.WorkflowKey != "directory-sync" || authority.DefinitionVersionID != "definition-1" ||
+		authority.DefinitionVersion != 2 || authority.ReleaseID != "release-1" || authority.ReleaseDigest != "release-digest" || authority.TaskID != "task-1" ||
+		authority.SourceEventID != "event-1" || authority.InitiatorSubjectID != "operator-1" {
+		t.Fatalf("workload delivery request=%+v", delivery.resolveRequest)
+	}
+	execution.unitOfWork.rollBack(t.Context())
+
+	invalid := identityDeliveryTestExecution(t, delivery)
+	invalid.identityGrant.Operations = append(invalid.identityGrant.Operations, runtimeext.IdentityHandlerResolve)
+	invalid.requestIdentity = identitysdk.RequestIdentity{}
+	invalid.invocation.Source = actionmodel.ActionSourceWorkflow
+	if _, err := invalid.ResolveBoundIdentity(t.Context(), "identity-user-1"); apperror.CodeOf(err) != "identity.handler_delivery_request_identity_required" {
+		t.Fatalf("unmanaged background principal reached HandlerDelivery: %v", err)
+	}
+}
+
 func identityDeliveryTestExecution(t *testing.T, delivery identitysdk.HandlerDelivery) *businessActionExecution {
 	t.Helper()
 	principal := workspaceAggregatePrincipal("employee.create")
