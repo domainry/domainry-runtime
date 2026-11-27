@@ -17,7 +17,7 @@ import (
 	"github.com/domainry/domainry-runtime/testsupport/auditmodulefixture"
 )
 
-func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t *testing.T) {
+func TestWorkspaceAdministrationStoreCatalogLifecycleCASAndRollback(t *testing.T) {
 	runtimeStore, err := database.OpenContext(t.Context(), config.Config{DatabaseDriver: "sqlite", DBPath: filepath.Join(t.TempDir(), "workspace-administration.db")})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	}
 	store := NewWorkspaceAdministrationStore(runtimeStore)
 	items, more, err := store.ListWorkspaceCatalog(t.Context(), "", 1)
-	if err != nil || !more || len(items) != 1 || items[0].CanonicalCode != "alpha" || items[0].CommercialConfiguration.Plan != "standard" {
+	if err != nil || !more || len(items) != 1 || items[0].CanonicalCode != "alpha" {
 		t.Fatalf("catalog items=%+v more=%t err=%v", items, more, err)
 	}
 	next, more, err := store.ListWorkspaceCatalog(t.Context(), "alpha", 1)
@@ -75,37 +75,7 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	if err != nil || reactivated.Workspace.Status != workspaceprovisionmodel.WorkspaceStatusActive || reactivated.Workspace.Revision != 3 || reactivated.RevokedSessions != 0 {
 		t.Fatalf("reactivate=%+v err=%v", reactivated, err)
 	}
-	commercial, err := store.UpdateWorkspaceCommercialConfiguration(t.Context(), actor, "alpha", workspaceprovisionmodel.CommercialConfigurationUpdateRequest{
-		ExpectedRevision: 3,
-		Configuration: workspaceprovisionmodel.CommercialConfiguration{
-			Plan: "premium", IncludedUserLimit: 5, MaxUserLimit: 10, IncludedCustomerLimit: 10, MaxCustomerLimit: 100,
-			IncludedStoreLimit: 1, MaxStores: 4, ContractDate: "2026-09-06", BillingDay: 6, BillingContactName: "Billing",
-		},
-	}, "commercial-1")
-	if err != nil || commercial.Workspace.CanonicalCode != "alpha" || commercial.Workspace.Revision != 4 || commercial.Workspace.CommercialConfiguration.Plan != "premium" || commercial.Workspace.CommercialConfiguration.Revision != 2 {
-		t.Fatalf("commercial=%+v err=%v", commercial, err)
-	}
-	if _, err := store.UpdateWorkspaceCommercialConfiguration(t.Context(), actor, "alpha", workspaceprovisionmodel.CommercialConfigurationUpdateRequest{ExpectedRevision: 3}, "commercial-stale"); !errors.Is(err, workspaceprovisionmodel.ErrRevisionConflict) {
-		t.Fatalf("stale commercial CAS=%v", err)
-	}
-	commercialFailureKey := "commercial-audit-failure"
-	commercialAuditID := mustWorkspaceAdministrationOperationID(t, actor, workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey, commercialFailureKey)
-	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, commercialAuditID, nowText)
-	failingCommercialRequest := workspaceprovisionmodel.CommercialConfigurationUpdateRequest{
-		ExpectedRevision: 4,
-		Configuration: workspaceprovisionmodel.CommercialConfiguration{
-			Plan: "must-rollback", IncludedStoreLimit: 1, MaxStores: 1, ContractDate: "2026-09-06", BillingDay: 6,
-		},
-	}
-	if _, err := store.UpdateWorkspaceCommercialConfiguration(t.Context(), actor, "alpha", failingCommercialRequest, commercialFailureKey); err == nil {
-		t.Fatal("audit failure committed commercial configuration mutation")
-	}
-	var plan string
-	var commercialRevision int
-	if err := runtimeStore.DB().QueryRowContext(t.Context(), `SELECT plan,commercial_revision FROM _workspaces WHERE workspace_id=?`, "workspace-target").Scan(&plan, &commercialRevision); err != nil || plan != "premium" || commercialRevision != 2 {
-		t.Fatalf("commercial rollback plan=%q revision=%d err=%v", plan, commercialRevision, err)
-	}
-	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 4, "session-a", true)
+	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 3, "session-a", true)
 
 	if _, err := runtimeStore.DB().ExecContext(t.Context(), `INSERT INTO _identity_auth_refresh_tokens(workspace_id,user_id,session_id,expires_at,revoked_at,last_used_at,updated_at) VALUES(?,?,?,?,?,?,?)`, "workspace-target", "staff-b", "session-b", expires, int64(0), int64(0), now); err != nil {
 		t.Fatal(err)
@@ -113,10 +83,10 @@ func TestWorkspaceAdministrationStoreCatalogLifecycleCommercialCASAndRollback(t 
 	failingKey := "suspend-audit-failure"
 	auditID := mustWorkspaceAdministrationOperationID(t, actor, workspaceprovisionapplication.SuspendWorkspaceActionKey, failingKey)
 	insertWorkspaceAdministrationAuditCollision(t, runtimeStore, auditID, nowText)
-	if _, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 4, workspaceprovisionmodel.WorkspaceStatusSuspended, failingKey); err == nil {
+	if _, err := store.SetWorkspaceStatus(t.Context(), actor, "alpha", 3, workspaceprovisionmodel.WorkspaceStatusSuspended, failingKey); err == nil {
 		t.Fatal("audit failure committed Workspace lifecycle mutation")
 	}
-	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 4, "session-b", false)
+	assertWorkspaceAdministrationState(t, runtimeStore.DB(), "workspace-target", "active", 3, "session-b", false)
 	if _, err := store.SetWorkspaceStatus(t.Context(), actor, "omega", 1, workspaceprovisionmodel.WorkspaceStatusSuspended, "initial-suspend"); !errors.Is(err, workspaceprovisionmodel.ErrInitialWorkspaceSuspension) {
 		t.Fatalf("initial Workspace suspend=%v", err)
 	}
@@ -151,11 +121,8 @@ func insertWorkspaceAdministrationFixture(t *testing.T, db *sql.DB, id, code, na
 		installation = installationIdentity
 	}
 	if _, err := db.ExecContext(t.Context(), `INSERT INTO _workspaces(
-		workspace_id,canonical_code,name,status,initial_installation_identity,
-		plan,included_user_limit,max_user_limit,included_customer_limit,max_customer_limit,included_store_limit,max_stores,
-		contract_date,billing_day,billing_contact_name,billing_contact_phone,billing_contact_email,billing_contact_address,billing_contact_notes,
-		commercial_revision,revision,created_at,updated_at
-	) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, code, name, "active", installation, "standard", 1, 2, 1, 2, 1, 2, "2026-09-06", 1, "", "", "", "", "", 1, 1, now, now); err != nil {
+		workspace_id,canonical_code,name,status,initial_installation_identity,revision,created_at,updated_at
+	) VALUES(?,?,?,?,?,?,?,?)`, id, code, name, "active", installation, 1, now, now); err != nil {
 		t.Fatal(err)
 	}
 }

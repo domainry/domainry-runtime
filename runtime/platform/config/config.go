@@ -140,21 +140,18 @@ type Config struct {
 	MigrationInstanceID                     string
 	// WorkspaceProvisionFailurePoint is a process-start acceptance control.
 	// Project, file, and remote configuration sources cannot set it.
-	WorkspaceProvisionFailurePoint              string
-	RuntimeWorkspaceProvisionClientID           string
-	RuntimeWorkspaceProvisionSigningSecret      string
-	AuthDefaultPassword                         string
-	AuthInitialCredentialRotationRequired       bool
-	InitialWorkspaceRequestID                   string
-	InitialWorkspaceCode                        string
-	InitialWorkspaceName                        string
-	InitialWorkspaceFirstStoreCode              string
-	InitialWorkspaceFirstStoreName              string
-	InitialWorkspaceAdminLoginID                string
-	InitialWorkspaceAdminName                   string
-	InitialWorkspaceCommercialConfigurationJSON string
-	InitialWorkspaceApplicationBootstrapJSON    string
-	InitialWorkspaceCredentialFile              string
+	WorkspaceProvisionFailurePoint           string
+	RuntimeWorkspaceProvisionClientID        string
+	RuntimeWorkspaceProvisionSigningSecret   string
+	AuthDefaultPassword                      string
+	AuthInitialCredentialRotationRequired    bool
+	InitialWorkspaceRequestID                string
+	InitialWorkspaceCode                     string
+	InitialWorkspaceName                     string
+	InitialWorkspaceAdminLoginID             string
+	InitialWorkspaceAdminName                string
+	InitialWorkspaceApplicationBootstrapJSON string
+	InitialWorkspaceCredentialFile           string
 	// InstallationAdministratorBootstrapEnabled is an explicit process-start
 	// control. It is off by default and is never accepted from project, file,
 	// or remote configuration sources.
@@ -346,11 +343,8 @@ func FromEnv() Config {
 		InitialWorkspaceRequestID:                       env("INITIAL_WORKSPACE_REQUEST_ID", "initial-workspace"),
 		InitialWorkspaceCode:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CODE")),
 		InitialWorkspaceName:                            strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_NAME")),
-		InitialWorkspaceFirstStoreCode:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_CODE")),
-		InitialWorkspaceFirstStoreName:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_FIRST_STORE_NAME")),
 		InitialWorkspaceAdminLoginID:                    strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_LOGIN_ID")),
 		InitialWorkspaceAdminName:                       strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_ADMIN_NAME")),
-		InitialWorkspaceCommercialConfigurationJSON:     env("INITIAL_WORKSPACE_COMMERCIAL_CONFIGURATION_JSON", `{"plan":"standard","included_user_limit":1,"max_user_limit":100,"included_customer_limit":0,"max_customer_limit":10000,"included_store_limit":1,"max_stores":1,"contract_date":"1970-01-01","billing_day":1,"billing_contact_name":"","billing_contact_phone":"","billing_contact_email":"","billing_contact_address":"","billing_contact_notes":""}`),
 		InitialWorkspaceApplicationBootstrapJSON:        env("INITIAL_WORKSPACE_APPLICATION_BOOTSTRAP_JSON", `{}`),
 		InitialWorkspaceCredentialFile:                  strings.TrimSpace(os.Getenv("INITIAL_WORKSPACE_CREDENTIAL_FILE")),
 		InstallationAdministratorBootstrapEnabled:       boolEnv("INSTALLATION_ADMINISTRATOR_BOOTSTRAP_ENABLED", false),

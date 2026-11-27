@@ -13,9 +13,9 @@ import (
 	recordpolicy "github.com/domainry/domainry-runtime/runtime/domain/record/policy"
 )
 
-func projectStoreOrganizationSnapshotOutput(principal principalmodel.Principal, actionKey string, contract definitionmodel.ActionOutputField, value any, objectForKey func(string) (definitionmodel.ObjectSchema, bool)) (map[string]any, error) {
+func projectOrganizationUnitSnapshotOutput(principal principalmodel.Principal, actionKey string, contract definitionmodel.ActionOutputField, value any, objectForKey func(string) (definitionmodel.ObjectSchema, bool)) (map[string]any, error) {
 	fail := func(detail string) (map[string]any, error) {
-		return nil, apperror.New(apperror.KindInternal, "backend.action.store_organization_snapshot_output_invalid", nil, map[string]string{"action": actionKey, "field": contract.Key, "detail": detail})
+		return nil, apperror.New(apperror.KindInternal, "backend.action.organization_unit_snapshot_output_invalid", nil, map[string]string{"action": actionKey, "field": contract.Key, "detail": detail})
 	}
 	page, ok := value.(map[string]any)
 	if !ok || !snapshotExactKeys(page, []string{"items"}, []string{"next_cursor"}) {
@@ -28,14 +28,14 @@ func projectStoreOrganizationSnapshotOutput(principal principalmodel.Principal, 
 		}
 	}
 	items, ok := page["items"].([]any)
-	if !ok || len(items) > runtimeext.StoreOrganizationCatalogMaximumPageSize {
+	if !ok || len(items) > runtimeext.OrganizationUnitCatalogMaximumPageSize {
 		return fail("items")
 	}
-	objects := make(map[string]definitionmodel.ObjectSchema, len(contract.StoreOrganizationSnapshotObjectKeys))
-	if objectForKey == nil || len(contract.StoreOrganizationSnapshotObjectKeys) == 0 {
+	objects := make(map[string]definitionmodel.ObjectSchema, len(contract.OrganizationUnitSnapshotObjectKeys))
+	if objectForKey == nil || len(contract.OrganizationUnitSnapshotObjectKeys) == 0 {
 		return fail("contract")
 	}
-	for _, raw := range contract.StoreOrganizationSnapshotObjectKeys {
+	for _, raw := range contract.OrganizationUnitSnapshotObjectKeys {
 		objectKey := strings.TrimSpace(raw)
 		object, exists := objectForKey(objectKey)
 		if objectKey == "" || !exists {
@@ -45,7 +45,7 @@ func projectStoreOrganizationSnapshotOutput(principal principalmodel.Principal, 
 	}
 	seenReferences := map[string]bool{}
 	projectedItems := make([]any, 0, len(items))
-	itemRequired := append([]string{"organization"}, contract.StoreOrganizationSnapshotObjectKeys...)
+	itemRequired := append([]string{"organization"}, contract.OrganizationUnitSnapshotObjectKeys...)
 	for index, raw := range items {
 		item, ok := raw.(map[string]any)
 		if !ok || !snapshotExactKeys(item, itemRequired, nil) {
@@ -62,7 +62,7 @@ func projectStoreOrganizationSnapshotOutput(principal principalmodel.Principal, 
 		seenReferences[reference] = true
 		projectedItem := make(map[string]any, len(item))
 		projectedItem["organization"] = cloneSnapshotMap(organization)
-		for _, objectKey := range contract.StoreOrganizationSnapshotObjectKeys {
+		for _, objectKey := range contract.OrganizationUnitSnapshotObjectKeys {
 			record, ok := item[objectKey].(map[string]any)
 			if !ok || !snapshotExactKeys(record, []string{"record_id", "revision", "data"}, nil) || !snapshotNonEmptyString(record["record_id"]) || !snapshotNonEmptyString(record["revision"]) {
 				return fail(fmt.Sprintf("items[%d].%s", index, objectKey))

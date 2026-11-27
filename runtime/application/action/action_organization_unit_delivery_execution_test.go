@@ -18,11 +18,15 @@ import (
 )
 
 type organizationUnitDeliveryStub struct {
-	createRequests  []organizationunit.DeliveryRequest
-	resolveRequests []organizationunit.ResolveRequest
-	createResult    organizationunit.DeliveryResult
-	resolveResult   organizationunit.DeliveredOrganizationUnit
-	err             error
+	createRequests   []organizationunit.DeliveryRequest
+	mutationRequests []organizationunit.MutationRequest
+	resolveRequests  []organizationunit.ResolveRequest
+	listRequests     []organizationunit.ListRequest
+	createResult     organizationunit.DeliveryResult
+	mutationResult   organizationunit.DeliveryResult
+	resolveResult    organizationunit.DeliveredOrganizationUnit
+	listResult       organizationunit.Page
+	err              error
 }
 
 func (stub *organizationUnitDeliveryStub) CreateOrganizationUnit(_ context.Context, request organizationunit.DeliveryRequest) (organizationunit.DeliveryResult, error) {
@@ -30,9 +34,19 @@ func (stub *organizationUnitDeliveryStub) CreateOrganizationUnit(_ context.Conte
 	return stub.createResult, stub.err
 }
 
+func (stub *organizationUnitDeliveryStub) MutateOrganizationUnit(_ context.Context, request organizationunit.MutationRequest) (organizationunit.DeliveryResult, error) {
+	stub.mutationRequests = append(stub.mutationRequests, request)
+	return stub.mutationResult, stub.err
+}
+
 func (stub *organizationUnitDeliveryStub) ResolveOrganizationUnit(_ context.Context, request organizationunit.ResolveRequest) (organizationunit.DeliveredOrganizationUnit, error) {
 	stub.resolveRequests = append(stub.resolveRequests, request)
 	return stub.resolveResult, stub.err
+}
+
+func (stub *organizationUnitDeliveryStub) ListOrganizationUnits(_ context.Context, request organizationunit.ListRequest) (organizationunit.Page, error) {
+	stub.listRequests = append(stub.listRequests, request)
+	return stub.listResult, stub.err
 }
 
 func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliveredTarget(t *testing.T) {
@@ -44,7 +58,7 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 		t.Fatal(err)
 	}
 	delivery.createResult = organizationunit.DeliveryResult{DeliveryID: "delivery-department-sales", Organization: organizationunit.DeliveredOrganizationUnit{
-		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
+		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeType("department"),
 		Status: "active", ParentOrganizationID: "company-hq", SortOrder: 20, Version: 1,
 	}}
 	bundle := &identitysdk.AccessBundle{ContractVersion: identitysdk.CurrentPolicyBundleVersion}
@@ -64,21 +78,21 @@ func TestOrganizationUnitDeliveryCreatesDepartmentWithoutStoreQuotaAndFixesDeliv
 		targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit},
 		organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 			Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-			NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+			NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 			ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 		},
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 	}
-	request := runtimeext.OrganizationUnitDeliveryRequest{Code: " SALES ", Name: " Sales ", NodeType: runtimeext.OrganizationUnitNodeTypeDepartment, SortOrder: 20}
+	request := runtimeext.OrganizationUnitDeliveryRequest{Code: " SALES ", Name: " Sales ", NodeType: runtimeext.OrganizationUnitNodeType("department"), SortOrder: 20}
 	result, err := execution.CreateOrganizationUnit(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Organization.ID != wantID || result.Organization.NodeType != runtimeext.OrganizationUnitNodeTypeDepartment || result.Version != 1 || len(delivery.createRequests) != 1 {
+	if result.Organization.ID != wantID || result.Organization.NodeType != runtimeext.OrganizationUnitNodeType("department") || result.Version != 1 || len(delivery.createRequests) != 1 {
 		t.Fatalf("result=%#v requests=%#v", result, delivery.createRequests)
 	}
 	bound := delivery.createRequests[0]
-	if bound.AccessToken != "trusted-token" || bound.Organization.ParentOrganizationID != "company-hq" || bound.Organization.OrganizationID != wantID || bound.Organization.NodeType != organizationunit.NodeTypeDepartment || bound.Organization.SortOrder != 20 || bound.Organization.ExpectedVersion != 0 {
+	if bound.AccessToken != "trusted-token" || bound.Organization.ParentOrganizationID != "company-hq" || bound.Organization.OrganizationID != wantID || bound.Organization.NodeType != organizationunit.NodeType("department") || bound.Organization.SortOrder != 20 || bound.Organization.ExpectedVersion != 0 {
 		t.Fatalf("Identity request=%#v", bound)
 	}
 	if target, ok := execution.TargetOrganization(); !ok || target.ID != wantID || execution.mutationPrincipal == nil || len(execution.mutationPrincipal.AccessBundle.DataPolicies) != 1 || execution.mutationPrincipal.AccessBundle.DataPolicies[0].Key != "runtime.delivered_organization_unit."+executionID {
@@ -109,9 +123,12 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 	delivery := &organizationUnitDeliveryStub{createResult: organizationunit.DeliveryResult{
 		DeliveryID: "delivery-team-platform",
 		Organization: organizationunit.DeliveredOrganizationUnit{
-			OrganizationUnitID: wantChildID, Code: "PLATFORM", Name: "Platform", NodeType: organizationunit.NodeTypeTeam,
+			OrganizationUnitID: wantChildID, Code: "PLATFORM", Name: "Platform", NodeType: organizationunit.NodeType("team"),
 			Status: "active", ParentOrganizationID: "department-engineering", SortOrder: 10, Version: 1,
 		},
+	}, resolveResult: organizationunit.DeliveredOrganizationUnit{
+		OrganizationUnitID: "department-engineering", NodeType: organizationunit.NodeType("department"),
+		Status: "active", ParentOrganizationID: "company-hq", Version: 1,
 	}}
 	execution := &businessActionExecution{
 		dependencies: BusinessHandlerExecutionDependencies{BindOrganizationUnitDelivery: func(context.Context) (organizationunit.Delivery, error) { return delivery, nil }},
@@ -120,10 +137,11 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 		unitOfWork: newActionTestUnitOfWork(),
 		targetGrant: &runtimeext.ActionTargetOrganizationCapability{
 			Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation,
+			NodeType: runtimeext.OrganizationUnitNodeType("department"),
 		},
 		organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 			Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-			NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeTeam},
+			NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("team")},
 			ParentSource: runtimeext.OrganizationUnitParentSourceTargetOrganization,
 		},
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
@@ -132,7 +150,7 @@ func TestOrganizationUnitNestedCreateKeepsParentTargetAndReturnsOpaqueChild(t *t
 		t.Fatal(err)
 	}
 	result, err := execution.CreateOrganizationUnit(t.Context(), runtimeext.OrganizationUnitDeliveryRequest{
-		Code: "PLATFORM", Name: "Platform", NodeType: runtimeext.OrganizationUnitNodeTypeTeam, SortOrder: 10,
+		Code: "PLATFORM", Name: "Platform", NodeType: runtimeext.OrganizationUnitNodeType("team"), SortOrder: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +195,7 @@ func TestOrganizationUnitDeliveryRejectsTamperedCreateReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := organizationunit.DeliveryResult{DeliveryID: "delivery-department-sales", Organization: organizationunit.DeliveredOrganizationUnit{
-		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeTypeDepartment,
+		OrganizationUnitID: wantID, Code: "SALES", Name: "Sales", NodeType: organizationunit.NodeType("department"),
 		Status: "active", ParentOrganizationID: "company-hq", SortOrder: 20, Version: 1,
 	}}
 	for _, test := range []struct {
@@ -200,13 +218,13 @@ func TestOrganizationUnitDeliveryRejectsTamperedCreateReceipt(t *testing.T) {
 				targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit},
 				organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 					Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-					NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+					NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 					ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 				},
 				requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 			}
 			_, err := execution.CreateOrganizationUnit(t.Context(), runtimeext.OrganizationUnitDeliveryRequest{
-				Code: "SALES", Name: "Sales", NodeType: runtimeext.OrganizationUnitNodeTypeDepartment, SortOrder: 20,
+				Code: "SALES", Name: "Sales", NodeType: runtimeext.OrganizationUnitNodeType("department"), SortOrder: 20,
 			})
 			if apperror.CodeOf(err) != "backend.action.organization_unit_delivery_identity_mismatch" || execution.targetResolved || execution.organizationUnitResult.Organization.ID != "" {
 				t.Fatalf("error=%v targetResolved=%v result=%#v", err, execution.targetResolved, execution.organizationUnitResult)
@@ -219,7 +237,7 @@ func TestOrganizationUnitDeliveryRejectsTamperedCreateReceipt(t *testing.T) {
 func TestOrganizationUnitDeliveryRejectsStoreAndCallerAuthorityFields(t *testing.T) {
 	capability := runtimeext.OrganizationUnitDeliveryCapability{
 		Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 		ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 	}
 	execution := &businessActionExecution{organizationUnitGrant: &capability}
@@ -238,7 +256,7 @@ func TestOrganizationUnitDeliveryRejectsStoreAndCallerAuthorityFields(t *testing
 
 func TestOrganizationUnitDeliveryResolvesOnlyFixedTargetAndGrantedNodeType(t *testing.T) {
 	delivery := &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{
-		OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active",
+		OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeType("department"), Status: "active",
 		ParentOrganizationID: "company-hq", Version: 1,
 	}}
 	execution := &businessActionExecution{
@@ -252,11 +270,11 @@ func TestOrganizationUnitDeliveryResolvesOnlyFixedTargetAndGrantedNodeType(t *te
 		targetGrant: &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit},
 		organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 			Operations: []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryResolve},
-			NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+			NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 		},
 		requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 	}
-	request := runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeTypeDepartment}
+	request := runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeType("department")}
 	result, err := execution.ResolveOrganizationUnit(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -265,13 +283,13 @@ func TestOrganizationUnitDeliveryResolvesOnlyFixedTargetAndGrantedNodeType(t *te
 		t.Fatalf("result=%#v requests=%#v", result, delivery.resolveRequests)
 	}
 	bound := delivery.resolveRequests[0]
-	if bound.OrganizationID != "department-sales" || bound.NodeType != organizationunit.NodeTypeDepartment || bound.AccessToken != "trusted-token" {
+	if bound.OrganizationID != "department-sales" || bound.NodeType != organizationunit.NodeType("department") || bound.AccessToken != "trusted-token" {
 		t.Fatalf("Identity resolve=%#v", bound)
 	}
 	if target, ok := execution.TargetOrganization(); !ok || target.ID != "department-sales" {
 		t.Fatalf("target=%#v ok=%v", target, ok)
 	}
-	if _, wrongErr := execution.ResolveOrganizationUnit(t.Context(), runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeTypeTeam}); apperror.CodeOf(wrongErr) != "backend.action.organization_unit_delivery_grant_denied" {
+	if _, wrongErr := execution.ResolveOrganizationUnit(t.Context(), runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeType("team")}); apperror.CodeOf(wrongErr) != "backend.action.organization_unit_delivery_grant_denied" {
 		t.Fatalf("wrong type error=%v", wrongErr)
 	}
 	execution.unitOfWork.rollBack(t.Context())
@@ -280,7 +298,7 @@ func TestOrganizationUnitDeliveryResolvesOnlyFixedTargetAndGrantedNodeType(t *te
 func TestOrganizationUnitDeliveryFailsClosedOnIdentityScopeAndResponseMismatch(t *testing.T) {
 	grant := &runtimeext.OrganizationUnitDeliveryCapability{
 		Operations: []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryResolve},
-		NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+		NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 	}
 	for _, test := range []struct {
 		name     string
@@ -288,8 +306,8 @@ func TestOrganizationUnitDeliveryFailsClosedOnIdentityScopeAndResponseMismatch(t
 		wantCode string
 	}{
 		{name: "cross workspace or permission denied", delivery: &organizationUnitDeliveryStub{err: &identitysdk.Error{Code: "identity.organization_unit_delivery_application_scope_mismatch"}}, wantCode: "identity.organization_unit_delivery_application_scope_mismatch"},
-		{name: "response id mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "other", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 1}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
-		{name: "response version mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeTypeDepartment, Status: "active", ParentOrganizationID: "company", Version: 2}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
+		{name: "response id mismatch", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "other", NodeType: organizationunit.NodeType("department"), Status: "active", ParentOrganizationID: "company", Version: 1}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
+		{name: "invalid response version", delivery: &organizationUnitDeliveryStub{resolveResult: organizationunit.DeliveredOrganizationUnit{OrganizationUnitID: "department-sales", NodeType: organizationunit.NodeType("department"), Status: "active", ParentOrganizationID: "company", Version: 0}}, wantCode: "backend.action.organization_unit_delivery_identity_mismatch"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			execution := &businessActionExecution{
@@ -297,7 +315,7 @@ func TestOrganizationUnitDeliveryFailsClosedOnIdentityScopeAndResponseMismatch(t
 				unitOfWork:   newActionTestUnitOfWork(), organizationUnitTargetID: "department-sales", organizationUnitGrant: grant,
 				requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 			}
-			_, err := execution.ResolveOrganizationUnit(t.Context(), runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeTypeDepartment})
+			_, err := execution.ResolveOrganizationUnit(t.Context(), runtimeext.OrganizationUnitResolveRequest{NodeType: runtimeext.OrganizationUnitNodeType("department")})
 			if apperror.CodeOf(err) != test.wantCode || execution.targetResolved {
 				t.Fatalf("error=%v targetResolved=%v", err, execution.targetResolved)
 			}
@@ -327,13 +345,13 @@ func TestOrganizationUnitDeliveryPreservesIdentityCreateConflictAndAuthorityErro
 				unitOfWork: newActionTestUnitOfWork(),
 				organizationUnitGrant: &runtimeext.OrganizationUnitDeliveryCapability{
 					Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-					NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+					NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 					ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 				},
 				requestIdentity: identitysdk.RequestIdentity{AccessToken: "trusted-token"},
 			}
 			_, err := execution.CreateOrganizationUnit(t.Context(), runtimeext.OrganizationUnitDeliveryRequest{
-				Code: "SALES", Name: "Sales", NodeType: runtimeext.OrganizationUnitNodeTypeDepartment,
+				Code: "SALES", Name: "Sales", NodeType: runtimeext.OrganizationUnitNodeType("department"),
 			})
 			if apperror.CodeOf(err) != code || execution.targetResolved || execution.organizationUnitResult.Organization.ID != "" {
 				t.Fatalf("error=%v targetResolved=%v result=%#v", err, execution.targetResolved, execution.organizationUnitResult)

@@ -11,13 +11,13 @@ import (
 	accessfixture "github.com/domainry/domainry-runtime/testsupport/identitysdkfixture"
 )
 
-func TestProjectStoreOrganizationSnapshotOutputIsStrictAndReappliesFieldSecurity(t *testing.T) {
+func TestProjectOrganizationUnitSnapshotOutputIsStrictAndReappliesFieldSecurity(t *testing.T) {
 	object := definitionmodel.ObjectSchema{Key: "store_config", Fields: []definitionmodel.FieldSchema{
 		{Key: "name", Type: "text", Required: true},
 		{Key: "secret", Type: "text", Config: map[string]any{"sensitive": true}},
 	}}
 	action := definitionmodel.ActionSchema{Key: "store_config.snapshot", Kind: definitionmodel.ActionKindObjectOperation, OutputFields: []definitionmodel.ActionOutputField{{
-		Key: "stores", Type: "store_organization_snapshot", Required: true, StoreOrganizationSnapshotObjectKeys: []string{"store_config"},
+		Key: "stores", Type: "organization_unit_snapshot", Required: true, OrganizationUnitSnapshotObjectKeys: []string{"store_config"},
 	}}}
 	input := map[string]any{"stores": map[string]any{"items": []any{map[string]any{
 		"organization": map[string]any{"reference": "org-1", "code": "north", "name": "North", "status": "active", "sort_order": float64(1), "version": float64(2)},
@@ -65,29 +65,33 @@ func TestProjectStoreOrganizationSnapshotOutputIsStrictAndReappliesFieldSecurity
 	}
 }
 
-func TestPublishedStoreOrganizationSnapshotRequiresCatalogAndListGrants(t *testing.T) {
+func TestPublishedOrganizationUnitSnapshotRequiresCatalogAndListGrants(t *testing.T) {
 	action := definitionmodel.ActionSchema{Key: "store_config.snapshot", Kind: definitionmodel.ActionKindObjectOperation, OutputFields: []definitionmodel.ActionOutputField{{
-		Key: "stores", Type: "store_organization_snapshot", Required: true, StoreOrganizationSnapshotObjectKeys: []string{"store_config"},
+		Key: "stores", Type: "organization_unit_snapshot", Required: true, OrganizationUnitSnapshotObjectKeys: []string{"store_config"},
 	}}}
 	descriptor := runtimeext.HandlerDescriptor{
-		StoreOrganizationCatalog: &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25},
-		ObjectCapabilities:       []runtimeext.ActionObjectCapability{{ObjectKey: "store_config", Operations: []string{"list"}}},
+		OrganizationUnitCatalog: &runtimeext.OrganizationUnitCatalogCapability{NodeType: runtimeext.OrganizationUnitNodeType("store"), MaxPageSize: 25},
+		ObjectCapabilities:      []runtimeext.ActionObjectCapability{{ObjectKey: "store_config", Operations: []string{"list"}}},
 	}
-	if err := validateStoreOrganizationSnapshotOutput(action, descriptor); err != nil {
+	if err := validateOrganizationUnitSnapshotOutput(action, descriptor); err != nil {
 		t.Fatal(err)
 	}
-	descriptor.StoreOrganizationCatalog = nil
-	if err := validateStoreOrganizationSnapshotOutput(action, descriptor); err == nil {
+	descriptor.OrganizationUnitCatalog = nil
+	if err := validateOrganizationUnitSnapshotOutput(action, descriptor); err == nil {
 		t.Fatal("snapshot without catalog was accepted")
 	}
-	descriptor.StoreOrganizationCatalog = &runtimeext.StoreOrganizationCatalogCapability{MaxPageSize: 25}
+	descriptor.OrganizationUnitCatalog = &runtimeext.OrganizationUnitCatalogCapability{NodeType: runtimeext.OrganizationUnitNodeType("store"), MaxPageSize: 25}
 	descriptor.ObjectCapabilities[0].Operations = []string{"get"}
-	if err := validateStoreOrganizationSnapshotOutput(action, descriptor); err == nil {
+	if err := validateOrganizationUnitSnapshotOutput(action, descriptor); err == nil {
 		t.Fatal("snapshot without list grant was accepted")
 	}
 	descriptor.ObjectCapabilities[0].Operations = []string{"list"}
-	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceProvisionedStore}
-	if err := validateStoreOrganizationSnapshotOutput(action, descriptor); err == nil {
+	descriptor.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+		Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
+		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("store")},
+		ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
+	}
+	if err := validateOrganizationUnitSnapshotOutput(action, descriptor); err == nil {
 		t.Fatal("snapshot with a side-effecting Organization capability was accepted")
 	}
 }

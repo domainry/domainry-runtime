@@ -224,7 +224,6 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) catalogRevision(ctx con
 	statement, arguments, err := query.NewSelectBuilder(authority.runtime.RuntimeRenderer(), "_workspaces").Alias("workspace").
 		Projections(
 			query.Project(query.QualifiedColumn("workspace", "workspace_id")), query.Project(query.QualifiedColumn("workspace", "revision")),
-			query.Project(query.QualifiedColumn("workspace", "commercial_revision")),
 		).
 		Where(query.EqualExpressions(query.QualifiedColumn("workspace", "status"), query.Value("active"))).OrderBy(query.AscendingExpression(query.QualifiedColumn("workspace", "id"))).Build()
 	if err != nil {
@@ -239,11 +238,11 @@ func (authority *runtimeWorkspaceIdentityUsageAuthority) catalogRevision(ctx con
 	_, _ = hash.Write([]byte("domainry.runtime.workspace-identity-usage.catalog.v1\x00" + strings.TrimSpace(installationID)))
 	for rows.Next() {
 		var workspaceID string
-		var workspaceRevision, commercialRevision int64
-		if err := rows.Scan(&workspaceID, &workspaceRevision, &commercialRevision); err != nil {
+		var workspaceRevision int64
+		if err := rows.Scan(&workspaceID, &workspaceRevision); err != nil {
 			return "", err
 		}
-		_, _ = hash.Write([]byte("\x00" + strings.TrimSpace(workspaceID) + "\x00" + fmt.Sprint(workspaceRevision) + "\x00" + fmt.Sprint(commercialRevision)))
+		_, _ = hash.Write([]byte("\x00" + strings.TrimSpace(workspaceID) + "\x00" + fmt.Sprint(workspaceRevision)))
 	}
 	if err := rows.Err(); err != nil {
 		return "", err

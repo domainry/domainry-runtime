@@ -41,7 +41,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCano
 		t.Fatalf("handle authority=%T cursor_key_length=%d", handle.WorkspaceIdentityUsageAuthority, len(handle.WorkspaceIdentityUsageCursorKey))
 	}
 	if err := authority.BindAuthenticator(workspaceIdentityUsageAuthenticatorStub{principal: identitysdk.Principal{
-		Known: true, WorkspaceID: "workspace-installation", UserID: "billing-admin", RoleKey: workspaceIdentityUsageAdministratorRole,
+		Known: true, WorkspaceID: "workspace-installation", UserID: "usage-admin", RoleKey: workspaceIdentityUsageAdministratorRole,
 		AuthorizationRevision: "authz-7",
 	}}); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestRuntimeWorkspaceIdentityUsageAuthorityDurablyAuthorizesThenResolvesCano
 	if err != nil {
 		t.Fatal(err)
 	}
-	if grant.SubjectID != "billing-admin" || grant.AuditWorkspaceID != "workspace-installation" || grant.AuthorizationAuditID == "" {
+	if grant.SubjectID != "usage-admin" || grant.AuditWorkspaceID != "workspace-installation" || grant.AuthorizationAuditID == "" {
 		t.Fatalf("grant=%#v", grant)
 	}
 	var authorizationAudits int
@@ -128,11 +128,9 @@ func seedWorkspaceIdentityUsageAuthorityWorkspace(t *testing.T, store *bootstrap
 	statement, arguments, err := query.NewInsertBuilder(store.RuntimeRenderer(), "_workspaces").
 		Columns(
 			"workspace_id", "canonical_code", "name", "status", "initial_installation_identity",
-			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores",
-			"contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes",
-			"commercial_revision", "revision", "created_at", "updated_at",
+			"revision", "created_at", "updated_at",
 		).
-		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, "standard", 5, 25, 100, 1000, 1, 5, "2026-09-01", 25, "", "", "", "", "", 1, 1, int64(1788652800000), int64(1788652800000)).Build()
+		Values(workspaceID, canonicalCode, canonicalCode, "active", installationIdentity, 1, int64(1788652800000), int64(1788652800000)).Build()
 	if err != nil {
 		t.Fatal(err)
 	}

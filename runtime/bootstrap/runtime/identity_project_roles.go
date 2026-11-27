@@ -91,7 +91,6 @@ func runtimeRolesWithInstallationAdministrator(roles []projectmodel.Role, assign
 		workspaceprovisionapplication.ListWorkspacesActionKey,
 		workspaceprovisionapplication.SuspendWorkspaceActionKey,
 		workspaceprovisionapplication.ReactivateWorkspaceActionKey,
-		workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey,
 	}
 	grants := make([]projectmodel.RolePermission, 0, len(permissions))
 	for _, permission := range permissions {
@@ -269,18 +268,16 @@ func runtimeProjectRoleDefinition(role projectmodel.Role, permissions []identity
 }
 
 var runtimeManagedDownstreamPermissions = map[string]bool{
-	organizationunit.DeliveryCreatePermission:              true,
-	organizationunit.DeliveryResolvePermission:             true,
-	identitysdk.StoreOrganizationDeliveryCreatePermission:  true,
-	identitysdk.StoreOrganizationDeliveryRenamePermission:  true,
-	identitysdk.StoreOrganizationDeliveryDisablePermission: true,
-	identitysdk.StoreOrganizationDeliveryResolvePermission: true,
-	identitysdk.StoreOrganizationDeliveryListPermission:    true,
-	identitysdk.HandlerDeliveryCreatePermission:            true,
-	identitysdk.HandlerDeliveryUpdatePermission:            true,
-	identitysdk.HandlerDeliveryDisablePermission:           true,
-	identitysdk.HandlerDeliveryResolvePermission:           true,
-	identitysdk.WorkspaceIdentityUsageAggregatePermission:  true,
+	organizationunit.DeliveryCreatePermission:             true,
+	organizationunit.DeliveryRenamePermission:             true,
+	organizationunit.DeliveryDisablePermission:            true,
+	organizationunit.DeliveryResolvePermission:            true,
+	organizationunit.DeliveryListPermission:               true,
+	identitysdk.HandlerDeliveryCreatePermission:           true,
+	identitysdk.HandlerDeliveryUpdatePermission:           true,
+	identitysdk.HandlerDeliveryDisablePermission:          true,
+	identitysdk.HandlerDeliveryResolvePermission:          true,
+	identitysdk.WorkspaceIdentityUsageAggregatePermission: true,
 }
 
 func runtimeDownstreamCapabilityPermissions(descriptors []runtimeext.HandlerDescriptor) (map[string][]string, error) {
@@ -302,37 +299,25 @@ func runtimeDownstreamCapabilityPermissions(descriptors []runtimeext.HandlerDesc
 					add(organizationunit.DeliveryCreatePermission)
 				case runtimeext.OrganizationUnitDeliveryResolve:
 					add(organizationunit.DeliveryResolvePermission)
+				case runtimeext.OrganizationUnitDeliveryRename:
+					add(organizationunit.DeliveryRenamePermission)
+				case runtimeext.OrganizationUnitDeliveryDisable:
+					add(organizationunit.DeliveryDisablePermission)
 				}
 			}
 		}
-		// Organization Unit delivery resolves/creates its trusted target through
-		// the transaction-bound organizationunit port. Only the ordinary target
-		// execution path calls StoreOrganizationDelivery.
-		if descriptor.TargetOrganization != nil && descriptor.OrganizationUnitDelivery == nil {
+		if descriptor.TargetOrganization != nil {
 			switch descriptor.TargetOrganization.Source {
 			case runtimeext.TargetOrganizationSourceExplicit:
-				add(identitysdk.StoreOrganizationDeliveryResolvePermission)
-			case runtimeext.TargetOrganizationSourceExplicitOrSoleAuthorizedStore:
-				add(identitysdk.StoreOrganizationDeliveryListPermission)
-				add(identitysdk.StoreOrganizationDeliveryResolvePermission)
-			case runtimeext.TargetOrganizationSourceProvisionedStore:
-				add(identitysdk.StoreOrganizationDeliveryListPermission)
-				add(identitysdk.StoreOrganizationDeliveryCreatePermission)
+				add(organizationunit.DeliveryResolvePermission)
+			case runtimeext.TargetOrganizationSourceExplicitOrSoleAuthorizedOrganization:
+				add(organizationunit.DeliveryListPermission)
+				add(organizationunit.DeliveryResolvePermission)
 			}
 		}
-		if descriptor.StoreOrganizationCatalog != nil {
-			add(identitysdk.StoreOrganizationDeliveryListPermission)
-			add(identitysdk.StoreOrganizationDeliveryResolvePermission)
-		}
-		if descriptor.StoreOrganizationMutation != nil {
-			for _, operation := range descriptor.StoreOrganizationMutation.Operations {
-				switch operation {
-				case runtimeext.StoreOrganizationMutationRename:
-					add(identitysdk.StoreOrganizationDeliveryRenamePermission)
-				case runtimeext.StoreOrganizationMutationDisable:
-					add(identitysdk.StoreOrganizationDeliveryDisablePermission)
-				}
-			}
+		if descriptor.OrganizationUnitCatalog != nil {
+			add(organizationunit.DeliveryListPermission)
+			add(organizationunit.DeliveryResolvePermission)
 		}
 		if descriptor.IdentityHandlerDelivery != nil {
 			for _, operation := range descriptor.IdentityHandlerDelivery.Operations {

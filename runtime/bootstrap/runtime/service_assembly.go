@@ -67,7 +67,6 @@ import (
 	reportnotification "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/reportnotification"
 	workflowpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workflow"
 	workspaceaggregatepersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceaggregate"
-	workspaceprovisionpersistence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/database/workspaceprovision"
 	lifecyclemodule "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/lifecyclemodule"
 	subjectevidence "github.com/domainry/domainry-runtime/runtime/infrastructure/persistence/subjectevidence"
 	"github.com/domainry/domainry-runtime/runtime/platform/config"
@@ -86,43 +85,42 @@ type runtimeServiceAssembly struct {
 }
 
 type runtimeExtensionRegistries struct {
-	projectExtensions               *runtimeext.ProjectExtensionRegistry
-	connectorProviders              *connector.Registry
-	notificationCompiler            func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
-	taskNotificationCommitter       workflowapplication.WorkflowTaskNotificationCommitter
-	notificationPublisher           notificationIntentPublisher
-	integrationOwnerDelivery        integrationsdk.Delivery
-	integrationOwnerCatalog         integrationsdk.Catalog
-	integrationOwnerManagement      integrationsdk.Management
-	integrationOwnerOperations      integrationsdk.Operations
-	integrationOwnerAccountReads    integrationsdk.ConnectionAccountReads
-	integrationOwnerAccountWrites   integrationsdk.ConnectionAccountWrites
-	integrationOwnerSubjects        integrationsdk.SubjectLifecycle
-	integrationSubjectPersistence   integrationsdk.SubjectLifecyclePersistenceBinding
-	dataExchangeProviderKey         string
-	dataExchangeImportProvider      dataexchangemodulehost.ImportProvider
-	dataExchangeExportProvider      dataexchangemodulehost.ExportProvider
-	integrationMode                 integrationsdk.DeploymentMode
-	notificationSubjectLifecycle    lifecyclecontract.SubjectExecutionHandler
-	identitySubjectLifecycle        lifecyclecontract.SubjectExecutionHandler
-	identityBinding                 identitysdk.Binding
-	notificationRetention           lifecyclecontract.OwnerLifecycleExecutor
-	notificationArchives            *notificationSDKRetentionArchiveStore
-	auditRepository                 auditrepository.AuditRepository
-	auditSubjectLifecycle           lifecyclecontract.SubjectExecutionHandler
-	auditBinding                    auditsdk.Binding
-	lifecycleFactory                lifecyclesdk.Factory
-	dataExchangeFactory             dataexchangesdk.Factory
-	agentBinding                    agentsdk.Binding
-	reportBinding                   reportsdk.Binding
-	reportAnalysisTables            reportmodulehost.AnalysisTableSource
-	identityHandlerDeliveryBinder   identitysdk.HandlerDeliveryUnitOfWorkBinder
-	organizationUnitDeliveryBinder  organizationunit.UnitOfWorkBinder
-	storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
-	workspaceIdentityUsageBinder    identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
-	blobStore                       runtimefile.BlobStore
-	fileScanner                     runtimefile.FileScanner
-	knowledgeFiles                  knowledgefiles.Service
+	projectExtensions              *runtimeext.ProjectExtensionRegistry
+	connectorProviders             *connector.Registry
+	notificationCompiler           func(notificationmodel.NotificationIntent) (notificationmodel.NotificationEvent, error)
+	taskNotificationCommitter      workflowapplication.WorkflowTaskNotificationCommitter
+	notificationPublisher          notificationIntentPublisher
+	integrationOwnerDelivery       integrationsdk.Delivery
+	integrationOwnerCatalog        integrationsdk.Catalog
+	integrationOwnerManagement     integrationsdk.Management
+	integrationOwnerOperations     integrationsdk.Operations
+	integrationOwnerAccountReads   integrationsdk.ConnectionAccountReads
+	integrationOwnerAccountWrites  integrationsdk.ConnectionAccountWrites
+	integrationOwnerSubjects       integrationsdk.SubjectLifecycle
+	integrationSubjectPersistence  integrationsdk.SubjectLifecyclePersistenceBinding
+	dataExchangeProviderKey        string
+	dataExchangeImportProvider     dataexchangemodulehost.ImportProvider
+	dataExchangeExportProvider     dataexchangemodulehost.ExportProvider
+	integrationMode                integrationsdk.DeploymentMode
+	notificationSubjectLifecycle   lifecyclecontract.SubjectExecutionHandler
+	identitySubjectLifecycle       lifecyclecontract.SubjectExecutionHandler
+	identityBinding                identitysdk.Binding
+	notificationRetention          lifecyclecontract.OwnerLifecycleExecutor
+	notificationArchives           *notificationSDKRetentionArchiveStore
+	auditRepository                auditrepository.AuditRepository
+	auditSubjectLifecycle          lifecyclecontract.SubjectExecutionHandler
+	auditBinding                   auditsdk.Binding
+	lifecycleFactory               lifecyclesdk.Factory
+	dataExchangeFactory            dataexchangesdk.Factory
+	agentBinding                   agentsdk.Binding
+	reportBinding                  reportsdk.Binding
+	reportAnalysisTables           reportmodulehost.AnalysisTableSource
+	identityHandlerDeliveryBinder  identitysdk.HandlerDeliveryUnitOfWorkBinder
+	organizationUnitDeliveryBinder organizationunit.UnitOfWorkBinder
+	workspaceIdentityUsageBinder   identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
+	blobStore                      runtimefile.BlobStore
+	fileScanner                    runtimefile.FileScanner
+	knowledgeFiles                 knowledgefiles.Service
 }
 
 func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectModel projectmodel.RuntimeModel, projectDefinitions runtimeext.ProjectDefinitions, integrations appschemamodel.IntegrationSchema, notifications composition.NotificationRenderer, store *persistence.RuntimeStore, identityProjection identitysdk.Projection, identityPrincipals identitysdk.PrincipalResolver, auditApplication *auditapplication.AuditApplicationService, workerDependencies workerplatform.Dependencies, extensionRegistries ...runtimeExtensionRegistries) (runtimeServiceAssembly, error) {
@@ -155,7 +153,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 	var reportAnalysisTables reportmodulehost.AnalysisTableSource
 	var identityHandlerDeliveryBinder identitysdk.HandlerDeliveryUnitOfWorkBinder
 	var organizationUnitDeliveryBinder organizationunit.UnitOfWorkBinder
-	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	var workspaceIdentityUsageBinder identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	var dataExchangeProviderKey string
 	var dataExchangeImportProvider dataexchangemodulehost.ImportProvider
@@ -207,7 +204,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 		reportAnalysisTables = extensionRegistries[0].reportAnalysisTables
 		identityHandlerDeliveryBinder = extensionRegistries[0].identityHandlerDeliveryBinder
 		organizationUnitDeliveryBinder = extensionRegistries[0].organizationUnitDeliveryBinder
-		storeOrganizationDeliveryBinder = extensionRegistries[0].storeOrganizationDeliveryBinder
 		workspaceIdentityUsageBinder = extensionRegistries[0].workspaceIdentityUsageBinder
 		dataExchangeProviderKey = extensionRegistries[0].dataExchangeProviderKey
 		dataExchangeImportProvider = extensionRegistries[0].dataExchangeImportProvider
@@ -596,7 +592,6 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 			WorkspaceActiveResolver:             workspaceAggregates,
 			WorkspaceUsageResolver:              workspaceAggregates,
 			WorkspaceAggregateRepository:        workspaceAggregates,
-			WorkspaceCommercialConfiguration:    workspaceprovisionpersistence.NewCommercialConfigurationStore(store),
 			VerifyFileClean:                     verifyFileClean,
 			OpenVerifiedFile:                    openVerifiedFile,
 			IssueFileDownload:                   issueFileDownload,
@@ -644,22 +639,21 @@ func assembleRuntimeServices(ctx context.Context, cfg config.Config, projectMode
 				prepared["_runtime_scan_evidence_ref"] = evidence.EvidenceRef
 				return prepared, nil
 			},
-			RuntimeStatus:                   deploymentpersistence.NewRuntimeStatusStore(store),
-			Notifications:                   notifications,
-			IdentityProjection:              identityProjection,
-			IdentityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
-			AccountErasures:                 accountErasures,
-			OrganizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
-			StoreOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
-			WorkspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
-			WorkspaceIdentityUsageCursor:    workspaceIdentityUsageCursor,
-			IntegrationOwnerDelivery:        integrationOwnerDelivery,
-			IntegrationOwnerCatalog:         integrationOwnerCatalog,
-			IntegrationOwnerManagement:      integrationOwnerManagement,
-			IntegrationOwnerOperations:      integrationOwnerOperations,
-			IntegrationOwnerAccountReads:    integrationOwnerAccountReads,
-			IntegrationOwnerAccountWrites:   integrationOwnerAccountWrites,
-			Worker:                          workerDependencies,
+			RuntimeStatus:                  deploymentpersistence.NewRuntimeStatusStore(store),
+			Notifications:                  notifications,
+			IdentityProjection:             identityProjection,
+			IdentityHandlerDeliveryBinder:  identityHandlerDeliveryBinder,
+			AccountErasures:                accountErasures,
+			OrganizationUnitDeliveryBinder: organizationUnitDeliveryBinder,
+			WorkspaceIdentityUsageBinder:   workspaceIdentityUsageBinder,
+			WorkspaceIdentityUsageCursor:   workspaceIdentityUsageCursor,
+			IntegrationOwnerDelivery:       integrationOwnerDelivery,
+			IntegrationOwnerCatalog:        integrationOwnerCatalog,
+			IntegrationOwnerManagement:     integrationOwnerManagement,
+			IntegrationOwnerOperations:     integrationOwnerOperations,
+			IntegrationOwnerAccountReads:   integrationOwnerAccountReads,
+			IntegrationOwnerAccountWrites:  integrationOwnerAccountWrites,
+			Worker:                         workerDependencies,
 		},
 	})
 	installLifecycle := func() error { return nil }

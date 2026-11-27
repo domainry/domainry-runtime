@@ -186,10 +186,6 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	if embedded, ok := identityBinding.(organizationunit.EmbeddedBinding); ok {
 		organizationUnitDeliveryBinder = embedded.OrganizationUnitDeliveryUnitOfWorkBinder()
 	}
-	var storeOrganizationDeliveryBinder identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
-	if embedded, ok := identityBinding.(identitysdk.EmbeddedStoreOrganizationDeliveryBinding); ok {
-		storeOrganizationDeliveryBinder = embedded.StoreOrganizationDeliveryUnitOfWorkBinder()
-	}
 	var workspaceIdentityUsageBinder identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	if embedded, ok := identityBinding.(identitysdk.EmbeddedWorkspaceIdentityUsageBinding); ok {
 		workspaceIdentityUsageBinder = embedded.WorkspaceIdentityUsageUnitOfWorkBinder()
@@ -350,41 +346,40 @@ func newWithExtensionsUsingAllFactoriesAndStore(ctx context.Context, cfg config.
 	mustCompleteRuntimeStartup(synchronizeAgentDefinitions(ctx, agentBinding, startupOptions.ProjectModel.ProjectKey, projectDefinitions))
 	serviceAssembly, err := assembleRuntimeServices(ctx, cfg, projectModel, projectDefinitions, projectIntegrations, templateRenderer, store, identityProjection, identityPrincipals, runtimeAudit, workerDependencies, runtimeExtensionRegistries{
 		projectExtensions: projectExtensions, connectorProviders: connectorProviders,
-		notificationCompiler:            compileNotification,
-		taskNotificationCommitter:       workflowpersistence.NewWorkflowTaskNotificationStore(store),
-		notificationPublisher:           notificationPublisher,
-		integrationOwnerDelivery:        integrationOwner.Delivery,
-		integrationOwnerCatalog:         integrationOwner.Catalog,
-		integrationOwnerManagement:      integrationOwner.Management,
-		integrationOwnerOperations:      integrationOwner.Operations,
-		integrationOwnerAccountReads:    integrationOwner.AccountReads,
-		integrationOwnerAccountWrites:   integrationOwner.AccountWrites,
-		integrationOwnerSubjects:        integrationOwner.Subjects,
-		integrationSubjectPersistence:   integrationOwner.SubjectPersistence,
-		dataExchangeProviderKey:         identityDataExchangeKey,
-		dataExchangeImportProvider:      identityDataExchangeImport,
-		dataExchangeExportProvider:      identityDataExchangeExport,
-		integrationMode:                 integrationDeploymentMode(integrationOwner.Binding),
-		identitySubjectLifecycle:        identitySystemSubjectLifecycle{binding: identityBinding},
-		identityBinding:                 identityBinding,
-		notificationSubjectLifecycle:    notificationSubjectLifecycle,
-		notificationRetention:           notificationRetention,
-		notificationArchives:            notificationArchives,
-		auditRepository:                 runtimeAuditRepository,
-		auditSubjectLifecycle:           runtimeauditmodule.NewSubjectLifecycle(auditBinding),
-		auditBinding:                    auditBinding,
-		lifecycleFactory:                foundationModules.Lifecycle,
-		dataExchangeFactory:             dataExchangeFactory,
-		agentBinding:                    agentBinding,
-		reportBinding:                   reportBinding,
-		reportAnalysisTables:            startupOptions.AnalysisTableSource,
-		identityHandlerDeliveryBinder:   identityHandlerDeliveryBinder,
-		organizationUnitDeliveryBinder:  organizationUnitDeliveryBinder,
-		storeOrganizationDeliveryBinder: storeOrganizationDeliveryBinder,
-		workspaceIdentityUsageBinder:    workspaceIdentityUsageBinder,
-		blobStore:                       startupOptions.BlobStore,
-		fileScanner:                     startupOptions.FileScanner,
-		knowledgeFiles:                  startupOptions.KnowledgeFiles,
+		notificationCompiler:           compileNotification,
+		taskNotificationCommitter:      workflowpersistence.NewWorkflowTaskNotificationStore(store),
+		notificationPublisher:          notificationPublisher,
+		integrationOwnerDelivery:       integrationOwner.Delivery,
+		integrationOwnerCatalog:        integrationOwner.Catalog,
+		integrationOwnerManagement:     integrationOwner.Management,
+		integrationOwnerOperations:     integrationOwner.Operations,
+		integrationOwnerAccountReads:   integrationOwner.AccountReads,
+		integrationOwnerAccountWrites:  integrationOwner.AccountWrites,
+		integrationOwnerSubjects:       integrationOwner.Subjects,
+		integrationSubjectPersistence:  integrationOwner.SubjectPersistence,
+		dataExchangeProviderKey:        identityDataExchangeKey,
+		dataExchangeImportProvider:     identityDataExchangeImport,
+		dataExchangeExportProvider:     identityDataExchangeExport,
+		integrationMode:                integrationDeploymentMode(integrationOwner.Binding),
+		identitySubjectLifecycle:       identitySystemSubjectLifecycle{binding: identityBinding},
+		identityBinding:                identityBinding,
+		notificationSubjectLifecycle:   notificationSubjectLifecycle,
+		notificationRetention:          notificationRetention,
+		notificationArchives:           notificationArchives,
+		auditRepository:                runtimeAuditRepository,
+		auditSubjectLifecycle:          runtimeauditmodule.NewSubjectLifecycle(auditBinding),
+		auditBinding:                   auditBinding,
+		lifecycleFactory:               foundationModules.Lifecycle,
+		dataExchangeFactory:            dataExchangeFactory,
+		agentBinding:                   agentBinding,
+		reportBinding:                  reportBinding,
+		reportAnalysisTables:           startupOptions.AnalysisTableSource,
+		identityHandlerDeliveryBinder:  identityHandlerDeliveryBinder,
+		organizationUnitDeliveryBinder: organizationUnitDeliveryBinder,
+		workspaceIdentityUsageBinder:   workspaceIdentityUsageBinder,
+		blobStore:                      startupOptions.BlobStore,
+		fileScanner:                    startupOptions.FileScanner,
+		knowledgeFiles:                 startupOptions.KnowledgeFiles,
 	})
 	mustCompleteRuntimeStartup(err)
 	records, recordRepository := serviceAssembly.services, serviceAssembly.records

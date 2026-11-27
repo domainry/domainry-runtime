@@ -13,13 +13,12 @@ import (
 )
 
 const (
-	WorkspaceAdministratorRoleKey                   = "tenant_admin"
-	ListWorkspacesActionKey                         = "runtime.workspaceprovision.list_workspaces"
-	SuspendWorkspaceActionKey                       = "runtime.workspaceprovision.suspend_workspace"
-	ReactivateWorkspaceActionKey                    = "runtime.workspaceprovision.reactivate_workspace"
-	UpdateWorkspaceCommercialConfigurationActionKey = "runtime.workspaceprovision.update_commercial_configuration"
-	workspaceCatalogDefaultPageSize                 = 50
-	workspaceCatalogMaxPageSize                     = 100
+	WorkspaceAdministratorRoleKey   = "tenant_admin"
+	ListWorkspacesActionKey         = "runtime.workspaceprovision.list_workspaces"
+	SuspendWorkspaceActionKey       = "runtime.workspaceprovision.suspend_workspace"
+	ReactivateWorkspaceActionKey    = "runtime.workspaceprovision.reactivate_workspace"
+	workspaceCatalogDefaultPageSize = 50
+	workspaceCatalogMaxPageSize     = 100
 )
 
 type WorkspaceAdministrationApplicationService struct {
@@ -91,22 +90,6 @@ func (service *WorkspaceAdministrationApplicationService) setStatus(ctx context.
 		return workspaceprovisionmodel.LifecycleResult{}, workspaceAdministrationError(workspaceprovisionmodel.ErrInvalid)
 	}
 	result, err := service.repository.SetWorkspaceStatus(ctx, workspaceAdministrationActor(principal), canonicalCode, expectedRevision, status, idempotencyKey)
-	return result, workspaceAdministrationError(err)
-}
-
-func (service *WorkspaceAdministrationApplicationService) UpdateCommercialConfiguration(ctx context.Context, principal principalmodel.Principal, canonicalCode string, request workspaceprovisionmodel.CommercialConfigurationUpdateRequest, idempotencyKey string) (workspaceprovisionmodel.CommercialConfigurationUpdateResult, error) {
-	if err := authorizeWorkspaceAdministration(principal, UpdateWorkspaceCommercialConfigurationActionKey); err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if service == nil || service.repository == nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, workspaceAdministrationError(workspaceprovisionmodel.ErrAdministrationUnavailable)
-	}
-	canonicalCode, idempotencyKey = workspaceprovisionvalidation.NormalizeCanonicalCode(canonicalCode), strings.TrimSpace(idempotencyKey)
-	request.Configuration = workspaceprovisionvalidation.NormalizeCommercialConfiguration(request.Configuration)
-	if workspaceprovisionvalidation.ValidateCanonicalCode(canonicalCode) != nil || request.ExpectedRevision < 1 || idempotencyKey == "" || workspaceprovisionvalidation.ValidateCommercialConfiguration(request.Configuration) != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, workspaceAdministrationError(workspaceprovisionmodel.ErrInvalid)
-	}
-	result, err := service.repository.UpdateWorkspaceCommercialConfiguration(ctx, workspaceAdministrationActor(principal), canonicalCode, request, idempotencyKey)
 	return result, workspaceAdministrationError(err)
 }
 

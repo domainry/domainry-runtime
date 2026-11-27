@@ -80,10 +80,12 @@ func (e *businessActionExecution) CreateOrganizationUnit(ctx context.Context, re
 	}
 	result := runtimeext.OrganizationUnitDeliveryResult{
 		Organization: runtimeext.OrganizationUnit{ID: organizationID, NodeType: request.NodeType},
+		Name:         strings.TrimSpace(organization.Name),
+		Status:       strings.TrimSpace(organization.Status),
 		Version:      organization.Version,
 		Replayed:     delivered.Replayed,
 	}
-	if e.targetGrant != nil && e.targetGrant.Source == runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit {
+	if e.organizationUnitGrant.RetargetCreated || e.targetGrant != nil && e.targetGrant.Source == runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit {
 		e.setTargetOrganization(organizationID, true)
 	}
 	e.organizationUnitRequest, e.organizationUnitResult = &request, result
@@ -122,15 +124,64 @@ func (e *businessActionExecution) ResolveOrganizationUnit(ctx context.Context, r
 		return runtimeext.OrganizationUnitDeliveryResult{}, normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery.resolve_failed")
 	}
 	if strings.TrimSpace(organization.OrganizationUnitID) != targetID || strings.TrimSpace(string(organization.NodeType)) != string(request.NodeType) ||
-		strings.TrimSpace(organization.ParentOrganizationID) == "" || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") || organization.Version != 1 {
+		strings.TrimSpace(organization.ParentOrganizationID) == "" || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") || organization.Version < 1 {
 		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindInternal, "backend.action.organization_unit_delivery_identity_mismatch", nil, nil)
 	}
 	result := runtimeext.OrganizationUnitDeliveryResult{
 		Organization: runtimeext.OrganizationUnit{ID: targetID, NodeType: request.NodeType},
+		Name:         strings.TrimSpace(organization.Name),
+		Status:       strings.TrimSpace(organization.Status),
 		Version:      organization.Version,
 	}
 	e.setTargetOrganization(targetID, false)
 	e.organizationUnitResolve, e.organizationUnitResult = &request, result
+	return result, nil
+}
+
+func (e *businessActionExecution) MutateOrganizationUnit(ctx context.Context, request runtimeext.OrganizationUnitMutationRequest) (runtimeext.OrganizationUnitDeliveryResult, error) {
+	request.Name = strings.TrimSpace(request.Name)
+	if e == nil || e.organizationUnitGrant == nil || !request.Valid() || !e.organizationUnitGrant.Allows(request.Operation, request.NodeType) {
+		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindForbidden, "backend.action.organization_unit_delivery_grant_denied", nil, nil)
+	}
+	if e.organizationUnitMutation != nil {
+		if reflect.DeepEqual(*e.organizationUnitMutation, request) {
+			return e.organizationUnitMutationResult, nil
+		}
+		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindConflict, "backend.idempotency_key_reused", nil, nil)
+	}
+	targetID := strings.TrimSpace(e.organizationUnitTargetID)
+	if targetID == "" || !e.targetResolved || strings.TrimSpace(e.targetOrganization.ID) != targetID {
+		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
+	}
+	txCtx, err := e.unitOfWork.beginWriting(ctx)
+	if err != nil {
+		return runtimeext.OrganizationUnitDeliveryResult{}, err
+	}
+	delivery, err := e.bindOrganizationUnitDelivery(txCtx)
+	if err != nil {
+		return runtimeext.OrganizationUnitDeliveryResult{}, err
+	}
+	delivered, err := delivery.MutateOrganizationUnit(txCtx, organizationunit.MutationRequest{
+		ContractVersion: organizationunit.DeliveryContractVersionV1,
+		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
+		IdempotencyKey:  e.identity.ExecutionID + ":organization_unit_" + string(request.Operation),
+		Organization: organizationunit.MutationCandidate{
+			Operation: organizationunit.MutationOperation(request.Operation), OrganizationID: targetID,
+			NodeType: organizationunit.NodeType(request.NodeType), Name: request.Name, ExpectedVersion: request.ExpectedVersion,
+		},
+	})
+	if err != nil {
+		return runtimeext.OrganizationUnitDeliveryResult{}, normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery."+string(request.Operation)+"_failed")
+	}
+	organization := delivered.Organization
+	if strings.TrimSpace(organization.OrganizationUnitID) != targetID || organization.NodeType != organizationunit.NodeType(request.NodeType) || organization.Version < 1 || request.Operation == runtimeext.OrganizationUnitDeliveryRename && strings.TrimSpace(organization.Name) != request.Name || request.Operation == runtimeext.OrganizationUnitDeliveryDisable && !strings.EqualFold(strings.TrimSpace(organization.Status), "disabled") {
+		return runtimeext.OrganizationUnitDeliveryResult{}, apperror.New(apperror.KindInternal, "backend.action.organization_unit_delivery_identity_mismatch", nil, nil)
+	}
+	result := runtimeext.OrganizationUnitDeliveryResult{
+		Organization: runtimeext.OrganizationUnit{ID: targetID, NodeType: request.NodeType}, Name: strings.TrimSpace(organization.Name),
+		Status: strings.TrimSpace(organization.Status), Version: organization.Version, Replayed: delivered.Replayed,
+	}
+	e.organizationUnitMutation, e.organizationUnitMutationResult = &request, result
 	return result, nil
 }
 

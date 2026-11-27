@@ -7,9 +7,8 @@ import (
 	ormschema "github.com/domainry/domainry-orm/schema"
 )
 
-// EnsureWorkspaceProvisioningSchema creates only Workspace-owned V3
-// authorities. Legacy registry, installation, opaque-configuration, and
-// projection-receipt tables are migration inputs and are never created here.
+// EnsureWorkspaceProvisioningSchema creates Runtime's generic Workspace
+// registry. Product organization nodes and commercial facts live outside it.
 func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 	tables := []struct {
 		name    string
@@ -23,21 +22,6 @@ func EnsureWorkspaceProvisioningSchema(ctx context.Context, store Store) error {
 			// Only the initial Workspace carries this stable host identity. A
 			// nullable unique value avoids a second Workspace mapping table.
 			ormschema.Column("initial_installation_identity", ormschema.TextKey(64)),
-			ormschema.Column("plan", ormschema.TextKey(191)).NotNull().DefaultValue(""),
-			ormschema.Column("included_user_limit", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("max_user_limit", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("included_customer_limit", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("max_customer_limit", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("included_store_limit", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("max_stores", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("contract_date", ormschema.TextKey(32)).NotNull().DefaultValue(""),
-			ormschema.Column("billing_day", ormschema.Integer()).NotNull().DefaultValue(0),
-			ormschema.Column("billing_contact_name", ormschema.Text()).NotNull().DefaultValue(""),
-			ormschema.Column("billing_contact_phone", ormschema.Text()).NotNull().DefaultValue(""),
-			ormschema.Column("billing_contact_email", ormschema.Text()).NotNull().DefaultValue(""),
-			ormschema.Column("billing_contact_address", ormschema.Text()).NotNull().DefaultValue(""),
-			ormschema.Column("billing_contact_notes", ormschema.LongText()).NotNull().DefaultValue(""),
-			ormschema.Column("commercial_revision", ormschema.Integer()).NotNull().DefaultValue(0),
 			ormschema.Column("revision", ormschema.Integer()).NotNull().DefaultValue(1),
 			ormschema.Column("created_at", ormschema.BigInt()).NotNull(),
 			ormschema.Column("updated_at", ormschema.BigInt()).NotNull(),

@@ -76,7 +76,7 @@ func resourceHealth(report *integrationsdk.ProviderResourceHealth) *connector.Re
 	}
 	return &connector.ResourceHealthReport{
 		ObservationID: report.ObservationID, Kind: report.Kind, State: report.State, PreviousState: report.PreviousState,
-		EvidenceSource: report.EvidenceSource, QuotaUsedPercent: report.QuotaUsedPercent, BalanceBand: report.BalanceBand,
+		EvidenceSource: report.EvidenceSource, QuotaUsedPercent: report.QuotaUsedPercent,
 		CapabilityBlocked: report.CapabilityBlocked, ObservedAt: report.ObservedAt, ErrorCode: report.ErrorCode,
 	}
 }

@@ -23,15 +23,15 @@ func TestActionDefinitionValidationOwnsMetadataContract(t *testing.T) {
 	}
 }
 
-func TestActionOrganizationUnitDeliveryValidationClosesOperationTypeAndParent(t *testing.T) {
+func TestActionOrganizationUnitValidationClosesOperationTypeAndParent(t *testing.T) {
 	valid := definitionmodel.ActionSchema{
 		Key: "department_profile.provision", ObjectKey: "department_profile", Kind: definitionmodel.ActionKindObjectOperation,
 		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit},
-		OrganizationUnitDelivery: &definitionmodel.ActionOrganizationUnitDeliveryPolicy{
+		OrganizationUnit: &definitionmodel.ActionOrganizationUnitPolicy{
 			Operations: []string{"create"}, NodeTypes: []string{"department"}, ParentSource: "workspace_company",
 		},
 	}
-	if issues := actionValidateOrganizationUnitDeliveryPolicy(valid); len(issues) != 0 {
+	if issues := actionValidateOrganizationUnitPolicy(valid); len(issues) != 0 {
 		t.Fatalf("valid policy issues=%#v", issues)
 	}
 	for _, test := range []struct {
@@ -39,29 +39,29 @@ func TestActionOrganizationUnitDeliveryValidationClosesOperationTypeAndParent(t 
 		mutate func(*definitionmodel.ActionSchema)
 		path   string
 	}{
-		{name: "store bypass", mutate: func(action *definitionmodel.ActionSchema) {
-			action.OrganizationUnitDelivery.NodeTypes = []string{"store"}
-		}, path: "node_types[0]"},
+		{name: "duplicate node type", mutate: func(action *definitionmodel.ActionSchema) {
+			action.OrganizationUnit.NodeTypes = []string{"store", "store"}
+		}, path: "node_types[1]"},
 		{name: "company root", mutate: func(action *definitionmodel.ActionSchema) {
-			action.OrganizationUnitDelivery.NodeTypes = []string{"company"}
+			action.OrganizationUnit.NodeTypes = []string{"company"}
 		}, path: "node_types[0]"},
-		{name: "multiple operations", mutate: func(action *definitionmodel.ActionSchema) {
-			action.OrganizationUnitDelivery.Operations = []string{"create", "resolve"}
-		}, path: "operations"},
-		{name: "caller parent", mutate: func(action *definitionmodel.ActionSchema) { action.OrganizationUnitDelivery.ParentSource = "input" }, path: "parent_source"},
+		{name: "duplicate operation", mutate: func(action *definitionmodel.ActionSchema) {
+			action.OrganizationUnit.Operations = []string{"create", "create"}
+		}, path: "operations[1]"},
+		{name: "caller parent", mutate: func(action *definitionmodel.ActionSchema) { action.OrganizationUnit.ParentSource = "input" }, path: "parent_source"},
 		{name: "wrong delivered target", mutate: func(action *definitionmodel.ActionSchema) {
-			action.TargetOrganization.Source = definitionmodel.ActionTargetOrganizationSourceProvisionedStore
+			action.TargetOrganization.Source = definitionmodel.ActionTargetOrganizationSourceExplicit
 		}, path: "parent_source"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			candidate := valid
 			target := *valid.TargetOrganization
-			policy := *valid.OrganizationUnitDelivery
-			policy.Operations = append([]string(nil), valid.OrganizationUnitDelivery.Operations...)
-			policy.NodeTypes = append([]string(nil), valid.OrganizationUnitDelivery.NodeTypes...)
-			candidate.TargetOrganization, candidate.OrganizationUnitDelivery = &target, &policy
+			policy := *valid.OrganizationUnit
+			policy.Operations = append([]string(nil), valid.OrganizationUnit.Operations...)
+			policy.NodeTypes = append([]string(nil), valid.OrganizationUnit.NodeTypes...)
+			candidate.TargetOrganization, candidate.OrganizationUnit = &target, &policy
 			test.mutate(&candidate)
-			issues := actionValidateOrganizationUnitDeliveryPolicy(candidate)
+			issues := actionValidateOrganizationUnitPolicy(candidate)
 			found := false
 			for _, issue := range issues {
 				found = found || strings.Contains(issue.FieldPath, test.path)
@@ -72,9 +72,9 @@ func TestActionOrganizationUnitDeliveryValidationClosesOperationTypeAndParent(t 
 		})
 	}
 	resolve := valid
-	resolve.TargetOrganization = &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceExplicit, Input: definitionmodel.ActionTargetOrganizationInputInvocation}
-	resolve.OrganizationUnitDelivery = &definitionmodel.ActionOrganizationUnitDeliveryPolicy{Operations: []string{"resolve"}, NodeTypes: []string{"department"}}
-	if issues := actionValidateOrganizationUnitDeliveryPolicy(resolve); len(issues) != 0 {
+	resolve.TargetOrganization = &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceExplicit, Input: definitionmodel.ActionTargetOrganizationInputInvocation, NodeType: "department"}
+	resolve.OrganizationUnit = &definitionmodel.ActionOrganizationUnitPolicy{Operations: []string{"resolve"}, NodeTypes: []string{"department"}}
+	if issues := actionValidateOrganizationUnitPolicy(resolve); len(issues) != 0 {
 		t.Fatalf("valid resolve issues=%#v", issues)
 	}
 }

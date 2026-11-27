@@ -16,7 +16,6 @@ type workspaceAdministrationRepositoryProbe struct {
 	listAfter  string
 	listLimit  int
 	statusCall int
-	updateCall int
 }
 
 func (probe *workspaceAdministrationRepositoryProbe) ListWorkspaceCatalog(_ context.Context, after string, limit int) ([]workspaceprovisionmodel.CatalogEntry, bool, error) {
@@ -27,11 +26,6 @@ func (probe *workspaceAdministrationRepositoryProbe) ListWorkspaceCatalog(_ cont
 func (probe *workspaceAdministrationRepositoryProbe) SetWorkspaceStatus(_ context.Context, _ workspaceprovisionmodel.AdministrationActor, canonicalCode string, expected int, status, key string) (workspaceprovisionmodel.LifecycleResult, error) {
 	probe.statusCall++
 	return workspaceprovisionmodel.LifecycleResult{Workspace: workspaceprovisionmodel.CatalogEntry{CanonicalCode: canonicalCode, Status: status, Revision: expected + 1}}, nil
-}
-
-func (probe *workspaceAdministrationRepositoryProbe) UpdateWorkspaceCommercialConfiguration(_ context.Context, _ workspaceprovisionmodel.AdministrationActor, canonicalCode string, request workspaceprovisionmodel.CommercialConfigurationUpdateRequest, key string) (workspaceprovisionmodel.CommercialConfigurationUpdateResult, error) {
-	probe.updateCall++
-	return workspaceprovisionmodel.CommercialConfigurationUpdateResult{Workspace: workspaceprovisionmodel.CatalogEntry{CanonicalCode: canonicalCode}}, nil
 }
 
 func workspaceAdministrationPrincipal(t *testing.T, role, workspaceID string, permissions ...string) principalmodel.Principal {
@@ -92,23 +86,14 @@ func TestWorkspaceAdministrationApplicationServiceRequiresInstallationTenantAdmi
 	}
 }
 
-func TestWorkspaceAdministrationApplicationServiceValidatesCASAndTypedCommercialConfiguration(t *testing.T) {
+func TestWorkspaceAdministrationApplicationServiceValidatesLifecycleCAS(t *testing.T) {
 	probe := &workspaceAdministrationRepositoryProbe{}
 	service := NewWorkspaceAdministrationApplicationService(probe, nil)
-	principal := workspaceAdministrationPrincipal(t, WorkspaceAdministratorRoleKey, "workspace-initial", SuspendWorkspaceActionKey, UpdateWorkspaceCommercialConfigurationActionKey)
+	principal := workspaceAdministrationPrincipal(t, WorkspaceAdministratorRoleKey, "workspace-initial", SuspendWorkspaceActionKey)
 	if _, err := service.Suspend(t.Context(), principal, "alpha", 1, ""); apperror.CodeOf(err) != "workspace.administration_request_invalid" || probe.statusCall != 0 {
 		t.Fatalf("missing idempotency key call=%d err=%v", probe.statusCall, err)
 	}
 	if _, err := service.Suspend(t.Context(), principal, "alpha", 1, "suspend-1"); err != nil || probe.statusCall != 1 {
 		t.Fatalf("valid lifecycle call=%d err=%v", probe.statusCall, err)
-	}
-	invalid := workspaceprovisionmodel.CommercialConfigurationUpdateRequest{ExpectedRevision: 1, Configuration: workspaceprovisionmodel.CommercialConfiguration{Plan: "standard"}}
-	if _, err := service.UpdateCommercialConfiguration(t.Context(), principal, "alpha", invalid, "commercial-1"); apperror.CodeOf(err) != "workspace.administration_request_invalid" || probe.updateCall != 0 {
-		t.Fatalf("invalid commercial call=%d err=%v", probe.updateCall, err)
-	}
-	valid := invalid
-	valid.Configuration = workspaceprovisionmodel.CommercialConfiguration{Plan: "standard", IncludedStoreLimit: 1, MaxStores: 1, ContractDate: "2026-09-06", BillingDay: 1}
-	if _, err := service.UpdateCommercialConfiguration(t.Context(), principal, "alpha", valid, "commercial-2"); err != nil || probe.updateCall != 1 {
-		t.Fatalf("valid commercial call=%d err=%v", probe.updateCall, err)
 	}
 }

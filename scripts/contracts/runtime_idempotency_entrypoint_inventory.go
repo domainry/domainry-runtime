@@ -81,9 +81,6 @@ func classifyHTTP(method, path string) (string, string) {
 	if strings.HasPrefix(path, "/dispatch/") {
 		return "system_key_required", "upstream operation and resolved target identity"
 	}
-	if method == "PUT" && path == "/workspaces/{workspaceCode}/commercial-configuration" {
-		return "caller_key_required", "Idempotency-Key header"
-	}
 	readOnlyFragments := []string{"/validate", "/preview", "/simulate", "/analysis/query", "/context"}
 	for _, fragment := range readOnlyFragments {
 		if strings.Contains(path, fragment) {
@@ -192,9 +189,6 @@ func classifyApplicationCommand(owner, name string) (string, string) {
 	}
 	if owner == "dispatch" && name == "Execute" {
 		return "system_key_required", "upstream operation and resolved target identity"
-	}
-	if owner == "workspaceprovision" && name == "UpdateCommercialConfiguration" {
-		return "caller_key_required", "use-case key propagated from transport"
 	}
 	if strings.Contains(name, "Idempotent") {
 		return "caller_key_required", "use-case key propagated from transport or parent execution"

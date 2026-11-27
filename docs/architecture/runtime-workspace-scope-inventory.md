@@ -23,9 +23,8 @@ Registered schema tables:
 
 - `_schema_migrations` — `installation_scoped` and the sole host/module migration ledger
 - `_workspaces` — `runtime_global`; it is the platform registry for canonical
-  Workspace identity, initial-installation identity and current company
-  organization authority; its typed commercial limits, billing contact and
-  commercial revision are fields of the same aggregate row
+  Workspace identity, initial-installation identity and current root-company
+  organization authority. Product commercial facts are not Runtime fields
 - owner=`workspace`, kind=`workspace.provisioning` or
   `workspace.administration` rows in `_operations` — `runtime_global`; request
   idempotency is enforced for platform-wide Workspace operations without an

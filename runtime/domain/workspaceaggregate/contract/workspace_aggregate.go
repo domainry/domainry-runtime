@@ -19,28 +19,9 @@ var (
 type Workspace struct {
 	ID            string
 	CanonicalCode string
-	// DisplayName and commercial fields are populated by ActiveResolver for
-	// the invoice-safe Identity usage join. Catalog.ListActive callers use only
-	// ID and CanonicalCode for cross-Workspace record aggregation.
-	DisplayName       string
-	Status            string
-	Revision          int64
-	CommercialPlan    string
-	IncludedUserLimit int64
-	MaxUserLimit      int64
-
-	IncludedCustomerLimit int64
-	MaxCustomerLimit      int64
-	IncludedStoreLimit    int64
-	MaxStores             int64
-	ContractDate          string
-	BillingDay            int64
-	BillingContactName    string
-	BillingContactPhone   string
-	BillingContactEmail   string
-	BillingContactAddress string
-	BillingContactNotes   string
-	CommercialRevision    int64
+	DisplayName   string
+	Status        string
+	Revision      int64
 }
 
 type Catalog interface {

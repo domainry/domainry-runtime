@@ -9,7 +9,7 @@ import (
 
 func TestDevelopmentIdentityRequestIsEnvironmentGatedAndNormalized(t *testing.T) {
 	options := &DevelopmentIdentityOptions{
-		Organizations: []DevelopmentIdentityOrganization{{ID: " lab ", Code: " main ", Name: " Pioneer Lab "}},
+		Organizations: []DevelopmentIdentityOrganization{{ID: " lab ", Code: " main ", Name: " Pioneer Lab ", NodeType: " clinic "}},
 		Actors: []DevelopmentIdentityActor{{
 			ID: " evaluator ", LoginID: " evaluator@example.test ", Name: " Evaluator ", RoleKey: " doctor ",
 			OrganizationID: " lab ", InitialPassword: "EvaluationOnly1!",
@@ -22,7 +22,7 @@ func TestDevelopmentIdentityRequestIsEnvironmentGatedAndNormalized(t *testing.T)
 	if err != nil || !enabled {
 		t.Fatalf("enabled=%t error=%v", enabled, err)
 	}
-	if len(request.Organizations) != 1 || request.Organizations[0].ID != "lab" || request.Organizations[0].Code != "main" || request.Organizations[0].Name != "Pioneer Lab" {
+	if len(request.Organizations) != 1 || request.Organizations[0].ID != "lab" || request.Organizations[0].Code != "main" || request.Organizations[0].Name != "Pioneer Lab" || request.Organizations[0].NodeType != "clinic" {
 		t.Fatalf("organizations=%+v", request.Organizations)
 	}
 	if len(request.Actors) != 1 || request.Actors[0].ID != "evaluator" || request.Actors[0].LoginID != "evaluator@example.test" || request.Actors[0].RoleKey != "doctor" || request.Actors[0].InitialPassword != "EvaluationOnly1!" {

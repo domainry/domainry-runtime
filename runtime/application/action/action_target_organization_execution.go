@@ -3,14 +3,12 @@ package action
 import (
 	"context"
 	"errors"
-	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/domainry/domainry-foundation/apperror"
-	"github.com/domainry/domainry-foundation/entityid"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityevaluator "github.com/domainry/domainry-identity-sdk/authorization/evaluator"
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
@@ -45,20 +43,11 @@ func cloneIdentityHandlerDeliveryCapability(value *runtimeext.IdentityHandlerDel
 	return &cloned
 }
 
-func cloneStoreOrganizationCatalogCapability(value *runtimeext.StoreOrganizationCatalogCapability) *runtimeext.StoreOrganizationCatalogCapability {
+func cloneOrganizationUnitCatalogCapability(value *runtimeext.OrganizationUnitCatalogCapability) *runtimeext.OrganizationUnitCatalogCapability {
 	if value == nil {
 		return nil
 	}
 	cloned := *value
-	return &cloned
-}
-
-func cloneStoreOrganizationMutationCapability(value *runtimeext.ActionStoreOrganizationMutationCapability) *runtimeext.ActionStoreOrganizationMutationCapability {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-	cloned.Operations = append([]runtimeext.StoreOrganizationMutationOperation(nil), value.Operations...)
 	return &cloned
 }
 
@@ -72,62 +61,55 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if targetID == "" {
 			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_required", nil, nil)
 		}
-		if e.organizationUnitGrant != nil {
-			if err := e.authorizeTargetOrganization(targetID); err != nil {
-				return err
-			}
-			e.organizationUnitTargetID = targetID
-			if e.organizationUnitGrant.Operations[0] == runtimeext.OrganizationUnitDeliveryCreate {
-				e.setTargetOrganization(targetID, false)
-			}
-			return nil
-		}
 		txCtx, err := e.unitOfWork.beginWriting(ctx)
 		if err != nil {
 			return err
 		}
-		delivery, err := e.bindStoreOrganizationDelivery(txCtx)
+		delivery, err := e.bindOrganizationUnitDelivery(txCtx)
 		if err != nil {
 			return err
 		}
-		organization, err := delivery.ResolveStoreOrganization(txCtx, identitysdk.StoreOrganizationResolveRequest{
-			ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
+		organization, err := delivery.ResolveOrganizationUnit(txCtx, organizationunit.ResolveRequest{
+			ContractVersion: organizationunit.DeliveryContractVersionV1,
 			AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
 			OrganizationID:  targetID,
+			NodeType:        organizationunit.NodeType(e.targetGrant.NodeType),
 		})
 		if err != nil {
-			return normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.resolve_failed")
+			return normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery.resolve_failed")
 		}
-		if strings.TrimSpace(organization.OrganizationUnitID) != targetID {
+		if strings.TrimSpace(organization.OrganizationUnitID) != targetID || organization.NodeType != organizationunit.NodeType(e.targetGrant.NodeType) || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
 			return apperror.New(apperror.KindInternal, "backend.action.target_organization_identity_mismatch", nil, nil)
 		}
 		if err := e.authorizeTargetOrganization(targetID); err != nil {
 			return err
 		}
+		e.organizationUnitTargetID = targetID
 		e.setTargetOrganization(targetID, false)
 		return nil
-	case runtimeext.TargetOrganizationSourceExplicitOrSoleAuthorizedStore:
+	case runtimeext.TargetOrganizationSourceExplicitOrSoleAuthorizedOrganization:
 		targetID := strings.TrimSpace(e.invocation.TargetOrganizationID)
 		txCtx, err := e.unitOfWork.beginWriting(ctx)
 		if err != nil {
 			return err
 		}
-		delivery, err := e.bindStoreOrganizationDelivery(txCtx)
+		delivery, err := e.bindOrganizationUnitDelivery(txCtx)
 		if err != nil {
 			return err
 		}
 		if targetID == "" {
-			targetID, err = e.resolveSoleAuthorizedActiveStore(txCtx, delivery)
+			targetID, err = e.resolveSoleAuthorizedActiveOrganization(txCtx, delivery, e.targetGrant.NodeType)
 			if err != nil {
 				return err
 			}
 		} else {
-			organization, resolveErr := delivery.ResolveStoreOrganization(txCtx, identitysdk.StoreOrganizationResolveRequest{
-				ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
+			organization, resolveErr := delivery.ResolveOrganizationUnit(txCtx, organizationunit.ResolveRequest{
+				ContractVersion: organizationunit.DeliveryContractVersionV1,
 				AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken), OrganizationID: targetID,
+				NodeType: organizationunit.NodeType(e.targetGrant.NodeType),
 			})
 			if resolveErr != nil {
-				return normalizeIdentityCapabilityError(resolveErr, "identity.store_organization_delivery.resolve_failed")
+				return normalizeIdentityCapabilityError(resolveErr, "identity.organization_unit_delivery.resolve_failed")
 			}
 			if strings.TrimSpace(organization.OrganizationUnitID) != targetID || !strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
 				return apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
@@ -136,6 +118,7 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if err := e.authorizeTargetOrganization(targetID); err != nil {
 			return err
 		}
+		e.organizationUnitTargetID = targetID
 		e.setTargetOrganization(targetID, false)
 		return nil
 	case runtimeext.TargetOrganizationSourceRecordOwner:
@@ -153,16 +136,8 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 		if strings.TrimSpace(targetID) == "" {
 			return apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
 		}
-		if e.organizationUnitGrant != nil {
-			e.organizationUnitTargetID = strings.TrimSpace(targetID)
-			if e.organizationUnitGrant.Operations[0] == runtimeext.OrganizationUnitDeliveryCreate {
-				e.setTargetOrganization(targetID, false)
-			}
-			return nil
-		}
+		e.organizationUnitTargetID = strings.TrimSpace(targetID)
 		e.setTargetOrganization(targetID, false)
-		return nil
-	case runtimeext.TargetOrganizationSourceProvisionedStore:
 		return nil
 	case runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit:
 		return nil
@@ -171,16 +146,16 @@ func (e *businessActionExecution) initializeTargetOrganization(ctx context.Conte
 	}
 }
 
-func (e *businessActionExecution) resolveSoleAuthorizedActiveStore(ctx context.Context, delivery identitysdk.StoreOrganizationDelivery) (string, error) {
-	page, err := delivery.ListStoreOrganizations(ctx, identitysdk.StoreOrganizationListRequest{
-		ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
-		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken), PageSize: 2,
+func (e *businessActionExecution) resolveSoleAuthorizedActiveOrganization(ctx context.Context, delivery organizationunit.Delivery, nodeType runtimeext.OrganizationUnitNodeType) (string, error) {
+	page, err := delivery.ListOrganizationUnits(ctx, organizationunit.ListRequest{
+		ContractVersion: organizationunit.DeliveryContractVersionV1,
+		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken), NodeType: organizationunit.NodeType(nodeType), PageSize: 2,
 	})
 	if err != nil {
-		return "", normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.list_failed")
+		return "", normalizeIdentityCapabilityError(err, "identity.organization_unit_delivery.list_failed")
 	}
 	// Fail closed unless the complete authorized catalog is exactly one active
-	// store. We deliberately do not skip disabled rows or select the first row:
+	// node. We deliberately do not skip disabled rows or select the first row:
 	// either would let a multi-store principal acquire an implicit target.
 	if len(page.Items) != 1 || strings.TrimSpace(page.NextCursor) != "" ||
 		!strings.EqualFold(strings.TrimSpace(page.Items[0].Status), "active") || strings.TrimSpace(page.Items[0].OrganizationUnitID) == "" {
@@ -189,219 +164,11 @@ func (e *businessActionExecution) resolveSoleAuthorizedActiveStore(ctx context.C
 	return strings.TrimSpace(page.Items[0].OrganizationUnitID), nil
 }
 
-func (e *businessActionExecution) bindStoreOrganizationDelivery(ctx context.Context) (identitysdk.StoreOrganizationDelivery, error) {
-	if e.dependencies.BindStoreOrganizationDelivery == nil {
-		return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
-	}
-	if strings.TrimSpace(e.requestIdentity.AccessToken) == "" {
-		return nil, apperror.New(apperror.KindForbidden, "identity.store_organization_delivery_request_identity_required", nil, nil)
-	}
-	delivery, err := e.dependencies.BindStoreOrganizationDelivery(ctx)
-	if err != nil {
-		return nil, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery_transaction_required")
-	}
-	if delivery == nil {
-		return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
-	}
-	return delivery, nil
-}
-
 func (e *businessActionExecution) TargetOrganization() (runtimeext.TargetOrganization, bool) {
 	if e == nil || !e.targetResolved || strings.TrimSpace(e.targetOrganization.ID) == "" {
 		return runtimeext.TargetOrganization{}, false
 	}
 	return e.targetOrganization, true
-}
-
-func (e *businessActionExecution) ProvisionStoreOrganization(ctx context.Context, request runtimeext.StoreOrganizationProvisionRequest) (runtimeext.StoreOrganizationProvisionResult, error) {
-	if e == nil || e.targetGrant == nil || e.targetGrant.Source != runtimeext.TargetOrganizationSourceProvisionedStore {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_provision_denied", nil, nil)
-	}
-	request.Code = strings.TrimSpace(request.Code)
-	request.Name = strings.TrimSpace(request.Name)
-	if !request.Valid() {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindBadRequest, "backend.action.store_organization_provision_invalid", nil, nil)
-	}
-	if e.storeProvisionRequest != nil {
-		if reflect.DeepEqual(*e.storeProvisionRequest, request) {
-			return e.storeProvisionResult, nil
-		}
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.idempotency_key_reused", nil, nil)
-	}
-	txCtx, err := e.unitOfWork.beginWriting(ctx)
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, err
-	}
-	delivery, err := e.bindStoreOrganizationDelivery(txCtx)
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, err
-	}
-	if e.dependencies.WorkspaceCommercialConfiguration == nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, missingExecutorPort("workspace_commercial_configuration")
-	}
-	commercial, err := e.dependencies.WorkspaceCommercialConfiguration.LockWorkspaceCommercialConfiguration(txCtx, e.workspace.ID)
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.action.store_quota_unavailable", err, nil)
-	}
-	companyOrganizationID := strings.TrimSpace(e.principal.OrgID)
-	if companyOrganizationID == "" {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindForbidden, "backend.action.target_organization_denied", nil, nil)
-	}
-	activeStores, err := countActiveStoreOrganizations(txCtx, delivery, strings.TrimSpace(e.requestIdentity.AccessToken), companyOrganizationID, commercial.MaxStores)
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, err
-	}
-	if activeStores >= commercial.MaxStores {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindConflict, "backend.action.store_quota_exceeded", nil, map[string]string{"max_stores": fmt.Sprint(commercial.MaxStores)})
-	}
-	organizationID, err := stableStoreOrganizationID(e.workspace.ID, e.identity.ExecutionID)
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindInternal, "identity.store_organization_delivery.identity_invalid", err, nil)
-	}
-	result, err := delivery.DeliverStoreOrganization(txCtx, identitysdk.StoreOrganizationDeliveryRequest{
-		ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
-		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken),
-		IdempotencyKey:  e.identity.ExecutionID + ":store_organization",
-		Organization: identitysdk.StoreOrganizationMutation{
-			Operation:            identitysdk.StoreOrganizationCreate,
-			OrganizationID:       organizationID,
-			Code:                 request.Code,
-			Name:                 request.Name,
-			ParentOrganizationID: companyOrganizationID,
-			SortOrder:            request.SortOrder,
-			ExpectedVersion:      0,
-		},
-	})
-	if err != nil {
-		return runtimeext.StoreOrganizationProvisionResult{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.create_failed")
-	}
-	if strings.TrimSpace(result.Organization.OrganizationUnitID) != organizationID {
-		return runtimeext.StoreOrganizationProvisionResult{}, apperror.New(apperror.KindInternal, "backend.action.target_organization_identity_mismatch", nil, nil)
-	}
-	e.setTargetOrganization(organizationID, true)
-	e.storeProvisionRequest = &request
-	e.storeProvisionResult = runtimeext.StoreOrganizationProvisionResult{Target: e.targetOrganization, Version: result.Organization.Version, Replayed: result.Replayed}
-	return e.storeProvisionResult, nil
-}
-
-func (e *businessActionExecution) RenameStoreOrganization(ctx context.Context, request runtimeext.StoreOrganizationRenameRequest) (runtimeext.StoreOrganizationMutationResult, error) {
-	if !e.storeOrganizationMutationGranted(runtimeext.StoreOrganizationMutationRename) {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_mutation_grant_denied", nil, nil)
-	}
-	request.Name = strings.TrimSpace(request.Name)
-	if !request.Valid() {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.store_organization_rename_invalid", nil, nil)
-	}
-	if e.storeRenameRequest != nil {
-		if reflect.DeepEqual(*e.storeRenameRequest, request) {
-			return e.storeRenameResult, nil
-		}
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindConflict, "backend.idempotency_key_reused", nil, nil)
-	}
-	result, err := e.mutateFixedStoreOrganization(ctx, identitysdk.StoreOrganizationRename, request.Name, request.ExpectedVersion, "rename")
-	if err != nil {
-		return runtimeext.StoreOrganizationMutationResult{}, err
-	}
-	e.storeRenameRequest, e.storeRenameResult = &request, result
-	return result, nil
-}
-
-func (e *businessActionExecution) DisableStoreOrganization(ctx context.Context, request runtimeext.StoreOrganizationDisableRequest) (runtimeext.StoreOrganizationMutationResult, error) {
-	if !e.storeOrganizationMutationGranted(runtimeext.StoreOrganizationMutationDisable) {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_mutation_grant_denied", nil, nil)
-	}
-	if !request.Valid() {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindBadRequest, "backend.action.store_organization_disable_invalid", nil, nil)
-	}
-	if e.storeDisableRequest != nil {
-		if reflect.DeepEqual(*e.storeDisableRequest, request) {
-			return e.storeDisableResult, nil
-		}
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindConflict, "backend.idempotency_key_reused", nil, nil)
-	}
-	result, err := e.mutateFixedStoreOrganization(ctx, identitysdk.StoreOrganizationDisable, "", request.ExpectedVersion, "disable")
-	if err != nil {
-		return runtimeext.StoreOrganizationMutationResult{}, err
-	}
-	e.storeDisableRequest, e.storeDisableResult = &request, result
-	return result, nil
-}
-
-func (e *businessActionExecution) storeOrganizationMutationGranted(operation runtimeext.StoreOrganizationMutationOperation) bool {
-	if e == nil || e.storeMutationGrant == nil {
-		return false
-	}
-	for _, granted := range e.storeMutationGrant.Operations {
-		if granted == operation {
-			return true
-		}
-	}
-	return false
-}
-
-func (e *businessActionExecution) mutateFixedStoreOrganization(ctx context.Context, operation identitysdk.StoreOrganizationOperation, name string, expectedVersion int64, idempotencySuffix string) (runtimeext.StoreOrganizationMutationResult, error) {
-	if e == nil || e.targetGrant == nil || e.targetGrant.Source != runtimeext.TargetOrganizationSourceRecordOwner || !e.targetResolved || strings.TrimSpace(e.targetOrganization.ID) == "" {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindForbidden, "backend.action.store_organization_mutation_target_denied", nil, nil)
-	}
-	txCtx, err := e.unitOfWork.beginWriting(ctx)
-	if err != nil {
-		return runtimeext.StoreOrganizationMutationResult{}, err
-	}
-	delivery, err := e.bindStoreOrganizationDelivery(txCtx)
-	if err != nil {
-		return runtimeext.StoreOrganizationMutationResult{}, err
-	}
-	targetID := strings.TrimSpace(e.targetOrganization.ID)
-	delivered, err := delivery.DeliverStoreOrganization(txCtx, identitysdk.StoreOrganizationDeliveryRequest{
-		ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
-		AccessToken:     strings.TrimSpace(e.requestIdentity.AccessToken), IdempotencyKey: e.identity.ExecutionID + ":store_organization_" + idempotencySuffix,
-		Organization: identitysdk.StoreOrganizationMutation{Operation: operation, OrganizationID: targetID, Name: name, ExpectedVersion: expectedVersion},
-	})
-	if err != nil {
-		return runtimeext.StoreOrganizationMutationResult{}, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery."+idempotencySuffix+"_failed")
-	}
-	organization := delivered.Organization
-	if strings.TrimSpace(organization.OrganizationUnitID) != targetID || organization.Version < 1 || operation == identitysdk.StoreOrganizationRename && strings.TrimSpace(organization.Name) != name || operation == identitysdk.StoreOrganizationDisable && !strings.EqualFold(strings.TrimSpace(organization.Status), "disabled") {
-		return runtimeext.StoreOrganizationMutationResult{}, apperror.New(apperror.KindInternal, "backend.action.store_organization_identity_mismatch", nil, nil)
-	}
-	return runtimeext.StoreOrganizationMutationResult{Target: e.targetOrganization, Name: strings.TrimSpace(organization.Name), Status: strings.TrimSpace(organization.Status), Version: organization.Version, Replayed: delivered.Replayed}, nil
-}
-
-func countActiveStoreOrganizations(ctx context.Context, delivery identitysdk.StoreOrganizationDelivery, accessToken, companyID string, maxStores int) (int, error) {
-	cursor, active, pages := "", 0, 0
-	for {
-		page, err := delivery.ListStoreOrganizations(ctx, identitysdk.StoreOrganizationListRequest{
-			ContractVersion: identitysdk.StoreOrganizationDeliveryContractVersionV1,
-			AccessToken:     accessToken, PageSize: identitysdk.StoreOrganizationMaxPageSize, Cursor: cursor,
-		})
-		if err != nil {
-			return 0, normalizeIdentityCapabilityError(err, "identity.store_organization_delivery.list_failed")
-		}
-		for _, organization := range page.Items {
-			if strings.TrimSpace(organization.ParentOrganizationID) != companyID {
-				return 0, apperror.New(apperror.KindConflict, "backend.action.store_company_scope_conflict", nil, nil)
-			}
-			if strings.EqualFold(strings.TrimSpace(organization.Status), "active") {
-				active++
-				if active >= maxStores {
-					return active, nil
-				}
-			}
-		}
-		next := strings.TrimSpace(page.NextCursor)
-		if next == "" {
-			return active, nil
-		}
-		pages++
-		if next == cursor || pages > 10_000 {
-			return 0, apperror.New(apperror.KindInternal, "identity.store_organization_delivery.page_invalid", nil, nil)
-		}
-		cursor = next
-	}
-}
-
-func stableStoreOrganizationID(workspaceID, executionID string) (string, error) {
-	return entityid.Derive("store", "runtime.action.store-organization", workspaceID, executionID)
 }
 
 func (e *businessActionExecution) setTargetOrganization(targetID string, provisioned bool) {
@@ -414,10 +181,7 @@ func (e *businessActionExecution) setTargetOrganization(targetID string, provisi
 	principal := e.invocation.Principal
 	bundle := *principal.AccessBundle
 	resource, operation := definitionmodel.ActionPermissionSubject(e.action)
-	policyKey := "runtime.provisioned_store." + e.identity.ExecutionID
-	if e.targetGrant.Source == runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit {
-		policyKey = "runtime.delivered_organization_unit." + e.identity.ExecutionID
-	}
+	policyKey := "runtime.delivered_organization_unit." + e.identity.ExecutionID
 	bundle.DataPolicies = append(append([]identitysdk.DataPolicy(nil), bundle.DataPolicies...), identitysdk.DataPolicy{
 		Key:      policyKey,
 		Resource: identitysdk.ResourceType(resource),

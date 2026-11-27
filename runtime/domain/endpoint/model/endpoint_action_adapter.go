@@ -123,7 +123,6 @@ func runtimeEndpointPermissionText(sourceOwner, resourceKey, operationKey string
 		"retry": "Retry operation", "deactivate_business_profile": "Deactivate business profile",
 		"reactivate_business_profile": "Reactivate business profile", "list_workspaces": "List workspaces",
 		"provision_workspace": "Provision workspace", "reactivate_workspace": "Reactivate workspace", "suspend_workspace": "Suspend workspace",
-		"update_commercial_configuration": "Update commercial configuration",
 	}[operationKey]
 	operationChinese := map[string]string{
 		"ops_metadata_diagnostics": "查看元数据诊断", "list_deliveries": "查看投递记录",
@@ -139,7 +138,6 @@ func runtimeEndpointPermissionText(sourceOwner, resourceKey, operationKey string
 		"retry": "重试操作", "deactivate_business_profile": "停用业务档案",
 		"reactivate_business_profile": "重新启用业务档案", "list_workspaces": "查看工作区",
 		"provision_workspace": "创建工作区", "reactivate_workspace": "重新启用工作区", "suspend_workspace": "暂停工作区",
-		"update_commercial_configuration": "更新商业配置",
 	}[operationKey]
 	if operationEnglish == "" {
 		operationEnglish = strings.ReplaceAll(operationKey, "_", " ")

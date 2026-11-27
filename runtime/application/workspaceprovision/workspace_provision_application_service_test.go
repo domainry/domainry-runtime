@@ -25,12 +25,8 @@ func workspaceProvisionTenantAdministrator(t *testing.T) principalmodel.Principa
 
 func validWorkspaceProvisionApplicationRequest() workspaceprovisionmodel.Request {
 	return workspaceprovisionmodel.Request{
-		RequestID: "request-1", WorkspaceCode: "workspace-a", WorkspaceName: "Workspace A", FirstStoreCode: "store-a", FirstStoreName: "Store A",
+		RequestID: "request-1", WorkspaceCode: "workspace-a", WorkspaceName: "Workspace A",
 		AdminLoginID: "admin@example.test", AdminName: "Admin",
-		CommercialConfiguration: workspaceprovisionmodel.CommercialConfiguration{
-			Plan: "standard", IncludedUserLimit: 1, MaxUserLimit: 2, IncludedCustomerLimit: 1, MaxCustomerLimit: 2,
-			IncludedStoreLimit: 1, MaxStores: 2, ContractDate: "2026-09-06", BillingDay: 1,
-		},
 	}
 }
 

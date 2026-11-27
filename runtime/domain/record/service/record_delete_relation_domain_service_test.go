@@ -65,7 +65,7 @@ func TestDeleteRelationServiceScansReferencesInStableObjectOrder(t *testing.T) {
 func TestDeleteRelationServiceAppliesSetNullAndCascade(t *testing.T) {
 	objects := map[string]definitionmodel.ObjectSchema{
 		"order": {Key: "order", Fields: []definitionmodel.FieldSchema{
-			{Key: "billing_customer", Type: "relation", Config: map[string]any{"target": "customer", "on_delete": "set_null"}},
+			{Key: "primary_customer", Type: "relation", Config: map[string]any{"target": "customer", "on_delete": "set_null"}},
 			{Key: "shipping_customer", Type: "relation", Config: map[string]any{"target": "customer", "on_delete": "cascade"}},
 		}},
 	}
@@ -90,7 +90,7 @@ func TestDeleteRelationServiceAppliesSetNullAndCascade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(setNull, []string{"billing_customer:order-1"}) || !reflect.DeepEqual(cascade, []string{"shipping_customer:order-1"}) {
+	if !reflect.DeepEqual(setNull, []string{"primary_customer:order-1"}) || !reflect.DeepEqual(cascade, []string{"shipping_customer:order-1"}) {
 		t.Fatalf("callbacks set_null=%#v cascade=%#v", setNull, cascade)
 	}
 }

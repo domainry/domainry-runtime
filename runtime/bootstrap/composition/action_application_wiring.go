@@ -242,16 +242,6 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				}
 				return records.organizationUnitDeliveryBinder.BindOrganizationUnitDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
 			},
-			BindStoreOrganizationDelivery: func(ctx context.Context) (identitysdk.StoreOrganizationDelivery, error) {
-				if records.storeOrganizationDeliveryBinder == nil {
-					return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
-				}
-				executor := database.ActionExecutionTransaction(ctx)
-				if executor == nil {
-					return nil, apperror.New(apperror.KindInternal, "identity.store_organization_delivery_transaction_required", nil, nil)
-				}
-				return records.storeOrganizationDeliveryBinder.BindStoreOrganizationDeliveryUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
-			},
 			BindIdentityHandlerDelivery: func(ctx context.Context) (identitysdk.HandlerDelivery, error) {
 				if records.identityHandlerDeliveryBinder == nil {
 					return nil, apperror.New(apperror.KindInternal, "identity.handler_delivery_transaction_required", nil, nil)
@@ -291,7 +281,6 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				}
 				return records.workspaceIdentityUsageBinder.BindWorkspaceIdentityUsageUnitOfWork(identitysdk.EmbeddedTransaction{Executor: executor})
 			},
-			WorkspaceCommercialConfiguration: records.workspaceCommercialConfiguration,
 			ResolveProfileBindingField: func(bindingKey, objectKey string) (string, bool) {
 				for _, extension := range records.identityProfileExtensions {
 					if strings.TrimSpace(extension.BusinessIdentity.Key) == strings.TrimSpace(bindingKey) && strings.TrimSpace(extension.ObjectKey) == strings.TrimSpace(objectKey) {

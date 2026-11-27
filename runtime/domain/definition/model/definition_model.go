@@ -232,39 +232,35 @@ type ObjectLedgerPolicy struct {
 }
 
 type ActionSchema struct {
-	Key                       string                                 `json:"key"`
-	ObjectKey                 string                                 `json:"object_key"`
-	Label                     string                                 `json:"label"`
-	PermissionGrantMode       string                                 `json:"permission_grant_mode,omitempty"`
-	I18n                      localizationmodel.LocalizedTextMap     `json:"i18n,omitempty"`
-	Kind                      string                                 `json:"kind"`
-	RiskLevel                 string                                 `json:"risk_level,omitempty"`
-	Preconditions             []string                               `json:"preconditions"`
-	AuditEvent                string                                 `json:"audit_event"`
-	AuditPolicy               string                                 `json:"audit_policy,omitempty"`
-	InputType                 string                                 `json:"input_type,omitempty"`
-	OutputType                string                                 `json:"output_type,omitempty"`
-	PayloadFields             []ActionPayloadField                   `json:"payload_fields,omitempty"`
-	OutputFields              []ActionOutputField                    `json:"output_fields,omitempty"`
-	Defaults                  map[string]any                         `json:"defaults,omitempty"`
-	OptimisticConcurrency     bool                                   `json:"optimistic_concurrency,omitempty"`
-	ConcurrencyField          string                                 `json:"concurrency_field,omitempty"`
-	AssurancePolicy           *ActionAssurancePolicy                 `json:"assurance_policy,omitempty"`
-	EffectSet                 *ActionEffectSet                       `json:"effect_set,omitempty"`
-	FileOperations            []string                               `json:"file_operations,omitempty"`
-	TargetOrganization        *ActionTargetOrganizationPolicy        `json:"target_organization,omitempty"`
-	OrganizationUnitDelivery  *ActionOrganizationUnitDeliveryPolicy  `json:"organization_unit_delivery,omitempty"`
-	StoreOrganizationMutation *ActionStoreOrganizationMutationPolicy `json:"store_organization_mutation,omitempty"`
+	Key                   string                             `json:"key"`
+	ObjectKey             string                             `json:"object_key"`
+	Label                 string                             `json:"label"`
+	PermissionGrantMode   string                             `json:"permission_grant_mode,omitempty"`
+	I18n                  localizationmodel.LocalizedTextMap `json:"i18n,omitempty"`
+	Kind                  string                             `json:"kind"`
+	RiskLevel             string                             `json:"risk_level,omitempty"`
+	Preconditions         []string                           `json:"preconditions"`
+	AuditEvent            string                             `json:"audit_event"`
+	AuditPolicy           string                             `json:"audit_policy,omitempty"`
+	InputType             string                             `json:"input_type,omitempty"`
+	OutputType            string                             `json:"output_type,omitempty"`
+	PayloadFields         []ActionPayloadField               `json:"payload_fields,omitempty"`
+	OutputFields          []ActionOutputField                `json:"output_fields,omitempty"`
+	Defaults              map[string]any                     `json:"defaults,omitempty"`
+	OptimisticConcurrency bool                               `json:"optimistic_concurrency,omitempty"`
+	ConcurrencyField      string                             `json:"concurrency_field,omitempty"`
+	AssurancePolicy       *ActionAssurancePolicy             `json:"assurance_policy,omitempty"`
+	EffectSet             *ActionEffectSet                   `json:"effect_set,omitempty"`
+	FileOperations        []string                           `json:"file_operations,omitempty"`
+	TargetOrganization    *ActionTargetOrganizationPolicy    `json:"target_organization,omitempty"`
+	OrganizationUnit      *ActionOrganizationUnitPolicy      `json:"organization_unit,omitempty"`
 }
 
-type ActionOrganizationUnitDeliveryPolicy struct {
-	Operations   []string `json:"operations"`
-	NodeTypes    []string `json:"node_types"`
-	ParentSource string   `json:"parent_source,omitempty"`
-}
-
-type ActionStoreOrganizationMutationPolicy struct {
-	Operations []string `json:"operations"`
+type ActionOrganizationUnitPolicy struct {
+	Operations      []string `json:"operations"`
+	NodeTypes       []string `json:"node_types"`
+	ParentSource    string   `json:"parent_source,omitempty"`
+	RetargetCreated bool     `json:"retarget_created,omitempty"`
 }
 
 const DefaultBusinessActionAuditEvent = "business_action_executed"
@@ -353,17 +349,17 @@ type ActionObjectEffect struct {
 }
 
 type ActionTargetOrganizationPolicy struct {
-	Source string `json:"source"`
-	Input  string `json:"input,omitempty"`
+	Source   string `json:"source"`
+	Input    string `json:"input,omitempty"`
+	NodeType string `json:"node_type,omitempty"`
 }
 
 const (
-	ActionTargetOrganizationSourceExplicit                      = "explicit"
-	ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore = "explicit_or_sole_authorized_store"
-	ActionTargetOrganizationSourceRecordOwner                   = "record_owner"
-	ActionTargetOrganizationSourceProvisionedStore              = "provisioned_store"
-	ActionTargetOrganizationSourceDeliveredOrganizationUnit     = "delivered_organization_unit"
-	ActionTargetOrganizationInputInvocation                     = "target_organization_id"
+	ActionTargetOrganizationSourceExplicit                             = "explicit"
+	ActionTargetOrganizationSourceExplicitOrSoleAuthorizedOrganization = "explicit_or_sole_authorized_organization"
+	ActionTargetOrganizationSourceRecordOwner                          = "record_owner"
+	ActionTargetOrganizationSourceDeliveredOrganizationUnit            = "delivered_organization_unit"
+	ActionTargetOrganizationInputInvocation                            = "target_organization_id"
 )
 
 const (
@@ -452,13 +448,13 @@ func actionPayloadFieldsStructured(fields []ActionPayloadField) bool {
 // result. Runtime uses this closed contract to re-apply caller field security
 // after trusted business code has completed its internal reads.
 type ActionOutputField struct {
-	Key                                 string   `json:"key"`
-	Type                                string   `json:"type"`
-	SourceObjectKey                     string   `json:"source_object_key,omitempty"`
-	SourceFieldKey                      string   `json:"source_field_key,omitempty"`
-	Required                            bool     `json:"required,omitempty"`
-	Repeated                            bool     `json:"repeated,omitempty"`
-	StoreOrganizationSnapshotObjectKeys []string `json:"store_organization_snapshot_object_keys,omitempty"`
+	Key                                string   `json:"key"`
+	Type                               string   `json:"type"`
+	SourceObjectKey                    string   `json:"source_object_key,omitempty"`
+	SourceFieldKey                     string   `json:"source_field_key,omitempty"`
+	Required                           bool     `json:"required,omitempty"`
+	Repeated                           bool     `json:"repeated,omitempty"`
+	OrganizationUnitSnapshotObjectKeys []string `json:"organization_unit_snapshot_object_keys,omitempty"`
 }
 
 type WorkflowSchema struct {

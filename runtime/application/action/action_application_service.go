@@ -380,14 +380,9 @@ func validateActionTargetOrganizationInvocation(action definitionmodel.ActionSch
 		if targetID == "" {
 			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_required", nil, nil)
 		}
-	case definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore:
-		// An explicit store remains caller-selectable for multi-store roles. When
-		// omitted, Runtime resolves only an unambiguous authorized store; project
-		// input and browser code never infer or write ownership.
-	case definitionmodel.ActionTargetOrganizationSourceProvisionedStore:
-		if targetID != "" {
-			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)
-		}
+	case definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedOrganization:
+		// An explicit organization remains caller-selectable for multi-node roles.
+		// When omitted, Runtime resolves only one unambiguous authorized node.
 	case definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit:
 		if targetID != "" {
 			return apperror.New(apperror.KindBadRequest, "backend.action.target_organization_forbidden", nil, nil)

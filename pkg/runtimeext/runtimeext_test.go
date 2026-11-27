@@ -121,6 +121,19 @@ func TestRuntimeextContractIdentityIsCurrent(t *testing.T) {
 	}
 }
 
+func TestOrganizationUnitNodeTypeAcceptsProductVocabularyAndReservesCompany(t *testing.T) {
+	for _, value := range []OrganizationUnitNodeType{"store", "venue_zone", "floor_2"} {
+		if !value.Valid() {
+			t.Fatalf("product node type %q was rejected", value)
+		}
+	}
+	for _, value := range []OrganizationUnitNodeType{"", "company", "Venue", "venue-zone", "venue_", " venue"} {
+		if value.Valid() {
+			t.Fatalf("invalid product node type %q was accepted", value)
+		}
+	}
+}
+
 func TestContractTypeNameKeepsJSONRawMessageStable(t *testing.T) {
 	field, ok := reflect.TypeOf(BusinessJobRequest{}).FieldByName("Payload")
 	if !ok {
@@ -216,9 +229,12 @@ func TestWorkspaceBootstrapDescriptorBindsControlledInputConstraints(t *testing.
 	}
 }
 
-func TestStoreOrganizationMutationCapabilityRequiresRecordOwnerAndExposesNoTargetSelector(t *testing.T) {
-	descriptor := validTestBusinessHandler("store.settings.replace").Descriptor()
-	descriptor.StoreOrganizationMutation = &ActionStoreOrganizationMutationCapability{Operations: []StoreOrganizationMutationOperation{StoreOrganizationMutationRename}}
+func TestOrganizationUnitMutationCapabilityRequiresRecordOwnerAndExposesNoTargetSelector(t *testing.T) {
+	descriptor := validTestBusinessHandler("organization.settings.replace").Descriptor()
+	descriptor.OrganizationUnitDelivery = &OrganizationUnitDeliveryCapability{
+		Operations: []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryRename},
+		NodeTypes:  []OrganizationUnitNodeType{OrganizationUnitNodeType("store")},
+	}
 	if err := descriptor.Validate(); !errors.Is(err, ErrHandlerCapabilityInvalid) {
 		t.Fatalf("mutation without record owner error=%v", err)
 	}
@@ -226,7 +242,7 @@ func TestStoreOrganizationMutationCapabilityRequiresRecordOwnerAndExposesNoTarge
 	if err := descriptor.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []any{StoreOrganizationProvisionRequest{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}} {
+	for _, value := range []any{OrganizationUnitDeliveryRequest{}, OrganizationUnitMutationRequest{}} {
 		typeOf := reflect.TypeOf(value)
 		for _, forbidden := range []string{"OrganizationID", "ParentOrganizationID", "OwnerOrganizationID", "WorkspaceID"} {
 			if _, found := typeOf.FieldByName(forbidden); found {
@@ -241,7 +257,7 @@ func TestOrganizationUnitDeliveryCapabilityClosesTypeParentAndTarget(t *testing.
 	base.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceDeliveredOrganizationUnit}
 	base.OrganizationUnitDelivery = &OrganizationUnitDeliveryCapability{
 		Operations:   []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryCreate},
-		NodeTypes:    []OrganizationUnitNodeType{OrganizationUnitNodeTypeDepartment},
+		NodeTypes:    []OrganizationUnitNodeType{OrganizationUnitNodeType("department")},
 		ParentSource: OrganizationUnitParentSourceWorkspaceCompany,
 	}
 	if err := base.Validate(); err != nil {
@@ -249,7 +265,7 @@ func TestOrganizationUnitDeliveryCapabilityClosesTypeParentAndTarget(t *testing.
 	}
 	for _, mutate := range []func(*HandlerDescriptor){
 		func(value *HandlerDescriptor) {
-			value.OrganizationUnitDelivery.NodeTypes = []OrganizationUnitNodeType{"store"}
+			value.OrganizationUnitDelivery.NodeTypes = []OrganizationUnitNodeType{OrganizationUnitNodeType("department"), OrganizationUnitNodeType("department")}
 		},
 		func(value *HandlerDescriptor) {
 			value.OrganizationUnitDelivery.NodeTypes = []OrganizationUnitNodeType{"company"}
@@ -261,7 +277,7 @@ func TestOrganizationUnitDeliveryCapabilityClosesTypeParentAndTarget(t *testing.
 			value.OrganizationUnitDelivery.ParentSource = OrganizationUnitParentSourceTargetOrganization
 		},
 		func(value *HandlerDescriptor) {
-			value.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceProvisionedStore}
+			value.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceExplicit, Input: TargetOrganizationInputInvocation, NodeType: OrganizationUnitNodeType("department")}
 		},
 	} {
 		candidate := cloneHandlerDescriptor(base)
@@ -271,10 +287,10 @@ func TestOrganizationUnitDeliveryCapabilityClosesTypeParentAndTarget(t *testing.
 		}
 	}
 	resolve := cloneHandlerDescriptor(base)
-	resolve.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceExplicit, Input: TargetOrganizationInputInvocation}
+	resolve.TargetOrganization = &ActionTargetOrganizationCapability{Source: TargetOrganizationSourceExplicit, Input: TargetOrganizationInputInvocation, NodeType: OrganizationUnitNodeType("department")}
 	resolve.OrganizationUnitDelivery = &OrganizationUnitDeliveryCapability{
 		Operations: []OrganizationUnitDeliveryOperation{OrganizationUnitDeliveryResolve},
-		NodeTypes:  []OrganizationUnitNodeType{OrganizationUnitNodeTypeDepartment, OrganizationUnitNodeTypeTeam},
+		NodeTypes:  []OrganizationUnitNodeType{OrganizationUnitNodeType("department"), OrganizationUnitNodeType("team")},
 	}
 	if err := resolve.Validate(); err != nil {
 		t.Fatal(err)
@@ -402,7 +418,7 @@ func TestProjectExtensionRegistrySnapshotsBindingIdentityAtRegistration(t *testi
 }
 
 func TestWorkspaceIdentityUsageGrantIsBoundedAndFrozen(t *testing.T) {
-	handler := validTestBusinessHandler("billing.invoice.generate")
+	handler := validTestBusinessHandler("invoice.generate")
 	handler.descriptor.WorkspaceIdentityUsage = &WorkspaceIdentityUsageCapability{MaxPageSize: 25}
 	registry := NewProjectExtensionRegistry()
 	if err := registry.RegisterBusinessHandler(handler); err != nil {
@@ -410,16 +426,16 @@ func TestWorkspaceIdentityUsageGrantIsBoundedAndFrozen(t *testing.T) {
 	}
 	handler.descriptor.WorkspaceIdentityUsage.MaxPageSize = 99
 	registry.Freeze()
-	binding, ok := registry.BusinessHandlerBinding("billing.invoice.generate")
+	binding, ok := registry.BusinessHandlerBinding("invoice.generate")
 	if !ok || binding.Descriptor.WorkspaceIdentityUsage == nil || binding.Descriptor.WorkspaceIdentityUsage.MaxPageSize != 25 {
 		t.Fatalf("binding=%#v", binding)
 	}
 	binding.Descriptor.WorkspaceIdentityUsage.MaxPageSize = 1
-	again, _ := registry.BusinessHandlerBinding("billing.invoice.generate")
+	again, _ := registry.BusinessHandlerBinding("invoice.generate")
 	if again.Descriptor.WorkspaceIdentityUsage.MaxPageSize != 25 {
 		t.Fatal("Workspace identity usage grant was mutable")
 	}
-	invalid := validTestBusinessHandler("billing.invalid").Descriptor()
+	invalid := validTestBusinessHandler("invoice.invalid").Descriptor()
 	invalid.WorkspaceIdentityUsage = &WorkspaceIdentityUsageCapability{MaxPageSize: WorkspaceIdentityUsageMaximumPageSize + 1}
 	if err := invalid.Validate(); !errors.Is(err, ErrHandlerCapabilityInvalid) {
 		t.Fatalf("unbounded usage grant error=%v", err)

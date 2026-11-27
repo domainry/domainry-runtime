@@ -182,10 +182,11 @@ func normalizePublishedActionContract(definition definitionmodel.ActionSchema) d
 		policy := *definition.TargetOrganization
 		policy.Source = strings.TrimSpace(policy.Source)
 		policy.Input = strings.TrimSpace(policy.Input)
+		policy.NodeType = strings.TrimSpace(policy.NodeType)
 		definition.TargetOrganization = &policy
 	}
-	if definition.OrganizationUnitDelivery != nil {
-		policy := *definition.OrganizationUnitDelivery
+	if definition.OrganizationUnit != nil {
+		policy := *definition.OrganizationUnit
 		policy.Operations = append([]string(nil), policy.Operations...)
 		for index := range policy.Operations {
 			policy.Operations[index] = strings.TrimSpace(policy.Operations[index])
@@ -197,16 +198,7 @@ func normalizePublishedActionContract(definition definitionmodel.ActionSchema) d
 		}
 		sort.Strings(policy.NodeTypes)
 		policy.ParentSource = strings.TrimSpace(policy.ParentSource)
-		definition.OrganizationUnitDelivery = &policy
-	}
-	if definition.StoreOrganizationMutation != nil {
-		policy := *definition.StoreOrganizationMutation
-		policy.Operations = append([]string(nil), policy.Operations...)
-		for index := range policy.Operations {
-			policy.Operations[index] = strings.TrimSpace(policy.Operations[index])
-		}
-		sort.Strings(policy.Operations)
-		definition.StoreOrganizationMutation = &policy
+		definition.OrganizationUnit = &policy
 	}
 	return definition
 }
@@ -222,7 +214,7 @@ func validatePublishedActionContract(entry ActionCatalogEntry) error {
 		{name: "output_type", catalog: definition.OutputType, registry: entry.HandlerBinding.Descriptor.OutputType},
 	}
 	if entry.Owner == ActionOwnerSystemOperation {
-		if definition.TargetOrganization != nil || definition.OrganizationUnitDelivery != nil || definition.StoreOrganizationMutation != nil {
+		if definition.TargetOrganization != nil || definition.OrganizationUnit != nil {
 			return fmt.Errorf("system action %s must not declare business Handler organization capability", definition.Key)
 		}
 		for _, field := range fields {
@@ -246,22 +238,19 @@ func validatePublishedActionContract(entry ActionCatalogEntry) error {
 	if !actionTargetOrganizationCapabilityMatches(definition.TargetOrganization, entry.HandlerBinding.Descriptor.TargetOrganization) {
 		return fmt.Errorf("published action %s target organization capability mismatch", definition.Key)
 	}
-	if !actionOrganizationUnitDeliveryCapabilityMatches(definition.OrganizationUnitDelivery, entry.HandlerBinding.Descriptor.OrganizationUnitDelivery) {
-		return fmt.Errorf("published action %s organization unit delivery capability mismatch", definition.Key)
-	}
-	if !actionStoreOrganizationMutationCapabilityMatches(definition.StoreOrganizationMutation, entry.HandlerBinding.Descriptor.StoreOrganizationMutation) {
-		return fmt.Errorf("published action %s store organization mutation capability mismatch", definition.Key)
+	if !actionOrganizationUnitCapabilityMatches(definition.OrganizationUnit, entry.HandlerBinding.Descriptor.OrganizationUnitDelivery) {
+		return fmt.Errorf("published action %s organization unit capability mismatch", definition.Key)
 	}
 	if err := validateIdentityInitialCredentialOutput(definition, entry.HandlerBinding.Descriptor.IdentityHandlerDelivery); err != nil {
 		return err
 	}
-	if err := validateStoreOrganizationSnapshotOutput(definition, entry.HandlerBinding.Descriptor); err != nil {
+	if err := validateOrganizationUnitSnapshotOutput(definition, entry.HandlerBinding.Descriptor); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema, descriptor runtimeext.HandlerDescriptor) error {
+func validateOrganizationUnitSnapshotOutput(action definitionmodel.ActionSchema, descriptor runtimeext.HandlerDescriptor) error {
 	listGrants := map[string]bool{}
 	for _, capability := range descriptor.ObjectCapabilities {
 		for _, operation := range capability.Operations {
@@ -272,22 +261,22 @@ func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema
 	}
 	count := 0
 	for _, field := range action.OutputFields {
-		if strings.TrimSpace(field.Type) != "store_organization_snapshot" {
+		if strings.TrimSpace(field.Type) != "organization_unit_snapshot" {
 			continue
 		}
 		count++
 		if strings.TrimSpace(action.Kind) != definitionmodel.ActionKindObjectOperation {
-			return fmt.Errorf("published action %s store Organization snapshot output requires object_operation", action.Key)
+			return fmt.Errorf("published action %s Organization Unit snapshot output requires object_operation", action.Key)
 		}
-		if descriptor.StoreOrganizationCatalog == nil || !field.Required || field.Repeated || len(field.StoreOrganizationSnapshotObjectKeys) == 0 {
-			return fmt.Errorf("published action %s store Organization snapshot output %s is not closed over a catalog and required singleton Objects", action.Key, field.Key)
+		if descriptor.OrganizationUnitCatalog == nil || !field.Required || field.Repeated || len(field.OrganizationUnitSnapshotObjectKeys) == 0 {
+			return fmt.Errorf("published action %s Organization Unit snapshot output %s is not closed over a catalog and required singleton Objects", action.Key, field.Key)
 		}
-		if descriptor.TargetOrganization != nil || descriptor.OrganizationUnitDelivery != nil || descriptor.StoreOrganizationMutation != nil || descriptor.WorkspaceIdentityUsage != nil || descriptor.IdentityHandlerDelivery != nil || descriptor.AccountErasure != nil || len(descriptor.CrossWorkspaceAggregates) != 0 || len(descriptor.ConnectorCapabilities) != 0 || len(descriptor.NotificationEventTypes) != 0 || len(descriptor.FileCapabilities) != 0 {
-			return fmt.Errorf("published action %s store Organization snapshot output may grant only read-only record access and the store Organization catalog", action.Key)
+		if descriptor.TargetOrganization != nil || descriptor.OrganizationUnitDelivery != nil || descriptor.WorkspaceIdentityUsage != nil || descriptor.IdentityHandlerDelivery != nil || descriptor.AccountErasure != nil || len(descriptor.CrossWorkspaceAggregates) != 0 || len(descriptor.ConnectorCapabilities) != 0 || len(descriptor.NotificationEventTypes) != 0 || len(descriptor.FileCapabilities) != 0 {
+			return fmt.Errorf("published action %s Organization Unit snapshot output may grant only read-only record access and the Organization Unit catalog", action.Key)
 		}
-		for _, objectKey := range field.StoreOrganizationSnapshotObjectKeys {
+		for _, objectKey := range field.OrganizationUnitSnapshotObjectKeys {
 			if !listGrants[strings.TrimSpace(objectKey)] {
-				return fmt.Errorf("published action %s store Organization snapshot output %s requires %s.list", action.Key, field.Key, objectKey)
+				return fmt.Errorf("published action %s Organization Unit snapshot output %s requires %s.list", action.Key, field.Key, objectKey)
 			}
 		}
 		for _, capability := range descriptor.ObjectCapabilities {
@@ -296,22 +285,22 @@ func validateStoreOrganizationSnapshotOutput(action definitionmodel.ActionSchema
 				case runtimeext.ObjectCapabilityCreate, runtimeext.ObjectCapabilityUpdate,
 					runtimeext.ObjectCapabilityConditionalUpdate, runtimeext.ObjectCapabilityConditionalUpdateMany,
 					runtimeext.ObjectCapabilityDelete, runtimeext.ObjectCapabilityRestore:
-					return fmt.Errorf("published action %s store Organization snapshot output must not grant record writes", action.Key)
+					return fmt.Errorf("published action %s Organization Unit snapshot output must not grant record writes", action.Key)
 				}
 			}
 		}
 	}
 	if count > 1 {
-		return fmt.Errorf("published action %s declares more than one store Organization snapshot output", action.Key)
+		return fmt.Errorf("published action %s declares more than one Organization Unit snapshot output", action.Key)
 	}
 	return nil
 }
 
-func actionOrganizationUnitDeliveryCapabilityMatches(policy *definitionmodel.ActionOrganizationUnitDeliveryPolicy, capability *runtimeext.OrganizationUnitDeliveryCapability) bool {
+func actionOrganizationUnitCapabilityMatches(policy *definitionmodel.ActionOrganizationUnitPolicy, capability *runtimeext.OrganizationUnitDeliveryCapability) bool {
 	if policy == nil || capability == nil {
 		return policy == nil && capability == nil
 	}
-	if strings.TrimSpace(policy.ParentSource) != strings.TrimSpace(string(capability.ParentSource)) || len(policy.Operations) != len(capability.Operations) || len(policy.NodeTypes) != len(capability.NodeTypes) {
+	if strings.TrimSpace(policy.ParentSource) != strings.TrimSpace(string(capability.ParentSource)) || policy.RetargetCreated != capability.RetargetCreated || len(policy.Operations) != len(capability.Operations) || len(policy.NodeTypes) != len(capability.NodeTypes) {
 		return false
 	}
 	for index := range policy.Operations {
@@ -321,21 +310,6 @@ func actionOrganizationUnitDeliveryCapabilityMatches(policy *definitionmodel.Act
 	}
 	for index := range policy.NodeTypes {
 		if strings.TrimSpace(policy.NodeTypes[index]) != strings.TrimSpace(string(capability.NodeTypes[index])) {
-			return false
-		}
-	}
-	return true
-}
-
-func actionStoreOrganizationMutationCapabilityMatches(policy *definitionmodel.ActionStoreOrganizationMutationPolicy, capability *runtimeext.ActionStoreOrganizationMutationCapability) bool {
-	if policy == nil || capability == nil {
-		return policy == nil && capability == nil
-	}
-	if len(policy.Operations) != len(capability.Operations) {
-		return false
-	}
-	for index := range policy.Operations {
-		if strings.TrimSpace(policy.Operations[index]) != strings.TrimSpace(string(capability.Operations[index])) {
 			return false
 		}
 	}
@@ -363,7 +337,7 @@ func actionTargetOrganizationCapabilityMatches(policy *definitionmodel.ActionTar
 	if policy == nil || capability == nil {
 		return policy == nil && capability == nil
 	}
-	return strings.TrimSpace(policy.Source) == strings.TrimSpace(string(capability.Source)) && strings.TrimSpace(policy.Input) == strings.TrimSpace(capability.Input)
+	return strings.TrimSpace(policy.Source) == strings.TrimSpace(string(capability.Source)) && strings.TrimSpace(policy.Input) == strings.TrimSpace(capability.Input) && strings.TrimSpace(policy.NodeType) == strings.TrimSpace(string(capability.NodeType))
 }
 
 func (c *ActionCatalog) Entry(actionKey string) (ActionCatalogEntry, bool) {

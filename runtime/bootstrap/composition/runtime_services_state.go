@@ -142,10 +142,8 @@ type runtimeAssembly struct {
 	identityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
 	accountErasures                     lifecyclecontract.AccountErasures
 	organizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
-	storeOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	workspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	workspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec
-	workspaceCommercialConfiguration    actionapplication.WorkspaceCommercialConfigurationLocker
 	actionAssuranceStore                actioncontract.ActionAssuranceStore
 	workflowProcesses                   *workflowapplication.WorkflowProcessEngine
 	connectorRegistry                   *runtimeConnectorCatalog

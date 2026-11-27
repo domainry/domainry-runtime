@@ -182,7 +182,7 @@ func TestExportRelationLabelFallbackEdges(t *testing.T) {
 	if len(labels[field.Key]) != 0 {
 		t.Fatalf("labels without resolver=%#v", labels)
 	}
-	secondField := definitionmodel.FieldSchema{Key: "billing_customer_id", Type: "relation", Config: map[string]any{"object_key": "customer"}}
+	secondField := definitionmodel.FieldSchema{Key: "primary_customer_id", Type: "relation", Config: map[string]any{"object_key": "customer"}}
 	labels = service.relationLabels(t.Context(), source, []definitionmodel.FieldSchema{field, secondField}, []recordmodel.Record{
 		{Data: map[string]any{field.Key: "", secondField.Key: nil}},
 		{Data: map[string]any{field.Key: "customer-1", secondField.Key: "customer-2"}},

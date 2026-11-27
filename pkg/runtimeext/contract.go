@@ -9,7 +9,7 @@ import (
 
 const (
 	ContractVersion = "runtimeext-v66"
-	ContractSHA256  = "1077322f7b4ed5164db30c12e326ddb757cf13d6e3a001daecc347ceb3923c68"
+	ContractSHA256  = "1ec2a12bc7e962c446e565690b90874f3dc7297e24787a80fde1a5a89e9e11e1"
 )
 
 const contractDefinitionV60 = `runtimeext-v66
@@ -104,21 +104,18 @@ ProjectExtensionRegistry.WorkspaceBootstrapParticipant()WorkspaceBootstrapPartic
 QueryOperation=get,get_for_update,list,exists,count
 RecordQueryPagination=after_id
 RecordQueryFilterContains=literal_substring|text_long_text_email_phone_url_and_record_id|string_value|preserve_spaces|escape_percent_underscore_tilde|database_collation|null_does_not_match
-RecordQuery.StoreOrganization=execution_scoped_catalog_reference|list_only
+RecordQuery.OrganizationUnit=execution_scoped_catalog_reference|list_only
 ExecuteCrossWorkspaceAggregate(context.Context,ActionExecution,CrossWorkspaceAggregateRequest)(CrossWorkspaceAggregateResult,error)
 CrossWorkspaceDimensionWorkspace=$workspace
 AggregateOperation=count,sum,min,max,avg
 ResolveTargetOrganization(ActionExecution)(TargetOrganization,error)
-ProvisionStoreOrganization(context.Context,ActionExecution,StoreOrganizationProvisionRequest)(StoreOrganizationProvisionResult,error)
-StoreOrganizationProvisionResult=runtime_authoritative_target_id|organization_version|replayed
-RenameStoreOrganization(context.Context,ActionExecution,StoreOrganizationRenameRequest)(StoreOrganizationMutationResult,error)
-DisableStoreOrganization(context.Context,ActionExecution,StoreOrganizationDisableRequest)(StoreOrganizationMutationResult,error)
-TargetOrganizationSource=explicit,explicit_or_sole_authorized_store,record_owner,provisioned_store,delivered_organization_unit
-ExplicitOrSoleAuthorizedStore=explicit_identity_resolve_and_action_scope|omitted_exactly_one_complete_active_authorized_catalog|zero_multiple_disabled_or_continuation_denied
+TargetOrganizationSource=explicit,explicit_or_sole_authorized_organization,record_owner,delivered_organization_unit
+ExplicitOrSoleAuthorizedOrganization=explicit_identity_resolve_and_action_scope|omitted_exactly_one_complete_active_authorized_catalog|zero_multiple_disabled_or_continuation_denied
 CreateOrganizationUnit(context.Context,ActionExecution,OrganizationUnitDeliveryRequest)(OrganizationUnitDeliveryResult,error)
 ResolveOrganizationUnit(context.Context,ActionExecution,OrganizationUnitResolveRequest)(OrganizationUnitDeliveryResult,error)
-OrganizationUnitDeliveryOperation=create,resolve
-OrganizationUnitDeliveryNodeType=region,department,team,warehouse|company_and_store_forbidden
+MutateOrganizationUnit(context.Context,ActionExecution,OrganizationUnitMutationRequest)(OrganizationUnitDeliveryResult,error)
+OrganizationUnitDeliveryOperation=create,resolve,rename,disable
+OrganizationUnitDeliveryNodeType=source_owned_lower_snake_case(max=64)|company_root_forbidden
 OrganizationUnitDeliveryParentSource=workspace_company,target_organization
 OrganizationUnitDeliveryAuthority=project_model_and_handler_descriptor_exact_match|runtime_workspace_and_bearer|runtime_parent_resolution|same_action_uow|opaque_result|no_workspace_bearer_parent_or_owner_input
 DeliverIdentity(context.Context,ActionExecution,IdentityHandlerDeliveryRequest)(IdentityHandlerDeliveryResult,error)
@@ -132,16 +129,16 @@ IdentityHandlerResolveBatch=distinct_nonempty_user_ids|max_200|one_action_uow|st
 IdentityHandlerProfileResolution=generated_static_binding_key_and_object|caller_profile_id|identity_owned_cas_version|active_exact_user
 IdentityHandlerOperation=create,update,disable,resolve
 IdentityHandlerLoginMode=none,password
-ExecuteStoreOrganizationCatalog(context.Context,ActionExecution,StoreOrganizationCatalogRequest)(StoreOrganizationCatalogPage,error)
-ExecuteStoreOrganizationCatalogResolve(context.Context,ActionExecution,string)(StoreOrganizationCatalogItem,error)
-IssueStoreOrganizationCatalogItem(StoreOrganizationCatalogItem)(StoreOrganizationCatalogItem,string,error)
-StoreOrganizationCatalogResolve=exact_authorized_identity_organization_id|issued_current_action_reference|same_action_uow
-StoreOrganizationCatalogOwnedRecordLookup=generated_ListForStore|issued_current_action_reference|record_read_effect|workspace_and_identity_scope|read_only
+ExecuteOrganizationUnitCatalog(context.Context,ActionExecution,OrganizationUnitCatalogRequest)(OrganizationUnitCatalogPage,error)
+ExecuteOrganizationUnitCatalogResolve(context.Context,ActionExecution,string)(OrganizationUnitCatalogItem,error)
+IssueOrganizationUnitCatalogItem(OrganizationUnitCatalogItem)(OrganizationUnitCatalogItem,string,error)
+OrganizationUnitCatalogResolve=exact_authorized_identity_organization_id|issued_current_action_reference|same_action_uow
+OrganizationUnitCatalogOwnedRecordLookup=generated_list_for_node_type|issued_current_action_reference|record_read_effect|workspace_and_identity_scope|read_only
 ExecuteWorkspaceIdentityUsage(context.Context,ActionExecution,WorkspaceIdentityUsageRequest)(WorkspaceIdentityUsagePage,error)
 ExecuteWorkspaceIdentityUsageResolve(context.Context,ActionExecution,WorkspaceIdentityUsageResolveRequest)(WorkspaceIdentityUsageResolveResult,error)
 WorkspaceIdentityUsageMaximumPageSize=100
-WorkspaceIdentityUsageProjection=canonical_code,display_name,commercial_plan,included_user_limit,max_user_limit,identity_account_counts|physical_workspace_id_withheld
-WorkspaceIdentityUsageResolve=canonical_workspace_code,expected_top_level_workspace_revision|active_workspace_locked_and_rechecked|typed_commercial_configuration|identity_account_counts|same_action_uow|physical_workspace_id_withheld
+WorkspaceIdentityUsageProjection=canonical_code,display_name,identity_account_counts|physical_workspace_id_withheld
+WorkspaceIdentityUsageResolve=canonical_workspace_code,expected_top_level_workspace_revision|active_workspace_locked_and_rechecked|identity_account_counts|same_action_uow|physical_workspace_id_withheld
 ProjectExtensions.BusinessHandlers=[]BusinessHandler
 ProjectExtensions.AssigneeResolvers=[]AssigneeResolver
 ProjectExtensions.WorkspaceBootstrapParticipant=WorkspaceBootstrapParticipant
@@ -171,11 +168,11 @@ func contractStructTypes() []reflect.Type {
 	structs := []any{
 		BusinessProfileReference{}, Principal{}, Workspace{}, ExecutionIdentity{}, ActionObjectCapability{}, ActionConnectorCapability{}, FileVerificationRequest{}, FileVerificationEvidence{}, FileRecordBinding{}, VerifiedFileRequest{}, VerifiedFile{}, FileDownloadRequest{}, FileDownloadTicket{}, DerivedFileRequest{}, DerivedFileEvidence{}, UploadedFileRequest{}, UploadedFileInspection{}, KnowledgeFileReadRequest{}, KnowledgeFileEvidence{}, KnowledgeFileBindingRequest{}, BusinessJobRequest{}, BusinessJobReceipt{}, RecordNotificationRecipientRequest{}, RecordManagerRecipientRequest{},
 		CrossWorkspaceAggregateDimension{}, CrossWorkspaceAggregateDimensionTransform{}, CrossWorkspaceAggregateDateBucketTransform{}, CrossWorkspaceAggregateMeasure{}, CrossWorkspaceAggregateFilterCapability{}, CrossWorkspaceAggregateCapability{}, CrossWorkspaceAggregateFilter{}, CrossWorkspaceAggregateRequest{}, CrossWorkspaceAggregateRow{}, CrossWorkspaceAggregateResult{},
-		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{}, StoreOrganizationProvisionRequest{}, StoreOrganizationProvisionResult{}, StoreOrganizationRenameRequest{}, StoreOrganizationDisableRequest{}, StoreOrganizationMutationResult{}, ActionStoreOrganizationMutationCapability{},
+		ActionTargetOrganizationCapability{}, TargetOrganization{}, OrganizationUnitDeliveryCapability{}, OrganizationUnitDeliveryRequest{}, OrganizationUnitResolveRequest{}, OrganizationUnitMutationRequest{}, OrganizationUnit{}, OrganizationUnitDeliveryResult{},
 		AccountErasureCapability{}, AccountErasureStageRequest{}, AccountErasureGetRequest{}, AccountErasureReceipt{},
 		IdentityProfileBindingCapability{}, IdentityHandlerDeliveryCapability{}, IdentityUser{}, IdentityHandlerUserMutation{}, IdentityHandlerProfileBindingMutation{}, IdentityHandlerDeliveryRequest{}, IdentityHandlerProfileBinding{}, IdentityHandlerProfileBindingSelector{}, IdentityHandlerDeliveryResult{}, IdentityBoundIdentity{},
-		StoreOrganizationCatalogCapability{}, StoreOrganizationCatalogRequest{}, StoreOrganizationCatalogItem{}, StoreOrganizationCatalogPage{},
-		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceCommercialTerms{}, WorkspaceCommercialConfiguration{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
+		OrganizationUnitCatalogCapability{}, OrganizationUnitCatalogRequest{}, OrganizationUnitCatalogItem{}, OrganizationUnitCatalogPage{},
+		WorkspaceIdentityUsageCapability{}, WorkspaceIdentityUsageRequest{}, WorkspaceIdentityUsageResolveRequest{}, WorkspaceIdentityAccountCounts{}, WorkspaceIdentityUsageItem{}, WorkspaceIdentityUsagePage{}, WorkspaceIdentityUsageResolveResult{},
 		WorkspaceBootstrapInputField{}, WorkspaceBootstrapRecordCapability{}, WorkspaceBootstrapDescriptor{}, WorkspaceBootstrapContext{}, WorkspaceBootstrapRecord{},
 		HandlerDescriptor{}, BusinessHandlerBinding{}, ProjectExtensionDescriptor{},
 		AssigneeResolverConfigField{}, AssigneeResolverRecordCapability{}, AssigneeResolverRelationCapability{}, AssigneeResolverDescriptor{}, AssigneeRecordFilter{}, AssigneeRecordListRequest{}, AssigneeRelationRequest{}, AssigneeRecord{}, AssigneeIdentityUser{}, AssigneeResolverContext{}, AssigneeEvidenceFact{}, AssigneeResolverCandidate{}, AssigneeResolverBinding{},

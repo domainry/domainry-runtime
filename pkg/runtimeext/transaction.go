@@ -54,9 +54,9 @@ type RecordQuery struct {
 	// AfterID echoes a prior Record.Cursor for an id-ascending scan. It is not
 	// a business identity and cannot be constructed from Record.ID.
 	AfterID string
-	// StoreOrganization is an execution-scoped catalog reference used only by
+	// OrganizationUnit is an execution-scoped catalog reference used only by
 	// generated catalog-owned list methods. It is not a business-field filter.
-	StoreOrganization *StoreOrganizationCatalogItem
+	OrganizationUnit *OrganizationUnitCatalogItem
 }
 
 func (q RecordQuery) Valid() bool {
@@ -68,18 +68,18 @@ func (q RecordQuery) Valid() bool {
 	}
 	switch q.Operation {
 	case QueryGet, QueryGetForUpdate:
-		return q.StoreOrganization == nil && strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
+		return q.OrganizationUnit == nil && strings.TrimSpace(q.RecordID) != "" && len(q.Filters) == 0 && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	case QueryList:
 		if strings.TrimSpace(q.RecordID) != "" || recordQueryContainsRuntimeOwnedFilter(q.Filters) {
 			return false
 		}
-		if q.StoreOrganization != nil {
-			_, _, valid := ResolveStoreOrganizationCatalogItem(*q.StoreOrganization)
+		if q.OrganizationUnit != nil {
+			_, _, valid := ResolveOrganizationUnitCatalogItem(*q.OrganizationUnit)
 			return valid
 		}
 		return true
 	case QueryExists, QueryCount:
-		return q.StoreOrganization == nil && !recordQueryContainsRuntimeOwnedFilter(q.Filters) && strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
+		return q.OrganizationUnit == nil && !recordQueryContainsRuntimeOwnedFilter(q.Filters) && strings.TrimSpace(q.RecordID) == "" && len(q.Sorts) == 0 && len(q.Projection) == 0 && q.Limit == 0 && strings.TrimSpace(q.AfterID) == ""
 	default:
 		return false
 	}

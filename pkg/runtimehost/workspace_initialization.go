@@ -93,7 +93,7 @@ func (manager *projectWorkspaceManager) Activate(ctx context.Context, model proj
 	defer manager.mu.Unlock()
 	if manager.binding != nil && manager.binding.Descriptor().Mode == identitysdk.DeploymentModeExternal {
 		for _, handler := range handlerDescriptors {
-			if handler.TargetOrganization != nil || handler.OrganizationUnitDelivery != nil || handler.IdentityHandlerDelivery != nil || handler.AccountErasure != nil || handler.StoreOrganizationCatalog != nil || handler.StoreOrganizationMutation != nil || handler.WorkspaceIdentityUsage != nil {
+			if handler.TargetOrganization != nil || handler.OrganizationUnitDelivery != nil || handler.IdentityHandlerDelivery != nil || handler.AccountErasure != nil || handler.OrganizationUnitCatalog != nil || handler.WorkspaceIdentityUsage != nil {
 				return fmt.Errorf("external identity does not provide organization or account administration required by handler %q", handler.ActionKey)
 			}
 		}
@@ -208,7 +208,7 @@ func developmentIdentityRequest(cfg config.Config, options *DevelopmentIdentityO
 	}
 	for _, organization := range options.Organizations {
 		request.Organizations = append(request.Organizations, identitysdk.WorkspaceAcceptanceOrganization{
-			ID: strings.TrimSpace(organization.ID), Code: strings.TrimSpace(organization.Code), Name: strings.TrimSpace(organization.Name),
+			ID: strings.TrimSpace(organization.ID), Code: strings.TrimSpace(organization.Code), Name: strings.TrimSpace(organization.Name), NodeType: strings.TrimSpace(organization.NodeType),
 		})
 	}
 	for _, actor := range options.Actors {
@@ -240,15 +240,6 @@ func (manager *projectWorkspaceManager) bindWorkspaceBootstrapCatalogsWithRoleCa
 }
 
 func initialWorkspaceRequest(cfg config.Config) (workspaceprovisionmodel.Request, error) {
-	configuration := workspaceprovisionmodel.CommercialConfiguration{}
-	decoder := json.NewDecoder(bytes.NewBufferString(strings.TrimSpace(cfg.InitialWorkspaceCommercialConfigurationJSON)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&configuration); err != nil {
-		return workspaceprovisionmodel.Request{}, fmt.Errorf("INITIAL_WORKSPACE_COMMERCIAL_CONFIGURATION_JSON must match the typed commercial contract: %w", err)
-	}
-	if err := requireJSONEOF(decoder); err != nil {
-		return workspaceprovisionmodel.Request{}, fmt.Errorf("INITIAL_WORKSPACE_COMMERCIAL_CONFIGURATION_JSON must contain exactly one JSON object: %w", err)
-	}
 	applicationBootstrap := map[string]any{}
 	applicationBootstrapJSON := strings.TrimSpace(cfg.InitialWorkspaceApplicationBootstrapJSON)
 	if applicationBootstrapJSON == "" {
@@ -268,10 +259,9 @@ func initialWorkspaceRequest(cfg config.Config) (workspaceprovisionmodel.Request
 	}
 	return workspaceprovisionmodel.Request{
 		RequestID: strings.TrimSpace(cfg.InitialWorkspaceRequestID), WorkspaceCode: strings.TrimSpace(cfg.InitialWorkspaceCode),
-		WorkspaceName: strings.TrimSpace(cfg.InitialWorkspaceName), FirstStoreCode: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreCode),
-		FirstStoreName: strings.TrimSpace(cfg.InitialWorkspaceFirstStoreName), AdminLoginID: strings.TrimSpace(cfg.InitialWorkspaceAdminLoginID),
+		WorkspaceName: strings.TrimSpace(cfg.InitialWorkspaceName), AdminLoginID: strings.TrimSpace(cfg.InitialWorkspaceAdminLoginID),
 		AdminName: strings.TrimSpace(cfg.InitialWorkspaceAdminName), InitialAdminPassword: initialPassword,
-		InitialAdminMustChangePassword: mustChangePassword, CommercialConfiguration: configuration, ApplicationBootstrap: applicationBootstrap,
+		InitialAdminMustChangePassword: mustChangePassword, ApplicationBootstrap: applicationBootstrap,
 	}, nil
 }
 

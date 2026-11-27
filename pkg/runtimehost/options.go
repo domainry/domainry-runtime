@@ -169,9 +169,10 @@ type DevelopmentIdentityOptions struct {
 }
 
 type DevelopmentIdentityOrganization struct {
-	ID   string
-	Code string
-	Name string
+	ID       string
+	Code     string
+	Name     string
+	NodeType string
 }
 
 type DevelopmentIdentityActor struct {

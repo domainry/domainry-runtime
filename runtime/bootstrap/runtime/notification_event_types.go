@@ -60,8 +60,6 @@ func notificationBuiltInEventTypes(locales []string, defaultLocale string, looku
 		integrationResourceHealthEventType("integration.quota.warning", "integration.quota.warning.in_app", "warning", true),
 		integrationResourceHealthEventType("integration.quota.exhausted", "integration.quota.exhausted.in_app", "critical", true),
 		integrationResourceHealthEventType("integration.quota.recovered", "integration.quota.recovered.in_app", "info", false),
-		integrationResourceHealthEventType("integration.billing.payment_required", "integration.billing.payment_required.in_app", "critical", true),
-		integrationResourceHealthEventType("integration.billing.recovered", "integration.billing.recovered.in_app", "info", false),
 		integrationInstallationHealthEventType("integration.health.degraded", "integration.health.degraded.in_app", "critical"),
 		integrationInstallationHealthEventType("integration.health.recovered", "integration.health.recovered.in_app", "info"),
 		reportSnapshotEventType("report.snapshot.completed", "report.snapshot.completed.in_app", "info"),
@@ -188,7 +186,7 @@ func integrationResourceHealthEventType(key, templateKey, severity string, actio
 		Key: key, Source: "integration", Category: "integration", DefaultSeverity: severity, MandatoryInApp: true,
 		TemplateKey: templateKey, Variables: []notificationmodel.NotificationTemplateVariable{
 			{Key: "connection_name", Type: "string", Required: true}, {Key: "provider_key", Type: "string"},
-			{Key: "quota_used_percent", Type: "number"}, {Key: "balance_band", Type: "string"},
+			{Key: "quota_used_percent", Type: "number"},
 			{Key: "capability_blocked", Type: "boolean"}, {Key: "observed_at", Type: "string"}, {Key: "error_code", Type: "string"},
 		},
 	}
@@ -235,8 +233,6 @@ func notificationBuiltInPresentationKeys(eventType string) ([]string, []string) 
 		return []string{"errorCode"}, []string{"integration.connection.open"}
 	case "integration.quota.warning", "integration.quota.exhausted":
 		return []string{"quotaUsed", "observedAt"}, []string{"integration.connection.open"}
-	case "integration.billing.payment_required":
-		return []string{"balanceBand", "observedAt"}, []string{"integration.connection.open"}
 	case "report.snapshot.completed", "report.snapshot.failed":
 		return nil, []string{"report.open"}
 	case "record.export.completed":

@@ -7,5 +7,4 @@ func (handler *WorkspaceProvisionHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /workspaces", handler.provision)
 	mux.HandleFunc("POST /workspaces/{workspaceCode}/suspend", handler.suspend)
 	mux.HandleFunc("POST /workspaces/{workspaceCode}/reactivate", handler.reactivate)
-	mux.HandleFunc("PUT /workspaces/{workspaceCode}/commercial-configuration", handler.updateCommercialConfiguration)
 }

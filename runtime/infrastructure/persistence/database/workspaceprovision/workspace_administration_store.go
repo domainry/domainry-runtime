@@ -153,82 +153,6 @@ func (store *WorkspaceAdministrationStore) SetWorkspaceStatus(ctx context.Contex
 	return response, nil
 }
 
-func (store *WorkspaceAdministrationStore) UpdateWorkspaceCommercialConfiguration(ctx context.Context, actor workspaceprovisionmodel.AdministrationActor, canonicalCode string, request workspaceprovisionmodel.CommercialConfigurationUpdateRequest, idempotencyKey string) (workspaceprovisionmodel.CommercialConfigurationUpdateResult, error) {
-	if store == nil || store.runtime == nil || store.runtime.DB() == nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, workspaceprovisionmodel.ErrAdministrationUnavailable
-	}
-	actionKey := workspaceprovisionapplication.UpdateWorkspaceCommercialConfigurationActionKey
-	fingerprint := workspaceAdministrationFingerprint(actionKey, canonicalCode, request.ExpectedRevision, request.Configuration)
-	operationID, err := workspaceAdministrationOperationID(actor, actionKey, idempotencyKey)
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if replay, found, err := store.commercialReceipt(ctx, store.runtime.DB(), operationID, fingerprint); found || err != nil {
-		return replay, err
-	}
-	tx, err := store.beginAdministrationTransaction(ctx)
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if replay, found, err := store.commercialReceipt(ctx, tx, operationID, fingerprint); found || err != nil {
-		return replay, err
-	}
-	workspaceID, _, before, err := store.workspaceForUpdate(ctx, tx, canonicalCode)
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if before.Revision != request.ExpectedRevision {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, workspaceprovisionmodel.ErrRevisionConflict
-	}
-	configuration := request.Configuration
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	update, arguments, err := query.NewUpdateBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
-		Set("plan", configuration.Plan).
-		Set("included_user_limit", configuration.IncludedUserLimit).Set("max_user_limit", configuration.MaxUserLimit).
-		Set("included_customer_limit", configuration.IncludedCustomerLimit).Set("max_customer_limit", configuration.MaxCustomerLimit).
-		Set("included_store_limit", configuration.IncludedStoreLimit).Set("max_stores", configuration.MaxStores).
-		Set("contract_date", configuration.ContractDate).Set("billing_day", configuration.BillingDay).
-		Set("billing_contact_name", configuration.BillingContactName).Set("billing_contact_phone", configuration.BillingContactPhone).
-		Set("billing_contact_email", configuration.BillingContactEmail).Set("billing_contact_address", configuration.BillingContactAddress).
-		Set("billing_contact_notes", configuration.BillingContactNotes).
-		SetExpression("commercial_revision", query.Add(query.Column("commercial_revision"), query.Value(1))).
-		SetExpression("revision", query.Add(query.Column("revision"), query.Value(1))).Set("updated_at", timevalue.Millis(now)).
-		Where(query.And(
-			query.Equal("workspace_id", workspaceID),
-			query.Equal("revision", request.ExpectedRevision),
-			query.Equal("commercial_revision", before.CommercialConfiguration.Revision),
-		)).Build()
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	result, err := tx.ExecContext(ctx, update, arguments...)
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if affected, _ := result.RowsAffected(); affected != 1 {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, workspaceprovisionmodel.ErrRevisionConflict
-	}
-	after, err := store.workspaceEntryByID(ctx, tx, workspaceID)
-	if err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	response := workspaceprovisionmodel.CommercialConfigurationUpdateResult{Workspace: after}
-	if err := store.appendAdministrationAudit(ctx, tx, operationID, workspaceID, actor, actionKey, canonicalCode,
-		map[string]any{"revision": before.Revision},
-		map[string]any{"revision": after.Revision},
-		map[string]any{"updated_fields": []string{"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact"}}); err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if err := store.insertReceipt(ctx, tx, actor, operationID, fingerprint, actionKey, workspaceID, response, now); err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, err
-	}
-	return response, nil
-}
-
 func (store *WorkspaceAdministrationStore) WorkspaceActive(ctx context.Context, workspaceID string) (bool, error) {
 	if store == nil || store.runtime == nil || store.runtime.DB() == nil || strings.TrimSpace(workspaceID) == "" {
 		return false, workspaceprovisionmodel.ErrAdministrationUnavailable
@@ -321,39 +245,24 @@ type workspaceCatalogScanner interface{ Scan(...any) error }
 
 func scanWorkspaceCatalogEntry(scanner workspaceCatalogScanner) (workspaceprovisionmodel.CatalogEntry, error) {
 	var entry workspaceprovisionmodel.CatalogEntry
-	configuration := &entry.CommercialConfiguration
 	err := scanner.Scan(
 		&entry.CanonicalCode, &entry.DisplayName, &entry.Status, &entry.Revision,
-		&configuration.Plan, &configuration.IncludedUserLimit, &configuration.MaxUserLimit,
-		&configuration.IncludedCustomerLimit, &configuration.MaxCustomerLimit, &configuration.IncludedStoreLimit, &configuration.MaxStores,
-		&configuration.ContractDate, &configuration.BillingDay, &configuration.BillingContactName, &configuration.BillingContactPhone,
-		&configuration.BillingContactEmail, &configuration.BillingContactAddress, &configuration.BillingContactNotes, &configuration.Revision,
 	)
 	return entry, err
 }
 
 func workspaceCatalogProjections() []query.Projection {
 	columns := []string{"canonical_code", "name", "status", "revision"}
-	result := make([]query.Projection, 0, 19)
+	result := make([]query.Projection, 0, len(columns))
 	for _, column := range columns {
-		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
-	}
-	for _, column := range []string{"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit", "included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision"} {
 		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
 	}
 	return result
 }
 
 func validateWorkspaceCatalogEntry(entry workspaceprovisionmodel.CatalogEntry) error {
-	configuration := entry.CommercialConfiguration
-	if workspaceprovisionvalidation.ValidateCanonicalCode(entry.CanonicalCode) != nil || strings.TrimSpace(entry.DisplayName) == "" || entry.Revision < 1 || configuration.Revision < 1 ||
-		(entry.Status != workspaceprovisionmodel.WorkspaceStatusActive && entry.Status != workspaceprovisionmodel.WorkspaceStatusSuspended) ||
-		strings.TrimSpace(configuration.Plan) == "" || configuration.IncludedUserLimit < 0 || configuration.MaxUserLimit < configuration.IncludedUserLimit ||
-		configuration.IncludedCustomerLimit < 0 || configuration.MaxCustomerLimit < configuration.IncludedCustomerLimit ||
-		configuration.IncludedStoreLimit < 1 || configuration.MaxStores < configuration.IncludedStoreLimit || configuration.BillingDay < 1 || configuration.BillingDay > 31 {
-		return workspaceprovisionmodel.ErrAdministrationUnavailable
-	}
-	if _, err := time.Parse("2006-01-02", configuration.ContractDate); err != nil {
+	if workspaceprovisionvalidation.ValidateCanonicalCode(entry.CanonicalCode) != nil || strings.TrimSpace(entry.DisplayName) == "" || entry.Revision < 1 ||
+		(entry.Status != workspaceprovisionmodel.WorkspaceStatusActive && entry.Status != workspaceprovisionmodel.WorkspaceStatusSuspended) {
 		return workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
 	return nil
@@ -429,20 +338,6 @@ func (store *WorkspaceAdministrationStore) lifecycleReceipt(ctx context.Context,
 	var result workspaceprovisionmodel.LifecycleResult
 	if database.UnmarshalTimeJSON([]byte(raw), &result) != nil {
 		return workspaceprovisionmodel.LifecycleResult{}, true, workspaceprovisionmodel.ErrAdministrationUnavailable
-	}
-	result.Replayed = true
-	return result, true, nil
-}
-
-func (store *WorkspaceAdministrationStore) commercialReceipt(ctx context.Context, executor workspaceAdministrationTx, id, fingerprint string) (workspaceprovisionmodel.CommercialConfigurationUpdateResult, bool, error) {
-	var raw string
-	found, err := store.receiptJSON(ctx, executor, id, fingerprint, &raw)
-	if !found || err != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, found, err
-	}
-	var result workspaceprovisionmodel.CommercialConfigurationUpdateResult
-	if database.UnmarshalTimeJSON([]byte(raw), &result) != nil {
-		return workspaceprovisionmodel.CommercialConfigurationUpdateResult{}, true, workspaceprovisionmodel.ErrAdministrationUnavailable
 	}
 	result.Replayed = true
 	return result, true, nil

@@ -181,15 +181,11 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err := store.validateApplicationBootstrapRequest(request.ApplicationBootstrap); err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	configuration, err := database.MarshalTimeJSON(request.CommercialConfiguration)
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
-	}
 	applicationInput, err := database.MarshalTimeJSON(request.ApplicationBootstrap)
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, workspaceprovisionmodel.ErrInvalid
 	}
-	fingerprint := requestFingerprint(request, configuration, applicationInput)
+	fingerprint := requestFingerprint(request, applicationInput)
 	if replay, found, replayErr := store.receipt(ctx, request.RequestID, fingerprint); found || replayErr != nil {
 		if replayErr != nil {
 			return workspaceprovisionmodel.Result{}, replayErr
@@ -224,16 +220,12 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
-	firstStoreID, err := randomID("store")
-	if err != nil {
-		return workspaceprovisionmodel.Result{}, err
-	}
 	adminUserID, err := randomID("user")
 	if err != nil {
 		return workspaceprovisionmodel.Result{}, err
 	}
 	result = workspaceprovisionmodel.Result{
-		WorkspaceID: workspaceID, CompanyID: companyID, FirstStoreID: firstStoreID,
+		WorkspaceID: workspaceID, CompanyID: companyID,
 		InitialAdminUserID: adminUserID, CanonicalCode: request.WorkspaceCode,
 		AdminLoginID: request.AdminLoginID, MustChangePassword: request.InitialAdminMustChangePassword,
 		CredentialDelivery: workspaceprovisionmodel.CredentialUnavailableResetRequired,
@@ -280,7 +272,6 @@ func (store *WorkspaceProvisionStore) provision(ctx context.Context, request wor
 		ContractHash:    identitysdk.WorkspaceIdentityBootstrapContractHash,
 		InvocationID:    request.RequestID, WorkspaceID: result.WorkspaceID,
 		CompanyID: result.CompanyID, CompanyCode: request.WorkspaceCode + "-company", CompanyName: request.WorkspaceName,
-		FirstStoreID: result.FirstStoreID, FirstStoreCode: request.FirstStoreCode, FirstStoreName: request.FirstStoreName,
 		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: request.AdminLoginID, InitialAdminName: request.AdminName,
 		// Runtime generates a one-time secret for Identity's closed bootstrap
 		// transaction. It is never authored in model.json or retained in project
@@ -362,7 +353,7 @@ func validateIdentityReceipt(result workspaceprovisionmodel.Result, invocationID
 	if receipt.ContractVersion != identitysdk.WorkspaceIdentityBootstrapContractVersion || receipt.ContractHash != identitysdk.WorkspaceIdentityBootstrapContractHash {
 		return fmt.Errorf("Identity workspace bootstrap returned an invalid contract receipt")
 	}
-	if receipt.InvocationID != invocationID || receipt.WorkspaceID != result.WorkspaceID || receipt.CompanyID != result.CompanyID || receipt.FirstStoreID != result.FirstStoreID || receipt.InitialAdminUserID != result.InitialAdminUserID || strings.TrimSpace(receipt.ReceiptID) == "" || strings.TrimSpace(receipt.InitialAdminLoginID) == "" {
+	if receipt.InvocationID != invocationID || receipt.WorkspaceID != result.WorkspaceID || receipt.CompanyID != result.CompanyID || receipt.InitialAdminUserID != result.InitialAdminUserID || strings.TrimSpace(receipt.ReceiptID) == "" || strings.TrimSpace(receipt.InitialAdminLoginID) == "" {
 		return fmt.Errorf("Identity workspace bootstrap returned an invalid authority receipt")
 	}
 	if rolePolicy.RoleCatalogSHA256 == "" || receipt.RoleCatalogSHA256 != rolePolicy.RoleCatalogSHA256 {
@@ -402,8 +393,8 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 		return workspaceprovisionmodel.ErrInvalid
 	}
 	records, err := store.participant.BuildWorkspaceBootstrap(ctx, runtimeext.WorkspaceBootstrapContext{
-		WorkspaceCode:            result.CanonicalCode,
-		FirstStoreOrganizationID: result.FirstStoreID, InitialAdministratorUserID: result.InitialAdminUserID,
+		WorkspaceCode:      result.CanonicalCode,
+		RootOrganizationID: result.CompanyID, InitialAdministratorUserID: result.InitialAdminUserID,
 	}, normalizedInput)
 	if err != nil {
 		return fmt.Errorf("build application Workspace bootstrap: %w", err)
@@ -446,11 +437,7 @@ func (store *WorkspaceProvisionStore) insertApplicationBootstrap(ctx context.Con
 			return fmt.Errorf("derive application Workspace bootstrap record identity: %w", identityErr)
 		}
 		columns := []string{"workspace_id", recordschema.EntityIDColumn(object.Key), "owner_org_id", "created_at", "updated_at"}
-		values := []any{result.WorkspaceID, recordID, result.FirstStoreID, nowMillis, nowMillis}
-		if result.FirstStoreID == "" && result.InitialAdminUserID != "" {
-			columns = append(columns, "owner_user_id")
-			values = append(values, result.InitialAdminUserID)
-		}
+		values := []any{result.WorkspaceID, recordID, result.CompanyID, nowMillis, nowMillis}
 		rawData := make(map[string]any, len(record.Data))
 		keys := make([]string, 0, len(record.Data))
 		for key := range record.Data {
@@ -540,23 +527,16 @@ func stableApplicationBootstrapRecordID(workspaceID, capabilityKey, objectKey st
 func (store *WorkspaceProvisionStore) insertRuntimeWorkspace(ctx context.Context, tx *sql.Tx, request workspaceprovisionmodel.Request, result workspaceprovisionmodel.Result, installationIdentity string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	nowMillis := timevalue.Millis(now)
-	configuration := request.CommercialConfiguration
 	var initialIdentity any
 	if installationIdentity != "" {
 		initialIdentity = installationIdentity
 	}
 	if err := insert(ctx, tx, query.NewInsertBuilder(store.runtime.RuntimeRenderer(), "_workspaces").
 		Columns(
-			"workspace_id", "canonical_code", "name", "status", "initial_installation_identity",
-			"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
-			"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name", "billing_contact_phone",
-			"billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision", "revision", "created_at", "updated_at",
+			"workspace_id", "canonical_code", "name", "status", "initial_installation_identity", "revision", "created_at", "updated_at",
 		).
 		Values(
-			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity,
-			configuration.Plan, configuration.IncludedUserLimit, configuration.MaxUserLimit, configuration.IncludedCustomerLimit, configuration.MaxCustomerLimit,
-			configuration.IncludedStoreLimit, configuration.MaxStores, configuration.ContractDate, configuration.BillingDay, configuration.BillingContactName, configuration.BillingContactPhone,
-			configuration.BillingContactEmail, configuration.BillingContactAddress, configuration.BillingContactNotes, 1, 1, nowMillis, nowMillis,
+			result.WorkspaceID, result.CanonicalCode, request.WorkspaceName, "active", initialIdentity, 1, nowMillis, nowMillis,
 		)); err != nil {
 		return err
 	}
@@ -622,7 +602,7 @@ func (store *WorkspaceProvisionStore) receipt(ctx context.Context, requestID, fi
 		return workspaceprovisionmodel.Result{}, true, workspaceprovisionmodel.ErrIdentityUnavailable
 	}
 	result = workspaceprovisionmodel.Result{
-		WorkspaceID: storedResult.WorkspaceID, CompanyID: storedResult.CompanyID, FirstStoreID: storedResult.FirstStoreID,
+		WorkspaceID: storedResult.WorkspaceID, CompanyID: storedResult.CompanyID,
 		InitialAdminUserID: storedResult.InitialAdminUserID, CanonicalCode: storedResult.CanonicalCode,
 		AdminLoginID: storedResult.AdminLoginID, MustChangePassword: storedResult.MustChangePassword,
 	}
@@ -637,7 +617,6 @@ func workspaceProvisioningOperationID(requestID string) (string, error) {
 type workspaceProvisioningOperationResult struct {
 	WorkspaceID        string `json:"workspace_id"`
 	CompanyID          string `json:"company_id"`
-	FirstStoreID       string `json:"first_store_id"`
 	InitialAdminUserID string `json:"initial_admin_user_id"`
 	CanonicalCode      string `json:"canonical_code"`
 	AdminLoginID       string `json:"admin_login_id"`
@@ -646,7 +625,7 @@ type workspaceProvisioningOperationResult struct {
 
 func workspaceProvisioningOperationJSON(result workspaceprovisionmodel.Result, receipt identitysdk.WorkspaceIdentityBootstrapReceipt) (string, string, string, string, error) {
 	resultValue := workspaceProvisioningOperationResult{
-		WorkspaceID: result.WorkspaceID, CompanyID: result.CompanyID, FirstStoreID: result.FirstStoreID,
+		WorkspaceID: result.WorkspaceID, CompanyID: result.CompanyID,
 		InitialAdminUserID: result.InitialAdminUserID, CanonicalCode: result.CanonicalCode,
 		AdminLoginID: result.AdminLoginID, MustChangePassword: result.MustChangePassword,
 	}
@@ -663,7 +642,7 @@ func workspaceProvisioningOperationJSON(result workspaceprovisionmodel.Result, r
 	if err != nil {
 		return "", "", "", "", err
 	}
-	relatedIDs, _ := database.MarshalTimeJSON([]string{result.WorkspaceID, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID})
+	relatedIDs, _ := database.MarshalTimeJSON([]string{result.WorkspaceID, result.CompanyID, result.InitialAdminUserID})
 	evidence, _ := database.MarshalTimeJSON([]string{receipt.ReceiptID})
 	return string(resultJSON), string(metadataJSON), string(relatedIDs), string(evidence), nil
 }
@@ -707,8 +686,8 @@ func (store *WorkspaceProvisionStore) identityFailureInjector() identitysdk.Work
 	return identityFailureInjectorAdapter{failures: store.failures}
 }
 
-func requestFingerprint(request workspaceprovisionmodel.Request, configuration, applicationInput []byte) string {
-	payload := strings.Join([]string{request.WorkspaceCode, request.WorkspaceName, request.FirstStoreCode, request.FirstStoreName, request.AdminLoginID, request.AdminName, request.InitialAdminPassword, fmt.Sprintf("must_change_password=%t", request.InitialAdminMustChangePassword), string(configuration), string(applicationInput)}, "\x00")
+func requestFingerprint(request workspaceprovisionmodel.Request, applicationInput []byte) string {
+	payload := strings.Join([]string{request.WorkspaceCode, request.WorkspaceName, request.AdminLoginID, request.AdminName, request.InitialAdminPassword, fmt.Sprintf("must_change_password=%t", request.InitialAdminMustChangePassword), string(applicationInput)}, "\x00")
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
 }

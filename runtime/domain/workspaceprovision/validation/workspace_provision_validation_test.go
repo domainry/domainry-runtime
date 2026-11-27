@@ -11,12 +11,7 @@ import (
 func validRequest() workspaceprovisionmodel.Request {
 	return workspaceprovisionmodel.Request{
 		RequestID: "request-1", WorkspaceCode: "workspace-one", WorkspaceName: "Workspace One",
-		FirstStoreCode: "store-one", FirstStoreName: "Store One", AdminLoginID: "admin@example.com", AdminName: "Administrator",
-		CommercialConfiguration: workspaceprovisionmodel.CommercialConfiguration{
-			Plan: "standard", IncludedUserLimit: 1, MaxUserLimit: 10,
-			IncludedCustomerLimit: 0, MaxCustomerLimit: 100,
-			IncludedStoreLimit: 1, MaxStores: 2, ContractDate: "2026-09-06", BillingDay: 6,
-		},
+		AdminLoginID: "admin@example.com", AdminName: "Administrator",
 	}
 }
 
@@ -36,7 +31,7 @@ func TestWorkspaceProvisionValidationOwnsCanonicalCodeSyntax(t *testing.T) {
 	}
 }
 
-func TestWorkspaceProvisionValidationSharesCommercialRules(t *testing.T) {
+func TestWorkspaceProvisionValidationOwnsWorkspaceRules(t *testing.T) {
 	request := NormalizeRequest(validRequest())
 	if err := ValidateRequest(request); err != nil {
 		t.Fatalf("valid request: %v", err)
@@ -46,14 +41,4 @@ func TestWorkspaceProvisionValidationSharesCommercialRules(t *testing.T) {
 		t.Fatalf("reserved Workspace code: %v", err)
 	}
 
-	configuration := validRequest().CommercialConfiguration
-	configuration.MaxStores = 0
-	if err := ValidateCommercialConfiguration(configuration); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
-		t.Fatalf("invalid store limit: %v", err)
-	}
-	configuration = validRequest().CommercialConfiguration
-	configuration.ContractDate = "2026-02-30"
-	if err := ValidateCommercialConfiguration(configuration); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
-		t.Fatalf("invalid contract date: %v", err)
-	}
 }

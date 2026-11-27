@@ -15,38 +15,15 @@ var (
 	ErrAcceptanceFailure = errors.New("workspace provisioning acceptance failure")
 )
 
-// CommercialConfiguration is Runtime's typed commercial contract. It is not
-// an application configuration bag: callers cannot use it to choose database
-// objects, fields, ownership, SQL, or projections.
-type CommercialConfiguration struct {
-	Plan                  string `json:"plan"`
-	IncludedUserLimit     int    `json:"included_user_limit"`
-	MaxUserLimit          int    `json:"max_user_limit"`
-	IncludedCustomerLimit int    `json:"included_customer_limit"`
-	MaxCustomerLimit      int    `json:"max_customer_limit"`
-	IncludedStoreLimit    int    `json:"included_store_limit"`
-	MaxStores             int    `json:"max_stores"`
-	ContractDate          string `json:"contract_date"`
-	BillingDay            int    `json:"billing_day"`
-	BillingContactName    string `json:"billing_contact_name"`
-	BillingContactPhone   string `json:"billing_contact_phone"`
-	BillingContactEmail   string `json:"billing_contact_email"`
-	BillingContactAddress string `json:"billing_contact_address"`
-	BillingContactNotes   string `json:"billing_contact_notes"`
-}
-
 type Request struct {
-	RequestID                      string                  `json:"request_id"`
-	WorkspaceCode                  string                  `json:"workspace_code"`
-	WorkspaceName                  string                  `json:"workspace_name"`
-	FirstStoreCode                 string                  `json:"first_store_code"`
-	FirstStoreName                 string                  `json:"first_store_name"`
-	AdminLoginID                   string                  `json:"admin_login_id"`
-	AdminName                      string                  `json:"admin_name"`
-	InitialAdminPassword           string                  `json:"-"`
-	InitialAdminMustChangePassword bool                    `json:"-"`
-	CommercialConfiguration        CommercialConfiguration `json:"commercial_configuration"`
-	ApplicationBootstrap           map[string]any          `json:"application_bootstrap,omitempty"`
+	RequestID                      string         `json:"request_id"`
+	WorkspaceCode                  string         `json:"workspace_code"`
+	WorkspaceName                  string         `json:"workspace_name"`
+	AdminLoginID                   string         `json:"admin_login_id"`
+	AdminName                      string         `json:"admin_name"`
+	InitialAdminPassword           string         `json:"-"`
+	InitialAdminMustChangePassword bool           `json:"-"`
+	ApplicationBootstrap           map[string]any `json:"application_bootstrap,omitempty"`
 }
 
 type CredentialDeliveryStatus string
@@ -69,6 +46,5 @@ type Result struct {
 
 	WorkspaceID        string `json:"-"`
 	CompanyID          string `json:"-"`
-	FirstStoreID       string `json:"-"`
 	InitialAdminUserID string `json:"-"`
 }

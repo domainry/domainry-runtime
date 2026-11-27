@@ -167,10 +167,8 @@ type RuntimeServicesDependencies struct {
 	IdentityHandlerDeliveryBinder       identitysdk.HandlerDeliveryUnitOfWorkBinder
 	AccountErasures                     lifecyclecontract.AccountErasures
 	OrganizationUnitDeliveryBinder      organizationunit.UnitOfWorkBinder
-	StoreOrganizationDeliveryBinder     identitysdk.StoreOrganizationDeliveryUnitOfWorkBinder
 	WorkspaceIdentityUsageBinder        identitysdk.WorkspaceIdentityUsageUnitOfWorkBinder
 	WorkspaceIdentityUsageCursor        actionapplication.WorkspaceIdentityUsageCursorCodec
-	WorkspaceCommercialConfiguration    actionapplication.WorkspaceCommercialConfigurationLocker
 	Worker                              workerplatform.Dependencies
 }
 

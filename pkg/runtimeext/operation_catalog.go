@@ -52,21 +52,15 @@ func (descriptor HandlerDescriptor) ActionDefinition() (definitionmodel.ActionSc
 		definition.Label = descriptor.ActionKey
 	}
 	if descriptor.TargetOrganization != nil {
-		definition.TargetOrganization = &definitionmodel.ActionTargetOrganizationPolicy{Source: string(descriptor.TargetOrganization.Source), Input: descriptor.TargetOrganization.Input}
+		definition.TargetOrganization = &definitionmodel.ActionTargetOrganizationPolicy{Source: string(descriptor.TargetOrganization.Source), Input: descriptor.TargetOrganization.Input, NodeType: string(descriptor.TargetOrganization.NodeType)}
 	}
 	if descriptor.OrganizationUnitDelivery != nil {
-		definition.OrganizationUnitDelivery = &definitionmodel.ActionOrganizationUnitDeliveryPolicy{ParentSource: string(descriptor.OrganizationUnitDelivery.ParentSource)}
+		definition.OrganizationUnit = &definitionmodel.ActionOrganizationUnitPolicy{ParentSource: string(descriptor.OrganizationUnitDelivery.ParentSource), RetargetCreated: descriptor.OrganizationUnitDelivery.RetargetCreated}
 		for _, value := range descriptor.OrganizationUnitDelivery.Operations {
-			definition.OrganizationUnitDelivery.Operations = append(definition.OrganizationUnitDelivery.Operations, string(value))
+			definition.OrganizationUnit.Operations = append(definition.OrganizationUnit.Operations, string(value))
 		}
 		for _, value := range descriptor.OrganizationUnitDelivery.NodeTypes {
-			definition.OrganizationUnitDelivery.NodeTypes = append(definition.OrganizationUnitDelivery.NodeTypes, string(value))
-		}
-	}
-	if descriptor.StoreOrganizationMutation != nil {
-		definition.StoreOrganizationMutation = &definitionmodel.ActionStoreOrganizationMutationPolicy{}
-		for _, value := range descriptor.StoreOrganizationMutation.Operations {
-			definition.StoreOrganizationMutation.Operations = append(definition.StoreOrganizationMutation.Operations, string(value))
+			definition.OrganizationUnit.NodeTypes = append(definition.OrganizationUnit.NodeTypes, string(value))
 		}
 	}
 	return definition, nil

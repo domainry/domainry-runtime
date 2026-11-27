@@ -20,7 +20,7 @@ func ProjectBusinessHandlerOutput(_ context.Context, principal principalmodel.Pr
 		projected[key] = value
 	}
 	for _, resultField := range action.OutputFields {
-		if strings.TrimSpace(resultField.Type) == "store_organization_snapshot" {
+		if strings.TrimSpace(resultField.Type) == "organization_unit_snapshot" {
 			value, exists := projected[resultField.Key]
 			if !exists {
 				if resultField.Required {
@@ -28,7 +28,7 @@ func ProjectBusinessHandlerOutput(_ context.Context, principal principalmodel.Pr
 				}
 				continue
 			}
-			projectedValue, err := projectStoreOrganizationSnapshotOutput(principal, action.Key, resultField, value, objectForKey)
+			projectedValue, err := projectOrganizationUnitSnapshotOutput(principal, action.Key, resultField, value, objectForKey)
 			if err != nil {
 				return nil, err
 			}

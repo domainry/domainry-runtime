@@ -19,7 +19,6 @@ type AdministrationUseCases interface {
 	List(context.Context, principalmodel.Principal, workspaceprovisionmodel.CatalogQuery) (workspaceprovisionmodel.CatalogPage, error)
 	Suspend(context.Context, principalmodel.Principal, string, int, string) (workspaceprovisionmodel.LifecycleResult, error)
 	Reactivate(context.Context, principalmodel.Principal, string, int, string) (workspaceprovisionmodel.LifecycleResult, error)
-	UpdateCommercialConfiguration(context.Context, principalmodel.Principal, string, workspaceprovisionmodel.CommercialConfigurationUpdateRequest, string) (workspaceprovisionmodel.CommercialConfigurationUpdateResult, error)
 }
 
 type WorkspaceProvisionDependencies struct {
@@ -72,21 +71,6 @@ func (handler *WorkspaceProvisionHandler) setStatus(response http.ResponseWriter
 	} else {
 		result, err = handler.dependencies.Administration.Reactivate(request.Context(), handler.dependencies.Principal(request), request.PathValue("workspaceCode"), input.ExpectedRevision, request.Header.Get("Idempotency-Key"))
 	}
-	if err != nil {
-		handler.dependencies.WriteServiceError(response, request, err)
-		return
-	}
-	response.Header().Set("Cache-Control", "no-store")
-	response.Header().Set("Idempotency-Replayed", strconv.FormatBool(result.Replayed))
-	handler.dependencies.WriteJSON(response, http.StatusOK, result)
-}
-
-func (handler *WorkspaceProvisionHandler) updateCommercialConfiguration(response http.ResponseWriter, request *http.Request) {
-	var input workspaceprovisionmodel.CommercialConfigurationUpdateRequest
-	if !handler.dependencies.DecodeJSON(response, request, &input) {
-		return
-	}
-	result, err := handler.dependencies.Administration.UpdateCommercialConfiguration(request.Context(), handler.dependencies.Principal(request), request.PathValue("workspaceCode"), input, request.Header.Get("Idempotency-Key"))
 	if err != nil {
 		handler.dependencies.WriteServiceError(response, request, err)
 		return

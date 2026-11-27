@@ -133,37 +133,36 @@ func GeneratedActionOutputFields(fields ...GeneratedActionOutputField) []definit
 // HandlerDescriptor is the Runtime-readable identity of a typed Handler
 // wrapper.
 type HandlerDescriptor struct {
-	ActionKey                 string
-	ObjectKey                 string
-	Label                     string
-	PermissionGrantMode       string
-	Kind                      string
-	RiskLevel                 string
-	Preconditions             []string
-	AuditEvent                string
-	AuditPolicy               string
-	InputType                 string
-	OutputType                string
-	PayloadFields             []definitionmodel.ActionPayloadField
-	OutputFields              []definitionmodel.ActionOutputField
-	Defaults                  map[string]any
-	OptimisticConcurrency     bool
-	ConcurrencyField          string
-	AssurancePolicy           *definitionmodel.ActionAssurancePolicy
-	HandlerRevision           string
-	ObjectCapabilities        []ActionObjectCapability
-	ConnectorCapabilities     []ActionConnectorCapability
-	FileCapabilities          []string
-	NotificationEventTypes    []string
-	CrossWorkspaceAggregates  []CrossWorkspaceAggregateCapability
-	TargetOrganization        *ActionTargetOrganizationCapability
-	OrganizationUnitDelivery  *OrganizationUnitDeliveryCapability
-	IdentityHandlerDelivery   *IdentityHandlerDeliveryCapability
-	AccountErasure            *AccountErasureCapability
-	StoreOrganizationCatalog  *StoreOrganizationCatalogCapability
-	StoreOrganizationMutation *ActionStoreOrganizationMutationCapability
-	WorkspaceIdentityUsage    *WorkspaceIdentityUsageCapability
-	Workflows                 []WorkflowGrant
+	ActionKey                string
+	ObjectKey                string
+	Label                    string
+	PermissionGrantMode      string
+	Kind                     string
+	RiskLevel                string
+	Preconditions            []string
+	AuditEvent               string
+	AuditPolicy              string
+	InputType                string
+	OutputType               string
+	PayloadFields            []definitionmodel.ActionPayloadField
+	OutputFields             []definitionmodel.ActionOutputField
+	Defaults                 map[string]any
+	OptimisticConcurrency    bool
+	ConcurrencyField         string
+	AssurancePolicy          *definitionmodel.ActionAssurancePolicy
+	HandlerRevision          string
+	ObjectCapabilities       []ActionObjectCapability
+	ConnectorCapabilities    []ActionConnectorCapability
+	FileCapabilities         []string
+	NotificationEventTypes   []string
+	CrossWorkspaceAggregates []CrossWorkspaceAggregateCapability
+	TargetOrganization       *ActionTargetOrganizationCapability
+	OrganizationUnitDelivery *OrganizationUnitDeliveryCapability
+	IdentityHandlerDelivery  *IdentityHandlerDeliveryCapability
+	AccountErasure           *AccountErasureCapability
+	OrganizationUnitCatalog  *OrganizationUnitCatalogCapability
+	WorkspaceIdentityUsage   *WorkspaceIdentityUsageCapability
+	Workflows                []WorkflowGrant
 }
 
 func (d HandlerDescriptor) Validate() error {
@@ -309,10 +308,7 @@ func (d HandlerDescriptor) Validate() error {
 	if d.IdentityHandlerDelivery != nil && handlerDeliveryMutatesIdentity(d.IdentityHandlerDelivery.Operations) && d.TargetOrganization == nil {
 		return ErrHandlerCapabilityInvalid
 	}
-	if d.StoreOrganizationCatalog != nil && !d.StoreOrganizationCatalog.Valid() {
-		return ErrHandlerCapabilityInvalid
-	}
-	if d.StoreOrganizationMutation != nil && (!d.StoreOrganizationMutation.Valid() || d.TargetOrganization == nil || d.TargetOrganization.Source != TargetOrganizationSourceRecordOwner) {
+	if d.OrganizationUnitCatalog != nil && !d.OrganizationUnitCatalog.Valid() {
 		return ErrHandlerCapabilityInvalid
 	}
 	if d.WorkspaceIdentityUsage != nil && !d.WorkspaceIdentityUsage.Valid() {
@@ -334,18 +330,32 @@ func organizationUnitDeliveryTargetMatches(target *ActionTargetOrganizationCapab
 	if target == nil || !capability.Valid() {
 		return false
 	}
-	operation := capability.Operations[0]
-	if operation == OrganizationUnitDeliveryResolve {
-		return target.Source == TargetOrganizationSourceExplicit || target.Source == TargetOrganizationSourceRecordOwner
+	for _, operation := range capability.Operations {
+		switch operation {
+		case OrganizationUnitDeliveryCreate:
+			switch capability.ParentSource {
+			case OrganizationUnitParentSourceWorkspaceCompany:
+				if target.Source != TargetOrganizationSourceDeliveredOrganizationUnit {
+					return false
+				}
+			case OrganizationUnitParentSourceTargetOrganization:
+				if target.Source != TargetOrganizationSourceExplicit && target.Source != TargetOrganizationSourceRecordOwner {
+					return false
+				}
+			default:
+				return false
+			}
+		case OrganizationUnitDeliveryResolve:
+			if target.Source != TargetOrganizationSourceExplicit && target.Source != TargetOrganizationSourceRecordOwner {
+				return false
+			}
+		case OrganizationUnitDeliveryRename, OrganizationUnitDeliveryDisable:
+			if target.Source != TargetOrganizationSourceRecordOwner {
+				return false
+			}
+		}
 	}
-	switch capability.ParentSource {
-	case OrganizationUnitParentSourceWorkspaceCompany:
-		return target.Source == TargetOrganizationSourceDeliveredOrganizationUnit
-	case OrganizationUnitParentSourceTargetOrganization:
-		return target.Source == TargetOrganizationSourceExplicit || target.Source == TargetOrganizationSourceRecordOwner
-	default:
-		return false
-	}
+	return true
 }
 
 func handlerDeliveryMutatesIdentity(operations []IdentityHandlerOperation) bool {

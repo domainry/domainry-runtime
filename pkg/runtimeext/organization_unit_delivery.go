@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 )
 
 type OrganizationUnitDeliveryOperation string
@@ -11,31 +13,21 @@ type OrganizationUnitDeliveryOperation string
 const (
 	OrganizationUnitDeliveryCreate  OrganizationUnitDeliveryOperation = "create"
 	OrganizationUnitDeliveryResolve OrganizationUnitDeliveryOperation = "resolve"
+	OrganizationUnitDeliveryRename  OrganizationUnitDeliveryOperation = "rename"
+	OrganizationUnitDeliveryDisable OrganizationUnitDeliveryOperation = "disable"
 )
 
 func (operation OrganizationUnitDeliveryOperation) Valid() bool {
-	return operation == OrganizationUnitDeliveryCreate || operation == OrganizationUnitDeliveryResolve
+	return operation == OrganizationUnitDeliveryCreate || operation == OrganizationUnitDeliveryResolve || operation == OrganizationUnitDeliveryRename || operation == OrganizationUnitDeliveryDisable
 }
 
-// OrganizationUnitNodeType is deliberately narrower than Identity's complete
-// node vocabulary. Company is a host-provisioned root and store creation stays
-// on the quota-governed provisioned_store contract.
+// OrganizationUnitNodeType is a source-owned non-root organization type key.
+// Runtime reserves company for its host-owned root and otherwise treats the
+// product's organization vocabulary as opaque data.
 type OrganizationUnitNodeType string
 
-const (
-	OrganizationUnitNodeTypeRegion     OrganizationUnitNodeType = "region"
-	OrganizationUnitNodeTypeDepartment OrganizationUnitNodeType = "department"
-	OrganizationUnitNodeTypeTeam       OrganizationUnitNodeType = "team"
-	OrganizationUnitNodeTypeWarehouse  OrganizationUnitNodeType = "warehouse"
-)
-
 func (nodeType OrganizationUnitNodeType) Valid() bool {
-	switch nodeType {
-	case OrganizationUnitNodeTypeRegion, OrganizationUnitNodeTypeDepartment, OrganizationUnitNodeTypeTeam, OrganizationUnitNodeTypeWarehouse:
-		return true
-	default:
-		return false
-	}
+	return organizationunit.NodeType(nodeType).ValidDeliveryChild()
 }
 
 type OrganizationUnitParentSource string
@@ -60,14 +52,22 @@ func (source OrganizationUnitParentSource) Valid() bool {
 // the operation, accepted node types, and parent selection before Runtime ever
 // invokes project code.
 type OrganizationUnitDeliveryCapability struct {
-	Operations   []OrganizationUnitDeliveryOperation
-	NodeTypes    []OrganizationUnitNodeType
-	ParentSource OrganizationUnitParentSource
+	Operations      []OrganizationUnitDeliveryOperation
+	NodeTypes       []OrganizationUnitNodeType
+	ParentSource    OrganizationUnitParentSource
+	RetargetCreated bool
 }
 
 func (capability OrganizationUnitDeliveryCapability) Valid() bool {
-	if len(capability.Operations) != 1 || !capability.Operations[0].Valid() || len(capability.NodeTypes) == 0 {
+	if len(capability.Operations) == 0 || len(capability.NodeTypes) == 0 {
 		return false
+	}
+	operations := map[OrganizationUnitDeliveryOperation]bool{}
+	for _, operation := range capability.Operations {
+		if !operation.Valid() || operations[operation] {
+			return false
+		}
+		operations[operation] = true
 	}
 	seen := map[OrganizationUnitNodeType]bool{}
 	for _, nodeType := range capability.NodeTypes {
@@ -76,14 +76,25 @@ func (capability OrganizationUnitDeliveryCapability) Valid() bool {
 		}
 		seen[nodeType] = true
 	}
-	if capability.Operations[0] == OrganizationUnitDeliveryCreate {
-		return capability.ParentSource.Valid()
+	if operations[OrganizationUnitDeliveryCreate] {
+		if !capability.ParentSource.Valid() {
+			return false
+		}
+	} else if strings.TrimSpace(string(capability.ParentSource)) != "" || capability.RetargetCreated {
+		return false
 	}
-	return strings.TrimSpace(string(capability.ParentSource)) == ""
+	return true
 }
 
 func (capability OrganizationUnitDeliveryCapability) Allows(operation OrganizationUnitDeliveryOperation, nodeType OrganizationUnitNodeType) bool {
-	if !capability.Valid() || capability.Operations[0] != operation {
+	if !capability.Valid() {
+		return false
+	}
+	operationAllowed := false
+	for _, allowed := range capability.Operations {
+		operationAllowed = operationAllowed || allowed == operation
+	}
+	if !operationAllowed {
 		return false
 	}
 	for _, allowed := range capability.NodeTypes {
@@ -119,6 +130,8 @@ type OrganizationUnit struct {
 
 type OrganizationUnitDeliveryResult struct {
 	Organization OrganizationUnit
+	Name         string
+	Status       string
 	Version      int64
 	Replayed     bool
 }
@@ -131,9 +144,31 @@ type OrganizationUnitResolveRequest struct {
 
 func (request OrganizationUnitResolveRequest) Valid() bool { return request.NodeType.Valid() }
 
+type OrganizationUnitMutationRequest struct {
+	Operation       OrganizationUnitDeliveryOperation
+	NodeType        OrganizationUnitNodeType
+	Name            string
+	ExpectedVersion int64
+}
+
+func (request OrganizationUnitMutationRequest) Valid() bool {
+	if request.ExpectedVersion < 1 || !request.NodeType.Valid() {
+		return false
+	}
+	switch request.Operation {
+	case OrganizationUnitDeliveryRename:
+		return strings.TrimSpace(request.Name) != ""
+	case OrganizationUnitDeliveryDisable:
+		return strings.TrimSpace(request.Name) == ""
+	default:
+		return false
+	}
+}
+
 type OrganizationUnitDeliveryExecution interface {
 	CreateOrganizationUnit(context.Context, OrganizationUnitDeliveryRequest) (OrganizationUnitDeliveryResult, error)
 	ResolveOrganizationUnit(context.Context, OrganizationUnitResolveRequest) (OrganizationUnitDeliveryResult, error)
+	MutateOrganizationUnit(context.Context, OrganizationUnitMutationRequest) (OrganizationUnitDeliveryResult, error)
 }
 
 var ErrOrganizationUnitDeliveryUnavailable = errors.New("organization unit delivery is unavailable")
@@ -152,4 +187,12 @@ func ResolveOrganizationUnit(ctx context.Context, execution ActionExecution, req
 		return OrganizationUnitDeliveryResult{}, ErrOrganizationUnitDeliveryUnavailable
 	}
 	return capability.ResolveOrganizationUnit(ctx, request)
+}
+
+func MutateOrganizationUnit(ctx context.Context, execution ActionExecution, request OrganizationUnitMutationRequest) (OrganizationUnitDeliveryResult, error) {
+	capability, ok := execution.(OrganizationUnitDeliveryExecution)
+	if !ok {
+		return OrganizationUnitDeliveryResult{}, ErrOrganizationUnitDeliveryUnavailable
+	}
+	return capability.MutateOrganizationUnit(ctx, request)
 }

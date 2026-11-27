@@ -118,7 +118,7 @@ func TestBusinessHandlerExecutorRequiresCompleteTraceIdentity(t *testing.T) {
 
 func TestActionCatalogRequiresGeneratedCredentialOutputWithoutSourceLineage(t *testing.T) {
 	descriptor := actionTestHandlerDescriptor("employee.invite", nil)
-	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation}
+	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation, NodeType: runtimeext.OrganizationUnitNodeType("store")}
 	descriptor.IdentityHandlerDelivery = &runtimeext.IdentityHandlerDeliveryCapability{
 		Operations: []runtimeext.IdentityHandlerOperation{runtimeext.IdentityHandlerCreate}, InitialCredentialOutputField: "initial_credential",
 	}
@@ -130,7 +130,7 @@ func TestActionCatalogRequiresGeneratedCredentialOutputWithoutSourceLineage(t *t
 	registry.Freeze()
 	base := actionTestPublishedContract(definitionmodel.ActionSchema{
 		Key: "employee.invite", ObjectKey: "employee", Kind: definitionmodel.ActionKindObjectOperation,
-		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation},
+		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceExplicit, Input: runtimeext.TargetOrganizationInputInvocation, NodeType: "store"},
 	})
 	for _, test := range []struct {
 		name   string
@@ -160,10 +160,13 @@ func TestActionCatalogRequiresGeneratedCredentialOutputWithoutSourceLineage(t *t
 	}
 }
 
-func TestActionCatalogRequiresExactStoreOrganizationMutationGrant(t *testing.T) {
+func TestActionCatalogRequiresExactOrganizationUnitMutationGrant(t *testing.T) {
 	descriptor := actionTestHandlerDescriptor("store.settings.replace", nil)
 	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceRecordOwner}
-	descriptor.StoreOrganizationMutation = &runtimeext.ActionStoreOrganizationMutationCapability{Operations: []runtimeext.StoreOrganizationMutationOperation{runtimeext.StoreOrganizationMutationRename}}
+	descriptor.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
+		Operations: []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryRename},
+		NodeTypes:  []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("store")},
+	}
 	registry := runtimeext.NewProjectExtensionRegistry()
 	if err := registry.RegisterBusinessHandler(&catalogHandler{descriptor: descriptor}); err != nil {
 		t.Fatal(err)
@@ -173,14 +176,14 @@ func TestActionCatalogRequiresExactStoreOrganizationMutationGrant(t *testing.T) 
 		Key: "store.settings.replace", ObjectKey: "store_settings", Kind: definitionmodel.ActionKindRecordUpdate,
 		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceRecordOwner},
 	})
-	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "store organization mutation capability mismatch") {
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit capability mismatch") {
 		t.Fatalf("missing policy errors=%v", errors)
 	}
-	base.StoreOrganizationMutation = &definitionmodel.ActionStoreOrganizationMutationPolicy{Operations: []string{"disable"}}
-	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "store organization mutation capability mismatch") {
+	base.OrganizationUnit = &definitionmodel.ActionOrganizationUnitPolicy{Operations: []string{"disable"}, NodeTypes: []string{"store"}}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit capability mismatch") {
 		t.Fatalf("wrong operation errors=%v", errors)
 	}
-	base.StoreOrganizationMutation.Operations = []string{"rename"}
+	base.OrganizationUnit.Operations = []string{"rename"}
 	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 0 {
 		t.Fatalf("matching policy errors=%v", errors)
 	}
@@ -191,7 +194,7 @@ func TestActionCatalogRequiresExactOrganizationUnitDeliveryGrant(t *testing.T) {
 	descriptor.TargetOrganization = &runtimeext.ActionTargetOrganizationCapability{Source: runtimeext.TargetOrganizationSourceDeliveredOrganizationUnit}
 	descriptor.OrganizationUnitDelivery = &runtimeext.OrganizationUnitDeliveryCapability{
 		Operations:   []runtimeext.OrganizationUnitDeliveryOperation{runtimeext.OrganizationUnitDeliveryCreate},
-		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeTypeDepartment},
+		NodeTypes:    []runtimeext.OrganizationUnitNodeType{runtimeext.OrganizationUnitNodeType("department")},
 		ParentSource: runtimeext.OrganizationUnitParentSourceWorkspaceCompany,
 	}
 	registry := runtimeext.NewProjectExtensionRegistry()
@@ -203,14 +206,14 @@ func TestActionCatalogRequiresExactOrganizationUnitDeliveryGrant(t *testing.T) {
 		Key: "department_profile.provision", ObjectKey: "department_profile", Kind: definitionmodel.ActionKindObjectOperation,
 		TargetOrganization: &definitionmodel.ActionTargetOrganizationPolicy{Source: definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit},
 	})
-	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit delivery capability mismatch") {
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit capability mismatch") {
 		t.Fatalf("missing manifest policy errors=%v", errors)
 	}
-	base.OrganizationUnitDelivery = &definitionmodel.ActionOrganizationUnitDeliveryPolicy{Operations: []string{"create"}, NodeTypes: []string{"team"}, ParentSource: "workspace_company"}
-	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit delivery capability mismatch") {
+	base.OrganizationUnit = &definitionmodel.ActionOrganizationUnitPolicy{Operations: []string{"create"}, NodeTypes: []string{"team"}, ParentSource: "workspace_company"}
+	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 1 || !strings.Contains(errors[0].Error(), "organization unit capability mismatch") {
 		t.Fatalf("wrong manifest node type errors=%v", errors)
 	}
-	base.OrganizationUnitDelivery.NodeTypes = []string{"department"}
+	base.OrganizationUnit.NodeTypes = []string{"department"}
 	if errors := NewActionCatalog([]definitionmodel.ActionSchema{base}, NewSystemOperationCatalog(), registry).ValidationErrors(); len(errors) != 0 {
 		t.Fatalf("matching manifest policy errors=%v", errors)
 	}

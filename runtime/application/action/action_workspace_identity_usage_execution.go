@@ -70,7 +70,7 @@ func (e *businessActionExecution) ResolveWorkspaceIdentityUsage(ctx context.Cont
 		return fail(apperror.KindOf(err), apperror.CodeOf(err), workspaceIdentityUsageErrorOutcome(err), err)
 	}
 	workspace, err := e.dependencies.WorkspaceUsageResolver.ResolveUsageWorkspace(
-		txCtx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve exact Workspace billing facts"),
+		txCtx, principalmodel.NewSystemScope(principalmodel.SystemScopeInstallation, "resolve exact Workspace identity usage"),
 		request.WorkspaceCode, request.ExpectedWorkspaceRevision,
 	)
 	if err != nil {
@@ -106,22 +106,13 @@ func (e *businessActionExecution) ResolveWorkspaceIdentityUsage(ctx context.Cont
 	result := runtimeext.WorkspaceIdentityUsageResolveResult{
 		WorkspaceCode: request.WorkspaceCode, WorkspaceDisplayName: strings.TrimSpace(workspace.DisplayName),
 		WorkspaceStatus: strings.TrimSpace(workspace.Status), WorkspaceRevision: workspace.Revision,
-		CommercialConfiguration: runtimeext.WorkspaceCommercialConfiguration{
-			Plan: strings.TrimSpace(workspace.CommercialPlan), IncludedUserLimit: workspace.IncludedUserLimit, MaxUserLimit: workspace.MaxUserLimit,
-			IncludedCustomerLimit: workspace.IncludedCustomerLimit, MaxCustomerLimit: workspace.MaxCustomerLimit,
-			IncludedStoreLimit: workspace.IncludedStoreLimit, MaxStores: workspace.MaxStores, ContractDate: workspace.ContractDate,
-			BillingDay: workspace.BillingDay, BillingContactName: workspace.BillingContactName, BillingContactPhone: workspace.BillingContactPhone,
-			BillingContactEmail: workspace.BillingContactEmail, BillingContactAddress: workspace.BillingContactAddress,
-			BillingContactNotes: workspace.BillingContactNotes, Revision: workspace.CommercialRevision,
-		},
 		Accounts: runtimeext.WorkspaceIdentityAccountCounts{
 			ActiveHumanAccounts: identityUsage.Accounts.ActiveHumanAccounts, ActiveHumanAccountsWithActiveRole: identityUsage.Accounts.ActiveHumanAccountsWithActiveRole,
 			DisabledHumanAccounts: identityUsage.Accounts.DisabledHumanAccounts, ServiceAccounts: identityUsage.Accounts.ServiceAccounts,
 			AutomationAccounts: identityUsage.Accounts.AutomationAccounts,
 		},
 	}
-	if result.WorkspaceDisplayName == "" || result.WorkspaceStatus != "active" || result.WorkspaceRevision != request.ExpectedWorkspaceRevision ||
-		result.CommercialConfiguration.Plan == "" || result.CommercialConfiguration.Revision < 1 {
+	if result.WorkspaceDisplayName == "" || result.WorkspaceStatus != "active" || result.WorkspaceRevision != request.ExpectedWorkspaceRevision {
 		return fail(apperror.KindInternal, "backend.action.workspace_identity_usage_catalog_failed", "error", nil)
 	}
 	auditValue.Outcome = "success"
@@ -262,20 +253,17 @@ func (e *businessActionExecution) ListWorkspaceIdentityUsage(ctx context.Context
 	canonicalCodes := make(map[string]bool, len(page.Items))
 	for index, item := range page.Items {
 		workspace, ok := workspaces[physicalIDs[index]]
-		code, displayName, plan := strings.TrimSpace(workspace.CanonicalCode), strings.TrimSpace(workspace.DisplayName), strings.TrimSpace(workspace.CommercialPlan)
+		code, displayName := strings.TrimSpace(workspace.CanonicalCode), strings.TrimSpace(workspace.DisplayName)
 		if !ok || strings.TrimSpace(workspace.ID) != physicalIDs[index] || code == "" || canonicalCodes[code] {
 			return fail(apperror.KindForbidden, "backend.action.workspace_identity_usage_workspace_scope_mismatch", "denied", nil)
 		}
-		if displayName == "" || plan == "" || workspace.IncludedUserLimit < 0 || workspace.MaxUserLimit < workspace.IncludedUserLimit {
+		if displayName == "" {
 			return fail(apperror.KindInternal, "backend.action.workspace_identity_usage_catalog_failed", "error", nil)
 		}
 		canonicalCodes[code] = true
 		result.Items[index] = runtimeext.WorkspaceIdentityUsageItem{
 			WorkspaceCode:        code,
 			WorkspaceDisplayName: displayName,
-			CommercialTerms: runtimeext.WorkspaceCommercialTerms{
-				Plan: plan, IncludedUserLimit: workspace.IncludedUserLimit, MaxUserLimit: workspace.MaxUserLimit,
-			},
 			Accounts: runtimeext.WorkspaceIdentityAccountCounts{
 				ActiveHumanAccounts: item.Accounts.ActiveHumanAccounts, ActiveHumanAccountsWithActiveRole: item.Accounts.ActiveHumanAccountsWithActiveRole,
 				DisabledHumanAccounts: item.Accounts.DisabledHumanAccounts,

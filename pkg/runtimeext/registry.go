@@ -580,6 +580,7 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 		capability := *result.TargetOrganization
 		capability.Source = TargetOrganizationSource(strings.TrimSpace(string(capability.Source)))
 		capability.Input = strings.TrimSpace(capability.Input)
+		capability.NodeType = OrganizationUnitNodeType(strings.TrimSpace(string(capability.NodeType)))
 		result.TargetOrganization = &capability
 	}
 	if result.OrganizationUnitDelivery != nil {
@@ -622,18 +623,10 @@ func normalizeHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor 
 		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
 		result.AccountErasure = &capability
 	}
-	if result.StoreOrganizationCatalog != nil {
-		capability := *result.StoreOrganizationCatalog
-		result.StoreOrganizationCatalog = &capability
-	}
-	if result.StoreOrganizationMutation != nil {
-		capability := *result.StoreOrganizationMutation
-		capability.Operations = append([]StoreOrganizationMutationOperation(nil), capability.Operations...)
-		for index := range capability.Operations {
-			capability.Operations[index] = StoreOrganizationMutationOperation(strings.TrimSpace(string(capability.Operations[index])))
-		}
-		sort.Slice(capability.Operations, func(i, j int) bool { return capability.Operations[i] < capability.Operations[j] })
-		result.StoreOrganizationMutation = &capability
+	if result.OrganizationUnitCatalog != nil {
+		capability := *result.OrganizationUnitCatalog
+		capability.NodeType = OrganizationUnitNodeType(strings.TrimSpace(string(capability.NodeType)))
+		result.OrganizationUnitCatalog = &capability
 	}
 	if result.WorkspaceIdentityUsage != nil {
 		capability := *result.WorkspaceIdentityUsage
@@ -703,14 +696,9 @@ func cloneHandlerDescriptor(descriptor HandlerDescriptor) HandlerDescriptor {
 		capability.Operations = append([]AccountErasureOperation(nil), capability.Operations...)
 		result.AccountErasure = &capability
 	}
-	if descriptor.StoreOrganizationCatalog != nil {
-		capability := *descriptor.StoreOrganizationCatalog
-		result.StoreOrganizationCatalog = &capability
-	}
-	if descriptor.StoreOrganizationMutation != nil {
-		capability := *descriptor.StoreOrganizationMutation
-		capability.Operations = append([]StoreOrganizationMutationOperation(nil), capability.Operations...)
-		result.StoreOrganizationMutation = &capability
+	if descriptor.OrganizationUnitCatalog != nil {
+		capability := *descriptor.OrganizationUnitCatalog
+		result.OrganizationUnitCatalog = &capability
 	}
 	if descriptor.WorkspaceIdentityUsage != nil {
 		capability := *descriptor.WorkspaceIdentityUsage

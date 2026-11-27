@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	organizationunit "github.com/domainry/domainry-identity-sdk/organizationunit"
 	appschemamodel "github.com/domainry/domainry-runtime/runtime/domain/appschema/model"
 	definitionmodel "github.com/domainry/domainry-runtime/runtime/domain/definition/model"
 )
@@ -39,41 +40,38 @@ func ActionValidateDefinitionIssuesWithObjects(action definitionmodel.ActionSche
 	issues = append(issues, actionValidatePermissionPolicy(action)...)
 	issues = append(issues, actionValidateAssurancePolicy(action, objects)...)
 	issues = append(issues, actionValidateTargetOrganizationPolicy(action)...)
-	issues = append(issues, actionValidateOrganizationUnitDeliveryPolicy(action)...)
-	issues = append(issues, actionValidateStoreOrganizationMutationPolicy(action)...)
+	issues = append(issues, actionValidateOrganizationUnitPolicy(action)...)
 	return issues
 }
 
-func actionValidateOrganizationUnitDeliveryPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
-	policy := action.OrganizationUnitDelivery
+func actionValidateOrganizationUnitPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
+	policy := action.OrganizationUnit
 	if policy == nil {
 		return nil
 	}
 	issue := func(path, reason string) appschemamodel.ApplicationDefinitionValidationIssue {
-		return actionDefinitionValidationIssue("backend.action.definition_invalid", "organization_unit_delivery."+path, map[string]string{"field": "organization_unit_delivery." + path, "reason": reason})
+		return actionDefinitionValidationIssue("backend.action.definition_invalid", "organization_unit."+path, map[string]string{"field": "organization_unit." + path, "reason": reason})
 	}
 	issues := make([]appschemamodel.ApplicationDefinitionValidationIssue, 0)
-	if len(policy.Operations) != 1 {
-		issues = append(issues, issue("operations", "exactly one create or resolve operation is required"))
+	if len(policy.Operations) == 0 {
+		issues = append(issues, issue("operations", "at least one operation is required"))
 	}
-	operation := ""
 	seenOperations := map[string]bool{}
 	for index, raw := range policy.Operations {
-		operation = strings.TrimSpace(raw)
-		if operation != "create" && operation != "resolve" || seenOperations[operation] {
-			issues = append(issues, issue(fmt.Sprintf("operations[%d]", index), "operation must be one unique create or resolve grant"))
+		operation := strings.TrimSpace(raw)
+		if operation != "create" && operation != "resolve" && operation != "rename" && operation != "disable" || seenOperations[operation] {
+			issues = append(issues, issue(fmt.Sprintf("operations[%d]", index), "operation must be one unique create, resolve, rename, or disable grant"))
 		}
 		seenOperations[operation] = true
 	}
 	if len(policy.NodeTypes) == 0 {
-		issues = append(issues, issue("node_types", "at least one non-root, non-store Identity node type is required"))
+		issues = append(issues, issue("node_types", "at least one non-root Identity node type is required"))
 	}
-	allowedNodeTypes := map[string]bool{"region": true, "department": true, "team": true, "warehouse": true}
 	seenNodeTypes := map[string]bool{}
 	for index, raw := range policy.NodeTypes {
 		nodeType := strings.TrimSpace(raw)
-		if !allowedNodeTypes[nodeType] || seenNodeTypes[nodeType] {
-			issues = append(issues, issue(fmt.Sprintf("node_types[%d]", index), "node type must be one unique region, department, team, or warehouse grant"))
+		if !actionOrganizationUnitNodeTypeValid(nodeType) || seenNodeTypes[nodeType] {
+			issues = append(issues, issue(fmt.Sprintf("node_types[%d]", index), "node type must be one unique source-owned non-root organization type key"))
 		}
 		seenNodeTypes[nodeType] = true
 	}
@@ -82,8 +80,7 @@ func actionValidateOrganizationUnitDeliveryPolicy(action definitionmodel.ActionS
 	}
 	targetSource := strings.TrimSpace(action.TargetOrganization.Source)
 	parentSource := strings.TrimSpace(policy.ParentSource)
-	switch operation {
-	case "create":
+	if seenOperations["create"] {
 		switch parentSource {
 		case "workspace_company":
 			if targetSource != definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit {
@@ -96,39 +93,18 @@ func actionValidateOrganizationUnitDeliveryPolicy(action definitionmodel.ActionS
 		default:
 			issues = append(issues, issue("parent_source", "create requires workspace_company or target_organization"))
 		}
-	case "resolve":
-		if parentSource != "" {
-			issues = append(issues, issue("parent_source", "resolve must not declare a parent source"))
-		}
+	} else if parentSource != "" || policy.RetargetCreated {
+		issues = append(issues, issue("parent_source", "parent source and retarget_created require create"))
+	}
+	if seenOperations["resolve"] {
 		if targetSource != definitionmodel.ActionTargetOrganizationSourceExplicit && targetSource != definitionmodel.ActionTargetOrganizationSourceRecordOwner {
 			issues = append(issues, issue("parent_source", "resolve requires an explicit or record_owner target"))
 		}
 	}
-	return issues
-}
-
-func actionValidateStoreOrganizationMutationPolicy(action definitionmodel.ActionSchema) []appschemamodel.ApplicationDefinitionValidationIssue {
-	policy := action.StoreOrganizationMutation
-	if policy == nil {
-		return nil
-	}
-	issue := func(path, reason string) appschemamodel.ApplicationDefinitionValidationIssue {
-		return actionDefinitionValidationIssue("backend.action.definition_invalid", "store_organization_mutation."+path, map[string]string{"field": "store_organization_mutation." + path, "reason": reason})
-	}
-	if action.TargetOrganization == nil || strings.TrimSpace(action.TargetOrganization.Source) != definitionmodel.ActionTargetOrganizationSourceRecordOwner {
-		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("operations", "store Organization mutation requires a record_owner target")}
-	}
-	if len(policy.Operations) == 0 {
-		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("operations", "at least one operation is required")}
-	}
-	seen := map[string]bool{}
-	issues := []appschemamodel.ApplicationDefinitionValidationIssue{}
-	for index, raw := range policy.Operations {
-		operation := strings.TrimSpace(raw)
-		if operation != "rename" && operation != "disable" || seen[operation] {
-			issues = append(issues, issue(fmt.Sprintf("operations[%d]", index), "operation must be one unique rename or disable grant"))
+	if seenOperations["rename"] || seenOperations["disable"] {
+		if targetSource != definitionmodel.ActionTargetOrganizationSourceRecordOwner {
+			issues = append(issues, issue("operations", "rename and disable require a record_owner target"))
 		}
-		seen[operation] = true
 	}
 	return issues
 }
@@ -141,7 +117,7 @@ func actionValidateTargetOrganizationPolicy(action definitionmodel.ActionSchema)
 	issue := func(path, reason string) appschemamodel.ApplicationDefinitionValidationIssue {
 		return actionDefinitionValidationIssue("backend.action.definition_invalid", "target_organization."+path, map[string]string{"field": "target_organization." + path, "reason": reason})
 	}
-	source, input := strings.TrimSpace(policy.Source), strings.TrimSpace(policy.Input)
+	source, input, nodeType := strings.TrimSpace(policy.Source), strings.TrimSpace(policy.Input), strings.TrimSpace(policy.NodeType)
 	recordKind := action.Kind == definitionmodel.ActionKindRecordUpdate ||
 		action.Kind == definitionmodel.ActionKindRecordDelete ||
 		action.Kind == definitionmodel.ActionKindRecordRestore ||
@@ -149,12 +125,15 @@ func actionValidateTargetOrganizationPolicy(action definitionmodel.ActionSchema)
 		action.Kind == definitionmodel.ActionKindConditionalUpdate ||
 		action.Kind == definitionmodel.ActionKindRecordOperation
 	switch source {
-	case definitionmodel.ActionTargetOrganizationSourceExplicit, definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedStore:
+	case definitionmodel.ActionTargetOrganizationSourceExplicit, definitionmodel.ActionTargetOrganizationSourceExplicitOrSoleAuthorizedOrganization:
 		if recordKind {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "record Actions must inherit the anchor record owner")}
 		}
 		if input != definitionmodel.ActionTargetOrganizationInputInvocation {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", "caller-selectable target organization must use Runtime invocation metadata")}
+		}
+		if !actionOrganizationUnitNodeTypeValid(nodeType) {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("node_type", "caller-selectable target organization requires one non-root node type")}
 		}
 	case definitionmodel.ActionTargetOrganizationSourceRecordOwner:
 		if !recordKind {
@@ -163,17 +142,27 @@ func actionValidateTargetOrganizationPolicy(action definitionmodel.ActionSchema)
 		if input != "" {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", "record_owner does not accept caller input")}
 		}
-	case definitionmodel.ActionTargetOrganizationSourceProvisionedStore, definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit:
+		if nodeType != "" {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("node_type", "record_owner derives its organization type from the compiled organization capability")}
+		}
+	case definitionmodel.ActionTargetOrganizationSourceDeliveredOrganizationUnit:
 		if recordKind {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", source+" requires an object Action")}
 		}
 		if input != "" {
 			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("input", source+" does not accept caller input")}
 		}
+		if nodeType != "" {
+			return []appschemamodel.ApplicationDefinitionValidationIssue{issue("node_type", source+" does not accept a pre-existing node type")}
+		}
 	default:
 		return []appschemamodel.ApplicationDefinitionValidationIssue{issue("source", "unknown target organization source")}
 	}
 	return nil
+}
+
+func actionOrganizationUnitNodeTypeValid(value string) bool {
+	return organizationunit.NodeType(value).ValidDeliveryChild()
 }
 
 func actionValidateAssurancePolicy(action definitionmodel.ActionSchema, objects []definitionmodel.ObjectSchema) []appschemamodel.ApplicationDefinitionValidationIssue {

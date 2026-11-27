@@ -14,7 +14,7 @@ func TestWorkspaceIdentityUsageCursorIsConfidentialBoundExpiringAndRestartStable
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding := WorkspaceIdentityUsageCursorBinding{ActionKey: "billing.invoice.generate", WorkspaceID: "workspace-hq", SubjectID: "billing-operator", AuthorizationRevision: "authz-7"}
+	binding := WorkspaceIdentityUsageCursorBinding{ActionKey: "identity.usage.export", WorkspaceID: "workspace-hq", SubjectID: "usage-operator", AuthorizationRevision: "authz-7"}
 	raw := `eyJhZnRlcl93b3Jrc3BhY2VfaWQiOiJ3b3Jrc3BhY2UtcGh5c2ljYWwtYSIsImluc3RhbGxhdGlvbl9pZCI6Imluc3RhbGxhdGlvbi1hIn0`
 	sealed, err := codec.Seal(raw, binding)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestWorkspaceIdentityUsageCursorIsConfidentialBoundExpiringAndRestartStable
 		t.Fatal("tampered cursor was accepted")
 	}
 	for name, other := range map[string]WorkspaceIdentityUsageCursorBinding{
-		"action":        {ActionKey: "billing.seat.preview", WorkspaceID: binding.WorkspaceID, SubjectID: binding.SubjectID, AuthorizationRevision: binding.AuthorizationRevision},
+		"action":        {ActionKey: "identity.usage.preview", WorkspaceID: binding.WorkspaceID, SubjectID: binding.SubjectID, AuthorizationRevision: binding.AuthorizationRevision},
 		"subject":       {ActionKey: binding.ActionKey, WorkspaceID: binding.WorkspaceID, SubjectID: "other-user", AuthorizationRevision: binding.AuthorizationRevision},
 		"workspace":     {ActionKey: binding.ActionKey, WorkspaceID: "workspace-other", SubjectID: binding.SubjectID, AuthorizationRevision: binding.AuthorizationRevision},
 		"authorization": {ActionKey: binding.ActionKey, WorkspaceID: binding.WorkspaceID, SubjectID: binding.SubjectID, AuthorizationRevision: "authz-8"},

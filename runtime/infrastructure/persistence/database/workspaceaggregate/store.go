@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-runtime/pkg/runtimeext"
@@ -98,9 +97,6 @@ func (store *Store) ResolveActive(ctx context.Context, scope principalmodel.Syst
 			query.Project(query.QualifiedColumn("workspace", "workspace_id")),
 			query.Project(query.QualifiedColumn("workspace", "canonical_code")),
 			query.Project(query.QualifiedColumn("workspace", "name")),
-			query.Project(query.QualifiedColumn("workspace", "plan")),
-			query.Project(query.QualifiedColumn("workspace", "included_user_limit")),
-			query.Project(query.QualifiedColumn("workspace", "max_user_limit")),
 		).
 		Where(query.And(
 			query.InExpression(query.QualifiedColumn("workspace", "workspace_id"), values...),
@@ -117,16 +113,12 @@ func (store *Store) ResolveActive(ctx context.Context, scope principalmodel.Syst
 	result := make(map[string]aggregatecontract.Workspace, len(workspaceIDs))
 	for rows.Next() {
 		var workspace aggregatecontract.Workspace
-		if err := rows.Scan(
-			&workspace.ID, &workspace.CanonicalCode, &workspace.DisplayName, &workspace.CommercialPlan,
-			&workspace.IncludedUserLimit, &workspace.MaxUserLimit,
-		); err != nil {
+		if err := rows.Scan(&workspace.ID, &workspace.CanonicalCode, &workspace.DisplayName); err != nil {
 			return nil, err
 		}
 		workspace.ID, workspace.CanonicalCode = strings.TrimSpace(workspace.ID), strings.TrimSpace(workspace.CanonicalCode)
-		workspace.DisplayName, workspace.CommercialPlan = strings.TrimSpace(workspace.DisplayName), strings.TrimSpace(workspace.CommercialPlan)
-		if !seen[workspace.ID] || workspace.CanonicalCode == "" || workspace.DisplayName == "" || workspace.CommercialPlan == "" ||
-			workspace.IncludedUserLimit < 0 || workspace.MaxUserLimit < workspace.IncludedUserLimit {
+		workspace.DisplayName = strings.TrimSpace(workspace.DisplayName)
+		if !seen[workspace.ID] || workspace.CanonicalCode == "" || workspace.DisplayName == "" {
 			return nil, fmt.Errorf("invalid installation Workspace catalog row")
 		}
 		result[workspace.ID] = workspace
@@ -186,24 +178,13 @@ func scanWorkspaceUsage(scanner workspaceUsageScanner) (aggregatecontract.Worksp
 	var workspace aggregatecontract.Workspace
 	err := scanner.Scan(
 		&workspace.ID, &workspace.CanonicalCode, &workspace.DisplayName, &workspace.Status, &workspace.Revision,
-		&workspace.CommercialPlan, &workspace.IncludedUserLimit, &workspace.MaxUserLimit,
-		&workspace.IncludedCustomerLimit, &workspace.MaxCustomerLimit, &workspace.IncludedStoreLimit, &workspace.MaxStores,
-		&workspace.ContractDate, &workspace.BillingDay, &workspace.BillingContactName, &workspace.BillingContactPhone,
-		&workspace.BillingContactEmail, &workspace.BillingContactAddress, &workspace.BillingContactNotes, &workspace.CommercialRevision,
 	)
 	return workspace, err
 }
 
 func workspaceUsageProjections() []query.Projection {
-	result := make([]query.Projection, 0, 20)
+	result := make([]query.Projection, 0, 5)
 	for _, column := range []string{"workspace_id", "canonical_code", "name", "status", "revision"} {
-		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
-	}
-	for _, column := range []string{
-		"plan", "included_user_limit", "max_user_limit", "included_customer_limit", "max_customer_limit",
-		"included_store_limit", "max_stores", "contract_date", "billing_day", "billing_contact_name",
-		"billing_contact_phone", "billing_contact_email", "billing_contact_address", "billing_contact_notes", "commercial_revision",
-	} {
 		result = append(result, query.Project(query.QualifiedColumn("workspace", column)))
 	}
 	return result
@@ -211,16 +192,10 @@ func workspaceUsageProjections() []query.Projection {
 
 func validateWorkspaceUsage(workspace aggregatecontract.Workspace, canonicalCode string) error {
 	workspace.ID, workspace.CanonicalCode = strings.TrimSpace(workspace.ID), strings.TrimSpace(workspace.CanonicalCode)
-	workspace.DisplayName, workspace.CommercialPlan = strings.TrimSpace(workspace.DisplayName), strings.TrimSpace(workspace.CommercialPlan)
+	workspace.DisplayName = strings.TrimSpace(workspace.DisplayName)
 	if _, err := principalmodel.NewWorkspaceID(workspace.ID); err != nil || workspace.CanonicalCode != canonicalCode || workspace.DisplayName == "" ||
-		workspace.Status != "active" || workspace.Revision < 1 || workspace.CommercialRevision < 1 || workspace.CommercialPlan == "" ||
-		workspace.IncludedUserLimit < 0 || workspace.MaxUserLimit < workspace.IncludedUserLimit ||
-		workspace.IncludedCustomerLimit < 0 || workspace.MaxCustomerLimit < workspace.IncludedCustomerLimit ||
-		workspace.IncludedStoreLimit < 1 || workspace.MaxStores < workspace.IncludedStoreLimit || workspace.BillingDay < 1 || workspace.BillingDay > 31 {
+		workspace.Status != "active" || workspace.Revision < 1 {
 		return fmt.Errorf("invalid installation Workspace usage catalog row")
-	}
-	if _, err := time.Parse("2006-01-02", workspace.ContractDate); err != nil {
-		return fmt.Errorf("invalid installation Workspace usage commercial contract date: %w", err)
 	}
 	return nil
 }

@@ -20,7 +20,7 @@ import (
 )
 
 const provisionSigningTestSecret = "provisioning-test-secret-32-bytes-long"
-const provisionSigningTestBody = `{"request_id":"create-1","workspace_code":"shop-a","workspace_name":"Shop A","first_store_code":"main","first_store_name":"Main","admin_login_id":"owner@example.test","admin_name":"Owner","commercial_configuration":{"plan":"standard","included_user_limit":1,"max_user_limit":10,"included_customer_limit":0,"max_customer_limit":100,"included_store_limit":1,"max_stores":2,"contract_date":"2026-09-13","billing_day":1}}`
+const provisionSigningTestBody = `{"request_id":"create-1","workspace_code":"shop-a","workspace_name":"Shop A","admin_login_id":"owner@example.test","admin_name":"Owner"}`
 
 type signedProvisionRepository struct{ calls int }
 

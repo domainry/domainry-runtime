@@ -56,7 +56,7 @@ func (probe *identityBootstrapProbe) BootstrapWorkspaceIdentity(ctx context.Cont
 	probe.receipt = identitysdk.WorkspaceIdentityBootstrapReceipt{
 		ContractVersion: request.ContractVersion, ContractHash: request.ContractHash,
 		ReceiptID: "identity-receipt-" + request.InvocationID, InvocationID: request.InvocationID,
-		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID, FirstStoreID: request.FirstStoreID,
+		WorkspaceID: request.WorkspaceID, CompanyID: request.CompanyID,
 		InitialAdminUserID: request.InitialAdminUserID, InitialAdminLoginID: request.InitialAdminLoginID,
 		RoleCatalogSHA256:                    probe.rolePolicy.RoleCatalogSHA256,
 		InitialWorkspaceAdministratorRoleKey: probe.rolePolicy.InitialWorkspaceAdministratorRoleKey,
@@ -150,10 +150,10 @@ type workspaceBootstrapParticipantProbe struct {
 
 func (*workspaceBootstrapParticipantProbe) Descriptor() runtimeext.WorkspaceBootstrapDescriptor {
 	descriptor := runtimeext.WorkspaceBootstrapDescriptor{
-		Key: "store_configuration", InputType: "example.bootstrap.StoreInput",
+		Key: "workspace_configuration", InputType: "example.bootstrap.WorkspaceInput",
 		ParticipantRevision: "revision-1",
 		InputFields:         []runtimeext.WorkspaceBootstrapInputField{{Key: "currency", Type: runtimeext.WorkspaceBootstrapInputString, Required: true}},
-		Records:             []runtimeext.WorkspaceBootstrapRecordCapability{{Key: "first_store_configuration", ObjectKey: "store_configuration", Fields: []string{"currency"}}},
+		Records:             []runtimeext.WorkspaceBootstrapRecordCapability{{Key: "root_configuration", ObjectKey: "workspace_configuration", Fields: []string{"currency"}}},
 	}
 	descriptor.InputContractSHA256 = descriptor.ComputedInputContractSHA256()
 	return descriptor
@@ -161,7 +161,7 @@ func (*workspaceBootstrapParticipantProbe) Descriptor() runtimeext.WorkspaceBoot
 
 func (probe *workspaceBootstrapParticipantProbe) BuildWorkspaceBootstrap(_ context.Context, context runtimeext.WorkspaceBootstrapContext, input map[string]any) ([]runtimeext.WorkspaceBootstrapRecord, error) {
 	probe.context = context
-	return []runtimeext.WorkspaceBootstrapRecord{{CapabilityKey: "first_store_configuration", Data: map[string]any{"currency": input["currency"]}}}, nil
+	return []runtimeext.WorkspaceBootstrapRecord{{CapabilityKey: "root_configuration", Data: map[string]any{"currency": input["currency"]}}}, nil
 }
 
 func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *testing.T) {
@@ -197,7 +197,7 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{result.WorkspaceID, result.CompanyID, result.FirstStoreID, result.InitialAdminUserID, "workspace_id", "owner_org_id"} {
+	for _, forbidden := range []string{result.WorkspaceID, result.CompanyID, result.InitialAdminUserID, "workspace_id", "owner_org_id"} {
 		if forbidden != "" && strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("public result leaked %q: %s", forbidden, encoded)
 		}
@@ -215,13 +215,9 @@ func TestWorkspaceInitializationCompletesThenClaimsOnceAndReplayHasNoSecret(t *t
 	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM pragma_table_info('_workspaces') WHERE name = 'company_organization_id'`).Scan(&companyColumns); err != nil || companyColumns != 0 {
 		t.Fatalf("Workspace company authority columns=%d err=%v", companyColumns, err)
 	}
-	var plan string
-	var commercialRevision int
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT plan,commercial_revision FROM _workspaces WHERE workspace_id = ?`, result.WorkspaceID).Scan(&plan, &commercialRevision); err != nil || plan != request.CommercialConfiguration.Plan || commercialRevision != 1 {
-		t.Fatalf("Workspace commercial aggregate plan=%q revision=%d err=%v", plan, commercialRevision, err)
-	}
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '_workspace_commercial_configuration'`).Scan(&legacyTables); err != nil || legacyTables != 0 {
-		t.Fatalf("dedicated Workspace commercial configuration table remains=%d err=%v", legacyTables, err)
+	var commercialColumns int
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM pragma_table_info('_workspaces') WHERE name IN ('plan','included_user_limit','max_stores','billing_day','commercial_revision')`).Scan(&commercialColumns); err != nil || commercialColumns != 0 {
+		t.Fatalf("Workspace commercial columns=%d err=%v", commercialColumns, err)
 	}
 }
 
@@ -236,8 +232,6 @@ func TestRemoteWorkspaceProvisionGeneratesCredentialAfterReplayDetection(t *test
 	request := validWorkspaceRequest("remote-provision")
 	request.WorkspaceCode = "secondary"
 	request.WorkspaceName = "Secondary"
-	request.FirstStoreCode = "secondary-store"
-	request.FirstStoreName = "Secondary Store"
 	request.AdminLoginID = "secondary@example.test"
 	request.InitialAdminPassword = "caller-controlled-secret"
 	request.InitialAdminMustChangePassword = false
@@ -275,8 +269,6 @@ func TestRemoteWorkspaceProvisionHonorsConfiguredCredentialRotationPolicy(t *tes
 	request := validWorkspaceRequest("remote-no-rotation")
 	request.WorkspaceCode = "secondary-no-rotation"
 	request.WorkspaceName = "Secondary without rotation"
-	request.FirstStoreCode = "secondary-no-rotation-store"
-	request.FirstStoreName = "Secondary Store"
 	request.AdminLoginID = "secondary-no-rotation@example.test"
 	request.InitialAdminMustChangePassword = true
 	result, err := repository.Provision(t.Context(), request)
@@ -359,13 +351,13 @@ func TestWorkspaceInitializationRollsBackWhenConfiguredAcceptanceFixturesFail(t 
 }
 
 func TestWorkspaceBootstrapReceiptBindsRoleCatalogAndAdministratorEvidence(t *testing.T) {
-	result := workspaceprovisionmodel.Result{WorkspaceID: "workspace", CompanyID: "company", FirstStoreID: "store", InitialAdminUserID: "user"}
+	result := workspaceprovisionmodel.Result{WorkspaceID: "workspace", CompanyID: "company", InitialAdminUserID: "user"}
 	rolePolicy := workspaceBootstrapRolePolicyForTest(t)
 	receipt := identitysdk.WorkspaceIdentityBootstrapReceipt{
 		ContractVersion: identitysdk.WorkspaceIdentityBootstrapContractVersion,
 		ContractHash:    identitysdk.WorkspaceIdentityBootstrapContractHash,
 		ReceiptID:       "receipt", InvocationID: "invocation", WorkspaceID: result.WorkspaceID,
-		CompanyID: result.CompanyID, FirstStoreID: result.FirstStoreID,
+		CompanyID:          result.CompanyID,
 		InitialAdminUserID: result.InitialAdminUserID, InitialAdminLoginID: "admin@example.test",
 		RoleCatalogSHA256:                    rolePolicy.RoleCatalogSHA256,
 		InitialWorkspaceAdministratorRoleKey: rolePolicy.InitialWorkspaceAdministratorRoleKey,
@@ -462,36 +454,27 @@ func TestWorkspaceInitializationRequiresStagingBeforeCommit(t *testing.T) {
 	}
 }
 
-func TestWorkspaceProvisionValidationRejectsUntypedOrInvalidCommercialLimits(t *testing.T) {
+func TestWorkspaceBootstrapParticipantCreatesRootOwnedAggregateInHostTransaction(t *testing.T) {
 	store, probe := newWorkspaceProvisionTestStore(t)
-	request := validWorkspaceRequest("invalid")
-	request.CommercialConfiguration.MaxStores = 0
-	if _, err := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy).Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
-		t.Fatalf("error=%v", err)
-	}
-}
-
-func TestWorkspaceBootstrapParticipantCreatesFirstStoreOwnedAggregateInHostTransaction(t *testing.T) {
-	store, probe := newWorkspaceProvisionTestStore(t)
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,"workspace_id" TEXT NOT NULL,"store_configuration_id" TEXT NOT NULL UNIQUE,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL,"label" TEXT NOT NULL)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "workspace_configuration" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,"workspace_id" TEXT NOT NULL,"workspace_configuration_id" TEXT NOT NULL UNIQUE,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL,"label" TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	participant := &workspaceBootstrapParticipantProbe{}
-	model := projectmodel.RuntimeModel{Objects: []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}, {Key: "label", Type: "text", Required: true, DefaultValue: "Default Store"}}}}}
+	model := projectmodel.RuntimeModel{Objects: []definitionmodel.ObjectSchema{{Key: "workspace_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}, {Key: "label", Type: "text", Required: true, DefaultValue: "Default Workspace"}}}}}
 	request := validWorkspaceRequest("participant")
 	request.ApplicationBootstrap = map[string]any{"currency": "CNY"}
 	result, err := NewWorkspaceInitializationStoreWithParticipant(store, probe, model, participant, probe.rolePolicy).Initialize(t.Context(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if participant.context.WorkspaceCode != result.CanonicalCode || participant.context.FirstStoreOrganizationID != result.FirstStoreID || participant.context.InitialAdministratorUserID != result.InitialAdminUserID {
+	if participant.context.WorkspaceCode != result.CanonicalCode || participant.context.RootOrganizationID != result.CompanyID || participant.context.InitialAdministratorUserID != result.InitialAdminUserID {
 		t.Fatalf("participant context=%+v result=%+v", participant.context, result)
 	}
 	var workspaceID, ownerID, currency, label string
-	if err := store.DB().QueryRowContext(t.Context(), `SELECT "workspace_id","owner_org_id","currency","label" FROM "store_configuration"`).Scan(&workspaceID, &ownerID, &currency, &label); err != nil {
+	if err := store.DB().QueryRowContext(t.Context(), `SELECT "workspace_id","owner_org_id","currency","label" FROM "workspace_configuration"`).Scan(&workspaceID, &ownerID, &currency, &label); err != nil {
 		t.Fatal(err)
 	}
-	if workspaceID != result.WorkspaceID || ownerID != result.FirstStoreID || currency != "CNY" || label != "Default Store" {
+	if workspaceID != result.WorkspaceID || ownerID != result.CompanyID || currency != "CNY" || label != "Default Workspace" {
 		t.Fatalf("aggregate workspace=%q owner=%q currency=%q label=%q", workspaceID, ownerID, currency, label)
 	}
 	request.RequestID = "participant-unknown"
@@ -509,18 +492,18 @@ func TestWorkspaceBootstrapInputRequiresParticipantAndPerRecordFailureRollsBackE
 	if _, err := NewWorkspaceInitializationStore(store, probe, projectmodel.RuntimeModel{}, probe.rolePolicy).Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrInvalid) {
 		t.Fatalf("missing participant error=%v", err)
 	}
-	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "store_configuration" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,"workspace_id" TEXT NOT NULL,"store_configuration_id" TEXT NOT NULL UNIQUE,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL)`); err != nil {
+	if _, err := store.DB().ExecContext(t.Context(), `CREATE TABLE "workspace_configuration" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,"workspace_id" TEXT NOT NULL,"workspace_configuration_id" TEXT NOT NULL UNIQUE,"owner_org_id" TEXT NOT NULL,"created_at" BIGINT NOT NULL,"updated_at" BIGINT NOT NULL,"currency" TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	participant := &workspaceBootstrapParticipantProbe{}
-	model := projectmodel.RuntimeModel{Objects: []definitionmodel.ObjectSchema{{Key: "store_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}}}
+	model := projectmodel.RuntimeModel{Objects: []definitionmodel.ObjectSchema{{Key: "workspace_configuration", Fields: []definitionmodel.FieldSchema{{Key: "currency", Type: "text", Required: true}}}}}
 	repository := NewWorkspaceInitializationStoreWithParticipant(store, probe, model, participant, probe.rolePolicy)
-	repository.failures = NewAcceptanceFailureInjector(FailureAfterApplicationBootstrapRecord + "first_store_configuration")
+	repository.failures = NewAcceptanceFailureInjector(FailureAfterApplicationBootstrapRecord + "root_configuration")
 	request.RequestID, request.WorkspaceCode = "participant-rollback", "participant-rollback"
 	if _, err := repository.Initialize(t.Context(), request); !errors.Is(err, workspaceprovisionmodel.ErrAcceptanceFailure) {
 		t.Fatalf("per-record failure=%v", err)
 	}
-	for _, table := range []string{"_workspaces", workspaceProvisioningReceiptTable, "store_configuration", "identity_provision_probe"} {
+	for _, table := range []string{"_workspaces", workspaceProvisioningReceiptTable, "workspace_configuration", "identity_provision_probe"} {
 		assertRowCount(t, store, table, 0)
 	}
 	if len(probe.completions) != 1 || probe.completions[0].Outcome != identitysdk.WorkspaceIdentityBootstrapTransactionRolledBack {
@@ -566,14 +549,8 @@ func workspaceBootstrapRolePolicyForTest(t *testing.T) WorkspaceBootstrapRolePol
 func validWorkspaceRequest(requestID string) workspaceprovisionmodel.Request {
 	return workspaceprovisionmodel.Request{
 		RequestID: requestID, WorkspaceCode: "primary", WorkspaceName: "Primary",
-		FirstStoreCode: "primary-store", FirstStoreName: "Primary Store",
 		AdminLoginID: "OWNER@EXAMPLE.TEST", AdminName: "Owner", InitialAdminPassword: "Domainry!123",
 		InitialAdminMustChangePassword: true,
-		CommercialConfiguration: workspaceprovisionmodel.CommercialConfiguration{
-			Plan: "standard", IncludedUserLimit: 1, MaxUserLimit: 100,
-			IncludedCustomerLimit: 0, MaxCustomerLimit: 1000,
-			IncludedStoreLimit: 1, MaxStores: 2, ContractDate: "2026-09-06", BillingDay: 1,
-		},
 	}
 }
 
