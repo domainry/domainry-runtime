@@ -59,7 +59,7 @@ func TestSchedulerBusinessActionUsesManagedRoleAndStableWindowIdempotency(t *tes
 		Operation: "order.expire", ObjectKey: "order", RunAsRole: "order_automation", Payload: []byte(`{"status":"expired","sequence":9007199254740993}`),
 	}
 	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
-	ctx := requestcontext.WithRequestID(t.Context(), traceID)
+	ctx := requestcontext.WithWorkspaceID(requestcontext.WithRequestID(t.Context(), traceID), "workspace-1")
 	first, err := runtime.ExecuteBusinessActionTarget(ctx, request)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestSchedulerBusinessActionUsesManagedRoleAndStableWindowIdempotency(t *tes
 		t.Fatalf("first=%+v second=%+v calls=%d effects=%d err=%v", first, second, actions.calls, actions.effects, err)
 	}
 	wantVersion := schedulerBusinessActionAuthorizationVersion("expire-orders", "order.expire", "order", "order_automation")
-	if principals.execution.WorkloadKey != "scheduler:expire-orders" || principals.execution.DefinitionVersionID != wantVersion || principals.execution.RoleKey != "order_automation" || principals.execution.IdempotencyKey != request.IdempotencyKey {
+	if principals.execution.WorkspaceID != "workspace-1" || principals.execution.WorkloadKey != "scheduler:expire-orders" || principals.execution.DefinitionVersionID != wantVersion || principals.execution.RoleKey != "order_automation" || principals.execution.IdempotencyKey != request.IdempotencyKey {
 		t.Fatalf("managed workload resolution=%+v", principals.execution)
 	}
 	if actions.source != actionmodel.ActionSourceScheduler || actions.invocation.Principal.UserID != principal.UserID || actions.invocation.ActionKey != "order.expire" || actions.invocation.ObjectKey != "order" || actions.invocation.Input["status"] != "expired" || actions.invocation.Input["sequence"] != json.Number("9007199254740993") || actions.invocation.IdempotencyKey != request.IdempotencyKey || !actions.invocation.PreventExecutionReclaim {

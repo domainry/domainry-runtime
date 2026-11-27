@@ -202,10 +202,13 @@ func (e *businessActionExecution) RunBusinessJob(ctx context.Context, request ru
 	if e.dependencies.StageBusinessJob == nil {
 		return runtimeext.BusinessJobReceipt{}, missingExecutorPort("stage_business_job")
 	}
+	if e.invocation.Principal.Workload != nil && !e.invocation.Principal.HasPermission(request.ActionKey) {
+		return runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindForbidden, "backend.business_job.target_denied", nil, map[string]string{"action": request.ActionKey})
+	}
 	if _, err := e.unitOfWork.beginDeferredWriting(ctx); err != nil {
 		return runtimeext.BusinessJobReceipt{}, err
 	}
-	commit, receipt, err := e.dependencies.StageBusinessJob(e.unitOfWork.executionContext(ctx), e.workspace.ID, request)
+	commit, receipt, err := e.dependencies.StageBusinessJob(e.unitOfWork.executionContext(ctx), e.workspace.ID, e.invocation.Principal, request)
 	if err != nil {
 		return runtimeext.BusinessJobReceipt{}, err
 	}

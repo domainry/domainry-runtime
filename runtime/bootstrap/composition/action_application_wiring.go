@@ -123,7 +123,7 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 			InspectUploadedFile: records.inspectUploadedFile,
 			ReadKnowledgeFile:   records.readKnowledgeFile,
 			BindKnowledgeFile:   records.bindKnowledgeFile,
-			StageBusinessJob: func(ctx context.Context, workspaceID string, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+			StageBusinessJob: func(ctx context.Context, workspaceID string, principal principalmodel.Principal, request runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				if records.recordTimerService == nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindInternal, "backend.business_job.unavailable", nil, nil)
 				}
@@ -146,11 +146,23 @@ func assembleActionApplication(records *runtimeAssembly, policy recordQueryPolic
 				if retryMaxDelay == 0 {
 					retryMaxDelay = 300
 				}
-				commit, err := records.recordTimerService.BuildRecordTimerMutation(ctx, workspaceID, recordtimerapplication.RecordTimerSchedule{
+				schedule := recordtimerapplication.RecordTimerSchedule{
 					TimerKey: request.JobKey, ObjectKey: request.ObjectKey, RecordID: request.RecordID, Purpose: "business_job:" + request.ActionKey,
 					ScheduleMode: "absolute", DueAt: records.workerDependencies.Clock.Now(), Timezone: "UTC", TargetType: "action", TargetKey: request.ActionKey,
 					PayloadJSON: string(request.Payload), MaxAttempts: maxAttempts, RetryDelaySeconds: retryDelay, RetryMaxDelaySeconds: retryMaxDelay,
-				}, records.workerDependencies.Clock.Now())
+				}
+				if workload := principal.Workload; workload != nil {
+					workflowKey := strings.TrimSpace(workload.WorkflowKey)
+					if !principal.Known || principal.AccessBundle == nil || strings.TrimSpace(principal.WorkspaceID) != strings.TrimSpace(workspaceID) ||
+						workflowKey == "" || strings.TrimSpace(principal.UserID) != string(identitysdk.WorkflowWorkloadSubjectID(workflowKey)) || strings.TrimSpace(principal.RoleKey) == "" ||
+						strings.TrimSpace(workload.DefinitionVersionID) == "" || workload.DefinitionVersion <= 0 || strings.TrimSpace(workload.ReleaseID) == "" || strings.TrimSpace(workload.ReleaseDigest) == "" {
+						return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, apperror.New(apperror.KindForbidden, "backend.business_job.workload_invalid", nil, nil)
+					}
+					schedule.WorkloadKey, schedule.WorkloadDefinitionVersionID = workflowKey, strings.TrimSpace(workload.DefinitionVersionID)
+					schedule.WorkloadDefinitionVersion, schedule.WorkloadRoleKey = workload.DefinitionVersion, strings.TrimSpace(principal.RoleKey)
+					schedule.WorkloadInitiatorSubjectID = strings.TrimSpace(string(workload.InitiatorSubjectID))
+				}
+				commit, err := records.recordTimerService.BuildRecordTimerMutation(ctx, workspaceID, schedule, records.workerDependencies.Clock.Now())
 				if err != nil {
 					return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, err
 				}

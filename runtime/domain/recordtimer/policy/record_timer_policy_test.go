@@ -46,6 +46,11 @@ func TestRecordTimerSchedulePolicyOwnsDefaultsAndValidation(t *testing.T) {
 	if err := ValidateSchedule(schedule); err != nil {
 		t.Fatal(err)
 	}
+	incompleteWorkload := schedule
+	incompleteWorkload.WorkloadKey = "directory-sync"
+	if err := ValidateSchedule(incompleteWorkload); apperror.CodeOf(err) != "backend.record_timer.workload_invalid" {
+		t.Fatalf("incomplete workload error=%v", err)
+	}
 	schedule.TargetType = "unknown"
 	if err := ValidateSchedule(schedule); apperror.CodeOf(err) != "backend.record_timer.target_invalid" {
 		t.Fatalf("invalid target error=%v", err)

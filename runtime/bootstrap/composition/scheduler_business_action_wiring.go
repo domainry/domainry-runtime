@@ -109,7 +109,7 @@ func (runtime schedulerBusinessActionRuntime) ExecuteBusinessActionTarget(ctx co
 	}
 	versionID := schedulerBusinessActionAuthorizationVersion(definitionKey, actionKey, objectKey, roleKey)
 	principal, err := runtime.principals.ResolveManagedWorkloadPrincipal(ctx, workflowapplication.ManagedWorkloadExecution{
-		WorkloadKey: schedulerManagedWorkloadPrefix + definitionKey, DefinitionVersionID: versionID, DefinitionVersion: 1, RoleKey: roleKey,
+		WorkspaceID: requestcontext.WorkspaceID(ctx), WorkloadKey: schedulerManagedWorkloadPrefix + definitionKey, DefinitionVersionID: versionID, DefinitionVersion: 1, RoleKey: roleKey,
 		ExecutionID: strings.TrimSpace(request.ExecutionID), SourceEventID: strings.TrimSpace(request.ExecutionID), IdempotencyKey: strings.TrimSpace(request.IdempotencyKey),
 	})
 	if err != nil {

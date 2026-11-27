@@ -162,7 +162,7 @@ func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 			grants = []string{runtimeext.FileOperationRunJob}
 		}
 		return &businessActionExecution{
-			dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+			dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, principalmodel.Principal, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 				stageCalls++
 				commit := transactionmodel.RecordMutationCommit{Operation: "create", Object: definitionmodel.ObjectSchema{Key: "record_timer"}, Record: recordmodel.Record{RecordID: "job-1"}, RecordID: "job-1"}
 				return commit, runtimeext.BusinessJobReceipt{JobID: "job-1"}, nil
@@ -193,7 +193,7 @@ func TestRunBusinessJobRequiresGrantAndBusinessMutation(t *testing.T) {
 func TestRunBusinessJobRejectsInvalidOrUnboundedRequestsBeforeStaging(t *testing.T) {
 	stageCalls := 0
 	execution := &businessActionExecution{
-		dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+		dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, principalmodel.Principal, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
 			stageCalls++
 			return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, nil
 		}},
@@ -212,5 +212,25 @@ func TestRunBusinessJobRejectsInvalidOrUnboundedRequestsBeforeStaging(t *testing
 	}
 	if stageCalls != 0 {
 		t.Fatalf("invalid requests reached staging: calls=%d", stageCalls)
+	}
+}
+
+func TestRunBusinessJobWorkloadCannotEscalateItsTargetAction(t *testing.T) {
+	stageCalls := 0
+	bundle := identitysdk.AccessBundle{}
+	execution := &businessActionExecution{
+		dependencies: BusinessHandlerExecutionDependencies{StageBusinessJob: func(context.Context, string, principalmodel.Principal, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error) {
+			stageCalls++
+			return transactionmodel.RecordMutationCommit{}, runtimeext.BusinessJobReceipt{}, nil
+		}},
+		invocation: actionmodel.ActionInvocation{Principal: principalmodel.Principal{Principal: identitysdk.Principal{
+			Known: true, WorkspaceID: "workspace-a", UserID: "workflow:directory-sync", RoleKey: "directory_sync_service", AccessBundle: &bundle,
+			Workload: &identitysdk.WorkflowWorkloadPrincipalContext{WorkflowKey: "directory-sync", DefinitionVersionID: "definition-1", DefinitionVersion: 1, ReleaseID: "release-1", ReleaseDigest: "digest-1"},
+		}}},
+		workspace: runtimeext.Workspace{ID: "workspace-a"}, unitOfWork: newActionTestUnitOfWork(), fileGrants: []string{runtimeext.FileOperationRunJob},
+	}
+	request := runtimeext.BusinessJobRequest{JobKey: "disable", ObjectKey: "identity", RecordID: "identity-1", ActionKey: "identity.disable", Payload: json.RawMessage(`{}`)}
+	if _, err := execution.RunBusinessJob(t.Context(), request); apperror.CodeOf(err) != "backend.business_job.target_denied" || stageCalls != 0 {
+		t.Fatalf("code=%q stage calls=%d err=%v", apperror.CodeOf(err), stageCalls, err)
 	}
 }

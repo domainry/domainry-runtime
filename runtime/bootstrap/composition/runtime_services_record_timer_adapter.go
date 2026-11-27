@@ -3,8 +3,12 @@ package composition
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/domainry/domainry-foundation/apperror"
+	"github.com/domainry/domainry-foundation/requestcontext"
 	recordtimerapplication "github.com/domainry/domainry-runtime/runtime/application/recordtimer"
+	workflowapplication "github.com/domainry/domainry-runtime/runtime/application/workflow"
 	actionmodel "github.com/domainry/domainry-runtime/runtime/domain/action/model"
 	principalmodel "github.com/domainry/domainry-runtime/runtime/domain/principal/model"
 	workflowmodel "github.com/domainry/domainry-runtime/runtime/domain/workflow/model"
@@ -13,6 +17,7 @@ import (
 type recordTimerWorkflowRuntime interface {
 	ResumeTimerNode(context.Context, string, string, string, principalmodel.Principal) (workflowmodel.WorkflowProcessInstance, error)
 	ProcessApprovalDeadlineTimer(context.Context, string, string, string, principalmodel.Principal) error
+	ResolveManagedWorkloadPrincipal(context.Context, workflowapplication.ManagedWorkloadExecution) (principalmodel.Principal, error)
 }
 
 type recordTimerActionRuntime interface {
@@ -37,7 +42,22 @@ func executeRecordTimer(ctx context.Context, execution recordtimerapplication.Re
 		}
 	case "action":
 		executionPrincipal := principal.WithExactSystemCapabilities(execution.TargetKey)
-		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceRecordTimer, actionmodel.ActionInvocation{PreventExecutionReclaim: true, ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: executionPrincipal, Actor: principal, IdempotencyKey: execution.IdempotencyKey})
+		if strings.TrimSpace(execution.WorkloadKey) != "" {
+			resolved, err := workflows.ResolveManagedWorkloadPrincipal(ctx, workflowapplication.ManagedWorkloadExecution{
+				WorkspaceID: execution.WorkspaceID, WorkloadKey: execution.WorkloadKey, DefinitionVersionID: execution.WorkloadDefinitionVersionID,
+				DefinitionVersion: execution.WorkloadDefinitionVersion, RoleKey: execution.WorkloadRoleKey, ExecutionID: execution.TimerID,
+				SourceEventID: execution.TimerID, InitiatorSubjectID: execution.WorkloadInitiatorSubjectID, IdempotencyKey: execution.IdempotencyKey,
+			})
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(resolved.WorkspaceID) != strings.TrimSpace(execution.WorkspaceID) || !resolved.HasPermission(execution.TargetKey) {
+				return apperror.New(apperror.KindForbidden, "backend.business_job.target_denied", nil, map[string]string{"action": execution.TargetKey})
+			}
+			resolved.RequestID = requestcontext.RequestIDOrNew(ctx)
+			executionPrincipal = resolved
+		}
+		_, err := actionService.Invoke(ctx, actionmodel.ActionSourceRecordTimer, actionmodel.ActionInvocation{PreventExecutionReclaim: true, ActionKey: execution.TargetKey, ObjectKey: execution.ObjectKey, RecordID: execution.RecordID, Input: execution.Payload, Principal: executionPrincipal, Actor: executionPrincipal, IdempotencyKey: execution.IdempotencyKey})
 		return err
 	default:
 		return fmt.Errorf("unsupported record timer target type %q", execution.TargetType)

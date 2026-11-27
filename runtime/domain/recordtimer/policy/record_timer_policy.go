@@ -106,6 +106,8 @@ func NormalizeSchedule(request recordtimermodel.Schedule) recordtimermodel.Sched
 	request.Purpose, request.ScheduleMode = strings.TrimSpace(request.Purpose), strings.TrimSpace(request.ScheduleMode)
 	request.SourceField, request.Timezone, request.BusinessCalendarKey, request.BusinessCalendarRevision = strings.TrimSpace(request.SourceField), strings.TrimSpace(request.Timezone), strings.TrimSpace(request.BusinessCalendarKey), strings.TrimSpace(request.BusinessCalendarRevision)
 	request.TargetType, request.TargetKey = strings.TrimSpace(request.TargetType), strings.TrimSpace(request.TargetKey)
+	request.WorkloadKey, request.WorkloadDefinitionVersionID = strings.TrimSpace(request.WorkloadKey), strings.TrimSpace(request.WorkloadDefinitionVersionID)
+	request.WorkloadRoleKey, request.WorkloadInitiatorSubjectID = strings.TrimSpace(request.WorkloadRoleKey), strings.TrimSpace(request.WorkloadInitiatorSubjectID)
 	request.PayloadJSON, request.SupersedesTimerID = strings.TrimSpace(request.PayloadJSON), strings.TrimSpace(request.SupersedesTimerID)
 	if request.ScheduleMode == "" {
 		request.ScheduleMode = "absolute"
@@ -140,6 +142,10 @@ func ValidateSchedule(request recordtimermodel.Schedule) error {
 	}
 	if request.TargetType != "action" && request.TargetType != "workflow" {
 		return policyError("backend.record_timer.target_invalid", nil)
+	}
+	workloadDeclared := request.WorkloadKey != "" || request.WorkloadDefinitionVersionID != "" || request.WorkloadDefinitionVersion != 0 || request.WorkloadRoleKey != "" || request.WorkloadInitiatorSubjectID != ""
+	if workloadDeclared && (request.TargetType != "action" || request.WorkloadKey == "" || request.WorkloadDefinitionVersionID == "" || request.WorkloadDefinitionVersion <= 0 || request.WorkloadRoleKey == "") {
+		return policyError("backend.record_timer.workload_invalid", nil)
 	}
 	payload := map[string]any{}
 	if len(request.PayloadJSON) > MaximumPayloadJSONBytes || json.Unmarshal([]byte(request.PayloadJSON), &payload) != nil || payload == nil {

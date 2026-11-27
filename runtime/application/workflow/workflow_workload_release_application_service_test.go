@@ -188,10 +188,10 @@ func TestManagedWorkloadSharesAtomicReleaseAndResolvesExactAuthorizationVersion(
 	}
 	const traceID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	principal, err := service.ResolveManagedWorkloadPrincipal(requestcontext.WithRequestID(t.Context(), traceID), ManagedWorkloadExecution{
-		WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("a", 64), DefinitionVersion: 1, RoleKey: "order_automation",
-		ExecutionID: "run-7", SourceEventID: "run-7", IdempotencyKey: "window-7",
+		WorkspaceID: "workspace-1", WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("a", 64), DefinitionVersion: 1, RoleKey: "order_automation",
+		ExecutionID: "run-7", SourceEventID: "run-7", InitiatorSubjectID: "operator-1", IdempotencyKey: "window-7",
 	})
-	if err != nil || principal.UserID != "workflow:scheduler:expire-orders" || principal.RoleKey != "order_automation" || principal.RequestID != traceID || principal.Workload == nil || principal.Workload.TaskID != "run-7" {
+	if err != nil || principal.UserID != "workflow:scheduler:expire-orders" || principal.RoleKey != "order_automation" || principal.RequestID != traceID || principal.Workload == nil || principal.Workload.TaskID != "run-7" || principal.Workload.InitiatorSubjectID != "operator-1" {
 		t.Fatalf("principal=%+v err=%v", principal, err)
 	}
 	if _, err := service.ResolveManagedWorkloadPrincipal(t.Context(), ManagedWorkloadExecution{WorkloadKey: "scheduler:expire-orders", DefinitionVersionID: strings.Repeat("b", 64), DefinitionVersion: 1, RoleKey: "order_automation"}); apperror.CodeOf(err) != "backend.workload.release_not_active" {

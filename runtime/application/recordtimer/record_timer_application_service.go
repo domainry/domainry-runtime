@@ -23,10 +23,13 @@ type SchemaProvider interface {
 }
 
 type RecordTimerExecution struct {
-	TimerID, WorkspaceID, ObjectKey, RecordID string
-	TargetType, TargetKey                     string
-	Payload                                   map[string]any
-	IdempotencyKey                            string
+	TimerID, WorkspaceID, ObjectKey, RecordID   string
+	TargetType, TargetKey                       string
+	WorkloadKey, WorkloadDefinitionVersionID    string
+	WorkloadRoleKey, WorkloadInitiatorSubjectID string
+	WorkloadDefinitionVersion                   int
+	Payload                                     map[string]any
+	IdempotencyKey                              string
 }
 
 type TargetRuntime interface {

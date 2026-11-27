@@ -38,6 +38,8 @@ func recordTimerTestService(repository *recordTimerRepositoryFake, now time.Time
 func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 	now := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
 	request := recordTimerValidSchedule(now)
+	request.WorkloadKey, request.WorkloadDefinitionVersionID, request.WorkloadDefinitionVersion = "directory-sync", "definition-2", 2
+	request.WorkloadRoleKey, request.WorkloadInitiatorSubjectID = "directory_sync_service", "operator-1"
 	repository := &recordTimerRepositoryFake{}
 	service := recordTimerTestService(repository, now, true)
 	cancelled, cancel := context.WithCancel(t.Context())
@@ -56,6 +58,9 @@ func TestBuildAndScheduleRecordTimerEdges(t *testing.T) {
 	commit, err := service.BuildRecordTimerMutation(t.Context(), "workspace", request, time.Time{})
 	if err != nil || commit.Operation != "create" || commit.Record.CreatedAt != now.Format(time.RFC3339Nano) {
 		t.Fatalf("commit=%#v err=%v", commit, err)
+	}
+	if commit.Record.Data["workload_key"] != "directory-sync" || commit.Record.Data["workload_definition_version_id"] != "definition-2" || commit.Record.Data["workload_definition_version"] != 2 || commit.Record.Data["workload_role_key"] != "directory_sync_service" || commit.Record.Data["workload_initiator_subject_id"] != "operator-1" {
+		t.Fatalf("workload authority was not persisted: %#v", commit.Record.Data)
 	}
 	if _, err := service.BuildRecordTimerMutationFromSource(t.Context(), "workspace", RecordTimerSchedule{ScheduleMode: "relative_field", SourceField: "missing"}, recordmodel.Record{}, nil, now); err == nil {
 		t.Fatal("source resolution error accepted")

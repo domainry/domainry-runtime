@@ -60,7 +60,7 @@ type BusinessHandlerExecutionDependencies struct {
 	InspectUploadedFile               func(context.Context, string, principalmodel.Principal, runtimeext.UploadedFileInspection) (runtimeext.FileVerificationEvidence, error)
 	ReadKnowledgeFile                 func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileReadRequest) (runtimeext.KnowledgeFileEvidence, error)
 	BindKnowledgeFile                 func(context.Context, string, runtimeext.Principal, runtimeext.KnowledgeFileBindingRequest) error
-	StageBusinessJob                  func(context.Context, string, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)
+	StageBusinessJob                  func(context.Context, string, principalmodel.Principal, runtimeext.BusinessJobRequest) (transactionmodel.RecordMutationCommit, runtimeext.BusinessJobReceipt, error)
 	ObjectForKey                      func(string) (definitionmodel.ObjectSchema, bool)
 	NormalizeAggregateQuery           func(definitionmodel.ObjectSchema, recordmodel.RecordListQuery, principalmodel.Principal) recordmodel.RecordListQuery
 	WorkspaceAggregateCatalog         workspaceaggregatecontract.Catalog

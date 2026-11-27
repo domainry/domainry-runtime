@@ -76,6 +76,8 @@ func (s *RecordTimerApplicationService) BuildRecordTimerMutation(ctx context.Con
 		"status": "scheduled", "schedule_mode": request.ScheduleMode, "due_at": request.DueAt.UTC().Format(time.RFC3339Nano),
 		"source_field": request.SourceField, "offset_seconds": request.OffsetSeconds, "timezone": request.Timezone,
 		"business_calendar_key": request.BusinessCalendarKey, "business_calendar_revision": request.BusinessCalendarRevision, "target_type": request.TargetType, "target_key": request.TargetKey,
+		"workload_key": request.WorkloadKey, "workload_definition_version_id": request.WorkloadDefinitionVersionID, "workload_definition_version": request.WorkloadDefinitionVersion,
+		"workload_role_key": request.WorkloadRoleKey, "workload_initiator_subject_id": request.WorkloadInitiatorSubjectID,
 		"payload_json": request.PayloadJSON, "priority": request.Priority, "sequence": request.Sequence,
 		"lease_owner": "", "lease_expires_at": "", "fencing_token": 0, "attempt": 0,
 		"max_attempts": request.MaxAttempts, "retry_delay_seconds": request.RetryDelaySeconds, "retry_max_delay_seconds": request.RetryMaxDelaySeconds,

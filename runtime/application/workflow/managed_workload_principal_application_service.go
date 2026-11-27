@@ -13,12 +13,14 @@ import (
 // ManagedWorkloadExecution identifies one durable execution against the
 // authorization version embedded in its owner target.
 type ManagedWorkloadExecution struct {
+	WorkspaceID         string
 	WorkloadKey         string
 	DefinitionVersionID string
 	DefinitionVersion   int
 	RoleKey             string
 	ExecutionID         string
 	SourceEventID       string
+	InitiatorSubjectID  string
 	IdempotencyKey      string
 }
 
@@ -39,8 +41,17 @@ func (s *WorkflowApplicationService) ResolveManagedWorkloadPrincipal(ctx context
 		WorkflowKey: key, DefinitionVersionID: binding.DefinitionVersionID, DefinitionVersion: binding.DefinitionVersion,
 		ReleaseID: binding.ReleaseID, ReleaseDigest: binding.ReleaseDigest, TaskID: strings.TrimSpace(execution.ExecutionID), SourceEventID: strings.TrimSpace(execution.SourceEventID),
 	}
-	application := s.workloadReleases.Application()
-	resolution, err := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, string(application.WorkspaceID)), identitysdk.PrincipalResolutionRequest{
+	workspaceID := strings.TrimSpace(execution.WorkspaceID)
+	if len(workspaceID) == 0 {
+		return principalmodel.Principal{}, apperror.New(apperror.KindBadRequest, "backend.workload.workspace_required", nil, map[string]string{"workload": key})
+	}
+	if s.workloadReleases.ensureWorkspace != nil {
+		if err := s.workloadReleases.ensureWorkspace(ctx, workspaceID); err != nil {
+			return principalmodel.Principal{}, err
+		}
+	}
+	workload.InitiatorSubjectID = identitysdk.SubjectID(strings.TrimSpace(execution.InitiatorSubjectID))
+	resolution, err := s.principals.Resolve(requestcontext.WithWorkspaceID(ctx, workspaceID), identitysdk.PrincipalResolutionRequest{
 		SubjectID: identitysdk.WorkflowWorkloadSubjectID(key), RoleKey: roleKey, Workload: &workload,
 	})
 	if err != nil {
@@ -49,7 +60,7 @@ func (s *WorkflowApplicationService) ResolveManagedWorkloadPrincipal(ctx context
 	resolution.Principal.AccessBundle = &resolution.AccessBundle
 	principal := principalmodel.NewPrincipalFromIdentity(resolution.Principal, requestcontext.RequestIDOrNew(ctx))
 	expectedSubject := string(identitysdk.WorkflowWorkloadSubjectID(key))
-	if !principal.Known || principal.WorkspaceID != string(application.WorkspaceID) || principal.UserID != expectedSubject || principal.RoleKey != roleKey || principal.Workload == nil || principal.Workload.WorkflowKey != key || principal.Workload.DefinitionVersionID != binding.DefinitionVersionID || principal.Workload.DefinitionVersion != binding.DefinitionVersion || principal.Workload.ReleaseID != binding.ReleaseID || principal.Workload.ReleaseDigest != binding.ReleaseDigest || principal.Workload.TaskID != workload.TaskID || principal.Workload.SourceEventID != workload.SourceEventID || !principal.HasAllPermissions(binding.ActionKeys) {
+	if !principal.Known || principal.WorkspaceID != workspaceID || principal.UserID != expectedSubject || principal.RoleKey != roleKey || principal.Workload == nil || principal.Workload.WorkflowKey != key || principal.Workload.DefinitionVersionID != binding.DefinitionVersionID || principal.Workload.DefinitionVersion != binding.DefinitionVersion || principal.Workload.ReleaseID != binding.ReleaseID || principal.Workload.ReleaseDigest != binding.ReleaseDigest || principal.Workload.TaskID != workload.TaskID || principal.Workload.SourceEventID != workload.SourceEventID || principal.Workload.InitiatorSubjectID != workload.InitiatorSubjectID || !principal.HasAllPermissions(binding.ActionKeys) {
 		return principalmodel.Principal{}, apperror.New(apperror.KindForbidden, "backend.workload.execution_principal_mismatch", nil, map[string]string{"workload": key, "role": roleKey})
 	}
 	return principal, nil

@@ -164,7 +164,13 @@ func (s *RecordTimerApplicationService) processDueRecordTimers(ctx context.Conte
 				continue
 			}
 		}
-		execution := RecordTimerExecution{TimerID: lease.Record.RecordID, WorkspaceID: workspaceID, ObjectKey: recordTimerString(lease.Record, "object_key"), RecordID: recordTimerString(lease.Record, "record_id"), TargetType: recordTimerString(lease.Record, "target_type"), TargetKey: recordTimerString(lease.Record, "target_key"), Payload: payload, IdempotencyKey: lease.Record.RecordID}
+		execution := RecordTimerExecution{
+			TimerID: lease.Record.RecordID, WorkspaceID: workspaceID, ObjectKey: recordTimerString(lease.Record, "object_key"), RecordID: recordTimerString(lease.Record, "record_id"),
+			TargetType: recordTimerString(lease.Record, "target_type"), TargetKey: recordTimerString(lease.Record, "target_key"),
+			WorkloadKey: recordTimerString(lease.Record, "workload_key"), WorkloadDefinitionVersionID: recordTimerString(lease.Record, "workload_definition_version_id"),
+			WorkloadDefinitionVersion: recordTimerInt(lease.Record.Data["workload_definition_version"], 0), WorkloadRoleKey: recordTimerString(lease.Record, "workload_role_key"),
+			WorkloadInitiatorSubjectID: recordTimerString(lease.Record, "workload_initiator_subject_id"), Payload: payload, IdempotencyKey: lease.Record.RecordID,
+		}
 		if err := s.runtime.ExecuteRecordTimer(ctx, execution, principal); err != nil {
 			if failErr := s.FailRecordTimer(ctx, workspaceID, lease, err, now, scope); failErr != nil {
 				return processed, attempted, failErr
